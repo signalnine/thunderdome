@@ -1,0 +1,63 @@
+orchestrators:
+  - name: superpowers-full
+    adapter: ./adapters/superpowers-fork.sh
+    image: thunderdome/superpowers-fork:latest
+    env:
+      CONSENSUS_ENABLED: "true"
+      FRESH_CONTEXT: "true"
+      SELF_REVIEW: "true"
+  - name: superpowers-no-consensus
+    adapter: ./adapters/superpowers-fork.sh
+    image: thunderdome/superpowers-fork:latest
+    env:
+      CONSENSUS_ENABLED: "false"
+      FRESH_CONTEXT: "true"
+      SELF_REVIEW: "true"
+
+tasks:
+  - repo: git@github.com:org/bench-greenfield-cli.git
+    tag: v1
+    reference_tag: v1-solution
+    category: greenfield/simple
+    validation_image: node:20
+    install_cmd: "npm install"
+    test_cmd: "npm test"
+    lint_cmd: "npx eslint ."
+    rubric:
+      - criterion: "Follows existing code patterns"
+        weight: 2
+      - criterion: "Minimal diff"
+        weight: 1
+      - criterion: "Handles edge cases"
+        weight: 3
+    weights:
+      tests: 0.5
+      static_analysis: 0.2
+      rubric: 0.3
+  - repo: git@github.com:org/bench-bugfix-subtle.git
+    tag: v1
+    category: bugfix/complex
+    validation_image: python:3.12
+    install_cmd: "pip install -r requirements.txt"
+    test_cmd: "pytest"
+    lint_cmd: "mypy ."
+
+trials: 5
+
+proxy:
+  gateway: litellm
+  log_dir: ./results/proxy-logs
+  budget_per_trial_usd: 5.00
+  judge_model: claude-sonnet-4-5
+
+network:
+  allowlist:
+    - registry.npmjs.org
+    - pypi.org
+    - files.pythonhosted.org
+
+secrets:
+  env_file: .env.secrets
+
+results:
+  dir: ./results

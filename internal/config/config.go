@@ -1,0 +1,121 @@
+package config
+
+import (
+	"fmt"
+	"os"
+
+	"gopkg.in/yaml.v3"
+)
+
+type Config struct {
+	Orchestrators []Orchestrator `yaml:"orchestrators"`
+	Tasks         []Task         `yaml:"tasks"`
+	Trials        int            `yaml:"trials"`
+	Proxy         Proxy          `yaml:"proxy"`
+	Network       Network        `yaml:"network"`
+	Secrets       Secrets        `yaml:"secrets"`
+	Results       Results        `yaml:"results"`
+}
+
+type Orchestrator struct {
+	Name    string            `yaml:"name"`
+	Adapter string            `yaml:"adapter"`
+	Image   string            `yaml:"image"`
+	Env     map[string]string `yaml:"env"`
+}
+
+type Task struct {
+	Repo            string            `yaml:"repo"`
+	Tag             string            `yaml:"tag"`
+	ReferenceTag    string            `yaml:"reference_tag"`
+	Category        string            `yaml:"category"`
+	ValidationImage string            `yaml:"validation_image"`
+	InstallCmd      string            `yaml:"install_cmd"`
+	TestCmd         string            `yaml:"test_cmd"`
+	LintCmd         string            `yaml:"lint_cmd"`
+	Rubric          []RubricCriterion `yaml:"rubric"`
+	Weights         ValidationWeights `yaml:"weights"`
+}
+
+type RubricCriterion struct {
+	Criterion string  `yaml:"criterion"`
+	Weight    float64 `yaml:"weight"`
+}
+
+type ValidationWeights struct {
+	Tests          float64 `yaml:"tests"`
+	StaticAnalysis float64 `yaml:"static_analysis"`
+	Rubric         float64 `yaml:"rubric"`
+}
+
+type Proxy struct {
+	Gateway           string  `yaml:"gateway"`
+	LogDir            string  `yaml:"log_dir"`
+	BudgetPerTrialUSD float64 `yaml:"budget_per_trial_usd"`
+	JudgeModel        string  `yaml:"judge_model"`
+}
+
+type Network struct {
+	Allowlist []string `yaml:"allowlist"`
+}
+
+type Secrets struct {
+	EnvFile string `yaml:"env_file"`
+}
+
+type Results struct {
+	Dir string `yaml:"dir"`
+}
+
+func Load(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading config %s: %w", path, err)
+	}
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parsing config %s: %w", path, err)
+	}
+	if err := validate(&cfg); err != nil {
+		return nil, fmt.Errorf("invalid config %s: %w", path, err)
+	}
+	return &cfg, nil
+}
+
+func validate(cfg *Config) error {
+	if len(cfg.Orchestrators) == 0 {
+		return fmt.Errorf("no orchestrators defined")
+	}
+	for i, o := range cfg.Orchestrators {
+		if o.Name == "" {
+			return fmt.Errorf("orchestrator %d: name is required", i)
+		}
+		if o.Adapter == "" {
+			return fmt.Errorf("orchestrator %q: adapter is required", o.Name)
+		}
+		if o.Image == "" {
+			return fmt.Errorf("orchestrator %q: image is required", o.Name)
+		}
+	}
+	if len(cfg.Tasks) == 0 {
+		return fmt.Errorf("no tasks defined")
+	}
+	for i, t := range cfg.Tasks {
+		if t.Repo == "" {
+			return fmt.Errorf("task %d: repo is required", i)
+		}
+		if t.Tag == "" {
+			return fmt.Errorf("task %d: tag is required", i)
+		}
+		if t.ValidationImage == "" {
+			return fmt.Errorf("task %d: validation_image is required", i)
+		}
+		if t.TestCmd == "" {
+			return fmt.Errorf("task %d: test_cmd is required", i)
+		}
+	}
+	if cfg.Trials < 1 {
+		return fmt.Errorf("trials must be at least 1")
+	}
+	return nil
+}
