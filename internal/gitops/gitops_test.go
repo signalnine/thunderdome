@@ -70,6 +70,22 @@ func TestCaptureChanges(t *testing.T) {
 	}
 }
 
+func TestCloneRejectsOptionLikeRepo(t *testing.T) {
+	err := gitops.CloneAndCheckout("--upload-pack=evil", "v1", t.TempDir())
+	if err == nil {
+		t.Fatal("expected error for option-like repo")
+	}
+}
+
+func TestCloneRejectsInvalidTag(t *testing.T) {
+	for _, tag := range []string{"--option", "", " spaces", "../escape"} {
+		err := gitops.CloneAndCheckout("/tmp/repo", tag, t.TempDir())
+		if err == nil {
+			t.Errorf("expected error for tag %q", tag)
+		}
+	}
+}
+
 func TestCaptureChangesNoChanges(t *testing.T) {
 	repo := createTestRepo(t)
 	dest := t.TempDir()

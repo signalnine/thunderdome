@@ -84,6 +84,10 @@ func RunContainer(ctx context.Context, opts *RunOpts) (*RunResult, error) {
 		containerCfg.User = opts.UserID
 	}
 
+	// NOTE: opts.Allowlist is not yet enforced. The Internal:true network blocks
+	// all egress except to other containers on the same network and the host
+	// (via host.docker.internal). Domain-based allowlisting requires external
+	// iptables/nftables rules or a proxy, which is not yet implemented.
 	var networkingCfg *network.NetworkingConfig
 	if opts.GatewayAddr != "" || len(opts.Allowlist) > 0 {
 		networkID, err := createIsolatedNetwork(ctx, cli)
@@ -124,29 +128,31 @@ func RunContainer(ctx context.Context, opts *RunOpts) (*RunResult, error) {
 	waitResult := cli.ContainerWait(timeoutCtx, containerID, client.ContainerWaitOptions{
 		Condition: container.WaitConditionNotRunning,
 	})
-	select {
-	case err := <-waitResult.Error:
-		if err != nil {
-			cli.ContainerKill(context.Background(), containerID, client.ContainerKillOptions{Signal: "SIGKILL"})
-			logReader, _ := cli.ContainerLogs(context.Background(), containerID, client.ContainerLogsOptions{ShowStdout: true, ShowStderr: true})
-			if logReader != nil {
-				io.Copy(io.Discard, logReader)
-				logReader.Close()
+	for {
+		select {
+		case err := <-waitResult.Error:
+			if err != nil {
+				cli.ContainerKill(context.Background(), containerID, client.ContainerKillOptions{Signal: "SIGKILL"})
+				logReader, _ := cli.ContainerLogs(context.Background(), containerID, client.ContainerLogsOptions{ShowStdout: true, ShowStderr: true})
+				if logReader != nil {
+					io.Copy(io.Discard, logReader)
+					logReader.Close()
+				}
+				return &RunResult{
+					ExitCode: 124,
+					TimedOut: true,
+					Duration: time.Since(start),
+				}, nil
 			}
+			// nil error means no error on this channel; wait for result
+		case status := <-waitResult.Result:
 			return &RunResult{
-				ExitCode: 124,
-				TimedOut: true,
+				ExitCode: int(status.StatusCode),
+				TimedOut: false,
 				Duration: time.Since(start),
 			}, nil
 		}
-	case status := <-waitResult.Result:
-		return &RunResult{
-			ExitCode: int(status.StatusCode),
-			TimedOut: false,
-			Duration: time.Since(start),
-		}, nil
 	}
-	return nil, fmt.Errorf("unexpected state")
 }
 
 func createIsolatedNetwork(ctx context.Context, cli *client.Client) (string, error) {
