@@ -41,15 +41,15 @@ Ten tasks span five categories and the full parallelism spectrum:
 
 | # | Task | Category | Parallelism | Timeout | Tests |
 |---|------|----------|-------------|---------|-------|
-| 1 | CLI Time Tracker | greenfield/simple | None | 10m | 25 |
-| 2 | Collab Server | greenfield/complex | Mixed | 30m | 40+ |
+| 1 | CLI Time Tracker | greenfield/simple | None | 15m | 25 |
+| 2 | Collab Server | greenfield/complex | Mixed | 45m | 45 |
 | 3 | FTS Search | features/medium | Sequential | 30m | 35 |
-| 4 | Phantom Invoice Bug | bugfix/medium | Sequential | 30m | 40 |
-| 5 | Task Queue | marathon | Sequential | 60m | ~90 |
-| 6 | Monorepo Disaster | recovery | Mixed | 30m | 35+ |
-| 7 | Plugin Marketplace | greenfield/complex | Pure parallel | 30m | 55 |
-| 8 | Analytics Dashboard | greenfield/complex | Deceptive parallel | 30m | 50 |
-| 9 | Static Site Generator | features/complex | DAG parallel | 30m | 75 |
+| 4 | Phantom Invoice Bug | bugfix/medium | Sequential | 20m | 41 |
+| 5 | Task Queue Marathon | marathon | Sequential | 60m | 90 |
+| 6 | Monorepo Disaster | recovery | Mixed | 30m | 49 |
+| 7 | Plugin Marketplace | greenfield/complex | Pure parallel | 45m | 55 |
+| 8 | Analytics Dashboard | greenfield/complex | Deceptive parallel | 45m | 50 |
+| 9 | SSG Toolkit | features/complex | DAG parallel | 45m | 75 |
 | 10 | E-Commerce Backend | greenfield/complex | Pure parallel (max) | 45m | 70 |
 
 ```
@@ -58,7 +58,7 @@ None        Sequential     Mixed          Deceptive      DAG-Parallel     Pure P
 T1           T3,T5         T2,T6           T8              T9             T7,T10
 ```
 
-All tasks use TypeScript/Node.js with pre-written, read-only tests. Orchestrators cannot cheat by modifying tests. Validation runs `npm run build && npm run lint && npm test` -- no subjective grading.
+All 535 tests across 10 repos use TypeScript/Node.js with pre-written, read-only tests. Orchestrators cannot cheat by modifying tests. Validation runs `npm run build && npm run lint && npm test` -- no subjective grading.
 
 Each task includes at least one trap that punishes naive or template-driven approaches. See [`docs/plans/2026-02-11-survey-and-tasks-design.md`](docs/plans/2026-02-11-survey-and-tasks-design.md) for full task specifications.
 
@@ -195,6 +195,17 @@ The composite score blends test pass rate, static analysis, and rubric scores us
 │   ├── runner/                 # Trial execution, validation pipeline, pool
 │   └── validation/             # Test runner, lint, rubric judge, composite scoring
 ├── adapters/                   # Shell adapter scripts per orchestrator
+├── benchmarks/                 # 10 standalone task repos (each with v1/v1-solution tags)
+│   ├── bench-time-tracker/     # T1: greenfield/simple (25 tests)
+│   ├── bench-collab-server/    # T2: greenfield/complex (45 tests)
+│   ├── bench-fts-search/       # T3: features/medium (35 tests)
+│   ├── bench-phantom-invoice/  # T4: bugfix/medium (41 tests)
+│   ├── bench-task-queue/       # T5: marathon (90 tests, 12 phases)
+│   ├── bench-monorepo-disaster/# T6: recovery (49 tests, 6 breakages)
+│   ├── bench-plugin-marketplace/# T7: greenfield/complex (55 tests)
+│   ├── bench-analytics-dashboard/# T8: greenfield/complex (50 tests, parallel trap)
+│   ├── bench-ssg-toolkit/      # T9: features/complex (75 tests, DAG plugins)
+│   └── bench-ecommerce-backend/# T10: greenfield/complex (70 tests, event-driven)
 ├── docs/
 │   ├── survey/                 # Orchestrator architecture survey (10 tools)
 │   └── plans/                  # Design documents
@@ -259,8 +270,8 @@ The goal: run ablation studies, add and subtract genes, and find the minimal eff
 
 - [x] Orchestrator survey (10 tools documented)
 - [x] Benchmark task design (10 tasks specified)
-- [x] Harness implementation (run, list, report, validate commands)
-- [ ] Build benchmark task repos
+- [x] Build benchmark task repos (10 repos, 535 tests, v1/v1-solution tags)
+- [ ] Harness implementation (run, list, report, validate commands)
 - [ ] Write orchestrator adapters
 - [ ] Run baseline comparisons
 - [ ] Publish results

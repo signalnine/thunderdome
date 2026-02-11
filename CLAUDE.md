@@ -6,25 +6,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Agentic Thunderdome is a benchmarking framework for comparing agentic coding orchestrators (AI coding tools) head-to-head using standardized tasks. The full specification lives in `project.md`.
 
-**Current state:** Specification only — no code has been implemented yet. The project is in planning phase.
+**Current state:** Benchmark repos built. 10 task repos with 535 tests total, each with v1 (starting state) and v1-solution (reference) tags. Next step: build the test harness.
 
 ## Contenders Being Benchmarked
 
 - **Conclave** (Superpowers fork) — Multi-agent consensus with cross-provider models (Codex Max × Opus × Gemini 3 Pro)
 - **Superpowers (Original)**, **Amplifier**, **Gas Town**, others TBD
 
-## Planned Architecture
+## Benchmark Repos
 
 ```
 benchmarks/
-├── greenfield/      # Start from scratch (simple/medium/complex)
-├── features/        # Add to existing codebases (simple/medium/complex)
-├── bugfix/          # Diagnose and repair (simple/medium/complex)
-├── marathon/        # Tests context window management
-└── recovery/        # Intentionally broken states to escape
+├── bench-time-tracker/         # T1: greenfield/simple (25 tests)
+├── bench-collab-server/        # T2: greenfield/complex (45 tests)
+├── bench-fts-search/           # T3: features/medium (35 tests)
+├── bench-phantom-invoice/      # T4: bugfix/medium (41 tests)
+├── bench-task-queue/           # T5: marathon (90 tests, 12 phases)
+├── bench-monorepo-disaster/    # T6: recovery (49 tests, 6 breakages)
+├── bench-plugin-marketplace/   # T7: greenfield/complex (55 tests)
+├── bench-analytics-dashboard/  # T8: greenfield/complex (50 tests, parallel trap)
+├── bench-ssg-toolkit/          # T9: features/complex (75 tests, DAG plugins)
+└── bench-ecommerce-backend/    # T10: greenfield/complex (70 tests, event-driven)
 ```
 
-Each benchmark task includes: starting state (repo snapshot), task description, validation criteria, and optional reference solution.
+Each repo is its own git repository with `v1` (starting state) and `v1-solution` (reference solution) tags. All use TypeScript/Node.js with Vitest. The harness clones at `v1`, lets the orchestrator work, then validates with `npm test && npm run build && npm run lint`.
 
 ## Key Concepts
 
@@ -42,8 +47,8 @@ Each benchmark task includes: starting state (repo snapshot), task description, 
 
 ## Next Steps (from project.md)
 
-1. Survey 5-10 orchestrator patterns
-2. Define 10 initial benchmark tasks (designed, see design doc)
+1. ~~Survey 5-10 orchestrator patterns~~ (done — docs/survey/)
+2. ~~Define 10 initial benchmark tasks~~ (done — design doc + all 10 repos built)
 3. Create harness for running orchestrators against tasks
 4. Instrument Conclave for metrics collection
 5. Run baseline comparisons
