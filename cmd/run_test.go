@@ -93,23 +93,25 @@ func TestMatchCategory(t *testing.T) {
 	}
 }
 
-func TestTimeoutForCategory(t *testing.T) {
+func TestTimeoutForTask(t *testing.T) {
 	tests := []struct {
-		name     string
-		category string
-		want     time.Duration
+		name string
+		task config.Task
+		want time.Duration
 	}{
-		{"marathon", "marathon/long", 60 * time.Minute},
-		{"complex", "greenfield/complex", 30 * time.Minute},
-		{"default simple", "greenfield/simple", 10 * time.Minute},
-		{"default bugfix", "bugfix/medium", 10 * time.Minute},
+		{"explicit time limit", config.Task{Category: "greenfield/simple", TimeLimitMinutes: 15}, 15 * time.Minute},
+		{"explicit overrides category", config.Task{Category: "marathon/long", TimeLimitMinutes: 25}, 25 * time.Minute},
+		{"fallback marathon", config.Task{Category: "marathon/long"}, 60 * time.Minute},
+		{"fallback complex", config.Task{Category: "greenfield/complex"}, 30 * time.Minute},
+		{"fallback simple", config.Task{Category: "greenfield/simple"}, 10 * time.Minute},
+		{"fallback bugfix", config.Task{Category: "bugfix/medium"}, 10 * time.Minute},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := timeoutForCategory(tt.category)
+			got := timeoutForTask(&tt.task)
 			if got != tt.want {
-				t.Errorf("timeoutForCategory(%q) = %v, want %v", tt.category, got, tt.want)
+				t.Errorf("timeoutForTask(%+v) = %v, want %v", tt.task, got, tt.want)
 			}
 		})
 	}

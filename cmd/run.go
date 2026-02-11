@@ -85,7 +85,7 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 							GatewayURL:   gw.URL(),
 							GatewayAddr:  fmt.Sprintf("localhost:%d", gw.Port),
 							RunDir:       runDir,
-							Timeout:      timeoutForCategory(task.Category),
+							Timeout:      timeoutForTask(&task),
 							Allowlist:     cfg.Network.Allowlist,
 							GatewayLogDir: cfg.Proxy.LogDir,
 						})
@@ -121,7 +121,7 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 						GatewayURL:    gw.URL(),
 						GatewayLogDir: cfg.Proxy.LogDir,
 						RunDir:        runDir,
-						Timeout:       timeoutForCategory(task.Category),
+						Timeout:       timeoutForTask(&task),
 					})
 					if err != nil {
 						fmt.Printf("  ERROR: %v\n", err)
@@ -197,11 +197,15 @@ func matchCategory(category, pattern string) bool {
 	return category == pattern
 }
 
-func timeoutForCategory(category string) time.Duration {
+func timeoutForTask(task *config.Task) time.Duration {
+	if task.TimeLimitMinutes > 0 {
+		return time.Duration(task.TimeLimitMinutes) * time.Minute
+	}
+	// Fallback: infer from category
 	switch {
-	case strings.HasPrefix(category, "marathon"):
+	case strings.HasPrefix(task.Category, "marathon"):
 		return 60 * time.Minute
-	case strings.Contains(category, "complex"):
+	case strings.Contains(task.Category, "complex"):
 		return 30 * time.Minute
 	default:
 		return 10 * time.Minute

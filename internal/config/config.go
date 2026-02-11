@@ -25,16 +25,20 @@ type Orchestrator struct {
 }
 
 type Task struct {
-	Repo            string            `yaml:"repo"`
-	Tag             string            `yaml:"tag"`
-	ReferenceTag    string            `yaml:"reference_tag"`
-	Category        string            `yaml:"category"`
-	ValidationImage string            `yaml:"validation_image"`
-	InstallCmd      string            `yaml:"install_cmd"`
-	TestCmd         string            `yaml:"test_cmd"`
-	LintCmd         string            `yaml:"lint_cmd"`
-	Rubric          []RubricCriterion `yaml:"rubric"`
-	Weights         ValidationWeights `yaml:"weights"`
+	ID               string            `yaml:"id"`
+	Name             string            `yaml:"name"`
+	Repo             string            `yaml:"repo"`
+	Tag              string            `yaml:"tag"`
+	ReferenceTag     string            `yaml:"reference_tag"`
+	Category         string            `yaml:"category"`
+	ValidationImage  string            `yaml:"validation_image"`
+	InstallCmd       string            `yaml:"install_cmd"`
+	TestCmd          string            `yaml:"test_cmd"`
+	BuildCmd         string            `yaml:"build_cmd"`
+	LintCmd          string            `yaml:"lint_cmd"`
+	TimeLimitMinutes int               `yaml:"time_limit_minutes"`
+	Rubric           []RubricCriterion `yaml:"rubric"`
+	Weights          ValidationWeights `yaml:"weights"`
 }
 
 type RubricCriterion struct {
@@ -100,7 +104,8 @@ func validate(cfg *Config) error {
 	if len(cfg.Tasks) == 0 {
 		return fmt.Errorf("no tasks defined")
 	}
-	for i, t := range cfg.Tasks {
+	for i := range cfg.Tasks {
+		t := &cfg.Tasks[i]
 		if t.Repo == "" {
 			return fmt.Errorf("task %d: repo is required", i)
 		}
@@ -108,10 +113,13 @@ func validate(cfg *Config) error {
 			return fmt.Errorf("task %d: tag is required", i)
 		}
 		if t.ValidationImage == "" {
-			return fmt.Errorf("task %d: validation_image is required", i)
+			t.ValidationImage = "node:20"
 		}
 		if t.TestCmd == "" {
 			return fmt.Errorf("task %d: test_cmd is required", i)
+		}
+		if t.InstallCmd == "" {
+			t.InstallCmd = "npm install"
 		}
 	}
 	if cfg.Trials < 1 {
