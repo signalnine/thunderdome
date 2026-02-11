@@ -116,6 +116,7 @@ Hypotheses to Test
 * H2: Multi-agent consensus reduces "design reversals" mid-implementation vs solo agents
 * H3: Fresh context Ralph loops outperform stale-context loops on marathon tasks
 * H4: Consensus overhead pays for itself in reduced rework
+* H5: Orchestrators with dependency-aware parallel execution achieve sub-linear wall-clock time on decomposable tasks, while naive parallelization produces merge conflicts that eliminate the time advantage
 Orchestrator Patterns to Survey
 Need to survey the landscape - probably missing good ideas to adapt:
 * Amplifier - what's their architecture?
@@ -133,7 +134,7 @@ Need to survey the landscape - probably missing good ideas to adapt:
 * Claude Code (this tool) - what patterns does Anthropic use?
 Next Steps
 1. [ ] Survey 5-10 orchestrator patterns, document key ideas
-2. [ ] Define 5-10 initial benchmark tasks across complexity levels
+2. [ ] Define 10 initial benchmark tasks across complexity levels
 3. [ ] Create harness for running orchestrators against tasks
 4. [ ] Instrument Conclave for metrics collection
 5. [ ] Run baseline comparisons (including same-model vs cross-provider)

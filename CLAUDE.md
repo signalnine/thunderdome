@@ -38,11 +38,12 @@ Each benchmark task includes: starting state (repo snapshot), task description, 
 - H2: Multi-agent consensus reduces design reversals vs solo agents
 - H3: Fresh context Ralph loops outperform stale-context loops on marathon tasks
 - H4: Consensus overhead pays for itself in reduced rework
+- H5: Dependency-aware parallel execution achieves sub-linear wall-clock time on decomposable tasks; naive parallelization produces merge conflicts that eliminate the advantage
 
 ## Next Steps (from project.md)
 
 1. Survey 5-10 orchestrator patterns
-2. Define 5-10 initial benchmark tasks
+2. Define 10 initial benchmark tasks (designed, see design doc)
 3. Create harness for running orchestrators against tasks
 4. Instrument Conclave for metrics collection
 5. Run baseline comparisons
