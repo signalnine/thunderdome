@@ -1,11 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"os"
+
+	"github.com/signalnine/thunderdome/cmd"
 )
 
 func main() {
-	fmt.Println("thunderdome")
-	os.Exit(0)
+	if err := cmd.NewRootCmd().Execute(); err != nil {
+		os.Exit(1)
+	}
 }
