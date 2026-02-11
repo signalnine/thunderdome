@@ -14,10 +14,10 @@ func absf(x float64) float64 {
 }
 
 func TestParseTestOutput(t *testing.T) {
-	output := `===== 8 passed, 2 failed =====`
-	result := validation.ParseTestResults(output, 0)
-	if result.Score < 0 || result.Score > 1 {
-		t.Errorf("score out of range: %f", result.Score)
+	output := `8 passed, 2 failed`
+	result := validation.ParseTestResults(output, 1)
+	if absf(result.Score-0.8) > 0.001 {
+		t.Errorf("score: got %f, want 0.8", result.Score)
 	}
 }
 

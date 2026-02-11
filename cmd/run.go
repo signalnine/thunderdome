@@ -17,12 +17,12 @@ import (
 )
 
 var (
-	flagOrchestrator       string
-	flagTask               string
-	flagCategory           string
-	flagTrials             int
-	flagParallel           int
-	flagCleanupAggressive  bool
+	flagOrchestrator      string
+	flagTask              string
+	flagCategory          string
+	flagTrials            int
+	flagParallel          int
+	flagCleanupAggressive bool
 )
 
 func newRunCmd() *cobra.Command {
@@ -78,7 +78,7 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 					orch, task, trial := orch, task, trial
 					jobs = append(jobs, func() error {
 						fmt.Printf("Running %s × %s (trial %d/%d)...\n", orch.Name, task.Category, trial, cfg.Trials)
-						_, err := runner.RunTrial(ctx, &runner.TrialOpts{
+						meta, err := runner.RunTrial(ctx, &runner.TrialOpts{
 							Orchestrator: &orch,
 							Task:         &task,
 							TrialNum:     trial,
@@ -86,9 +86,21 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 							GatewayAddr:  fmt.Sprintf("localhost:%d", gw.Port),
 							RunDir:       runDir,
 							Timeout:      timeoutForCategory(task.Category),
-							Allowlist:    cfg.Network.Allowlist,
+							Allowlist:     cfg.Network.Allowlist,
+							GatewayLogDir: cfg.Proxy.LogDir,
 						})
-						return err
+						if err != nil {
+							return err
+						}
+						trialDir := result.TrialDir(runDir, orch.Name, runner.TaskName(&task), trial)
+						scored, err := runner.ValidateAndScore(ctx, trialDir, &task, gw.URL())
+						if err != nil {
+							fmt.Printf("  WARNING: validation failed for %s trial %d: %v\n", task.Category, trial, err)
+							fmt.Printf("  %s (duration: %ds)\n", meta.ExitReason, meta.DurationS)
+						} else {
+							fmt.Printf("  %s (duration: %ds, score: %.2f)\n", meta.ExitReason, meta.DurationS, scored.CompositeScore)
+						}
+						return nil
 					})
 				}
 			}
@@ -103,18 +115,26 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 				for trial := 1; trial <= cfg.Trials; trial++ {
 					fmt.Printf("Running %s × %s (trial %d/%d)...\n", orch.Name, task.Category, trial, cfg.Trials)
 					meta, err := runner.RunTrial(ctx, &runner.TrialOpts{
-						Orchestrator: &orch,
-						Task:         &task,
-						TrialNum:     trial,
-						GatewayURL:   gw.URL(),
-						RunDir:       runDir,
-						Timeout:      timeoutForCategory(task.Category),
+						Orchestrator:  &orch,
+						Task:          &task,
+						TrialNum:      trial,
+						GatewayURL:    gw.URL(),
+						GatewayLogDir: cfg.Proxy.LogDir,
+						RunDir:        runDir,
+						Timeout:       timeoutForCategory(task.Category),
 					})
 					if err != nil {
 						fmt.Printf("  ERROR: %v\n", err)
 						continue
 					}
-					fmt.Printf("  %s (duration: %ds)\n", meta.ExitReason, meta.DurationS)
+					trialDir := result.TrialDir(runDir, orch.Name, runner.TaskName(&task), trial)
+					scored, err := runner.ValidateAndScore(ctx, trialDir, &task, gw.URL())
+					if err != nil {
+						fmt.Printf("  WARNING: validation failed for %s trial %d: %v\n", task.Category, trial, err)
+						fmt.Printf("  %s (duration: %ds)\n", meta.ExitReason, meta.DurationS)
+					} else {
+						fmt.Printf("  %s (duration: %ds, score: %.2f)\n", meta.ExitReason, meta.DurationS, scored.CompositeScore)
+					}
 				}
 			}
 		}
@@ -153,6 +173,9 @@ func filterOrchestrators(orchs []config.Orchestrator, name string) []config.Orch
 }
 
 func filterTasks(tasks []config.Task, name, category string) []config.Task {
+	if name == "" && category == "" {
+		return tasks
+	}
 	var filtered []config.Task
 	for _, t := range tasks {
 		if name != "" && t.Repo != name && !strings.HasSuffix(t.Repo, "/"+name) {
@@ -162,9 +185,6 @@ func filterTasks(tasks []config.Task, name, category string) []config.Task {
 			continue
 		}
 		filtered = append(filtered, t)
-	}
-	if len(filtered) == 0 && name == "" && category == "" {
-		return tasks
 	}
 	return filtered
 }

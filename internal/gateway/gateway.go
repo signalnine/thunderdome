@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -55,14 +56,12 @@ func Start(ctx context.Context, opts *StartOpts) (*Gateway, error) {
 
 	cmd.Env = os.Environ()
 	if opts.SecretsEnvFile != "" {
-		data, err := os.ReadFile(opts.SecretsEnvFile)
-		if err == nil {
-			for _, line := range splitLines(data) {
-				if len(line) > 0 && line[0] != '#' {
-					cmd.Env = append(cmd.Env, string(line))
-				}
-			}
+		envVars, err := parseEnvFile(opts.SecretsEnvFile)
+		if err != nil {
+			logFile.Close()
+			return nil, fmt.Errorf("reading secrets env file: %w", err)
 		}
+		cmd.Env = append(cmd.Env, envVars...)
 	}
 
 	if err := cmd.Start(); err != nil {
@@ -137,6 +136,39 @@ func waitForPort(port int, timeout time.Duration) error {
 		time.Sleep(500 * time.Millisecond)
 	}
 	return fmt.Errorf("port %d not ready after %s", port, timeout)
+}
+
+func parseEnvFile(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var envVars []string
+	for _, line := range splitLines(data) {
+		s := strings.TrimSpace(string(line))
+		if s == "" || s[0] == '#' {
+			continue
+		}
+		s = strings.TrimPrefix(s, "export ")
+		eqIdx := strings.IndexByte(s, '=')
+		if eqIdx < 0 {
+			continue
+		}
+		key := s[:eqIdx]
+		val := s[eqIdx+1:]
+		val = stripQuotes(val)
+		envVars = append(envVars, key+"="+val)
+	}
+	return envVars, nil
+}
+
+func stripQuotes(s string) string {
+	if len(s) >= 2 {
+		if (s[0] == '\'' && s[len(s)-1] == '\'') || (s[0] == '"' && s[len(s)-1] == '"') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
 }
 
 func splitLines(data []byte) [][]byte {

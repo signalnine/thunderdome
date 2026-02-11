@@ -19,7 +19,9 @@ func RunTests(ctx context.Context, workDir, validationImage, installCmd, testCmd
 		cmd := exec.CommandContext(ctx, "docker", "run", "--rm",
 			"-v", workDir+":/workspace", "-w", "/workspace",
 			validationImage, "sh", "-c", installCmd)
-		cmd.CombinedOutput()
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return nil, fmt.Errorf("running install command: %s: %w", string(out), err)
+		}
 	}
 
 	cmd := exec.CommandContext(ctx, "docker", "run", "--rm",
