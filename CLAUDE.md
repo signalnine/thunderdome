@@ -10,8 +10,8 @@ Agentic Thunderdome is a benchmarking framework for comparing agentic coding orc
 
 ## Contenders Being Benchmarked
 
-- **Superpowers (Fork)** — Multi-agent consensus with cross-provider models (Codex Max × Opus × Gemini 3 Pro)
-- **Superpowers (Original)**, **Amplify**, **Gas Town**, others TBD
+- **Conclave** (Superpowers fork) — Multi-agent consensus with cross-provider models (Codex Max × Opus × Gemini 3 Pro)
+- **Superpowers (Original)**, **Amplifier**, **Gas Town**, others TBD
 
 ## Planned Architecture
 
@@ -44,6 +44,6 @@ Each benchmark task includes: starting state (repo snapshot), task description, 
 1. Survey 5-10 orchestrator patterns
 2. Define 5-10 initial benchmark tasks
 3. Create harness for running orchestrators against tasks
-4. Instrument Superpowers fork for metrics collection
+4. Instrument Conclave for metrics collection
 5. Run baseline comparisons
 6. Publish results/methodology

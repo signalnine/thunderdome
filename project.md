@@ -4,11 +4,11 @@ Created: 2026-02-04 Status: Active Priority: Medium
 Overview
 Benchmarking framework to compare agentic coding orchestrators head-to-head. Pit different tools against standardized tasks and measure what actually matters.
 Contenders
-* Superpowers (Fork) - Multi-agent consensus for architecture/brainstorming and code reviews, auto-pilot brainstorming mode, Ralph loop runner for fresh context windows in subagent runs
+* Conclave (Superpowers fork) - Multi-agent consensus for architecture/brainstorming and code reviews, auto-pilot brainstorming mode, Ralph loop runner for fresh context windows in subagent runs
     * Consensus uses cross-provider models: Codex Max × Opus × Gemini 3 Pro
     * Different training = different blind spots = real disagreement, not echo chamber
 * Superpowers (Original)
-* Amplify
+* Amplifier
 * Gas Town
 * Others TBD
 Key Differentiators to Test
@@ -118,7 +118,7 @@ Hypotheses to Test
 * H4: Consensus overhead pays for itself in reduced rework
 Orchestrator Patterns to Survey
 Need to survey the landscape - probably missing good ideas to adapt:
-* Amplify - what's their architecture?
+* Amplifier - what's their architecture?
 * Gas Town - approach?
 * Original Superpowers - what did we diverge from?
 * Devin / Cognition - how do they handle long tasks?
@@ -135,11 +135,11 @@ Next Steps
 1. [ ] Survey 5-10 orchestrator patterns, document key ideas
 2. [ ] Define 5-10 initial benchmark tasks across complexity levels
 3. [ ] Create harness for running orchestrators against tasks
-4. [ ] Instrument Superpowers fork for metrics collection
+4. [ ] Instrument Conclave for metrics collection
 5. [ ] Run baseline comparisons (including same-model vs cross-provider)
 6. [ ] Publish results / methodology
 Related
-* Superpowers fork
+* Conclave (Superpowers fork)
 * boxctl (could provide test tasks from real infra scripts)
 * SWE-bench (prior art)
 
