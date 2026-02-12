@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/signalnine/thunderdome/internal/config"
@@ -45,7 +46,7 @@ func ExitReasonFromCode(code int, timedOut bool) string {
 }
 
 func BuildAdapterCommand(orch *config.Orchestrator, taskDir, taskDesc, proxyURL string) []string {
-	return []string{"sh", "/adapter.sh"}
+	return []string{"bash", "/adapter.sh"}
 }
 
 func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
@@ -76,10 +77,16 @@ func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
 		return nil, fmt.Errorf("resolving adapter path: %w", err)
 	}
 
+	// Replace localhost with host.docker.internal so the container can
+	// reach the gateway running on the host.
+	containerGatewayURL := ""
+	if opts.GatewayURL != "" {
+		containerGatewayURL = strings.Replace(opts.GatewayURL, "localhost", "host.docker.internal", 1)
+	}
 	env := map[string]string{
 		"TASK_DIR":         "/workspace",
 		"TASK_DESCRIPTION": "/task.md",
-		"PROXY_URL":        opts.GatewayURL,
+		"PROXY_URL":        containerGatewayURL,
 	}
 	for k, v := range opts.Orchestrator.Env {
 		env[k] = v

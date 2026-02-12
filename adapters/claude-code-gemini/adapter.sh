@@ -6,20 +6,25 @@ set -e
 
 cd "$TASK_DIR"
 
-# Route API calls through proxy gateway if configured
-if [ -n "$PROXY_URL" ]; then
-  export ANTHROPIC_BASE_URL="$PROXY_URL"
-fi
+# Start LiteLLM proxy in background, translating Anthropic API to Gemini
+litellm --config /opt/litellm-config.yaml --port 4000 --host 0.0.0.0 &>/tmp/litellm.log &
+LITELLM_PID=$!
+
+# Wait for LiteLLM to be ready
+for i in $(seq 1 30); do
+  if curl -s http://localhost:4000/health >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+
+# Point Claude Code at LiteLLM proxy
+export ANTHROPIC_BASE_URL="http://localhost:4000"
 
 TASK_PROMPT=$(cat "$TASK_DESCRIPTION")
 OUTPUT_FILE=/workspace/.thunderdome-output.jsonl
 
 # Run Claude Code in print mode (non-interactive, agentic)
-# --dangerously-skip-permissions: auto-approve all tool use (sandboxed in Docker)
-# --output-format stream-json --verbose: emit NDJSON on stdout for metrics
-# All tool use, test running, etc. happens autonomously
-#
-# Disable set -e so we can capture exit code and still extract metrics
 set +e
 claude -p \
   --output-format stream-json \
@@ -29,6 +34,9 @@ claude -p \
   > "$OUTPUT_FILE" 2>/workspace/.thunderdome-stderr.log
 CLAUDE_EXIT=$?
 set -e
+
+# Stop LiteLLM
+kill $LITELLM_PID 2>/dev/null || true
 
 # Extract metrics from NDJSON output
 node -e '

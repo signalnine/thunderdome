@@ -49,6 +49,15 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 		cfg.Trials = flagTrials
 	}
 
+	// Expand ${VAR} references in orchestrator env from secrets file
+	if cfg.Secrets.EnvFile != "" {
+		secrets, err := gateway.ParseEnvFile(cfg.Secrets.EnvFile)
+		if err != nil {
+			return fmt.Errorf("reading secrets: %w", err)
+		}
+		expandOrchEnv(cfg.Orchestrators, secrets)
+	}
+
 	orchestrators := filterOrchestrators(cfg.Orchestrators, flagOrchestrator)
 	tasks := filterTasks(cfg.Tasks, flagTask, flagCategory)
 
@@ -60,15 +69,26 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
-	gw, err := gateway.Start(ctx, &gateway.StartOpts{
-		SecretsEnvFile: cfg.Secrets.EnvFile,
-		LogDir:         cfg.Proxy.LogDir,
-		BudgetUSD:      cfg.Proxy.BudgetPerTrialUSD,
-	})
-	if err != nil {
-		return fmt.Errorf("starting gateway: %w", err)
+	var gw *gateway.Gateway
+	var gwAddr string
+	if cfg.Proxy.Gateway != "" && cfg.Proxy.Gateway != "none" {
+		gw, err = gateway.Start(ctx, &gateway.StartOpts{
+			SecretsEnvFile: cfg.Secrets.EnvFile,
+			LogDir:         cfg.Proxy.LogDir,
+			BudgetUSD:      cfg.Proxy.BudgetPerTrialUSD,
+		})
+		if err != nil {
+			fmt.Printf("WARNING: gateway failed to start: %v (proceeding without proxy)\n", err)
+		} else {
+			defer gw.Stop()
+			gwAddr = fmt.Sprintf("localhost:%d", gw.Port)
+		}
 	}
-	defer gw.Stop()
+
+	gwURL := ""
+	if gw != nil {
+		gwURL = gw.URL()
+	}
 
 	if flagParallel > 1 {
 		var jobs []runner.Job
@@ -79,13 +99,13 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 					jobs = append(jobs, func() error {
 						fmt.Printf("Running %s × %s (trial %d/%d)...\n", orch.Name, task.Category, trial, cfg.Trials)
 						meta, err := runner.RunTrial(ctx, &runner.TrialOpts{
-							Orchestrator: &orch,
-							Task:         &task,
-							TrialNum:     trial,
-							GatewayURL:   gw.URL(),
-							GatewayAddr:  fmt.Sprintf("localhost:%d", gw.Port),
-							RunDir:       runDir,
-							Timeout:      timeoutForTask(&task),
+							Orchestrator:  &orch,
+							Task:          &task,
+							TrialNum:      trial,
+							GatewayURL:    gwURL,
+							GatewayAddr:   gwAddr,
+							RunDir:        runDir,
+							Timeout:       timeoutForTask(&task),
 							Allowlist:     cfg.Network.Allowlist,
 							GatewayLogDir: cfg.Proxy.LogDir,
 						})
@@ -93,7 +113,7 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 							return err
 						}
 						trialDir := result.TrialDir(runDir, orch.Name, runner.TaskName(&task), trial)
-						scored, err := runner.ValidateAndScore(ctx, trialDir, &task, gw.URL())
+						scored, err := runner.ValidateAndScore(ctx, trialDir, &task, gwURL)
 						if err != nil {
 							fmt.Printf("  WARNING: validation failed for %s trial %d: %v\n", task.Category, trial, err)
 							fmt.Printf("  %s (duration: %ds)\n", meta.ExitReason, meta.DurationS)
@@ -118,17 +138,19 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 						Orchestrator:  &orch,
 						Task:          &task,
 						TrialNum:      trial,
-						GatewayURL:    gw.URL(),
+						GatewayURL:    gwURL,
+						GatewayAddr:   gwAddr,
 						GatewayLogDir: cfg.Proxy.LogDir,
 						RunDir:        runDir,
 						Timeout:       timeoutForTask(&task),
+						Allowlist:     cfg.Network.Allowlist,
 					})
 					if err != nil {
 						fmt.Printf("  ERROR: %v\n", err)
 						continue
 					}
 					trialDir := result.TrialDir(runDir, orch.Name, runner.TaskName(&task), trial)
-					scored, err := runner.ValidateAndScore(ctx, trialDir, &task, gw.URL())
+					scored, err := runner.ValidateAndScore(ctx, trialDir, &task, gwURL)
 					if err != nil {
 						fmt.Printf("  WARNING: validation failed for %s trial %d: %v\n", task.Category, trial, err)
 						fmt.Printf("  %s (duration: %ds)\n", meta.ExitReason, meta.DurationS)
@@ -178,7 +200,7 @@ func filterTasks(tasks []config.Task, name, category string) []config.Task {
 	}
 	var filtered []config.Task
 	for _, t := range tasks {
-		if name != "" && t.Repo != name && !strings.HasSuffix(t.Repo, "/"+name) {
+		if name != "" && t.ID != name && t.Repo != name && !strings.HasSuffix(t.Repo, "/"+name) {
 			continue
 		}
 		if category != "" && !matchCategory(t.Category, category) {
@@ -209,6 +231,19 @@ func timeoutForTask(task *config.Task) time.Duration {
 		return 30 * time.Minute
 	default:
 		return 10 * time.Minute
+	}
+}
+
+func expandOrchEnv(orchs []config.Orchestrator, secrets map[string]string) {
+	for i := range orchs {
+		for k, v := range orchs[i].Env {
+			orchs[i].Env[k] = os.Expand(v, func(key string) string {
+				if val, ok := secrets[key]; ok {
+					return val
+				}
+				return os.Getenv(key)
+			})
+		}
 	}
 }
 

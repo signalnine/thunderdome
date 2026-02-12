@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 
@@ -33,13 +35,21 @@ func ComputeRubricScore(rubric []config.RubricCriterion, scores map[string]float
 }
 
 // JudgeModel is the model used for rubric evaluation.
-var JudgeModel = "claude-sonnet-4-5"
+var JudgeModel = "gemini-2.0-flash"
 
-// RunRubricJudge calls the LLM gateway to evaluate a diff against a rubric.
-// It runs 3 evaluations and takes the median per criterion for reproducibility.
+// RunRubricJudge evaluates a diff against a rubric using an LLM.
+// If gatewayURL is set, uses the proxy. Otherwise calls the Gemini API directly.
+// Runs 3 evaluations and takes the median per criterion for reproducibility.
 func RunRubricJudge(ctx context.Context, gatewayURL string, rubric []config.RubricCriterion, diff, taskDesc string) (map[string]float64, error) {
 	if len(rubric) == 0 {
 		return nil, nil
+	}
+
+	// Truncate large diffs to avoid exceeding model context window.
+	// ~100K chars ≈ 25-30K tokens, leaving room for prompt and response.
+	const maxDiffChars = 100_000
+	if len(diff) > maxDiffChars {
+		diff = diff[:maxDiffChars] + fmt.Sprintf("\n\n... [diff truncated from %d to %d chars] ...", len(diff), maxDiffChars)
 	}
 
 	criteriaList := ""
@@ -58,12 +68,19 @@ Diff:
 %s
 
 Respond with ONLY a JSON object mapping criterion name to score, e.g.:
-{"Follows existing code patterns": 0.8, "Minimal diff": 0.9}`, taskDesc, criteriaList, diff)
+{"Concise": 0.8, "Correct": 0.9}`, taskDesc, criteriaList, diff)
 
 	allScores := make(map[string][]float64)
 	for i := 0; i < 3; i++ {
-		scores, err := callLLMJudge(ctx, gatewayURL, prompt)
+		var scores map[string]float64
+		var err error
+		if gatewayURL != "" {
+			scores, err = callLLMJudgeViaGateway(ctx, gatewayURL, prompt)
+		} else {
+			scores, err = callLLMJudgeDirect(ctx, prompt)
+		}
 		if err != nil {
+			log.Printf("rubric judge attempt %d failed: %v", i+1, err)
 			continue
 		}
 		for k, v := range scores {
@@ -78,7 +95,62 @@ Respond with ONLY a JSON object mapping criterion name to score, e.g.:
 	return result, nil
 }
 
-func callLLMJudge(ctx context.Context, gatewayURL, prompt string) (map[string]float64, error) {
+// callLLMJudgeDirect calls the Gemini API via its OpenAI-compatible endpoint.
+func callLLMJudgeDirect(ctx context.Context, prompt string) (map[string]float64, error) {
+	apiKey := os.Getenv("GEMINI_API_KEY")
+	if apiKey == "" {
+		return nil, fmt.Errorf("GEMINI_API_KEY not set")
+	}
+
+	reqBody := map[string]interface{}{
+		"model":      JudgeModel,
+		"max_tokens": 1024,
+		"messages": []map[string]string{
+			{"role": "user", "content": prompt},
+		},
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	req, err := http.NewRequestWithContext(ctx, "POST",
+		"https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+		bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var errBody map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&errBody)
+		return nil, fmt.Errorf("API returned %d: %v", resp.StatusCode, errBody)
+	}
+
+	var chatResult struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&chatResult); err != nil {
+		return nil, err
+	}
+	if len(chatResult.Choices) == 0 {
+		return nil, fmt.Errorf("no choices in response")
+	}
+
+	return parseJudgeResponse(chatResult.Choices[0].Message.Content)
+}
+
+// callLLMJudgeViaGateway calls an OpenAI-compatible gateway.
+func callLLMJudgeViaGateway(ctx context.Context, gatewayURL, prompt string) (map[string]float64, error) {
 	reqBody := map[string]interface{}{
 		"model":       JudgeModel,
 		"temperature": 0,
@@ -114,7 +186,10 @@ func callLLMJudge(ctx context.Context, gatewayURL, prompt string) (map[string]fl
 		return nil, fmt.Errorf("no choices in response")
 	}
 
-	content := chatResult.Choices[0].Message.Content
+	return parseJudgeResponse(chatResult.Choices[0].Message.Content)
+}
+
+func parseJudgeResponse(content string) (map[string]float64, error) {
 	content = strings.TrimPrefix(content, "```json")
 	content = strings.TrimPrefix(content, "```")
 	content = strings.TrimSuffix(content, "```")

@@ -6,29 +6,44 @@ set -e
 
 cd "$TASK_DIR"
 
-# Route API calls through proxy gateway if configured
-if [ -n "$PROXY_URL" ]; then
-  export ANTHROPIC_BASE_URL="$PROXY_URL"
-fi
+# Start LiteLLM proxy in background, translating Anthropic API to Gemini
+litellm --config /opt/litellm-config.yaml --port 4000 --host 0.0.0.0 &>/tmp/litellm.log &
+LITELLM_PID=$!
+
+# Wait for LiteLLM to be ready
+for i in $(seq 1 30); do
+  if curl -s http://localhost:4000/health >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+
+# Point Claude Code at LiteLLM proxy
+export ANTHROPIC_BASE_URL="http://localhost:4000"
 
 TASK_PROMPT=$(cat "$TASK_DESCRIPTION")
 OUTPUT_FILE=/workspace/.thunderdome-output.jsonl
 
-# Run Claude Code in print mode (non-interactive, agentic)
-# --dangerously-skip-permissions: auto-approve all tool use (sandboxed in Docker)
-# --output-format stream-json --verbose: emit NDJSON on stdout for metrics
-# All tool use, test running, etc. happens autonomously
-#
-# Disable set -e so we can capture exit code and still extract metrics
+# Run Claude Code with the Conclave plugin, routed through LiteLLM to Gemini.
+# Interactive tool policy:
+#   Skill          → ENABLED  — loads skill content that guides methodology
+#   AskUserQuestion → DISABLED — no user to respond in headless mode
+#   EnterPlanMode   → DISABLED — no user to approve plans
 set +e
 claude -p \
   --output-format stream-json \
   --verbose \
   --dangerously-skip-permissions \
+  --plugin-dir /opt/conclave-plugin \
+  --disallowed-tools "AskUserQuestion,EnterPlanMode" \
+  --append-system-prompt "You are running in a headless benchmark environment. There is no human to interact with. Focus on implementation: read the task, write code, run tests, iterate until all tests pass. You have access to Conclave skills — use them when they would help you work more effectively (e.g. TDD, systematic debugging). The conclave binary is at /opt/conclave-plugin/conclave — you may use it for consensus code review if needed." \
   -- "$TASK_PROMPT" \
   > "$OUTPUT_FILE" 2>/workspace/.thunderdome-stderr.log
 CLAUDE_EXIT=$?
 set -e
+
+# Stop LiteLLM
+kill $LITELLM_PID 2>/dev/null || true
 
 # Extract metrics from NDJSON output
 node -e '

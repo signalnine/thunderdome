@@ -54,7 +54,23 @@ func Start(ctx context.Context, opts *StartOpts) (*Gateway, error) {
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 
-	cmd.Env = os.Environ()
+	// Run LiteLLM from /tmp so python-dotenv won't walk up to ~/.env and
+	// pick up DATABASE_URL (which triggers Prisma dependency we don't need).
+	tmpDir, err := os.MkdirTemp("", "litellm-")
+	if err != nil {
+		logFile.Close()
+		return nil, fmt.Errorf("creating temp dir for litellm: %w", err)
+	}
+	cmd.Dir = tmpDir
+
+	// Strip DATABASE_URL and set LITELLM_MODE=PRODUCTION to prevent
+	// python-dotenv from loading ~/.env (which may contain DATABASE_URL).
+	cmd.Env = []string{"LITELLM_MODE=PRODUCTION"}
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "DATABASE_URL=") && !strings.HasPrefix(e, "LITELLM_MODE=") {
+			cmd.Env = append(cmd.Env, e)
+		}
+	}
 	if opts.SecretsEnvFile != "" {
 		envVars, err := parseEnvFile(opts.SecretsEnvFile)
 		if err != nil {
@@ -136,6 +152,21 @@ func waitForPort(port int, timeout time.Duration) error {
 		time.Sleep(500 * time.Millisecond)
 	}
 	return fmt.Errorf("port %d not ready after %s", port, timeout)
+}
+
+// ParseEnvFile reads a .env file and returns a map of key=value pairs.
+func ParseEnvFile(path string) (map[string]string, error) {
+	vars, err := parseEnvFile(path)
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[string]string, len(vars))
+	for _, v := range vars {
+		if idx := strings.IndexByte(v, '='); idx >= 0 {
+			m[v[:idx]] = v[idx+1:]
+		}
+	}
+	return m, nil
 }
 
 func parseEnvFile(path string) ([]string, error) {

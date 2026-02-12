@@ -12,6 +12,10 @@ func CreateRunDir(baseDir string) (string, error) {
 	runsDir := filepath.Join(baseDir, "runs")
 	stamp := time.Now().UTC().Format("2006-01-02T15-04-05")
 	runDir := filepath.Join(runsDir, stamp)
+	runDir, err := filepath.Abs(runDir)
+	if err != nil {
+		return "", fmt.Errorf("resolving run dir: %w", err)
+	}
 	if err := os.MkdirAll(runDir, 0o755); err != nil {
 		return "", fmt.Errorf("creating run dir: %w", err)
 	}

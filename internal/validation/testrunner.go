@@ -15,8 +15,10 @@ type TestResult struct {
 
 // RunTests executes the test command in a validation container and returns results.
 func RunTests(ctx context.Context, workDir, validationImage, installCmd, testCmd string) (*TestResult, error) {
+	seccomp := "--security-opt=seccomp=unconfined"
+	apparmor := "--security-opt=apparmor=unconfined"
 	if installCmd != "" {
-		cmd := exec.CommandContext(ctx, "docker", "run", "--rm",
+		cmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--init", seccomp, apparmor,
 			"-v", workDir+":/workspace", "-w", "/workspace",
 			validationImage, "sh", "-c", installCmd)
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -24,7 +26,7 @@ func RunTests(ctx context.Context, workDir, validationImage, installCmd, testCmd
 		}
 	}
 
-	cmd := exec.CommandContext(ctx, "docker", "run", "--rm",
+	cmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--init", seccomp, apparmor,
 		"-v", workDir+":/workspace", "-w", "/workspace",
 		validationImage, "sh", "-c", testCmd)
 

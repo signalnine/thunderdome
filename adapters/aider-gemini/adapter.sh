@@ -5,13 +5,9 @@ set -e
 
 cd "$TASK_DIR"
 
-if [ -n "$PROXY_URL" ]; then
-  export ANTHROPIC_BASE_URL="$PROXY_URL"
-fi
-
-# set -e propagates aider's exit code
+# Aider supports Gemini natively
 aider \
   --yes-always \
   --no-auto-commits \
   --message-file "$TASK_DESCRIPTION" \
-  --model anthropic/claude-sonnet-4-5
+  --model gemini/gemini-2.0-flash

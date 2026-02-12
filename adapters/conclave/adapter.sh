@@ -14,17 +14,28 @@ fi
 TASK_PROMPT=$(cat "$TASK_DESCRIPTION")
 OUTPUT_FILE=/workspace/.thunderdome-output.jsonl
 
-# Run Claude Code in print mode (non-interactive, agentic)
-# --dangerously-skip-permissions: auto-approve all tool use (sandboxed in Docker)
-# --output-format stream-json --verbose: emit NDJSON on stdout for metrics
-# All tool use, test running, etc. happens autonomously
+# Run Claude Code with the Conclave plugin (v5.4.0+) loaded.
+# The plugin provides skills (TDD, systematic-debugging, verification-before-completion,
+# brainstorming, multi-agent-consensus, etc.) that Claude will use automatically.
 #
-# Disable set -e so we can capture exit code and still extract metrics
+# CONCLAVE_NON_INTERACTIVE=1 tells skills to skip interactive steps:
+#   - brainstorming: auto-uses Consensus Autopilot
+#   - executing-plans: auto-proceeds between batches
+#   - finishing-a-development-branch: auto-merges locally
+#   - writing-plans: auto-uses subagent-driven execution
+#
+# Interactive tool policy:
+#   Skill          → ENABLED  — loads skill content that guides methodology
+#   AskUserQuestion → DISABLED — no user to respond in headless mode
+#   EnterPlanMode   → DISABLED — no user to approve plans
 set +e
 claude -p \
   --output-format stream-json \
   --verbose \
   --dangerously-skip-permissions \
+  --plugin-dir /opt/conclave-plugin \
+  --disallowed-tools "AskUserQuestion,EnterPlanMode" \
+  --append-system-prompt "You are running in a headless benchmark environment. There is no human to interact with. Focus on implementation: read the task, write code, run tests, iterate until all tests pass. You have access to Conclave skills — use them when they would help you work more effectively (e.g. TDD, systematic debugging). The conclave binary is at /opt/conclave-plugin/conclave — you may use it for consensus code review if needed." \
   -- "$TASK_PROMPT" \
   > "$OUTPUT_FILE" 2>/workspace/.thunderdome-stderr.log
 CLAUDE_EXIT=$?

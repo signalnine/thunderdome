@@ -14,14 +14,9 @@ fi
 TASK_PROMPT=$(cat "$TASK_DESCRIPTION")
 OUTPUT_FILE=/workspace/.thunderdome-output.jsonl
 
-# Run Claude Code in print mode (non-interactive, agentic)
-# --dangerously-skip-permissions: auto-approve all tool use (sandboxed in Docker)
-# --output-format stream-json --verbose: emit NDJSON on stdout for metrics
-# All tool use, test running, etc. happens autonomously
-#
-# Disable set -e so we can capture exit code and still extract metrics
 set +e
 claude -p \
+  --model claude-haiku-4-5-20251001 \
   --output-format stream-json \
   --verbose \
   --dangerously-skip-permissions \

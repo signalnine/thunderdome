@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
-	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 )
 
@@ -66,7 +66,12 @@ func RunContainer(ctx context.Context, opts *RunOpts) (*RunResult, error) {
 		})
 	}
 
-	hostCfg := &container.HostConfig{Mounts: mounts}
+	initTrue := true
+	hostCfg := &container.HostConfig{
+		Mounts:     mounts,
+		Init:       &initTrue,
+		SecurityOpt: []string{"seccomp=unconfined", "apparmor=unconfined"},
+	}
 	if opts.CPULimit > 0 {
 		hostCfg.NanoCPUs = int64(opts.CPULimit * 1e9)
 	}
@@ -84,30 +89,14 @@ func RunContainer(ctx context.Context, opts *RunOpts) (*RunResult, error) {
 		containerCfg.User = opts.UserID
 	}
 
-	// NOTE: opts.Allowlist is not yet enforced. The Internal:true network blocks
-	// all egress except to other containers on the same network and the host
-	// (via host.docker.internal). Domain-based allowlisting requires external
-	// iptables/nftables rules or a proxy, which is not yet implemented.
-	var networkingCfg *network.NetworkingConfig
-	if opts.GatewayAddr != "" || len(opts.Allowlist) > 0 {
-		networkID, err := createIsolatedNetwork(ctx, cli)
-		if err != nil {
-			return nil, fmt.Errorf("creating isolated network: %w", err)
-		}
-		defer cli.NetworkRemove(context.Background(), networkID, client.NetworkRemoveOptions{})
-
-		networkingCfg = &network.NetworkingConfig{
-			EndpointsConfig: map[string]*network.EndpointSettings{
-				networkID: {},
-			},
-		}
-		hostCfg.ExtraHosts = []string{"host.docker.internal:host-gateway"}
-	}
+	// Allow container to reach the host (for API proxy gateway).
+	// NOTE: Domain-based allowlisting is not yet implemented. The container
+	// has full network access. Budget limits are enforced by the LiteLLM proxy.
+	hostCfg.ExtraHosts = []string{"host.docker.internal:host-gateway"}
 
 	createResp, err := cli.ContainerCreate(ctx, client.ContainerCreateOptions{
-		Config:           containerCfg,
-		HostConfig:       hostCfg,
-		NetworkingConfig: networkingCfg,
+		Config:     containerCfg,
+		HostConfig: hostCfg,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating container: %w", err)
@@ -135,8 +124,9 @@ func RunContainer(ctx context.Context, opts *RunOpts) (*RunResult, error) {
 				cli.ContainerKill(context.Background(), containerID, client.ContainerKillOptions{Signal: "SIGKILL"})
 				logReader, _ := cli.ContainerLogs(context.Background(), containerID, client.ContainerLogsOptions{ShowStdout: true, ShowStderr: true})
 				if logReader != nil {
-					io.Copy(io.Discard, logReader)
+					logData, _ := io.ReadAll(logReader)
 					logReader.Close()
+					fmt.Fprintf(os.Stderr, "Container logs (timeout):\n%s\n", string(logData))
 				}
 				return &RunResult{
 					ExitCode: 124,
@@ -146,6 +136,15 @@ func RunContainer(ctx context.Context, opts *RunOpts) (*RunResult, error) {
 			}
 			// nil error means no error on this channel; wait for result
 		case status := <-waitResult.Result:
+			// Capture container logs for debugging
+			logReader, _ := cli.ContainerLogs(context.Background(), containerID, client.ContainerLogsOptions{ShowStdout: true, ShowStderr: true, Tail: "100"})
+			if logReader != nil {
+				logData, _ := io.ReadAll(logReader)
+				logReader.Close()
+				if len(logData) > 0 {
+					fmt.Fprintf(os.Stderr, "Container logs:\n%s\n", string(logData))
+				}
+			}
 			return &RunResult{
 				ExitCode: int(status.StatusCode),
 				TimedOut: false,
@@ -155,15 +154,3 @@ func RunContainer(ctx context.Context, opts *RunOpts) (*RunResult, error) {
 	}
 }
 
-func createIsolatedNetwork(ctx context.Context, cli *client.Client) (string, error) {
-	name := fmt.Sprintf("thunderdome-%d", time.Now().UnixNano())
-	resp, err := cli.NetworkCreate(ctx, name, client.NetworkCreateOptions{
-		Driver:   "bridge",
-		Internal: true,
-		Labels:   map[string]string{"thunderdome": "true"},
-	})
-	if err != nil {
-		return "", err
-	}
-	return resp.ID, nil
-}
