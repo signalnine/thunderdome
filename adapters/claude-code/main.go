@@ -18,18 +18,18 @@ import (
 type State int
 
 const (
-	StateWaiting      State = iota // Listening, no connection yet
-	StateInitializing              // Connected, awaiting initialize handshake
-	StateRunning                   // Task prompt sent, Claude Code is working
-	StateDone                      // Result received, ready to exit
+	StateWaiting State = iota // Listening, no connection yet
+	StateInit                 // Connected, awaiting system/init from CLI
+	StateRunning              // Task prompt sent, Claude Code is working
+	StateDone                 // Result received, ready to exit
 )
 
 func (s State) String() string {
 	switch s {
 	case StateWaiting:
 		return "WAITING"
-	case StateInitializing:
-		return "INITIALIZING"
+	case StateInit:
+		return "INIT"
 	case StateRunning:
 		return "RUNNING"
 	case StateDone:
@@ -39,34 +39,79 @@ func (s State) String() string {
 	}
 }
 
-// Protocol message types (NDJSON over WebSocket).
+// --- Protocol message types (NDJSON over WebSocket) ---
+// These match the Claude Code SDK WebSocket protocol.
 
-type Message struct {
-	Type    string          `json:"type"`
-	Subtype string          `json:"subtype,omitempty"`
-	Content json.RawMessage `json:"content,omitempty"`
+// Envelope is the top-level message read from the wire.
+// Different message types use different subsets of fields.
+type Envelope struct {
+	Type    string `json:"type"`
+	Subtype string `json:"subtype,omitempty"`
 
-	// Fields for control_request/response
-	SupportedAPIVersions []string        `json:"supportedApiVersions,omitempty"`
-	APIVersion           string          `json:"apiVersion,omitempty"`
-	PermissionMode       string          `json:"permissionMode,omitempty"`
-	ToolName             string          `json:"toolName,omitempty"`
-	Input                json.RawMessage `json:"input,omitempty"`
-	Allowed              *bool           `json:"allowed,omitempty"`
+	// system/init fields (CLI → Server)
+	SessionID        string   `json:"session_id,omitempty"`
+	UUID             string   `json:"uuid,omitempty"`
+	Cwd              string   `json:"cwd,omitempty"`
+	Tools            []string `json:"tools,omitempty"`
+	Model            string   `json:"model,omitempty"`
+	PermissionMode   string   `json:"permissionMode,omitempty"`
+	ClaudeCodeVersion string  `json:"claude_code_version,omitempty"`
 
-	// Fields for result
-	Result string `json:"result,omitempty"`
-	Usage  *Usage `json:"usage,omitempty"`
+	// control_request fields (CLI → Server)
+	RequestID string          `json:"request_id,omitempty"`
+	Request   json.RawMessage `json:"request,omitempty"`
 
-	// Fields for user message
-	UserType string `json:"userType,omitempty"`
+	// control_response fields (Server → CLI)
+	Response json.RawMessage `json:"response,omitempty"`
+
+	// user message fields (Server → CLI)
+	Message         json.RawMessage `json:"message,omitempty"`
+	ParentToolUseID *string         `json:"parent_tool_use_id"` // null for top-level
+	// SessionID is shared with init
+
+	// assistant message fields (CLI → Server)
+	// Message, UUID, SessionID shared
+
+	// result fields (CLI → Server)
+	IsError     *bool           `json:"is_error,omitempty"`
+	Result      string          `json:"result,omitempty"`
+	Errors      []string        `json:"errors,omitempty"`
+	DurationMs  int             `json:"duration_ms,omitempty"`
+	NumTurns    int             `json:"num_turns,omitempty"`
+	TotalCostUSD float64        `json:"total_cost_usd,omitempty"`
+	Usage       *ResultUsage    `json:"usage,omitempty"`
 }
 
-type Usage struct {
-	InputTokens          int `json:"input_tokens"`
-	OutputTokens         int `json:"output_tokens"`
-	CacheReadTokens      int `json:"cache_read_input_tokens,omitempty"`
-	CacheCreationTokens  int `json:"cache_creation_input_tokens,omitempty"`
+// ControlRequestBody is the nested "request" inside a control_request envelope.
+type ControlRequestBody struct {
+	Subtype   string          `json:"subtype"`
+	ToolName  string          `json:"tool_name,omitempty"`
+	Input     json.RawMessage `json:"input,omitempty"`
+	ToolUseID string          `json:"tool_use_id,omitempty"`
+}
+
+// AssistantMessage is the nested "message" inside an assistant envelope.
+type AssistantMessage struct {
+	ID      string          `json:"id,omitempty"`
+	Type    string          `json:"type,omitempty"`
+	Role    string          `json:"role"`
+	Model   string          `json:"model,omitempty"`
+	Content json.RawMessage `json:"content,omitempty"`
+	Usage   *AssistantUsage `json:"usage,omitempty"`
+}
+
+type AssistantUsage struct {
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
+}
+
+type ResultUsage struct {
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
 }
 
 type Metrics struct {
@@ -76,10 +121,13 @@ type Metrics struct {
 	CacheCreationTokens int      `json:"cache_creation_tokens,omitempty"`
 	Turns               int      `json:"turns"`
 	ToolsUsed           []string `json:"tools_used"`
+	DurationMs          int      `json:"duration_ms,omitempty"`
+	TotalCostUSD        float64  `json:"total_cost_usd,omitempty"`
 }
 
 type Server struct {
 	state       State
+	sessionID   string
 	taskPrompt  string
 	metricsFile string
 	idleTimeout time.Duration
@@ -106,7 +154,7 @@ func (s *Server) logf(format string, args ...any) {
 }
 
 func (s *Server) HandleConnection(ctx context.Context, conn *websocket.Conn) error {
-	s.state = StateInitializing
+	s.state = StateInit
 	s.logf("[STATE] → %s", s.state)
 
 	readTimeout := s.idleTimeout
@@ -119,25 +167,25 @@ func (s *Server) HandleConnection(ctx context.Context, conn *websocket.Conn) err
 			return fmt.Errorf("read in state %s: %w", s.state, err)
 		}
 
-		var msg Message
-		if err := json.Unmarshal(data, &msg); err != nil {
+		var env Envelope
+		if err := json.Unmarshal(data, &env); err != nil {
 			s.logf("[RECV] malformed JSON: %s", string(data))
 			continue
 		}
 
-		s.logf("[RECV] type=%s subtype=%s state=%s", msg.Type, msg.Subtype, s.state)
+		s.logf("[RECV] type=%s subtype=%s state=%s", env.Type, env.Subtype, s.state)
 
-		response, err := s.handleMessage(&msg)
+		responses, err := s.handleMessage(&env)
 		if err != nil {
 			return fmt.Errorf("handle message in state %s: %w", s.state, err)
 		}
 
-		for _, resp := range response {
+		for _, resp := range responses {
 			respData, err := json.Marshal(resp)
 			if err != nil {
 				return fmt.Errorf("marshal response: %w", err)
 			}
-			s.logf("[SEND] type=%s subtype=%s", resp.Type, resp.Subtype)
+			s.logf("[SEND] %s", string(respData))
 			if err := conn.Write(ctx, websocket.MessageText, respData); err != nil {
 				return fmt.Errorf("write response: %w", err)
 			}
@@ -147,83 +195,144 @@ func (s *Server) HandleConnection(ctx context.Context, conn *websocket.Conn) err
 	return s.writeMetrics()
 }
 
-func (s *Server) handleMessage(msg *Message) ([]Message, error) {
+func (s *Server) handleMessage(env *Envelope) ([]json.RawMessage, error) {
 	switch s.state {
-	case StateInitializing:
-		return s.handleInitializing(msg)
+	case StateInit:
+		return s.handleInit(env)
 	case StateRunning:
-		return s.handleRunning(msg)
+		return s.handleRunning(env)
 	default:
 		return nil, fmt.Errorf("unexpected message in state %s", s.state)
 	}
 }
 
-func (s *Server) handleInitializing(msg *Message) ([]Message, error) {
-	if msg.Type != "control_request" || msg.Subtype != "initialize" {
-		return nil, fmt.Errorf("expected initialize, got type=%s subtype=%s", msg.Type, msg.Subtype)
+// handleInit handles the system/init message from the CLI and sends the task prompt.
+func (s *Server) handleInit(env *Envelope) ([]json.RawMessage, error) {
+	if env.Type != "system" || env.Subtype != "init" {
+		return nil, fmt.Errorf("expected system/init, got type=%s subtype=%s", env.Type, env.Subtype)
 	}
 
-	// Respond with initialize + send task prompt
-	responses := []Message{
-		{
-			Type:           "control_response",
-			Subtype:        "initialize",
-			APIVersion:     "1",
-			PermissionMode: "default",
+	s.sessionID = env.SessionID
+	s.logf("[INIT] session=%s model=%s version=%s tools=%v",
+		env.SessionID, env.Model, env.ClaudeCodeVersion, env.Tools)
+
+	// Send the task prompt as a user message
+	userMsg := map[string]any{
+		"type": "user",
+		"message": map[string]any{
+			"role":    "user",
+			"content": s.taskPrompt,
 		},
-		{
-			Type:    "user",
-			Content: mustMarshal([]map[string]string{{"type": "text", "text": s.taskPrompt}}),
-		},
+		"parent_tool_use_id": nil,
+		"session_id":         s.sessionID,
+	}
+	data, err := json.Marshal(userMsg)
+	if err != nil {
+		return nil, fmt.Errorf("marshal user message: %w", err)
 	}
 
 	s.state = StateRunning
 	s.logf("[STATE] → %s", s.state)
-	return responses, nil
+	return []json.RawMessage{data}, nil
 }
 
-func (s *Server) handleRunning(msg *Message) ([]Message, error) {
-	switch msg.Type {
+// handleRunning processes messages while Claude Code is working.
+func (s *Server) handleRunning(env *Envelope) ([]json.RawMessage, error) {
+	switch env.Type {
 	case "control_request":
-		return s.handleControlRequest(msg)
+		return s.handleControlRequest(env)
 	case "assistant":
-		s.metrics.Turns++
-		return nil, nil
+		return s.handleAssistant(env)
 	case "result":
-		return s.handleResult(msg)
+		return s.handleResult(env)
+	case "keep_alive", "stream_event", "tool_progress", "tool_use_summary", "system", "auth_status":
+		// Silently consume informational messages
+		return nil, nil
 	default:
-		// Ignore unknown message types
-		s.logf("[WARN] unknown message type: %s", msg.Type)
+		s.logf("[WARN] unknown message type: %s", env.Type)
 		return nil, nil
 	}
 }
 
-func (s *Server) handleControlRequest(msg *Message) ([]Message, error) {
-	switch msg.Subtype {
+// handleControlRequest processes tool permission requests.
+func (s *Server) handleControlRequest(env *Envelope) ([]json.RawMessage, error) {
+	var reqBody ControlRequestBody
+	if err := json.Unmarshal(env.Request, &reqBody); err != nil {
+		return nil, fmt.Errorf("unmarshal control request body: %w", err)
+	}
+
+	switch reqBody.Subtype {
 	case "can_use_tool":
-		if msg.ToolName != "" && !s.toolsSeen[msg.ToolName] {
-			s.toolsSeen[msg.ToolName] = true
-			s.metrics.ToolsUsed = append(s.metrics.ToolsUsed, msg.ToolName)
+		if reqBody.ToolName != "" && !s.toolsSeen[reqBody.ToolName] {
+			s.toolsSeen[reqBody.ToolName] = true
+			s.metrics.ToolsUsed = append(s.metrics.ToolsUsed, reqBody.ToolName)
 		}
-		allowed := true
-		return []Message{{
-			Type:    "control_response",
-			Subtype: "can_use_tool",
-			Allowed: &allowed,
-		}}, nil
+
+		// Auto-approve all tools with the original input
+		resp := map[string]any{
+			"type": "control_response",
+			"response": map[string]any{
+				"subtype":    "success",
+				"request_id": env.RequestID,
+				"response": map[string]any{
+					"behavior":     "allow",
+					"updatedInput": json.RawMessage(reqBody.Input),
+				},
+			},
+		}
+		data, err := json.Marshal(resp)
+		if err != nil {
+			return nil, fmt.Errorf("marshal control response: %w", err)
+		}
+		return []json.RawMessage{data}, nil
+
 	default:
-		s.logf("[WARN] unknown control_request subtype: %s", msg.Subtype)
+		s.logf("[WARN] unknown control_request subtype: %s", reqBody.Subtype)
 		return nil, nil
 	}
 }
 
-func (s *Server) handleResult(msg *Message) ([]Message, error) {
-	if msg.Usage != nil {
-		s.metrics.InputTokens += msg.Usage.InputTokens
-		s.metrics.OutputTokens += msg.Usage.OutputTokens
-		s.metrics.CacheReadTokens += msg.Usage.CacheReadTokens
-		s.metrics.CacheCreationTokens += msg.Usage.CacheCreationTokens
+// handleAssistant processes assistant response messages and extracts usage.
+func (s *Server) handleAssistant(env *Envelope) ([]json.RawMessage, error) {
+	s.metrics.Turns++
+
+	if env.Message != nil {
+		var msg AssistantMessage
+		if err := json.Unmarshal(env.Message, &msg); err == nil && msg.Usage != nil {
+			s.metrics.InputTokens += msg.Usage.InputTokens
+			s.metrics.OutputTokens += msg.Usage.OutputTokens
+			s.metrics.CacheReadTokens += msg.Usage.CacheReadInputTokens
+			s.metrics.CacheCreationTokens += msg.Usage.CacheCreationInputTokens
+		}
 	}
+
+	return nil, nil
+}
+
+// handleResult processes the final result message.
+func (s *Server) handleResult(env *Envelope) ([]json.RawMessage, error) {
+	// Extract usage from result (cumulative totals)
+	if env.Usage != nil {
+		// Result usage is cumulative — use it as the authoritative total
+		s.metrics.InputTokens = env.Usage.InputTokens
+		s.metrics.OutputTokens = env.Usage.OutputTokens
+		s.metrics.CacheReadTokens = env.Usage.CacheReadInputTokens
+		s.metrics.CacheCreationTokens = env.Usage.CacheCreationInputTokens
+	}
+
+	if env.NumTurns > 0 {
+		s.metrics.Turns = env.NumTurns
+	}
+	s.metrics.DurationMs = env.DurationMs
+	s.metrics.TotalCostUSD = env.TotalCostUSD
+
+	isError := env.IsError != nil && *env.IsError
+	if isError {
+		s.logf("[RESULT] error subtype=%s errors=%v", env.Subtype, env.Errors)
+	} else {
+		s.logf("[RESULT] success, cost=$%.4f, turns=%d", env.TotalCostUSD, env.NumTurns)
+	}
+
 	s.state = StateDone
 	s.logf("[STATE] → %s", s.state)
 	return nil, nil
@@ -242,14 +351,6 @@ func (s *Server) writeMetrics() error {
 	}
 	s.logf("[METRICS] written to %s", s.metricsFile)
 	return nil
-}
-
-func mustMarshal(v any) json.RawMessage {
-	data, err := json.Marshal(v)
-	if err != nil {
-		panic(err)
-	}
-	return data
 }
 
 func main() {
@@ -282,8 +383,6 @@ func main() {
 
 	httpServer := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// InsecureSkipVerify disables origin checking — safe because this
-			// server only accepts connections from localhost inside a container.
 			conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 				InsecureSkipVerify: true,
 			})

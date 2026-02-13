@@ -1,0 +1,60 @@
+name: Sync to Marketplace
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.claude-plugin/plugin.json'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout conclave
+        uses: actions/checkout@v4
+
+      - name: Extract version and build description
+        id: extract
+        run: |
+          VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          # Build description with version
+          DESC="Complete software development workflow with multi-agent consensus (Claude/Gemini/Codex), autonomous iteration (ralph-loop), and consensus autopilot. v${VERSION}"
+          echo "description=$DESC" >> $GITHUB_OUTPUT
+
+      - name: Checkout marketplace
+        uses: actions/checkout@v4
+        with:
+          repository: signalnine/honest-gabes-marketplace
+          token: ${{ secrets.MARKETPLACE_PAT }}
+          path: marketplace
+
+      - name: Update marketplace
+        run: |
+          cd marketplace
+
+          # Update description in plugins.json
+          jq --arg desc "${{ steps.extract.outputs.description }}" \
+             '.plugins[0].description = $desc' \
+             plugins.json > plugins.json.tmp && mv plugins.json.tmp plugins.json
+
+          # Update version in .claude-plugin/marketplace.json
+          jq --arg ver "${{ steps.extract.outputs.version }}" \
+             '(.plugins[] | select(.name == "conclave")).version = $ver' \
+             .claude-plugin/marketplace.json > .claude-plugin/marketplace.json.tmp \
+             && mv .claude-plugin/marketplace.json.tmp .claude-plugin/marketplace.json
+
+          # Check if anything changed
+          if git diff --quiet; then
+            echo "No changes to marketplace"
+            exit 0
+          fi
+
+          # Commit and push
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add plugins.json .claude-plugin/marketplace.json
+          git commit -m "chore: sync conclave to v${{ steps.extract.outputs.version }}"
+          git push

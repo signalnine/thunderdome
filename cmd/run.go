@@ -50,10 +50,16 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 	}
 
 	// Expand ${VAR} references in orchestrator env from secrets file
+	// Also set secrets in process env so the rubric judge can access API keys
 	if cfg.Secrets.EnvFile != "" {
 		secrets, err := gateway.ParseEnvFile(cfg.Secrets.EnvFile)
 		if err != nil {
 			return fmt.Errorf("reading secrets: %w", err)
+		}
+		for k, v := range secrets {
+			if os.Getenv(k) == "" {
+				os.Setenv(k, v)
+			}
 		}
 		expandOrchEnv(cfg.Orchestrators, secrets)
 	}

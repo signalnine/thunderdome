@@ -1,0 +1,1487 @@
+name: "ecosystem-activity-report"
+description: "Analyze activity across the Amplifier ecosystem by discovering repos from MODULES.md"
+version: "1.15.2"
+author: "Amplifier"
+tags: ["amplifier", "ecosystem", "github", "activity", "modules", "discovery"]
+
+# Amplifier Ecosystem Activity Report
+#
+# This recipe is the top-level entry point for analyzing activity across
+# the Amplifier ecosystem. It:
+#
+# 1. Discovers the current GitHub user (for filtering to your activity)
+# 2. Parses date range from natural language
+# 3. Reads MODULES.md to discover all ecosystem repos
+# 4. Filters repos based on criteria (org, name pattern)
+# 5. Calls the generic multi-repo recipe from @recipes bundle
+#
+# v1.15.2: Fix reduce-analyses step to filter intermediate files
+#         - Same fix as v1.15.1 but for reduce-analyses step (was missed)
+#         - Prevents 186 "unknown" repos appearing in final report
+#
+# v1.15.1: Fix validation to work with repo-activity-analysis v3.0.0+
+#         - Filter out intermediate analysis files (chunk, commit, pr)
+#         - Only count main {repo}-analysis.json files for validation
+#
+# v1.15.0: Model selection optimization for cost/performance
+#         - haiku for simple tasks: scope parsing, date parsing, file ops
+#         - sonnet for complex tasks: executive summary, cross-cutting analysis
+#         - Retry config added to synthesis steps for reliability
+#         - ~10x cost reduction on simple parsing steps
+#
+# v1.14.0: Orchestrator-level rate limiting
+#         - Added orchestrator config with min_delay_between_calls_ms: 500
+#         - This paces API calls WITHIN each agent's agentic loop
+#         - Combined with recipe-level rate_limiting for comprehensive coverage
+#
+# v1.13.0: Maximum reliability configuration
+#         - parallel_analysis: 2 → 1 (sequential repo analysis)
+#         - max_concurrent_llm: 2 → 1 (strictly sequential LLM calls)
+#         - min_delay_ms: 1500 → 3000 (3s between calls)
+#         - initial_delay_ms: 5000 → 10000 (10s backoff start)
+#         - Trade-off: ~2x slower but eliminates rate limit failures
+#
+# v1.12.0: More conservative rate limiting to avoid failures
+#         - parallel_analysis: true → 2 (max 2 concurrent repo analyses)
+#         - max_concurrent_llm: 3 → 2
+#         - min_delay_ms: 500 → 1500 (1.5s between LLM calls)
+#         - initial_delay_ms: 2000 → 5000 (5s backoff start)
+#
+# v1.11.0: Pagination fixes for accurate commit/PR counts
+#         - quick-activity-check now uses --paginate for repos with >100 commits
+#         - Added count_with_pagination() helper function
+#         - Increased timeout to 1800s for large repos with many pages
+#         - Fixes bug where repos like amplifier-app-cli showed 100 instead of 462 commits
+#
+# v1.10.0: Rate limiting for API citizenship
+#         - Added rate_limiting config (max_concurrent_llm: 3, min_delay_ms: 500)
+#         - Adaptive backoff on 429 errors enabled by default
+#         - Prevents overwhelming LLM providers in multi-user environments
+#
+# v1.7.0: Context overflow fix
+#         - Sub-recipe now returns compact synthesis_input for aggregation
+#         - Added reduce-analyses step with token budget enforcement
+#         - Synthesis step uses reduced data instead of raw repo_analyses
+#         - Full analysis details preserved in ai_working/analyses/ files
+#
+# v1.6.0: Recipe quality improvements from recipe-author review
+#         - Add api_delay_seconds configurable rate limiting (was hardcoded 0.5s)
+#         - Add api_retry_attempts for resilient GitHub API calls
+#         - Replace manual JSON construction with jq -n (safer)
+#         - Standardize on printf over heredoc for YAML safety
+#
+# v1.5.0: Timezone and date handling fixes
+#         - Use LOCAL timezone for date parsing (not UTC)
+#         - No end date for "since X" queries (prevents missing recent commits)
+#         - Explicit timezone detection and display in description
+#
+# v1.4.0: Reliability and completeness improvements
+#         - Fix "all activity" mode to actually check repos for commits (was skipping)
+#         - Fix PR detection to use created_at/merged_at (not updated_at)
+#         - Add explicit write-report step (LLM file writes are non-deterministic)
+#         - Change synthesize-report on_error to "fail" (critical step)
+#
+# v1.3.0: Natural language activity scope
+#         - Replace author_filter with activity_scope (natural language)
+#         - Support: "my activity", "all", "bkrabach", "me and robotdad", etc.
+#         - LLM interprets scope request into structured filter
+#
+# v1.2.0: Performance optimizations
+#         - parallel: true default for ~4x faster execution
+#         - Pass precomputed values to sub-recipes (eliminates 12 redundant LLM calls)
+#         - Convert discovery-summary to bash (faster, deterministic)
+#         - Add parallel_analysis toggle for user control
+#
+# v1.1.0: Converted bash-heavy steps to type: "bash" for efficiency
+#         (no LLM overhead for deterministic shell commands)
+
+recursion:
+  max_depth: 3
+  max_total_steps: 200
+
+# v1.14.0: Orchestrator-level rate limiting for agent loops
+# Paces API calls WITHIN each spawned agent's agentic loop
+# Complements recipe-level rate_limiting (which controls task spawning)
+orchestrator:
+  config:
+    min_delay_between_calls_ms: 500  # Pace within-agent tool calls
+
+# v1.10.0: Rate limiting to be a good API citizen
+# v1.12.0: More conservative settings to avoid rate limit failures
+# v1.13.0: Even more conservative - sequential LLM calls for reliability
+# Controls global LLM concurrency across the entire recipe tree (task spawning)
+rate_limiting:
+  max_concurrent_llm: 1      # Strictly sequential LLM calls (reduced from 2)
+  min_delay_ms: 3000         # 3s minimum between call completions (increased from 1.5s)
+  backoff:
+    enabled: true            # Auto-slow on 429 errors
+    initial_delay_ms: 10000  # Start with 10s delay after rate limit hit (increased from 5s)
+    max_delay_ms: 120000     # Cap at 2 minutes (increased from 1 minute)
+    multiplier: 2.5          # More aggressive backoff (increased from 2.0)
+    reset_after_success: 5   # Need more successes before reducing delay (increased from 3)
+#
+# Usage (your activity today - default):
+#   amplifier run "execute recipe @amplifier:recipes/ecosystem-activity-report.yaml"
+#
+# Usage (all ecosystem activity since yesterday):
+#   amplifier run 'execute recipe ... with context {
+#     "activity_scope": "all activity",
+#     "date_range": "since yesterday"
+#   }'
+#
+# Usage (specific user):
+#   amplifier run 'execute recipe ... with context {
+#     "activity_scope": "robotdad",
+#     "date_range": "last week"
+#   }'
+#
+# Usage (multiple users):
+#   amplifier run 'execute recipe ... with context {
+#     "activity_scope": "me and robotdad"
+#   }'
+#
+# Requirements:
+#   - gh CLI installed and authenticated
+#   - recipes bundle loaded (provides generic repo-activity-analysis recipe)
+
+context:
+  # Date range (natural language) - defaults to today
+  date_range: "today"
+  
+  # Activity scope (natural language) - who's activity to show
+  # Examples:
+  #   "my activity" or "" (default) - current authenticated user
+  #   "all activity" or "everyone" - no author filter
+  #   "bkrabach" or "activity from bkrabach" - specific user
+  #   "me and robotdad" - multiple users
+  #   "the team" - attempts to discover team from recent contributors
+  activity_scope: ""
+  
+  # Filter repos by regex pattern (applied to repo name)
+  # Examples: "amplifier-core", "amplifier-core|amplifier-foundation", "" (all)
+  repo_filter: ""
+  
+  # Filter repos by GitHub org (default: microsoft)
+  org_filter: "microsoft"
+  
+  # Working directory for intermediate files
+  working_dir: "./ai_working"
+  
+  # Output report filename
+  report_filename: "ecosystem-activity-report.md"
+  
+  # Parallel analysis mode - number limits concurrent repo analyses
+  # Set to 1 for sequential (safest), 2-3 for moderate parallelism, true for max
+  # v1.13.0: Reduced to 1 for reliability over speed
+  parallel_analysis: 1
+  
+  # Rate limiting: delay between GitHub API calls (seconds)
+  # Increase if hitting rate limits, decrease if you have higher limits
+  api_delay_seconds: 0.5
+  
+  # Retry configuration for GitHub API calls
+  # Set to 1 for no retries, higher for more resilience to transient failures
+  api_retry_attempts: 3
+  
+  # Default values for step outputs (prevents undefined variable errors)
+  user_info: {"username": "", "discovered": false}
+  parsed_date: {"original": "", "iso_since": "", "iso_until": "", "gh_format": ""}
+  modules_content: {"path": "", "content": "", "error": null}
+  discovered_repos: {"total": 0, "repos": []}
+  filtered_repos: {"count": 0, "repos": [], "dropped": []}
+  activity_checks: []
+  active_repos: {"count": 0, "repos": [], "skipped": []}
+  
+  # v1.9.0: Validation defaults for analysis completeness tracking
+  analysis_validation: {"expected_repos": 0, "analyzed_repos": 0, "missing_count": 0, "missing_repos": [], "lost_commits": 0, "lost_prs": 0, "complete": true}
+  final_validation: {"all_recovered": true, "still_missing": 0, "repos": []}
+
+steps:
+  # ==========================================================================
+  # Step 0: Validate prerequisites (fail fast if tools missing)
+  # ==========================================================================
+  # BASH STEP - Check required tools before starting expensive operations
+  # Why bash: Deterministic checks, no LLM needed, fail fast on missing deps
+  - id: "validate-prerequisites"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      
+      errors=""
+      warnings=""
+      
+      # Check gh CLI
+      if ! command -v gh &>/dev/null; then
+        errors="${errors}ERROR: gh CLI not found. Install: https://cli.github.com/\n"
+      elif ! gh auth status &>/dev/null; then
+        errors="${errors}ERROR: gh CLI not authenticated. Run: gh auth login\n"
+      fi
+      
+      # Check jq
+      if ! command -v jq &>/dev/null; then
+        errors="${errors}ERROR: jq not found. Install: brew install jq (macOS) or apt install jq (Linux)\n"
+      fi
+      
+      # Check base64 (usually available, but verify)
+      if ! command -v base64 &>/dev/null; then
+        errors="${errors}ERROR: base64 not found (required for decoding API responses)\n"
+      fi
+      
+      # Optional: Check for rate limiting issues
+      remaining=$(gh api rate_limit --jq '.resources.core.remaining' 2>/dev/null || echo "unknown")
+      if [ "$remaining" != "unknown" ] && [ "$remaining" -lt 100 ]; then
+        warnings="${warnings}WARNING: GitHub API rate limit low ($remaining remaining)\n"
+      fi
+      
+      # Output results
+      if [ -n "$errors" ]; then
+        printf "$errors" >&2
+        printf "$warnings" >&2
+        echo '{"valid": false, "errors": "Missing prerequisites - see stderr"}'
+        exit 1
+      else
+        if [ -n "$warnings" ]; then
+          printf "$warnings" >&2
+        fi
+        echo "{\"valid\": true, \"gh_version\": \"$(gh --version | head -1)\", \"jq_version\": \"$(jq --version)\", \"rate_limit_remaining\": \"$remaining\"}"
+      fi
+    output: "prerequisites"
+    timeout: 30
+    on_error: "fail"
+
+  # ==========================================================================
+  # Step 1: Setup and check if activity scope needs LLM interpretation
+  # ==========================================================================
+  # BASH STEP - Handle simple cases without LLM, flag complex cases for LLM
+  - id: "setup-and-check-scope"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      
+      # Create all working directories upfront
+      mkdir -p {{working_dir}}/{discovery,repos,reports}
+      
+      # Get current user for context
+      current_user=$(gh api user --jq '.login' 2>/dev/null || echo "")
+      
+      scope="{{activity_scope}}"
+      scope_lower=$(echo "$scope" | tr '[:upper:]' '[:lower:]')
+      
+      # Check for simple cases that don't need LLM
+      if [ -z "$scope" ] || [ "$scope_lower" = "my activity" ] || [ "$scope_lower" = "mine" ] || [ "$scope_lower" = "me" ]; then
+        # Current user - no LLM needed
+        jq -n --arg user "$current_user" '{
+          needs_llm: "false",
+          filter_mode: "current_user",
+          usernames: [$user],
+          description: ("your activity (" + $user + ")"),
+          original: "{{activity_scope}}"
+        }'
+      elif [ "$scope_lower" = "all" ] || [ "$scope_lower" = "everyone" ] || [ "$scope_lower" = "all activity" ]; then
+        # All activity - no LLM needed
+        echo '{"needs_llm": "false", "filter_mode": "all", "usernames": [], "description": "all activity", "original": "{{activity_scope}}"}'
+      elif echo "$scope" | grep -qE '^@?[a-zA-Z0-9_-]+$'; then
+        # Simple username (no spaces, "and", etc.) - no LLM needed
+        username=$(echo "$scope" | sed 's/^@//' | tr '[:upper:]' '[:lower:]')
+        jq -n --arg user "$username" '{
+          needs_llm: "false",
+          filter_mode: "specific_users",
+          usernames: [$user],
+          description: ("activity from " + $user),
+          original: "{{activity_scope}}"
+        }'
+      else
+        # Complex case - needs LLM interpretation
+        jq -n --arg scope "$scope" --arg user "$current_user" '{
+          needs_llm: "true",
+          activity_scope: $scope,
+          current_user: $user
+        }'
+      fi
+    output: "scope_check"
+    parse_json: true
+    timeout: 60
+
+  # ==========================================================================
+  # Step 1b: Interpret activity scope (LLM - only for complex cases)
+  # ==========================================================================
+  # AGENT STEP - LLM interprets complex natural language requests
+  # Model: haiku - simple NL→structured JSON pattern matching
+  - id: "interpret-activity-scope-llm"
+    condition: "{{scope_check.needs_llm}} == 'true'"
+    agent: "foundation:explorer"
+    provider: "anthropic"
+    model: "claude-haiku-*"
+    prompt: |
+      Interpret the activity scope request to determine whose GitHub activity to show.
+      
+      ## Input
+      
+      Activity scope request: "{{scope_check.activity_scope}}"
+      Current authenticated user: "{{scope_check.current_user}}"
+      
+      ## Interpretation Guidelines
+      
+      | Input | Interpretation |
+      |-------|---------------|
+      | "me and robotdad" | Multiple users: [current_user, robotdad] |
+      | "bkrabach and robotdad" | Multiple users: [bkrabach, robotdad] |
+      | "activity from john" | Specific user: john |
+      | "john's activity" | Specific user: john |
+      | "the team", "our team" | Use current_user (can't auto-discover team) |
+      
+      Handle variations gracefully:
+      - Case insensitive: "BKRABACH" → "bkrabach"
+      - With/without @: "@john" → "john"
+      - Possessive: "john's activity" → "john"
+      - Pronouns: "my", "mine", "me" → current_user
+      
+      ## Output
+      
+      Return JSON:
+      {
+        "filter_mode": "current_user" | "all" | "specific_users",
+        "usernames": ["list", "of", "usernames"],
+        "description": "human readable (e.g., 'activity from bkrabach and robotdad')",
+        "original": "{{scope_check.activity_scope}}"
+      }
+    output: "user_info_llm"
+    parse_json: true
+    timeout: 60
+
+  # ==========================================================================
+  # Step 1c: Use precomputed scope (only runs if LLM was skipped)
+  # ==========================================================================
+  - id: "use-precomputed-scope"
+    condition: "{{scope_check.needs_llm}} == 'false'"
+    type: "bash"
+    command: |
+      echo '{{scope_check}}' | jq 'del(.needs_llm)'
+    output: "user_info"
+    parse_json: true
+    timeout: 10
+
+  # ==========================================================================
+  # Step 1d: Use LLM scope (only runs if LLM step ran)
+  # ==========================================================================
+  - id: "use-llm-scope"
+    condition: "{{scope_check.needs_llm}} == 'true'"
+    type: "bash"
+    command: |
+      cat << 'SCOPEEOF'
+      {{user_info_llm}}
+      SCOPEEOF
+    output: "user_info"
+    parse_json: true
+    timeout: 10
+
+  # ==========================================================================
+  # Step 2: Parse date range (LLM for natural language flexibility)
+  # ==========================================================================
+  # AGENT STEP - LLM handles natural language interpretation
+  # CRITICAL: Uses LOCAL timezone, NOT UTC. No end date for "since X" queries.
+  # Model: haiku - simple NL→ISO date conversion (same as repo-activity-analysis)
+  - id: "parse-date-range"
+    agent: "foundation:explorer"
+    provider: "anthropic"
+    model: "claude-haiku-*"
+    prompt: |
+      Parse the natural language date range into ISO 8601 format for GitHub API.
+      
+      ## Input
+      
+      Date range: "{{date_range}}"
+      
+      ## CRITICAL: Use LOCAL Timezone
+      
+      First, get the current date/time IN THE USER'S LOCAL TIMEZONE:
+      ```bash
+      # Get local time AND timezone offset
+      date '+%Y-%m-%d %H:%M:%S %Z (UTC%:z)'
+      ```
+      
+      The user's request is in THEIR local time. "Tuesday 3pm" means 3pm in their
+      timezone, not UTC. You must:
+      1. Determine the start time in the user's local timezone
+      2. Convert to UTC (with Z suffix) for the GitHub API
+      
+      ## CRITICAL: No End Date for Open-Ended Queries
+      
+      When the query is "since X" or "from X" without an explicit end date:
+      - Set iso_until to "" (empty string)
+      - Do NOT set an end date - we want ALL commits since the start time
+      - This prevents timezone edge cases from missing recent commits
+      
+      Only set iso_until when there's an EXPLICIT end date like "Dec 15-20".
+      
+      ## Interpretation Guidelines
+      
+      | Input | Start (local time) | End |
+      |-------|-------------------|-----|
+      | "today" | Midnight today | "" (none - open ended) |
+      | "since yesterday" | Midnight yesterday | "" (none) |
+      | "since Tuesday 3pm" | Tuesday 15:00 local | "" (none) |
+      | "last 7 days" | 7 days ago midnight | "" (none) |
+      | "Dec 15-20" | Dec 15 00:00 local | Dec 20 23:59:59 local (explicit range) |
+      
+      Handle variations gracefully:
+      - "the past few days" → ~3 days ago, no end date
+      - "recently" → 7 days ago, no end date
+      - Any "since X", "from X", "after X" → no end date
+      
+      ## Output
+      
+      Return JSON:
+      {
+        "original": "{{date_range}}",
+        "iso_since": "YYYY-MM-DDTHH:MM:SSZ",
+        "iso_until": "",
+        "gh_format": "YYYY-MM-DD",
+        "local_timezone": "detected timezone (e.g., PST, EST, UTC-8)",
+        "description": "human readable (e.g., 'since Tuesday 3pm PST (2024-12-31T23:00:00Z)')"
+      }
+      
+      IMPORTANT: iso_until should be "" (empty) unless an explicit end date was given.
+    output: "parsed_date"
+    parse_json: true
+    timeout: 60
+
+  # ==========================================================================
+  # Step 3: Fetch MODULES.md
+  # ==========================================================================
+  # BASH STEP - Direct GitHub API fetch, no interpretation needed
+  # Why bash: gh api + base64 decode is deterministic, no reasoning required
+  - id: "fetch-modules-md"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      
+      # Fetch from GitHub API (authoritative source)
+      gh api repos/microsoft/amplifier/contents/docs/MODULES.md \
+        --jq '.content' | base64 -d > {{working_dir}}/discovery/MODULES.md
+      
+      # Get file info
+      if [ -f "{{working_dir}}/discovery/MODULES.md" ]; then
+        len=$(wc -c < "{{working_dir}}/discovery/MODULES.md" | tr -d ' ')
+        echo "{\"path\": \"github-api\", \"saved_to\": \"{{working_dir}}/discovery/MODULES.md\", \"content_length\": $len, \"error\": null}"
+      else
+        echo '{"path": null, "saved_to": null, "content_length": 0, "error": "Failed to fetch MODULES.md"}'
+      fi
+    output: "modules_content"
+    timeout: 120
+
+  # ==========================================================================
+  # Step 4: Extract repos using grep (reliable extraction)
+  # ==========================================================================
+  # BASH STEP - Regex extraction from structured markdown
+  # Why bash: grep/sed/sort are faster and more reliable than LLM for URL extraction
+  - id: "extract-repos-grep"
+    type: "bash"
+    command: |
+      cd {{working_dir}}/discovery
+      
+      # Extract all GitHub URLs, normalize, deduplicate, and format as JSON
+      grep -oE 'https://github\.com/[^/]+/[^/)"'"'"'#@` ]+' MODULES.md \
+        | sed 's/\.git$//' \
+        | sed 's/[[:space:]]*$//' \
+        | sort -u \
+        | while read url; do
+            owner=$(echo "$url" | cut -d'/' -f4)
+            repo=$(echo "$url" | cut -d'/' -f5)
+            echo "{\"owner\": \"$owner\", \"name\": \"$repo\", \"url\": \"$url\"}"
+          done > repos-extracted.jsonl
+      
+      # Build final JSON using jq -n (safer than manual construction)
+      jq -n --slurpfile repos <(jq -s '.' repos-extracted.jsonl) \
+        '{total: ($repos[0] | length), repos: $repos[0]}' > all-repos.json
+      
+      cat all-repos.json
+    output: "discovered_repos"
+    timeout: 120
+
+  # ==========================================================================
+  # Step 4b: Verify extraction
+  # ==========================================================================
+  # BASH STEP - Sanity check that expected repos are present
+  # Why bash: Simple string matching, no semantic understanding needed
+  - id: "verify-extraction"
+    type: "bash"
+    command: |
+      cd {{working_dir}}/discovery
+      
+      # Count GitHub URLs in source (rough check)
+      source_count=$(grep -c 'github.com/' MODULES.md || echo "0")
+      extracted_count={{discovered_repos.total}}
+      
+      echo "Source mentions: $source_count"
+      echo "Extracted unique: $extracted_count"
+      
+      # Check for key repos we expect to find
+      expected="amplifier amplifier-core amplifier-foundation amplifier-app-cli"
+      missing=""
+      for repo in $expected; do
+        if ! grep -q "\"name\": \"$repo\"" all-repos.json; then
+          missing="$missing $repo"
+        fi
+      done
+      
+      if [ -n "$missing" ]; then
+        echo "WARNING: Missing expected repos:$missing"
+        echo '{"verified": false, "issue": "missing_expected", "missing": "'$missing'"}'
+      else
+        echo '{"verified": true, "source_mentions": '$source_count', "extracted_unique": '$extracted_count'}'
+      fi
+    output: "extraction_verified"
+    timeout: 60
+
+  # ==========================================================================
+  # Step 5: Filter repos using jq
+  # ==========================================================================
+  # BASH STEP - jq filtering, no LLM needed
+  - id: "filter-repos"
+    type: "bash"
+    command: |
+      cd {{working_dir}}/discovery
+      
+      org_filter="{{org_filter}}"
+      repo_filter="{{repo_filter}}"
+      
+      # Start with all repos
+      cp all-repos.json filtered-repos.json
+      
+      # Apply org filter if set
+      if [ -n "$org_filter" ]; then
+        jq --arg org "$org_filter" '{
+          total: ([.repos[] | select(.owner == $org)] | length),
+          repos: [.repos[] | select(.owner == $org)]
+        }' all-repos.json > filtered-repos.json
+      fi
+      
+      # Apply repo name filter if set (grep-style regex)
+      if [ -n "$repo_filter" ]; then
+        jq --arg pattern "$repo_filter" '{
+          total: ([.repos[] | select(.name | test($pattern; "i"))] | length),
+          repos: [.repos[] | select(.name | test($pattern; "i"))]
+        }' filtered-repos.json > filtered-repos-tmp.json
+        mv filtered-repos-tmp.json filtered-repos.json
+      fi
+      
+      # Build output with dropped repos
+      original=$(jq '.total' all-repos.json)
+      filtered=$(jq '.total' filtered-repos.json)
+      
+      # Get dropped repo names
+      dropped=$(jq -r '.repos[].name' all-repos.json | while read name; do
+        if ! jq -e --arg n "$name" '.repos[] | select(.name == $n)' filtered-repos.json >/dev/null 2>&1; then
+          echo "$name"
+        fi
+      done | jq -R -s 'split("\n") | map(select(length > 0))')
+      
+      # Final output
+      jq --argjson orig "$original" --argjson dropped "$dropped" \
+        --arg org "$org_filter" --arg pattern "$repo_filter" '{
+        original_count: $orig,
+        count: .total,
+        filters: {org: $org, repo_pattern: $pattern},
+        repos: .repos,
+        dropped: $dropped
+      }' filtered-repos.json
+    output: "filtered_repos"
+    timeout: 60
+
+  # ==========================================================================
+  # Step 6: Quick activity check (BATCH - bash loop with rate limiting)
+  # ==========================================================================
+  # BASH STEP - Batch API calls to check for activity
+  # Why bash: gh api calls are deterministic, rate limiting is simple loop logic
+  # v1.11.0: Added pagination support for accurate commit counts (fixes 100-cap issue)
+  - id: "quick-activity-check"
+    type: "bash"
+    command: |
+      cd {{working_dir}}/discovery
+      
+      # Save repos for processing (printf safer than heredoc in YAML)
+      printf '%s\n' '{{filtered_repos.repos}}' > repos-to-check.json
+      
+      filter_mode="{{user_info.filter_mode}}"
+      since_iso="{{parsed_date.iso_since}}"
+      gh_date="{{parsed_date.gh_format}}"
+      
+      # Save usernames for processing (may be multiple)
+      printf '%s\n' '{{user_info.usernames}}' > usernames.json
+      
+      # Configurable rate limiting and retry settings
+      api_delay={{api_delay_seconds}}
+      max_retries={{api_retry_attempts}}
+      
+      # Helper function: gh API call with retry logic (single page)
+      gh_api_retry() {
+        local endpoint="$1"
+        local jq_filter="$2"
+        local attempt=1
+        local result=""
+        
+        while [ $attempt -le $max_retries ]; do
+          result=$(gh api "$endpoint" --jq "$jq_filter" 2>/dev/null) && break
+          attempt=$((attempt + 1))
+          [ $attempt -le $max_retries ] && sleep $((attempt * 2))  # Exponential backoff
+        done
+        
+        echo "${result:-0}"
+      }
+      
+      # Helper function: Count items with pagination (for accurate totals >100)
+      # Uses --paginate to follow all pages and count total items
+      count_with_pagination() {
+        local endpoint="$1"
+        local jq_filter="${2:-length}"
+        local attempt=1
+        local result=""
+        
+        while [ $attempt -le $max_retries ]; do
+          # Use --paginate to get ALL results, then count
+          result=$(gh api --paginate "$endpoint" 2>/dev/null | jq -s "add // [] | $jq_filter" 2>/dev/null) && break
+          attempt=$((attempt + 1))
+          [ $attempt -le $max_retries ] && sleep $((attempt * 2))
+        done
+        
+        echo "${result:-0}"
+      }
+      
+      # Process all repos in a bash loop with rate limiting
+      echo "["
+      first=true
+      
+      jq -c '.[]' repos-to-check.json | while read repo_json; do
+        owner=$(echo "$repo_json" | jq -r '.owner')
+        name=$(echo "$repo_json" | jq -r '.name')
+        url=$(echo "$repo_json" | jq -r '.url')
+        
+        # Comma handling for JSON array
+        if [ "$first" = "true" ]; then
+          first=false
+        else
+          echo ","
+          # Rate limiting: configurable delay between repos
+          sleep $api_delay
+        fi
+        
+        if [ "$filter_mode" = "all" ]; then
+          # Check if repo has ANY commits in date range (quick check with per_page=1)
+          has_commits=$(gh_api_retry "repos/$owner/$name/commits?since=$since_iso&per_page=1" 'length')
+          
+          if [ "${has_commits:-0}" -gt 0 ]; then
+            # Get ACTUAL commit count using pagination (handles >100 commits)
+            actual_count=$(count_with_pagination "repos/$owner/$name/commits?since=$since_iso&per_page=100" 'length')
+            jq -n --arg repo "$name" --arg owner "$owner" --arg url "$url" --argjson commits "$actual_count" \
+              '{repo: $repo, owner: $owner, url: $url, commits: $commits, prs: -1, has_activity: true}'
+          else
+            # Also check PRs - repo might have PR-only activity
+            # Use pagination for PRs too (filter after fetching all)
+            all_prs=$(count_with_pagination "repos/$owner/$name/pulls?state=all&per_page=100" \
+              "[.[] | select(.created_at >= \"$since_iso\" or .merged_at >= \"$since_iso\")] | length")
+            if [ "${all_prs:-0}" -gt 0 ]; then
+              jq -n --arg repo "$name" --arg owner "$owner" --arg url "$url" --argjson prs "$all_prs" \
+                '{repo: $repo, owner: $owner, url: $url, commits: 0, prs: $prs, has_activity: true}'
+            else
+              jq -n --arg repo "$name" --arg owner "$owner" --arg url "$url" \
+                '{repo: $repo, owner: $owner, url: $url, commits: 0, prs: 0, has_activity: false}'
+            fi
+          fi
+        else
+          # Check commits and PRs for each username in the list
+          total_commits=0
+          total_prs=0
+          
+          for username in $(jq -r '.[]' usernames.json); do
+            # Check commits for this user with pagination
+            user_commits=$(count_with_pagination "repos/$owner/$name/commits?author=$username&since=$since_iso&per_page=100" 'length')
+            total_commits=$((total_commits + user_commits))
+            
+            # Rate limiting between API calls
+            sleep $api_delay
+            
+            # Check PRs for this user with pagination
+            user_prs=$(count_with_pagination "repos/$owner/$name/pulls?state=all&per_page=100" \
+              "[.[] | select(.user.login == \"$username\" and (.created_at >= \"$since_iso\" or .merged_at >= \"$since_iso\"))] | length")
+            total_prs=$((total_prs + user_prs))
+          done
+          
+          # Determine activity and output using jq -n (safer JSON construction)
+          if [ "$total_commits" -gt 0 ] 2>/dev/null || [ "$total_prs" -gt 0 ] 2>/dev/null; then
+            jq -n --arg repo "$name" --arg owner "$owner" --arg url "$url" \
+              --argjson commits "$total_commits" --argjson prs "$total_prs" \
+              '{repo: $repo, owner: $owner, url: $url, commits: $commits, prs: $prs, has_activity: true}'
+          else
+            jq -n --arg repo "$name" --arg owner "$owner" --arg url "$url" \
+              --argjson commits "$total_commits" --argjson prs "$total_prs" \
+              '{repo: $repo, owner: $owner, url: $url, commits: $commits, prs: $prs, has_activity: false}'
+          fi
+        fi
+      done
+      
+      echo "]"
+    output: "activity_checks"
+    timeout: 1800
+
+  # ==========================================================================
+  # Step 7: Filter to repos with activity
+  # ==========================================================================
+  # BASH STEP - Filter JSON array by boolean field
+  # Why bash: jq filtering is deterministic, no reasoning needed
+  - id: "filter-to-active"
+    type: "bash"
+    command: |
+      cd {{working_dir}}/discovery
+      
+      # Save activity checks to file for processing (printf safer than heredoc in YAML)
+      printf '%s\n' '{{activity_checks}}' > activity-checks.json
+      
+      # Filter to active repos and build output
+      jq '{
+        count: ([.[] | select(.has_activity == true)] | length),
+        repos: [.[] | select(.has_activity == true) | {owner, name: .repo, url, commits, prs}],
+        skipped: [.[] | select(.has_activity == false) | .repo],
+        skipped_count: ([.[] | select(.has_activity == false)] | length)
+      }' activity-checks.json > active-repos.json
+      
+      cat active-repos.json
+    output: "active_repos"
+    timeout: 60
+
+  # ==========================================================================
+  # Step 8: Show discovery summary (Bash for speed and determinism)
+  # ==========================================================================
+  # BASH STEP - Format and display discovery results
+  # Why bash: Structured data formatting is deterministic, faster than LLM
+  - id: "discovery-summary"
+    type: "bash"
+    command: |
+      # Use printf instead of heredoc for YAML safety
+      printf '%s\n' "============================================================"
+      printf '%s\n' "AMPLIFIER ECOSYSTEM ACTIVITY REPORT"
+      printf '%s\n' "============================================================"
+      printf '%s\n' "Scope:      {{user_info.description}}"
+      printf '%s\n' "Date Range: {{parsed_date.description}}"
+      printf '%s\n' ""
+      printf '%s\n' "Discovery:  {{discovered_repos.total}} repos found → {{filtered_repos.count}} after org filter → {{active_repos.count}} with activity"
+      printf '%s\n' ""
+      
+      if [ "{{active_repos.count}}" -gt 0 ]; then
+        printf '%s\n' "Analyzing ({{active_repos.count}} repos):"
+        printf '%s\n' '{{active_repos.repos}}' | jq -r '.[] | "  • \(.name) - \(.commits) commits, \(.prs) PRs"'
+      else
+        printf '%s\n' "No repos with activity in date range."
+      fi
+      
+      printf '%s\n' ""
+      if [ "{{active_repos.skipped_count}}" -gt 0 ]; then
+        printf '%s\n' "Skipped ({{active_repos.skipped_count}} repos - no activity):"
+        printf '%s\n' '{{active_repos.skipped}}' | jq -r 'join(", ")' | fold -s -w 70 | sed 's/^/  /'
+      fi
+      
+      printf '%s\n' ""
+      printf '%s\n' "Estimated time: ~{{active_repos.count}} minutes (parallel: {{parallel_analysis}})"
+      printf '%s\n' "============================================================"
+      
+      # Output for next step
+      printf '%s\n' '{{active_repos.repos}}' | jq -c '{displayed: true, repos_to_analyze: [.[].name]}'
+    output: "summary"
+    parse_json: true
+    timeout: 30
+
+  # ==========================================================================
+  # Step 9: Analyze each repo using generic recipe
+  # ==========================================================================
+  # RECIPE STEP - Delegate detailed analysis to reusable sub-recipe
+  # Why recipe: Encapsulates complex per-repo analysis, enables parallel execution
+  # Optimization: Pass precomputed values to skip redundant LLM calls in sub-recipe
+  - id: "analyze-repos"
+    foreach: "{{active_repos.repos}}"
+    as: "repo"
+    parallel: "{{parallel_analysis}}"
+    collect: "repo_analyses"
+    type: "recipe"
+    recipe: "./repo-activity-analysis.yaml"
+    context:
+      repo_url: "{{repo.url}}"
+      date_range: "{{parsed_date.description}}"
+      working_dir: "{{working_dir}}"
+      include_deep_dive: false
+      # Precomputed values - sub-recipe skips expensive steps if these are provided
+      _precomputed:
+        date_since_iso: "{{parsed_date.iso_since}}"
+        date_since_date: "{{parsed_date.gh_format}}"
+        date_description: "{{parsed_date.description}}"
+        repo_owner: "{{repo.owner}}"
+        repo_name: "{{repo.name}}"
+    output: "single_repo_result"
+    timeout: 600
+    on_error: "continue"
+
+  # ==========================================================================
+  # Step 9b: Save analyses to file (handles large JSON safely)
+  # ==========================================================================
+  # AGENT STEP - Write repo_analyses to file (avoids bash JSON escaping issues)
+  # v1.7.0: Agents handle JSON natively; bash template substitution breaks on large JSON
+  # Model: haiku - trivial task (write JSON to file), no reasoning needed
+  - id: "save-analyses-to-file"
+    agent: "foundation:file-ops"
+    provider: "anthropic"
+    model: "claude-haiku-*"
+    prompt: |
+      Write the following JSON array to file: {{working_dir}}/collected-analyses.json
+      
+      Content to write:
+      {{repo_analyses}}
+      
+      Just write the file. Return {"saved": true, "path": "{{working_dir}}/collected-analyses.json"} when done.
+    output: "analyses_saved"
+    parse_json: true
+    timeout: 120
+
+  # ==========================================================================
+  # Step 9c: Reduce analyses (process from file)
+  # ==========================================================================
+  # BASH STEP - Read from file and create compact summary
+  # v1.7.0: Process from file to avoid template substitution issues
+  #         Sanitize JSON to fix unescaped newlines from LLM output
+  - id: "reduce-analyses"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      
+      cd {{working_dir}}
+      
+      # Build compact summaries from the analysis files
+      # Each repo has a -analysis.json file with full details
+      # v1.15.1: Filter out intermediate files from repo-activity-analysis v3.0.0+
+      # (chunk analyses, commit synthesis, PR synthesis are not main repo analyses)
+      echo "[" > reduced-analyses.json
+      first=true
+      for f in $(ls -1 analyses/*-analysis.json 2>/dev/null | grep -v -E '(-chunk-|-commit-|-pr-|-all-chunks|-deep-dives)'); do
+        [ -f "$f" ] || continue
+        
+        # Sanitize JSON: replace literal newlines in strings with escaped \n
+        # This fixes LLM output that has unescaped newlines in string values
+        sanitized=$(cat "$f" | tr '\n' ' ' | sed 's/  */ /g')
+        
+        # Try to extract compact summary; skip file if it fails
+        compact=$(echo "$sanitized" | jq -c '{
+          repo: (.repo // .repo_summary.repo // "unknown"),
+          commits: (.activity_summary.commits // .repo_summary.activity_summary.commits // 0),
+          prs: (.activity_summary.prs_total // .repo_summary.activity_summary.prs_total // 0),
+          impact: (.impact_assessment.overall // .repo_summary.impact_assessment.overall // "unknown"),
+          summary: (
+            if .themes then (.themes[:2] | join("; "))
+            elif .repo_summary.themes then (.repo_summary.themes[:2] | join("; "))
+            else "Activity detected"
+            end
+          ),
+          highlights: (
+            if .key_changes then [.key_changes[:3][] | .description[:80]]
+            elif .repo_summary.key_changes then [.repo_summary.key_changes[:3][] | .description[:80]]
+            else []
+            end
+          ),
+          risks: (
+            if .risks and (.risks | length) > 0 then [.risks[:2][] | .[:60]]
+            elif .repo_summary.risks and (.repo_summary.risks | length) > 0 then [.repo_summary.risks[:2][] | .[:60]]
+            else []
+            end
+          )
+        }' 2>/dev/null) || continue
+        
+        if [ "$first" = true ]; then
+          first=false
+        else
+          echo "," >> reduced-analyses.json
+        fi
+        echo "$compact" >> reduced-analyses.json
+      done
+      echo "]" >> reduced-analyses.json
+      
+      # Count and report
+      count=$(jq 'length' reduced-analyses.json)
+      bytes=$(wc -c < reduced-analyses.json | tr -d ' ')
+      echo "Reduced $count repos to $bytes bytes" >&2
+      
+      cat reduced-analyses.json
+    output: "reduced_analyses"
+    parse_json: true
+    timeout: 120
+
+  # ==========================================================================
+  # Step 9d: Validate analysis completeness
+  # ==========================================================================
+  # BASH STEP - Check that all expected repos have analysis files
+  # v1.9.0: Detect and report repos that failed during analysis
+  - id: "validate-analysis-completeness"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      
+      cd {{working_dir}}
+      
+      # Get expected repos from active_repos
+      printf '%s\n' '{{active_repos.repos}}' | jq -r '.[].name' | sort > expected-repos.txt
+      
+      # Get actual analysis files (only main {repo}-analysis.json, not chunk/commit/pr intermediates)
+      # v1.15.1: Filter out intermediate files from repo-activity-analysis v3.0.0+
+      ls -1 analyses/*-analysis.json 2>/dev/null | \
+        grep -v -E '(-chunk-|-commit-|-pr-|-all-chunks|-deep-dives)' | \
+        xargs -I {} basename {} -analysis.json | sort > analyzed-repos.txt || \
+        touch analyzed-repos.txt
+      
+      # Find missing repos
+      missing=$(comm -23 expected-repos.txt analyzed-repos.txt || true)
+      missing_count=$(echo "$missing" | grep -c . || true)
+      missing_count=${missing_count:-0}
+      analyzed_count=$(wc -l < analyzed-repos.txt | xargs)
+      expected_count=$(wc -l < expected-repos.txt | xargs)
+      
+      # Build missing repos detail with their expected commit counts
+      missing_details="[]"
+      lost_commits=0
+      lost_prs=0
+      if [ "$missing_count" -gt 0 ] && [ -n "$missing" ]; then
+        missing_details=$(echo "$missing" | while read -r repo; do
+          [ -z "$repo" ] && continue
+          # Find commit count from commits file if it exists
+          commits=0
+          prs=0
+          if [ -f "analyses/${repo}-commits.json" ]; then
+            commits=$(jq 'length' "analyses/${repo}-commits.json" 2>/dev/null || echo 0)
+          fi
+          if [ -f "analyses/${repo}-prs.json" ]; then
+            prs=$(jq 'length' "analyses/${repo}-prs.json" 2>/dev/null || echo 0)
+          fi
+          echo "{\"repo\": \"$repo\", \"expected_commits\": $commits, \"expected_prs\": $prs}"
+        done | jq -s '.')
+        
+        lost_commits=$(echo "$missing_details" | jq '[.[].expected_commits] | add // 0')
+        lost_prs=$(echo "$missing_details" | jq '[.[].expected_prs] | add // 0')
+      fi
+      
+      # Report
+      echo "Analysis validation: $analyzed_count/$expected_count repos completed" >&2
+      if [ "$missing_count" -gt 0 ]; then
+        echo "WARNING: $missing_count repos FAILED analysis:" >&2
+        echo "$missing" | grep -v '^$' | sed 's/^/  - /' >&2
+        echo "Lost data: $lost_commits commits, $lost_prs PRs" >&2
+      fi
+      
+      # Output for downstream steps
+      jq -n \
+        --argjson expected "$expected_count" \
+        --argjson analyzed "$analyzed_count" \
+        --argjson missing_count "$missing_count" \
+        --argjson missing_details "$missing_details" \
+        --argjson lost_commits "$lost_commits" \
+        --argjson lost_prs "$lost_prs" \
+        '{
+          expected_repos: $expected,
+          analyzed_repos: $analyzed,
+          missing_count: $missing_count,
+          missing_repos: $missing_details,
+          lost_commits: $lost_commits,
+          lost_prs: $lost_prs,
+          complete: ($missing_count == 0)
+        }'
+    output: "analysis_validation"
+    parse_json: true
+    timeout: 60
+
+  # ==========================================================================
+  # Step 9e: Final validation (copy analysis_validation to final_validation)
+  # ==========================================================================
+  # v1.9.0: Set final_validation = analysis_validation (no retry in this version)
+  - id: "set-final-validation"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      
+      cd {{working_dir}}
+      
+      # Recount (only main {repo}-analysis.json, not chunk/commit/pr intermediates)
+      # v1.15.1: Filter out intermediate files from repo-activity-analysis v3.0.0+
+      expected=$(wc -l < expected-repos.txt | tr -d ' ')
+      analyzed=$(ls -1 analyses/*-analysis.json 2>/dev/null | grep -v -E '(-chunk-|-commit-|-pr-|-all-chunks|-deep-dives)' | wc -l | tr -d ' ')
+      still_missing=$((expected - analyzed))
+      
+      if [ "$still_missing" -eq 0 ]; then
+        echo '{"all_complete": true, "still_missing": 0, "repos": []}' 
+      else
+        # Find missing repos
+        ls -1 analyses/*-analysis.json 2>/dev/null | \
+          grep -v -E '(-chunk-|-commit-|-pr-|-all-chunks|-deep-dives)' | \
+          xargs -I {} basename {} -analysis.json | sort > analyzed-repos-final.txt
+        missing=$(comm -23 expected-repos.txt analyzed-repos-final.txt || true)
+        echo "Final validation: $still_missing repos missing" >&2
+        echo "$missing" | grep -v '^$' | sed 's/^/  - /' >&2
+        
+        missing_json=$(echo "$missing" | grep -v '^$' | jq -R -s 'split("\n") | map(select(length > 0))')
+        jq -n --argjson m "$missing_json" --argjson c "$still_missing" \
+          '{"all_complete": false, "still_missing": $c, "repos": $m}'
+      fi
+    output: "final_validation"
+    parse_json: true
+    timeout: 60
+
+  # ==========================================================================
+  # Step 10a: Calculate report statistics (DETERMINISTIC)
+  # ==========================================================================
+  # BASH STEP - All numeric calculations done here, guaranteed accurate
+  # Why bash: LLMs are unreliable at math; jq gives exact results
+  # v1.8.0: Split synthesis into focused steps for reliability
+  - id: "calculate-stats"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      
+      cd {{working_dir}}
+      
+      # reduced_analyses is already in reduced-analyses.json from previous step
+      
+      # Calculate all statistics using jq
+      jq -n --slurpfile data reduced-analyses.json '
+        # Define impact level ordering for sorting
+        def impact_order:
+          if . == "breaking" then 0
+          elif . == "significant" then 1
+          elif . == "moderate" then 2
+          elif . == "minor" then 3
+          elif . == "trivial" then 4
+          else 5
+          end;
+        
+        # Input data
+        ($data[0] // []) as $repos |
+        
+        # Calculate totals (handle string values like "unknown (rate limited)" by converting to 0)
+        ($repos | map(.commits | if type == "number" then . else 0 end) | add // 0) as $total_commits |
+        ($repos | map(.prs | if type == "number" then . else 0 end) | add // 0) as $total_prs |
+        ($repos | length) as $total_repos |
+        
+        # Count by impact level (from_entries needs {key, value} not {key, count})
+        ($repos | group_by(.impact) | map({key: .[0].impact, value: length}) | from_entries) as $impact_counts |
+        
+        # Sort repos by impact level (breaking first, then significant, etc.)
+        ($repos | sort_by(.impact | impact_order)) as $sorted_repos |
+        
+        # Identify repos with risks
+        ($repos | map(select(.risks and (.risks | length) > 0)) | map(.repo)) as $repos_with_risks |
+        
+        # Build output
+        {
+          totals: {
+            repos: $total_repos,
+            commits: $total_commits,
+            prs: $total_prs
+          },
+          impact_distribution: {
+            breaking: ($impact_counts.breaking // 0),
+            significant: ($impact_counts.significant // 0),
+            moderate: ($impact_counts.moderate // 0),
+            minor: ($impact_counts.minor // 0),
+            trivial: ($impact_counts.trivial // 0),
+            unknown: ($impact_counts.unknown // 0)
+          },
+          repos_sorted_by_impact: $sorted_repos,
+          repos_with_risks: $repos_with_risks,
+          risk_count: ($repos_with_risks | length)
+        }
+      ' > report-stats.json
+      
+      cat report-stats.json
+    output: "report_stats"
+    parse_json: true
+    timeout: 60
+
+  # ==========================================================================
+  # Step 10b: Write executive summary and highlights (QUALITATIVE)
+  # ==========================================================================
+  # AGENT STEP - Qualitative synthesis only; NO calculations
+  # Why agent: Pattern recognition, prioritization, narrative synthesis
+  # v1.8.0: Focused prompt - LLM only does what it's good at
+  # Model: sonnet - qualitative synthesis requires reasoning capability
+  - id: "write-executive-summary"
+    agent: "foundation:zen-architect"
+    provider: "anthropic"
+    model: "claude-sonnet-*"
+    mode: "ANALYZE"
+    retry:
+      max_attempts: 3
+      backoff: "exponential"
+      initial_delay: 5
+      max_delay: 60
+    prompt: |
+      Write the Executive Summary section for the Amplifier Ecosystem Activity Report.
+      
+      ## Pre-Calculated Statistics (USE THESE EXACTLY - DO NOT RECALCULATE)
+      
+      - Total repos with activity: {{report_stats.totals.repos}}
+      - Total commits: {{report_stats.totals.commits}}
+      - Total PRs: {{report_stats.totals.prs}}
+      - Impact distribution:
+        - Breaking: {{report_stats.impact_distribution.breaking}}
+        - Significant: {{report_stats.impact_distribution.significant}}
+        - Moderate: {{report_stats.impact_distribution.moderate}}
+        - Minor: {{report_stats.impact_distribution.minor}}
+      - Repos with risks: {{report_stats.risk_count}}
+      
+      ## Repo Summaries (for qualitative analysis)
+      
+      {{report_stats.repos_sorted_by_impact}}
+      
+      ## Your Task
+      
+      Write ONLY the executive summary content. Focus on:
+      
+      1. **Key Highlights** (2-3 bullets): What are the most significant changes?
+         - Identify the most impactful work across repos
+         - Highlight notable patterns or achievements
+         
+      2. **Ecosystem Health Assessment** (1-2 sentences):
+         - Based on the impact distribution and risk count
+         - Note any concerns if breaking changes or risks are present
+      
+      ## Output Format
+      
+      Return a JSON object:
+      ```json
+      {
+        "key_highlights": [
+          "First highlight describing most significant change",
+          "Second highlight about another important pattern",
+          "Third highlight if warranted"
+        ],
+        "ecosystem_health": "Brief assessment of ecosystem health based on impact distribution and risks."
+      }
+      ```
+      
+      IMPORTANT:
+      - Do NOT include any statistics in your output - they will be injected by the assembly step
+      - Focus purely on qualitative observations and synthesis
+      - Keep highlights concise but informative
+    output: "executive_summary"
+    parse_json: true
+    timeout: 300
+
+  # ==========================================================================
+  # Step 10c: Write per-repo sections and cross-cutting observations
+  # ==========================================================================
+  # AGENT STEP - Format repo sections and identify patterns
+  # Why agent: Narrative formatting, pattern recognition across repos
+  # v1.8.0: Focused on narrative only; stats injected by assembly step
+  # Model: sonnet - cross-cutting analysis requires reasoning capability
+  - id: "write-repo-sections"
+    agent: "foundation:zen-architect"
+    provider: "anthropic"
+    model: "claude-sonnet-*"
+    mode: "ARCHITECT"
+    retry:
+      max_attempts: 3
+      backoff: "exponential"
+      initial_delay: 5
+      max_delay: 60
+    prompt: |
+      Write the per-repository sections and cross-cutting observations for the activity report.
+      
+      ## Pre-Calculated Data (stats will be injected - focus on narrative)
+      
+      Repos sorted by impact (breaking → trivial):
+      {{report_stats.repos_sorted_by_impact}}
+      
+      ## Repos Skipped (no activity)
+      
+      {{active_repos.skipped}}
+      
+      ## Your Task
+      
+      ### Part 1: Per-Repository Sections
+      
+      For EACH repo in the sorted list, write a section. The stats (commits/PRs/impact) 
+      will be injected by the assembly step - focus only on narrative content.
+      
+      ### Part 2: Cross-Cutting Observations
+      
+      Identify 2-4 patterns observed ACROSS multiple repos:
+      - Coordinated changes (same feature touched in multiple repos)
+      - Common themes (testing, documentation, refactoring)
+      - Ecosystem-wide trends (new capabilities, deprecations)
+      - Dependencies or integration points
+      
+      ## Output Format
+      
+      Return a JSON object:
+      ```json
+      {
+        "repo_sections": {
+          "repo-name-1": {
+            "summary_expanded": "One paragraph expanding on the summary",
+            "highlights_formatted": "- First highlight\\n- Second highlight",
+            "risks_formatted": "- Risk one\\n- Risk two"
+          },
+          "repo-name-2": { ... }
+        },
+        "cross_cutting_observations": [
+          "First observation about patterns across repos",
+          "Second observation about ecosystem trends"
+        ]
+      }
+      ```
+      
+      For repos with no risks, set risks_formatted to null or empty string.
+    output: "repo_sections"
+    parse_json: true
+    timeout: 600
+
+  # ==========================================================================
+  # Step 10d: Assemble final report (DETERMINISTIC)
+  # ==========================================================================
+  # BASH STEP - Combine all sections with guaranteed correct statistics
+  # Why bash: Template assembly is deterministic; stats injected exactly
+  # v1.8.0: All numbers come from calculate-stats step (guaranteed accurate)
+  - id: "assemble-report"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      
+      cd {{working_dir}}
+      
+      # Save inputs to files for processing
+      cat > exec-summary.json << 'EXECEOF'
+      {{executive_summary}}
+      EXECEOF
+      
+      cat > repo-sections.json << 'REPOEOF'
+      {{repo_sections}}
+      REPOEOF
+      
+      # Get current timestamp
+      timestamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+      
+      # Start building the report
+      cat > final-report.md << HEADEREOF
+      # Amplifier Ecosystem Activity Report
+
+      **Generated**: $timestamp
+      **Scope**: {{user_info.description}}
+      **Date Range**: {{parsed_date.description}}
+      **Repos Analyzed**: {{report_stats.totals.repos}}
+
+      ---
+
+      ## Executive Summary
+
+      | Metric | Count |
+      |--------|-------|
+      | Total Commits | {{report_stats.totals.commits}} |
+      | Total PRs | {{report_stats.totals.prs}} |
+      | Repos with Activity | {{report_stats.totals.repos}} |
+
+      **Impact Distribution**: {{report_stats.impact_distribution.breaking}} breaking, {{report_stats.impact_distribution.significant}} significant, {{report_stats.impact_distribution.moderate}} moderate, {{report_stats.impact_distribution.minor}} minor
+
+      HEADEREOF
+      
+      # v1.9.0: Add data gap warning if any repos failed analysis
+      still_missing={{final_validation.still_missing}}
+      if [ "$still_missing" -gt 0 ]; then
+        lost_commits={{analysis_validation.lost_commits}}
+        lost_prs={{analysis_validation.lost_prs}}
+        echo "" >> final-report.md
+        echo "> **Data Gap Warning**: $still_missing repos failed analysis even after retry. Approximately $lost_commits commits and $lost_prs PRs may be missing. See Failed Analyses section below." >> final-report.md
+        echo "" >> final-report.md
+      fi
+      
+      echo "### Key Highlights" >> final-report.md
+      echo "" >> final-report.md
+      
+      # Add key highlights from LLM
+      jq -r '.key_highlights[]' exec-summary.json | while read -r highlight; do
+        echo "- $highlight" >> final-report.md
+      done
+      
+      # Add ecosystem health
+      cat >> final-report.md << 'HEALTHEOF'
+
+      ### Ecosystem Health
+
+      HEALTHEOF
+      jq -r '.ecosystem_health' exec-summary.json >> final-report.md
+      
+      cat >> final-report.md << 'REPOHEADEREOF'
+
+      ---
+
+      ## Activity by Repository
+
+      REPOHEADEREOF
+      
+      # Add per-repo sections with injected stats
+      jq -c '.[]' report-stats.json 2>/dev/null | head -1 > /dev/null || true
+      jq -c '.repos_sorted_by_impact[]' report-stats.json | while read -r repo_data; do
+        repo_name=$(echo "$repo_data" | jq -r '.repo')
+        commits=$(echo "$repo_data" | jq -r '.commits')
+        prs=$(echo "$repo_data" | jq -r '.prs')
+        impact=$(echo "$repo_data" | jq -r '.impact')
+        
+        # Get the LLM-written section for this repo
+        summary=$(jq -r --arg repo "$repo_name" '.repo_sections[$repo].summary_expanded // "Activity detected in this repository."' repo-sections.json)
+        highlights=$(jq -r --arg repo "$repo_name" '.repo_sections[$repo].highlights_formatted // "- See commit history for details"' repo-sections.json)
+        risks=$(jq -r --arg repo "$repo_name" '.repo_sections[$repo].risks_formatted // empty' repo-sections.json)
+        
+        # Write the section with exact stats
+        echo "### $repo_name" >> final-report.md
+        echo "" >> final-report.md
+        echo "**Commits**: $commits | **PRs**: $prs | **Impact**: $impact" >> final-report.md
+        echo "" >> final-report.md
+        echo "$summary" >> final-report.md
+        echo "" >> final-report.md
+        echo "**Highlights**:" >> final-report.md
+        echo "$highlights" >> final-report.md
+        echo "" >> final-report.md
+        
+        # Add risks only if present
+        if [ -n "$risks" ] && [ "$risks" != "null" ]; then
+          echo "**Risks**:" >> final-report.md
+          echo "$risks" >> final-report.md
+          echo "" >> final-report.md
+        fi
+        
+        echo "---" >> final-report.md
+        echo "" >> final-report.md
+      done
+      
+      # Add cross-cutting observations
+      echo "## Cross-Cutting Observations" >> final-report.md
+      echo "" >> final-report.md
+      
+      jq -r '.cross_cutting_observations[]' repo-sections.json | while read -r obs; do
+        echo "- $obs" >> final-report.md
+      done
+      
+      # v1.9.0: Add Failed Analyses section if any repos still missing after retry
+      still_missing={{final_validation.still_missing}}
+      if [ "$still_missing" -gt 0 ]; then
+        echo "" >> final-report.md
+        echo "---" >> final-report.md
+        echo "" >> final-report.md
+        echo "## Failed Analyses" >> final-report.md
+        echo "" >> final-report.md
+        echo "The following repos had activity detected but analysis failed (even after retry):" >> final-report.md
+        echo "" >> final-report.md
+        echo "| Repository | Expected Commits | Expected PRs | Status |" >> final-report.md
+        echo "|------------|-----------------|--------------|--------|" >> final-report.md
+        
+        # Add rows for each missing repo
+        printf '%s\n' '{{analysis_validation.missing_repos}}' | \
+          jq -r '.[] | "| \(.repo) | \(.expected_commits) | \(.expected_prs) | Failed |"' >> final-report.md
+        
+        echo "" >> final-report.md
+        echo "**Possible causes**: LLM timeout, GitHub API rate limiting, context overflow for large repos." >> final-report.md
+        echo "**Recommendation**: Re-run recipe with parallel_analysis: false for more stable execution." >> final-report.md
+        echo "" >> final-report.md
+      fi
+      
+      # Add skipped repos section
+      echo "" >> final-report.md
+      echo "---" >> final-report.md
+      echo "" >> final-report.md
+      echo "## Repositories with No Activity" >> final-report.md
+      echo "" >> final-report.md
+      
+      skipped_repos='{{active_repos.skipped}}'
+      if [ "$skipped_repos" != "[]" ] && [ -n "$skipped_repos" ]; then
+        echo "$skipped_repos" | jq -r '.[]' | while read -r repo; do
+          echo "- $repo" >> final-report.md
+        done
+      else
+        echo "_All discovered repos had activity in the specified date range._" >> final-report.md
+      fi
+      
+      # Add footer (use echo to avoid heredoc --- breaking YAML)
+      echo "" >> final-report.md
+      echo "---" >> final-report.md
+      echo "" >> final-report.md
+      echo "*Generated by @amplifier:recipes/ecosystem-activity-report.yaml*" >> final-report.md
+      
+      # Move report to final location (assemble writes directly to avoid escaping issues)
+      mkdir -p reports
+      mv final-report.md reports/{{report_filename}}
+      
+      # Output status (NOT the report content - that breaks bash escaping)
+      size=$(wc -c < "reports/{{report_filename}}" | tr -d ' ')
+      echo "{\"assembled\": true, \"path\": \"{{working_dir}}/reports/{{report_filename}}\", \"size\": $size}"
+    output: "final_report"
+    parse_json: true
+    timeout: 120
+
+  # ==========================================================================
+  # Step 10e: Verify report was written
+  # ==========================================================================
+  # BASH STEP - Verify the assembled report exists
+  # v1.8.0: Assembly step now writes directly; this step just verifies
+  - id: "write-report"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      
+      # Verify the report was written by assemble step
+      if [ -s "{{working_dir}}/reports/{{report_filename}}" ]; then
+        size=$(wc -c < "{{working_dir}}/reports/{{report_filename}}" | tr -d ' ')
+        lines=$(wc -l < "{{working_dir}}/reports/{{report_filename}}" | tr -d ' ')
+        echo "Report verified: {{working_dir}}/reports/{{report_filename}} ($size bytes, $lines lines)" >&2
+        echo "{\"written\": true, \"path\": \"{{working_dir}}/reports/{{report_filename}}\", \"size\": $size, \"lines\": $lines}"
+      else
+        echo "ERROR: Report not found at {{working_dir}}/reports/{{report_filename}}" >&2
+        echo "{\"written\": false, \"error\": \"File empty or missing\"}"
+        exit 1
+      fi
+    output: "report_written"
+    parse_json: true
+    timeout: 60
+    on_error: "fail"
+
+  # ==========================================================================
+  # Step 11: Completion and cleanup
+  # ==========================================================================
+  # BASH STEP - Print completion summary and remove temp files
+  # Why bash: echo/rm are deterministic, no reasoning needed for cleanup
+  - id: "complete"
+    type: "bash"
+    command: |
+      # Get report path
+      report_path=$(realpath {{working_dir}}/reports/{{report_filename}} 2>/dev/null || echo "{{working_dir}}/reports/{{report_filename}}")
+      
+      # Print completion summary using printf (standardized over heredoc)
+      printf '%s\n' "============================================================"
+      printf '%s\n' "REPORT COMPLETE"
+      printf '%s\n' "============================================================"
+      printf '%s\n' "Scope:  {{user_info.description}}"
+      printf '%s\n' "Range:  {{parsed_date.description}}"
+      printf '%s\n' "Repos:  {{active_repos.count}} analyzed, {{active_repos.skipped_count}} skipped"
+      printf '%s\n' "Report: $report_path"
+      printf '%s\n' "============================================================"
+      
+      # Cleanup temporary files (keep reports/)
+      printf '%s\n' ""
+      printf '%s\n' "Cleaning up temporary files..."
+      
+      # Remove discovery intermediate files
+      rm -rf {{working_dir}}/discovery
+      
+      # Remove any cloned repos (if any were created)
+      rm -rf {{working_dir}}/repos
+      
+      # Show what remains
+      printf '%s\n' "Remaining in {{working_dir}}:"
+      ls -la {{working_dir}}/
+      
+      printf '%s\n' ""
+      # Use jq -n for safe JSON construction
+      jq -n --arg path "$report_path" '{completed: true, report_path: $path, cleanup: "done"}'
+    output: "completion"
+    timeout: 60
+    on_error: "continue"

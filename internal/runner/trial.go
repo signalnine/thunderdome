@@ -94,16 +94,29 @@ func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
 
 	hostUID := fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid())
 
+	extraMounts := []docker.Mount{
+		{Source: adapterAbs, Target: "/adapter.sh", ReadOnly: true},
+		{Source: taskDescPath, Target: "/task.md", ReadOnly: true},
+	}
+
+	// Mount host ~/.claude/.credentials.json to /tmp if it exists.
+	// The adapter script copies it into a writable ~/.claude/ dir at runtime.
+	if home, err := os.UserHomeDir(); err == nil {
+		credsFile := filepath.Join(home, ".claude", ".credentials.json")
+		if _, err := os.Stat(credsFile); err == nil {
+			extraMounts = append(extraMounts, docker.Mount{
+				Source: credsFile, Target: "/tmp/.claude-credentials.json", ReadOnly: true,
+			})
+		}
+	}
+
 	containerResult, err := docker.RunContainer(ctx, &docker.RunOpts{
-		Image:   opts.Orchestrator.Image,
-		Command: BuildAdapterCommand(opts.Orchestrator, "/workspace", "/task.md", opts.GatewayURL),
-		WorkDir: workDir,
-		Env:     env,
-		Timeout: opts.Timeout,
-		ExtraMounts: []docker.Mount{
-			{Source: adapterAbs, Target: "/adapter.sh", ReadOnly: true},
-			{Source: taskDescPath, Target: "/task.md", ReadOnly: true},
-		},
+		Image:       opts.Orchestrator.Image,
+		Command:     BuildAdapterCommand(opts.Orchestrator, "/workspace", "/task.md", opts.GatewayURL),
+		WorkDir:     workDir,
+		Env:         env,
+		Timeout:     opts.Timeout,
+		ExtraMounts: extraMounts,
 		Allowlist:   opts.Allowlist,
 		GatewayAddr: opts.GatewayAddr,
 		CPULimit:    opts.CPULimit,

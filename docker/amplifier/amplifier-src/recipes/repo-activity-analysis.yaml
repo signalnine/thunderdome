@@ -1,0 +1,1189 @@
+name: "repo-activity-analysis"
+description: "Analyze a GitHub repository for commits and PRs in a date range. Defaults to current repo since yesterday."
+version: "3.1.0"
+author: "Amplifier Recipes"
+tags: ["github", "analysis", "commits", "prs", "git", "activity"]
+
+# Repository Activity Analysis Recipe
+#
+# Analyzes a single GitHub repository for commits and PRs in a date range.
+# Defaults to the current working directory's repo and "since yesterday".
+#
+# v3.1.0: Model selection optimization for cost/performance
+#         - haiku for simple tasks: date parsing, commit chunk categorization
+#         - sonnet for complex tasks: synthesis, PR analysis, deep dives
+#         - Foreach loop (analyze-commit-chunks) uses haiku for ~10x cost reduction
+#         - No opus needed - repo analysis doesn't require maximum reasoning
+#
+# v3.0.0: Data persistence, scaling, and reliability improvements (BREAKING)
+#         - FULL DATA PERSISTENCE: All intermediate LLM analyses now persisted
+#           * {repo}-chunk-{N}-analysis.json for each chunk
+#           * {repo}-all-chunks.json for combined chunk analyses
+#           * {repo}-pr-analysis.json for PR analysis
+#           * {repo}-deep-dives.json for deep dive results
+#           * {repo}-manifest.json inventory of all files
+#         - SCALING: max_chunk_iterations now configurable (default: 100)
+#           * Supports 3,000+ commits (100 chunks * ~30 commits/chunk)
+#           * Math: max_chunk_iterations * commits_per_chunk = max commits
+#         - HARD FAIL: Recipe either completes fully or fails completely
+#           * No partial results returned to caller
+#           * Only deep-dive step can continue on error (truly optional)
+#           * Final validation ensures all files exist
+#         - NEW OUTPUT CONTRACT: Returns structured success/failure response
+#           * Success: {success: true, manifest_path, files_written, counts}
+#           * Failure: {success: false, error, failed_step, partial_files}
+#
+# v2.1.0: Reliability improvements - retry logic and increased timeouts
+#         - All LLM steps now have retry config (max 3 attempts, exponential backoff)
+#         - Increased timeouts from 300s to 600s for synthesis steps
+#         - Reduces transient failures from rate limiting
+#
+# v2.0.0: Token-based chunking for large repos (BREAKING)
+#         - fetch-commits now creates token-budgeted chunks (~6000 tokens each)
+#         - analyze-commit-chunks uses foreach to analyze each chunk independently
+#         - synthesize-commit-analysis combines chunk results into unified analysis
+#         - Handles repos with 500+ commits without context overflow
+#         - Replaces truncation approach from v1.8.0
+#
+# v1.7.0: Pagination fixes for repos with >100 commits/PRs
+#
+# SCALING MATH:
+#   max_commits = max_chunk_iterations * commits_per_chunk
+#   Default: 100 * 30 = 3,000 commits
+#   For larger repos: increase max_chunk_iterations proportionally
+#   Example: 6,000 commits -> max_chunk_iterations: 200
+#
+# Usage (in a session - recommended):
+#   "run repo-activity-analysis"
+#   "analyze this repo's activity for the last week"
+#
+# Usage (CLI - defaults, analyze current repo since yesterday):
+#   amplifier tool invoke recipes operation=execute recipe_path=repo-activity-analysis.yaml
+#
+# Usage (CLI - explicit repo):
+#   amplifier tool invoke recipes operation=execute \
+#     recipe_path=repo-activity-analysis.yaml \
+#     context='{"repo_url": "https://github.com/microsoft/amplifier-core"}'
+#
+# Usage (CLI - custom date range):
+#   amplifier tool invoke recipes operation=execute \
+#     recipe_path=repo-activity-analysis.yaml \
+#     context='{"date_range": "last 7 days"}'
+#
+# Usage (CLI - large repo with 5000+ commits):
+#   amplifier tool invoke recipes operation=execute \
+#     recipe_path=repo-activity-analysis.yaml \
+#     context='{"date_range": "last 30 days", "max_chunk_iterations": 200}'
+#
+# Requirements:
+#   - gh CLI installed and authenticated
+#   - Git (for detecting current repo if using defaults)
+
+context:
+  # Repository URL - leave empty to detect from current working directory
+  repo_url: ""
+  
+  # Date range (natural language) - defaults to yesterday
+  date_range: "since yesterday"
+  
+  # Working directory for intermediate files
+  working_dir: "./ai_working"
+  
+  # Include deep-dive analysis for unclear changes
+  include_deep_dive: true
+  
+  # NOTE: max_chunk_iterations is documented here but the actual value
+  # must be set directly in the analyze-commit-chunks step (max_iterations field)
+  # because YAML doesn't support variable substitution in integer fields.
+  # See step "analyze-commit-chunks" to modify the scaling limit.
+  
+  # === Optional precomputed values (for orchestration optimization) ===
+  # When called from a parent recipe, these skip expensive re-computation.
+  # Leave empty/default for standalone execution (recipe computes them).
+  _precomputed:
+    date_since_iso: ""      # e.g., "2024-12-28T00:00:00Z" - skips LLM date parsing
+    date_since_date: ""     # e.g., "2024-12-28"
+    date_description: ""    # e.g., "since yesterday (2024-12-28 to now)"
+    repo_owner: ""          # e.g., "microsoft" - skips URL parsing
+    repo_name: ""           # e.g., "amplifier-core"
+  
+  # Default values for conditional step outputs (prevents undefined variable errors)
+  chunk_analyses: []  # Collected from foreach in analyze-commit-chunks
+  commit_analysis: {"total_analyzed": 0, "by_impact": {}, "summaries": [], "needs_deep_dive": [], "themes": [], "skipped": true}
+  deep_dive_results: {"deep_dives": [], "skipped": true}
+  pr_analysis: {"total_prs": 0, "merged": 0, "open": 0, "by_category": {}, "notable_prs": [], "themes": [], "skipped": true}
+
+steps:
+  # ==========================================================================
+  # Step 1: Detect repo (Bash - uses precomputed or parses URL)
+  # ==========================================================================
+  # BASH STEP - Use precomputed owner/name if available, else parse URL
+  # Optimization: Parent recipes can pass _precomputed.repo_owner/name to skip parsing
+  - id: "detect-repo"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      
+      mkdir -p {{working_dir}}/analyses
+      
+      # Check for precomputed values first (from parent recipe)
+      precomputed_owner="{{_precomputed.repo_owner}}"
+      precomputed_name="{{_precomputed.repo_name}}"
+      repo_url="{{repo_url}}"
+      
+      if [ -n "$precomputed_owner" ] && [ -n "$precomputed_name" ]; then
+        # Use precomputed values - skip URL parsing
+        echo "{\"repo_url\": \"$repo_url\", \"owner\": \"$precomputed_owner\", \"repo_name\": \"$precomputed_name\", \"detected_from\": \"precomputed\", \"gh_available\": true, \"error\": null}"
+        exit 0
+      fi
+      
+      # Fall back to URL parsing for standalone execution
+      if [ -z "$repo_url" ]; then
+        repo_url=$(git remote get-url origin 2>/dev/null || echo "")
+        detected_from="git_remote"
+      else
+        detected_from="provided"
+      fi
+      
+      # Normalize URL and extract owner/repo
+      normalized=$(echo "$repo_url" | sed 's/\.git$//' | sed 's|git@github.com:|https://github.com/|')
+      owner=$(echo "$normalized" | sed 's|https://github.com/||' | cut -d'/' -f1)
+      repo_name=$(echo "$normalized" | sed 's|https://github.com/||' | cut -d'/' -f2)
+      
+      # Check gh CLI
+      if gh auth status >/dev/null 2>&1; then
+        gh_available=true
+      else
+        gh_available=false
+      fi
+      
+      if [ -z "$owner" ] || [ -z "$repo_name" ]; then
+        echo "{\"error\": \"Could not parse repo URL: $repo_url\", \"gh_available\": $gh_available}"
+      else
+        echo "{\"repo_url\": \"$normalized\", \"owner\": \"$owner\", \"repo_name\": \"$repo_name\", \"detected_from\": \"$detected_from\", \"gh_available\": $gh_available, \"error\": null}"
+      fi
+    output: "repo_info"
+    timeout: 120
+    on_error: "fail"
+
+  # ==========================================================================
+  # Step 2: Parse date range (uses precomputed or LLM)
+  # ==========================================================================
+  # Optimization: Skip LLM call if parent provides _precomputed.date_since_iso
+  - id: "parse-date-range"
+    type: "bash"
+    command: |
+      # Check for precomputed date values from parent recipe
+      precomputed_iso="{{_precomputed.date_since_iso}}"
+      precomputed_date="{{_precomputed.date_since_date}}"
+      precomputed_desc="{{_precomputed.date_description}}"
+      
+      if [ -n "$precomputed_iso" ]; then
+        # Use precomputed values - NO LLM CALL NEEDED
+        echo "{\"needs_llm\": \"false\", \"original\": \"{{date_range}}\", \"since_iso\": \"$precomputed_iso\", \"since_date\": \"$precomputed_date\", \"description\": \"$precomputed_desc\", \"source\": \"precomputed\"}"
+      else
+        # Signal that we need LLM parsing (standalone mode)
+        echo "{\"needs_llm\": \"true\", \"date_range\": \"{{date_range}}\"}"
+      fi
+    output: "date_check"
+    parse_json: true
+    timeout: 10
+
+  # Step 2b: LLM date parsing (only if precomputed not available)
+  # Model: haiku - simple NL→ISO date transformation, no deep reasoning needed
+  - id: "parse-date-range-llm"
+    condition: "{{date_check.needs_llm}} == 'true'"
+    agent: "foundation:zen-architect"
+    provider: "anthropic"
+    model: "claude-haiku-*"
+    mode: "ANALYZE"
+    prompt: |
+      Parse the natural language date range into ISO 8601 format for GitHub API.
+      
+      Input: "{{date_range}}"
+      
+      ## CRITICAL: Use LOCAL Timezone
+      
+      Run this to get local time AND timezone:
+      ```bash
+      date '+%Y-%m-%d %H:%M:%S %Z (UTC%:z)'
+      ```
+      
+      The user's request is in THEIR local time. "Tuesday 3pm" means 3pm in their
+      timezone, not UTC. Convert to UTC (Z suffix) for the API.
+      
+      ## CRITICAL: No End Date for Open-Ended Queries
+      
+      For "since X" queries, we only need a start time. Do NOT calculate an end time.
+      This prevents timezone edge cases from missing recent commits.
+      
+      Interpretation (relative to user's local time):
+      - "since yesterday" -> yesterday at 00:00:00 LOCAL, converted to UTC
+      - "since Tuesday 3pm" -> Tuesday 15:00 LOCAL, converted to UTC
+      - "last 7 days" -> 7 days ago at 00:00:00 LOCAL
+      - "since 2024-12-01" -> 2024-12-01T00:00:00 in user's timezone
+      
+      Return:
+      {
+        "original": "{{date_range}}",
+        "since_iso": "YYYY-MM-DDTHH:MM:SSZ",  // UTC time after timezone conversion
+        "since_date": "YYYY-MM-DD",            // Local date
+        "description": "human readable (e.g., 'since Tuesday 3pm PST (2024-12-31T23:00:00Z)')",
+        "source": "llm_parsed"
+      }
+    output: "parsed_date_llm"
+    parse_json: true
+    timeout: 60
+
+  # Step 2c: Use precomputed date (skips if LLM was needed)
+  - id: "use-precomputed-date"
+    condition: "{{date_check.needs_llm}} == 'false'"
+    type: "bash"
+    command: |
+      echo '{"original": "{{date_check.original}}", "since_iso": "{{date_check.since_iso}}", "since_date": "{{date_check.since_date}}", "description": "{{date_check.description}}", "source": "precomputed"}'
+    output: "parsed_date"
+    parse_json: true
+    timeout: 10
+
+  # Step 2d: Use LLM-parsed date (only runs if LLM step ran)
+  - id: "use-llm-date"
+    condition: "{{date_check.needs_llm}} == 'true'"
+    type: "bash"
+    command: |
+      echo '{"original": "{{parsed_date_llm.original}}", "since_iso": "{{parsed_date_llm.since_iso}}", "since_date": "{{parsed_date_llm.since_date}}", "description": "{{parsed_date_llm.description}}", "source": "llm_parsed"}'
+    output: "parsed_date"
+    parse_json: true
+    timeout: 10
+
+  # ==========================================================================
+  # Step 3: Fetch commits with token-based chunking
+  # ==========================================================================
+  # BASH STEP - Fetch ALL commits and create token-budgeted chunks
+  # Why bash: gh api + jq transforms are deterministic, no reasoning needed
+  # v1.7.0: Added --paginate to handle repos with >100 commits
+  # v2.0.0: Token-based chunking for large repos (replaces truncation)
+  #         - Estimates tokens per commit based on message length
+  #         - Creates chunks targeting ~6000 tokens each
+  #         - Enables parallel chunk analysis with summary synthesis
+  - id: "fetch-commits"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      cd {{working_dir}}/analyses
+      
+      # Fetch ALL commits using --paginate (handles >100 results automatically)
+      gh api --paginate "repos/{{repo_info.owner}}/{{repo_info.repo_name}}/commits?since={{parsed_date.since_iso}}&per_page=100" \
+        --jq '[.[] | {sha: .sha, message: .commit.message, author: .commit.author.name, date: .commit.author.date, url: .html_url}]' \
+        2>/dev/null > {{repo_info.repo_name}}-commits-raw.json || echo "[]" > {{repo_info.repo_name}}-commits-raw.json
+      
+      # Merge paginated results
+      jq -s 'add // []' {{repo_info.repo_name}}-commits-raw.json > {{repo_info.repo_name}}-commits.json 2>/dev/null || \
+        mv {{repo_info.repo_name}}-commits-raw.json {{repo_info.repo_name}}-commits.json
+      
+      total_count=$(jq 'length' {{repo_info.repo_name}}-commits.json)
+      
+      # ===================================================================
+      # TOKEN-BASED CHUNKING
+      # ===================================================================
+      # Target: ~6000 tokens per chunk (leaves room for prompt + response)
+      # Estimation: chars / 4, with JSON overhead factor of 1.3
+      
+      target_tokens=6000
+      
+      if [ "$total_count" -eq 0 ]; then
+        # No commits - empty result with has_commits flag
+        echo '{"total_commits": 0, "num_chunks": 0, "commits_per_chunk": 0, "needs_chunking": false, "has_commits": "false", "chunks": [], "error": null}'
+        exit 0
+      fi
+      
+      # Calculate average characters per commit in this dataset
+      avg_chars=$(jq '[.[] | ((.sha // "") | length) + ((.message // "") | length) + ((.author // "") | length) + 50] | add / length' {{repo_info.repo_name}}-commits.json)
+      
+      # Convert to tokens: chars * 1.3 (JSON overhead) / 4 (chars per token)
+      # Use awk for floating point math
+      avg_tokens=$(echo "$avg_chars" | awk '{printf "%.0f", $1 * 1.3 / 4}')
+      
+      # Ensure avg_tokens is at least 100 (safety floor)
+      if [ "$avg_tokens" -lt 100 ]; then
+        avg_tokens=100
+      fi
+      
+      # Calculate commits per chunk
+      commits_per_chunk=$((target_tokens / avg_tokens))
+      
+      # Clamp to reasonable bounds: min 15, max 60
+      if [ "$commits_per_chunk" -lt 15 ]; then
+        commits_per_chunk=15
+      elif [ "$commits_per_chunk" -gt 60 ]; then
+        commits_per_chunk=60
+      fi
+      
+      # Determine if chunking needed (threshold: 40 commits)
+      if [ "$total_count" -le 40 ]; then
+        needs_chunking=false
+        # Single chunk with all commits
+        jq '[{chunk_index: 0, commits: ., count: length}]' {{repo_info.repo_name}}-commits.json > {{repo_info.repo_name}}-chunks.json
+      else
+        needs_chunking=true
+        # Create multiple chunks
+        jq --argjson size "$commits_per_chunk" '
+          [range(0; length; $size) as $i | 
+           {chunk_index: ($i / $size | floor), commits: .[$i:$i+$size], count: (.[$i:$i+$size] | length)}
+          ]
+        ' {{repo_info.repo_name}}-commits.json > {{repo_info.repo_name}}-chunks.json
+      fi
+      
+      num_chunks=$(jq 'length' {{repo_info.repo_name}}-chunks.json)
+      
+      # Determine has_commits boolean for condition checks
+      if [ "$total_count" -gt 0 ]; then
+        has_commits="true"
+      else
+        has_commits="false"
+      fi
+      
+      jq -n \
+        --argjson total "$total_count" \
+        --argjson num_chunks "$num_chunks" \
+        --argjson cpc "$commits_per_chunk" \
+        --argjson avg_tokens "$avg_tokens" \
+        --argjson needs_chunking "$needs_chunking" \
+        --arg has_commits "$has_commits" \
+        --slurpfile chunks {{repo_info.repo_name}}-chunks.json \
+        '{
+          total_commits: $total,
+          num_chunks: $num_chunks,
+          commits_per_chunk: $cpc,
+          avg_tokens_per_commit: $avg_tokens,
+          needs_chunking: $needs_chunking,
+          has_commits: $has_commits,
+          chunks: $chunks[0],
+          error: null
+        }'
+    output: "commits_data"
+    parse_json: true
+    timeout: 600
+    on_error: "fail"
+
+  # ==========================================================================
+  # Step 4: Fetch PRs (Bash - direct API calls with pagination)
+  # ==========================================================================
+  # BASH STEP - Fetch ALL PRs via GitHub API using --paginate
+  # Why bash: gh api + jq filtering are deterministic, no reasoning needed
+  # v1.7.0: Switched from gh pr list (--limit 100 cap) to gh api --paginate
+  - id: "fetch-prs"
+    type: "bash"
+    command: |
+      cd {{working_dir}}/analyses
+      
+      # Fetch ALL PRs using gh api --paginate (gh pr list has arbitrary limits)
+      # Using API endpoint directly for full pagination support
+      gh api --paginate "repos/{{repo_info.owner}}/{{repo_info.repo_name}}/pulls?state=all&per_page=100" \
+        --jq '[.[] | {
+          number: .number,
+          title: .title,
+          state: (if .merged_at then "MERGED" elif .state == "closed" then "CLOSED" else "OPEN" end),
+          author: .user.login,
+          createdAt: .created_at,
+          mergedAt: .merged_at,
+          closedAt: .closed_at,
+          additions: .additions,
+          deletions: .deletions,
+          changedFiles: .changed_files,
+          url: .html_url
+        }]' \
+        2>/dev/null > {{repo_info.repo_name}}-prs-raw.json || echo "[]" > {{repo_info.repo_name}}-prs-raw.json
+      
+      # Merge paginated results
+      jq -s 'add // []' {{repo_info.repo_name}}-prs-raw.json > {{repo_info.repo_name}}-prs-merged.json 2>/dev/null || \
+        mv {{repo_info.repo_name}}-prs-raw.json {{repo_info.repo_name}}-prs-merged.json
+      mv {{repo_info.repo_name}}-prs-merged.json {{repo_info.repo_name}}-prs-raw.json
+      
+      # Filter to date range
+      since_iso="{{parsed_date.since_iso}}"
+      jq --arg since "$since_iso" '[.[] | select(.createdAt >= $since or .mergedAt >= $since or .closedAt >= $since)]' \
+        {{repo_info.repo_name}}-prs-raw.json > {{repo_info.repo_name}}-prs.json 2>/dev/null || echo "[]" > {{repo_info.repo_name}}-prs.json
+      
+      # Use jq to safely construct output JSON with counts (handles escaping of quotes in PR titles)
+      jq -c '{
+        count: length,
+        prs: .,
+        merged: [.[] | select(.state == "MERGED")] | length,
+        open: [.[] | select(.state == "OPEN")] | length,
+        closed: [.[] | select(.state == "CLOSED")] | length,
+        error: null
+      }' {{repo_info.repo_name}}-prs.json 2>/dev/null || \
+        echo '{"count": 0, "prs": [], "merged": 0, "open": 0, "closed": 0, "error": "Failed to parse PRs"}'
+    output: "prs_data"
+    parse_json: true
+    timeout: 600
+    on_error: "fail"
+
+  # ==========================================================================
+  # Step 5: Analyze commit chunks (foreach - one LLM call per chunk)
+  # ==========================================================================
+  # AGENT STEP with foreach - Analyze each chunk independently
+  # v2.0.0: Token-based chunking - each chunk stays within context limits
+  #         Results collected for synthesis in next step
+  # v3.0.0: max_iterations increased from 20 to 100 for scaling
+  #         Supports ~3,000 commits (100 chunks * ~30 commits/chunk)
+  #         Increase this value for larger repos (e.g., 200 for 6,000 commits)
+  #         on_error changed to "fail" for data integrity
+  # v3.1.0: Model selection - haiku for cost optimization (runs up to 100x in loop)
+  - id: "analyze-commit-chunks"
+    condition: "{{commits_data.has_commits}} == 'true'"
+    foreach: "{{commits_data.chunks}}"
+    as: "chunk"
+    collect: "chunk_analyses"
+    max_iterations: 100
+    agent: "foundation:zen-architect"
+    provider: "anthropic"
+    model: "claude-haiku-*"
+    mode: "ANALYZE"
+    retry:
+      max_attempts: 3
+      backoff: "exponential"
+      initial_delay: 10
+      max_delay: 120
+    prompt: |
+      Analyze commit chunk {{chunk.chunk_index}} of {{commits_data.num_chunks}} for {{repo_info.repo_name}}.
+      
+      **Chunk info**: {{chunk.count}} commits (of {{commits_data.total_commits}} total in repo)
+      **Chunking**: {{commits_data.num_chunks}} chunks, ~{{commits_data.commits_per_chunk}} commits each
+      
+      Commits in this chunk:
+      {{chunk.commits}}
+      
+      ## Instructions
+      
+      **DO NOT fetch diffs for every commit.** Instead:
+      1. Categorize commits by message patterns (feat:, fix:, docs:, refactor:, chore:, etc.)
+      2. Group similar commits (e.g., "5 documentation updates")
+      3. Only fetch diffs for commits that seem significant or unclear:
+         ```bash
+         gh api "repos/{{repo_info.owner}}/{{repo_info.repo_name}}/commits/<SHA>" \
+           --jq '{files: [.files[:10][] | {filename, additions, deletions}], stats: .stats}'
+         ```
+      
+      ## Return PARTIAL analysis for this chunk:
+      ```json
+      {
+        "chunk_index": {{chunk.chunk_index}},
+        "commits_analyzed": N,
+        "by_impact": {"trivial": N, "minor": N, "moderate": N, "significant": N, "breaking": N},
+        "notable_commits": [{"sha": "...", "summary": "...", "impact": "..."}],
+        "themes": ["patterns in this chunk"],
+        "needs_deep_dive": ["SHAs needing investigation"]
+      }
+      ```
+      
+      Keep output concise - this will be synthesized with other chunks.
+    output: "chunk_result"
+    parse_json: true
+    timeout: 600
+    on_error: "fail"
+
+  # ==========================================================================
+  # Step 5b: Persist chunk analyses to disk
+  # ==========================================================================
+  # v3.0.0: Full data persistence - write each chunk analysis to file
+  - id: "persist-chunk-analyses"
+    condition: "{{commits_data.has_commits}} == 'true'"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      cd {{working_dir}}/analyses
+      
+      # Write combined chunk analyses
+      cat << 'CHUNK_DATA_EOF' > {{repo_info.repo_name}}-all-chunks.json
+      {{chunk_analyses}}
+      CHUNK_DATA_EOF
+      
+      # Validate JSON and get count
+      if ! jq -e '.' {{repo_info.repo_name}}-all-chunks.json > /dev/null 2>&1; then
+        echo "ERROR: Invalid JSON in chunk analyses" >&2
+        exit 1
+      fi
+      
+      chunk_count=$(jq 'if type == "array" then length else 1 end' {{repo_info.repo_name}}-all-chunks.json)
+      
+      # Write individual chunk files for granular recovery
+      jq -c '.[]? // .' {{repo_info.repo_name}}-all-chunks.json | nl -v 0 | while read idx data; do
+        echo "$data" > "{{repo_info.repo_name}}-chunk-${idx}-analysis.json"
+      done
+      
+      echo "{\"persisted\": true, \"chunks_written\": $chunk_count, \"combined_file\": \"{{repo_info.repo_name}}-all-chunks.json\"}"
+    output: "chunk_persistence"
+    parse_json: true
+    timeout: 120
+    on_error: "fail"
+
+  # ==========================================================================
+  # Step 5c: Handle empty commits case
+  # ==========================================================================
+  - id: "handle-empty-commits"
+    condition: "{{commits_data.has_commits}} == 'false'"
+    type: "bash"
+    command: |
+      echo '{"total_analyzed": 0, "by_impact": {"trivial": 0, "minor": 0, "moderate": 0, "significant": 0, "breaking": 0}, "summaries": [], "needs_deep_dive": [], "themes": [], "skipped": true, "reason": "No commits in date range"}'
+    output: "commit_analysis"
+    parse_json: true
+    timeout: 10
+
+  # ==========================================================================
+  # Step 5d: Synthesize chunk analyses into unified commit analysis
+  # ==========================================================================
+  # AGENT STEP - Combine all chunk analyses into coherent summary
+  # Only runs if we have chunks to synthesize
+  # Model: sonnet - requires merging themes, prioritizing commits, pattern recognition
+  - id: "synthesize-commit-analysis"
+    condition: "{{commits_data.has_commits}} == 'true'"
+    agent: "foundation:zen-architect"
+    provider: "anthropic"
+    model: "claude-sonnet-*"
+    mode: "ANALYZE"
+    retry:
+      max_attempts: 3
+      backoff: "exponential"
+      initial_delay: 10
+      max_delay: 120
+    prompt: |
+      Synthesize commit analysis from {{commits_data.num_chunks}} chunks for {{repo_info.repo_name}}.
+      
+      **Total commits**: {{commits_data.total_commits}}
+      **Chunks processed**: {{commits_data.num_chunks}}
+      
+      Chunk analyses:
+      {{chunk_analyses}}
+      
+      ## Instructions
+      
+      Combine the per-chunk analyses into a unified summary:
+      1. **Aggregate impact counts** - Sum by_impact across all chunks
+      2. **Merge themes** - Identify cross-chunk patterns, deduplicate
+      3. **Prioritize notable commits** - Keep top 10-15 most significant
+      4. **Consolidate needs_deep_dive** - Unique SHAs only
+      
+      ## Return unified commit analysis:
+      ```json
+      {
+        "total_analyzed": {{commits_data.total_commits}},
+        "chunks_processed": {{commits_data.num_chunks}},
+        "by_impact": {"trivial": N, "minor": N, "moderate": N, "significant": N, "breaking": N},
+        "summaries": [{"sha": "...", "summary": "...", "impact": "...", "files_changed": [...]}],
+        "needs_deep_dive": ["unique SHAs requiring deeper analysis"],
+        "themes": ["consolidated patterns across all commits"],
+        "skipped": false
+      }
+      ```
+    output: "commit_analysis"
+    parse_json: true
+    timeout: 600
+    on_error: "fail"
+
+  # ==========================================================================
+  # Step 5e: Persist synthesized commit analysis
+  # ==========================================================================
+  # v3.0.0: Full data persistence - write synthesized analysis to file
+  - id: "persist-commit-analysis"
+    condition: "{{commits_data.has_commits}} == 'true'"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      cd {{working_dir}}/analyses
+      
+      cat << 'COMMIT_ANALYSIS_EOF' > {{repo_info.repo_name}}-commit-analysis.json
+      {{commit_analysis}}
+      COMMIT_ANALYSIS_EOF
+      
+      # Validate JSON
+      if ! jq -e '.' {{repo_info.repo_name}}-commit-analysis.json > /dev/null 2>&1; then
+        echo "ERROR: Invalid JSON in commit analysis" >&2
+        exit 1
+      fi
+      
+      total=$(jq '.total_analyzed // 0' {{repo_info.repo_name}}-commit-analysis.json)
+      echo "{\"persisted\": true, \"file\": \"{{repo_info.repo_name}}-commit-analysis.json\", \"total_commits\": $total}"
+    output: "commit_analysis_persistence"
+    parse_json: true
+    timeout: 60
+    on_error: "fail"
+
+  # ==========================================================================
+  # Step 6: Deep-dive unclear commits (optional LLM analysis)
+  # ==========================================================================
+  # AGENT STEP - Explore code context to understand unclear changes
+  # Why agent: Requires git exploration, reading code, inferring impact
+  # v3.0.0: This is the ONLY step that can continue on error (truly optional)
+  # Model: sonnet - requires code analysis, dependency tracing, blast radius assessment
+  - id: "deep-dive-unclear-commits"
+    agent: "foundation:explorer"
+    provider: "anthropic"
+    model: "claude-sonnet-*"
+    retry:
+      max_attempts: 2
+      backoff: "exponential"
+      initial_delay: 15
+      max_delay: 120
+    prompt: |
+      Deep-dive analysis for commits with unclear impact in {{repo_info.repo_name}}.
+      
+      ## Inputs
+      
+      Include deep dive: {{include_deep_dive}}
+      Commits needing analysis: {{commit_analysis.needs_deep_dive}}
+      
+      ## Logic
+      
+      **If include_deep_dive is false OR the needs_deep_dive list is empty:**
+      Return immediately with:
+      ```json
+      {"deep_dives": [], "skipped": true, "reason": "No deep dive needed or disabled"}
+      ```
+      
+      **Otherwise, for each commit SHA in needs_deep_dive:**
+      
+      1. If repo not cloned locally, clone it:
+      ```bash
+      gh repo clone {{repo_info.owner}}/{{repo_info.repo_name}} {{working_dir}}/repos/{{repo_info.repo_name}} -- --depth=50
+      ```
+      
+      2. Checkout the commit and explore:
+      ```bash
+      cd {{working_dir}}/repos/{{repo_info.repo_name}}
+      git show <SHA> --stat
+      git show <SHA> -- <key files>
+      ```
+      
+      3. For changed functions/classes, find:
+         - What depends on them (grep for imports/usages)
+         - Related tests (what behavior is expected)
+         - Documentation (what's the intended purpose)
+      
+      4. Assess actual impact:
+         - Is this a breaking change?
+         - What's the blast radius?
+         - Are there downstream consumers affected?
+      
+      Return enhanced analysis:
+      {
+        "deep_dives": [
+          {
+            "sha": "...",
+            "original_assessment": "...",
+            "revised_impact": "...",
+            "dependencies_found": [...],
+            "risk_assessment": "...",
+            "notes": "..."
+          }
+        ],
+        "skipped": false
+      }
+    output: "deep_dive_results"
+    parse_json: true
+    timeout: 600
+    on_error: "continue"
+
+  # ==========================================================================
+  # Step 6b: Persist deep dive results
+  # ==========================================================================
+  # v3.0.0: Full data persistence - write deep dive results to file
+  - id: "persist-deep-dives"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      cd {{working_dir}}/analyses
+      
+      cat << 'DEEP_DIVE_EOF' > {{repo_info.repo_name}}-deep-dives.json
+      {{deep_dive_results}}
+      DEEP_DIVE_EOF
+      
+      # Validate JSON (allow empty/skipped results)
+      if ! jq -e '.' {{repo_info.repo_name}}-deep-dives.json > /dev/null 2>&1; then
+        # If parsing fails, write a valid skipped result
+        echo '{"deep_dives": [], "skipped": true, "reason": "Deep dive output invalid or unavailable"}' > {{repo_info.repo_name}}-deep-dives.json
+      fi
+      
+      dive_count=$(jq '.deep_dives | length' {{repo_info.repo_name}}-deep-dives.json 2>/dev/null || echo "0")
+      skipped=$(jq '.skipped // false' {{repo_info.repo_name}}-deep-dives.json 2>/dev/null || echo "true")
+      echo "{\"persisted\": true, \"file\": \"{{repo_info.repo_name}}-deep-dives.json\", \"deep_dives_count\": $dive_count, \"skipped\": $skipped}"
+    output: "deep_dive_persistence"
+    parse_json: true
+    timeout: 60
+    on_error: "fail"
+
+  # ==========================================================================
+  # Step 7: Analyze PRs (LLM for semantic analysis)
+  # ==========================================================================
+  # AGENT STEP - Categorize PRs by type and assess significance
+  # Why agent: Requires reading PR titles/descriptions, inferring categories
+  # Model: sonnet - PR categorization benefits from context understanding and nuance
+  - id: "analyze-prs"
+    agent: "foundation:zen-architect"
+    provider: "anthropic"
+    model: "claude-sonnet-*"
+    mode: "ANALYZE"
+    retry:
+      max_attempts: 3
+      backoff: "exponential"
+      initial_delay: 10
+      max_delay: 120
+    prompt: |
+      Analyze the PRs for {{repo_info.repo_name}}.
+      
+      PRs count: {{prs_data.count}}
+      PRs: {{prs_data.prs}}
+      
+      **If PRs count is 0 or PRs list is empty, return immediately:**
+      ```json
+      {
+        "total_prs": 0,
+        "merged": 0,
+        "open": 0,
+        "by_category": {},
+        "notable_prs": [],
+        "themes": [],
+        "skipped": true,
+        "reason": "No PRs in date range"
+      }
+      ```
+      
+      **Otherwise, for each PR:**
+      
+      For each PR:
+      1. Categorize: feature | bugfix | docs | refactor | dependencies | other
+      2. Assess scope: small (<50 lines) | medium (50-200) | large (>200)
+      3. Note if merged, still open, or closed without merge
+      
+      Identify:
+      - Major features added
+      - Significant bug fixes
+      - Breaking changes
+      - PRs that might need attention (stale, contentious, large)
+      
+      Return:
+      {
+        "total_prs": N,
+        "merged": N,
+        "open": N,
+        "by_category": { "feature": N, "bugfix": N, ... },
+        "notable_prs": [
+          {
+            "number": N,
+            "title": "...",
+            "category": "...",
+            "scope": "...",
+            "summary": "...",
+            "notable_because": "..."
+          }
+        ],
+        "themes": ["patterns observed in PRs"]
+      }
+    output: "pr_analysis"
+    parse_json: true
+    timeout: 300
+    on_error: "fail"
+
+  # ==========================================================================
+  # Step 7b: Persist PR analysis
+  # ==========================================================================
+  # v3.0.0: Full data persistence - write PR analysis to file
+  - id: "persist-pr-analysis"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      cd {{working_dir}}/analyses
+      
+      cat << 'PR_ANALYSIS_EOF' > {{repo_info.repo_name}}-pr-analysis.json
+      {{pr_analysis}}
+      PR_ANALYSIS_EOF
+      
+      # Validate JSON
+      if ! jq -e '.' {{repo_info.repo_name}}-pr-analysis.json > /dev/null 2>&1; then
+        echo "ERROR: Invalid JSON in PR analysis" >&2
+        exit 1
+      fi
+      
+      total=$(jq '.total_prs // 0' {{repo_info.repo_name}}-pr-analysis.json)
+      echo "{\"persisted\": true, \"file\": \"{{repo_info.repo_name}}-pr-analysis.json\", \"total_prs\": $total}"
+    output: "pr_analysis_persistence"
+    parse_json: true
+    timeout: 60
+    on_error: "fail"
+
+  # ==========================================================================
+  # Step 8: Synthesize repo findings (LLM for comprehensive summary)
+  # ==========================================================================
+  # AGENT STEP - Combine all findings into cohesive narrative
+  # Why agent: Requires weighing importance, prioritizing, creating narrative
+  # v1.5.0: Added compact synthesis_input for aggregation (prevents context overflow)
+  # Model: sonnet - final synthesis in ARCHITECT mode, creates cohesive narrative
+  - id: "synthesize-repo-findings"
+    agent: "foundation:zen-architect"
+    provider: "anthropic"
+    model: "claude-sonnet-*"
+    mode: "ARCHITECT"
+    retry:
+      max_attempts: 3
+      backoff: "exponential"
+      initial_delay: 10
+      max_delay: 120
+    prompt: |
+      Synthesize all findings for {{repo_info.repo_name}}.
+      
+      Inputs:
+      - Repo info: {{repo_info}}
+      - Commits: {{commit_analysis}}
+      - Deep dives: {{deep_dive_results}}
+      - PRs: {{pr_analysis}}
+      - Date range: {{date_range}} ({{parsed_date.description}})
+      
+      Create TWO outputs:
+      
+      ## 1. Full Analysis (repo_summary - for file storage)
+      
+      {
+        "repo": "{{repo_info.repo_name}}",
+        "owner": "{{repo_info.owner}}",
+        "url": "{{repo_info.repo_url}}",
+        "analysis_date": "<current timestamp>",
+        "date_range": "{{parsed_date.description}}",
+        
+        "activity_summary": {
+          "has_activity": true|false,
+          "commits": N,
+          "prs_total": N,
+          "prs_merged": N,
+          "prs_open": N
+        },
+        
+        "impact_assessment": {
+          "overall": "none|trivial|minor|moderate|significant|breaking",
+          "by_level": { "trivial": N, ... }
+        },
+        
+        "key_changes": [
+          {
+            "description": "...",
+            "impact": "...",
+            "type": "commit|pr",
+            "references": ["sha or PR#"]
+          }
+        ],
+        
+        "themes": ["patterns and themes observed"],
+        
+        "risks": ["any risks or concerns identified"],
+        
+        "notable_items": [
+          "breaking changes, security items, major features"
+        ]
+      }
+      
+      ## 2. Compact Summary (synthesis_input - for ecosystem aggregation, MAX 300 tokens)
+      
+      {
+        "repo": "{{repo_info.repo_name}}",
+        "commits": N,
+        "prs": N,
+        "impact": "none|trivial|minor|moderate|significant|breaking",
+        "summary": "1-2 sentence summary of what changed",
+        "highlights": ["max 3 bullet points of most important changes"],
+        "risks": ["max 2 critical risks only, or empty"]
+      }
+      
+      IMPORTANT: synthesis_input is for ecosystem reports with 30+ repos. Keep it COMPACT.
+      
+      Return JSON with BOTH fields:
+      {
+        "repo_summary": { ... full analysis ... },
+        "synthesis_input": { ... compact summary ... }
+      }
+    output: "repo_findings"
+    parse_json: true
+    timeout: 300
+    on_error: "fail"
+
+  # ==========================================================================
+  # Step 9: Write analysis files (GUARANTEED file write)
+  # ==========================================================================
+  # BASH STEP - Explicit file write since LLM file writes are non-deterministic
+  # Why bash: Guarantees files are written, verifies success
+  # v1.5.0: Returns compact synthesis_input as final_output for parent aggregation
+  #         Handles both old format (direct object) and new format (wrapped)
+  # v3.0.1: Fixed JSON control character handling - LLM outputs may contain
+  #         literal newlines in strings that need escaping before jq parsing
+  - id: "write-analysis-files"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      
+      mkdir -p {{working_dir}}/analyses
+      repo_name="{{repo_info.repo_name}}"
+      
+      # Write raw LLM output using heredoc (handles special chars better than printf)
+      cat << 'REPO_FINDINGS_EOF' > {{working_dir}}/analyses/${repo_name}-findings-raw.json
+      {{repo_findings}}
+      REPO_FINDINGS_EOF
+      
+      # Sanitize: escape control characters in JSON strings
+      # This handles LLM outputs that contain literal newlines in string values
+      # sed replaces actual newlines within strings with escaped \n
+      # We use tr to replace literal control chars, then jq to re-serialize
+      cat {{working_dir}}/analyses/${repo_name}-findings-raw.json | \
+        tr '\n' '\036' | \
+        sed 's/\x1e\x1e/\n/g; s/\x1e/ /g' | \
+        jq -c '.' > {{working_dir}}/analyses/${repo_name}-findings-clean.json 2>/dev/null || \
+        cp {{working_dir}}/analyses/${repo_name}-findings-raw.json {{working_dir}}/analyses/${repo_name}-findings-clean.json
+      
+      # Extract repo_summary if present, otherwise use whole object
+      if jq -e '.repo_summary' {{working_dir}}/analyses/${repo_name}-findings-clean.json >/dev/null 2>&1; then
+        jq '.repo_summary' {{working_dir}}/analyses/${repo_name}-findings-clean.json > {{working_dir}}/analyses/${repo_name}-analysis.json
+      else
+        cp {{working_dir}}/analyses/${repo_name}-findings-clean.json {{working_dir}}/analyses/${repo_name}-analysis.json
+      fi
+      
+      # Generate markdown summary using jq
+      # Control chars already sanitized in findings-clean.json step above
+      jq -r '
+        "# " + .repo + " Repository Analysis\n\n" +
+        "**Repository**: [" + .owner + "/" + .repo + "](" + .url + ")  \n" +
+        "**Analysis Date**: " + .analysis_date + "  \n" +
+        "**Period**: " + .date_range + "\n\n" +
+        "## Activity Summary\n\n" +
+        "| Metric | Count |\n|--------|-------|\n" +
+        "| Commits | " + (.activity_summary.commits | tostring) + " |\n" +
+        "| PRs Total | " + (.activity_summary.prs_total | tostring) + " |\n" +
+        "| PRs Merged | " + (.activity_summary.prs_merged | tostring) + " |\n\n" +
+        "## Impact Assessment: " + (.impact_assessment.overall | ascii_upcase) + "\n\n" +
+        (if .impact_assessment.by_level then
+          "| Level | Count |\n|-------|-------|\n" +
+          (.impact_assessment.by_level | to_entries | map("| " + .key + " | " + (.value|tostring) + " |") | join("\n")) + "\n\n"
+        else "" end) +
+        "## Key Changes\n\n" +
+        (if .key_changes and (.key_changes | length) > 0 then
+          (.key_changes | to_entries | map(((.key + 1) | tostring) + ". " + .value.description + " (" + .value.impact + ")") | join("\n\n")) + "\n\n"
+        else "No significant changes in this period.\n\n" end) +
+        "## Themes\n\n" +
+        (if .themes and (.themes | length) > 0 then
+          (.themes | map("- " + .) | join("\n")) + "\n\n"
+        else "- No major themes identified\n\n" end) +
+        "## Risks\n\n" +
+        (if .risks and (.risks | length) > 0 then
+          (.risks | map("- " + .) | join("\n")) + "\n\n"
+        else "- No significant risks identified\n\n" end) +
+        "## Notable Items\n\n" +
+        (if .notable_items and (.notable_items | length) > 0 then
+          (.notable_items | map("- " + .) | join("\n"))
+        else "- No notable items" end)
+      ' {{working_dir}}/analyses/${repo_name}-analysis.json > {{working_dir}}/analyses/${repo_name}-summary.md
+      
+      # Clean up temp files
+      rm -f {{working_dir}}/analyses/${repo_name}-findings-raw.json {{working_dir}}/analyses/${repo_name}-findings-clean.json
+      
+      # Verify files were written
+      json_size=$(wc -c < "{{working_dir}}/analyses/${repo_name}-analysis.json" | tr -d ' ')
+      md_size=$(wc -c < "{{working_dir}}/analyses/${repo_name}-summary.md" | tr -d ' ')
+      
+      echo "Files written:" >&2
+      echo "  - ${repo_name}-analysis.json ($json_size bytes)" >&2
+      echo "  - ${repo_name}-summary.md ($md_size bytes)" >&2
+      
+      # Return write status (synthesis_input returned in final step)
+      echo "{\"analysis_written\": true, \"json_size\": $json_size, \"md_size\": $md_size}"
+    output: "files_written"
+    parse_json: true
+    timeout: 60
+    on_error: "fail"
+
+  # ==========================================================================
+  # Step 10: Write data manifest (inventory of all files)
+  # ==========================================================================
+  # v3.0.0: Data traceability - manifest of all collected data
+  - id: "write-data-manifest"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      cd {{working_dir}}/analyses
+      
+      repo_name="{{repo_info.repo_name}}"
+      
+      # Collect file info
+      commits_file="${repo_name}-commits.json"
+      chunks_file="${repo_name}-chunks.json"
+      prs_file="${repo_name}-prs.json"
+      all_chunks_file="${repo_name}-all-chunks.json"
+      commit_analysis_file="${repo_name}-commit-analysis.json"
+      pr_analysis_file="${repo_name}-pr-analysis.json"
+      deep_dives_file="${repo_name}-deep-dives.json"
+      analysis_file="${repo_name}-analysis.json"
+      summary_file="${repo_name}-summary.md"
+      
+      # Get file sizes and counts safely
+      get_size() { wc -c < "$1" 2>/dev/null | tr -d ' ' || echo "0"; }
+      get_json_length() { jq 'if type == "array" then length else 1 end' "$1" 2>/dev/null || echo "0"; }
+      
+      # Build manifest
+      jq -n \
+        --arg repo "$repo_name" \
+        --arg owner "{{repo_info.owner}}" \
+        --arg collected_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --arg date_range "{{parsed_date.description}}" \
+        --arg working_dir "{{working_dir}}/analyses" \
+        --argjson total_commits "{{commits_data.total_commits}}" \
+        --argjson num_chunks "{{commits_data.num_chunks}}" \
+        --argjson total_prs "{{prs_data.count}}" \
+        --argjson commits_file_size "$(get_size "$commits_file")" \
+        --argjson chunks_file_size "$(get_size "$chunks_file")" \
+        --argjson prs_file_size "$(get_size "$prs_file")" \
+        --argjson all_chunks_file_size "$(get_size "$all_chunks_file")" \
+        --argjson commit_analysis_file_size "$(get_size "$commit_analysis_file")" \
+        --argjson pr_analysis_file_size "$(get_size "$pr_analysis_file")" \
+        --argjson deep_dives_file_size "$(get_size "$deep_dives_file")" \
+        --argjson analysis_file_size "$(get_size "$analysis_file")" \
+        --argjson summary_file_size "$(get_size "$summary_file")" \
+        '{
+          repo: $repo,
+          owner: $owner,
+          collected_at: $collected_at,
+          date_range: $date_range,
+          working_dir: $working_dir,
+          counts: {
+            commits: $total_commits,
+            chunks: $num_chunks,
+            prs: $total_prs
+          },
+          files: {
+            raw_data: {
+              commits: {name: ($repo + "-commits.json"), size: $commits_file_size},
+              chunks: {name: ($repo + "-chunks.json"), size: $chunks_file_size},
+              prs: {name: ($repo + "-prs.json"), size: $prs_file_size}
+            },
+            llm_analyses: {
+              chunk_analyses: {name: ($repo + "-all-chunks.json"), size: $all_chunks_file_size},
+              commit_analysis: {name: ($repo + "-commit-analysis.json"), size: $commit_analysis_file_size},
+              pr_analysis: {name: ($repo + "-pr-analysis.json"), size: $pr_analysis_file_size},
+              deep_dives: {name: ($repo + "-deep-dives.json"), size: $deep_dives_file_size}
+            },
+            final_output: {
+              analysis: {name: ($repo + "-analysis.json"), size: $analysis_file_size},
+              summary: {name: ($repo + "-summary.md"), size: $summary_file_size}
+            }
+          }
+        }' > "${repo_name}-manifest.json"
+      
+      cat "${repo_name}-manifest.json"
+    output: "manifest"
+    parse_json: true
+    timeout: 60
+    on_error: "fail"
+
+  # ==========================================================================
+  # Step 11: Final validation and output contract
+  # ==========================================================================
+  # v3.0.0: Validate all files exist and return success/failure contract
+  # This ensures the caller gets either complete data or a clear error
+  - id: "final-validation"
+    type: "bash"
+    command: |
+      set -euo pipefail
+      cd {{working_dir}}/analyses
+      
+      repo_name="{{repo_info.repo_name}}"
+      errors=""
+      files_written=()
+      partial_files=()
+      
+      # Required files (must exist for success)
+      required_files=(
+        "${repo_name}-commits.json"
+        "${repo_name}-chunks.json"
+        "${repo_name}-prs.json"
+        "${repo_name}-analysis.json"
+        "${repo_name}-summary.md"
+        "${repo_name}-manifest.json"
+      )
+      
+      # Conditionally required files (only if commits exist)
+      if [ "{{commits_data.has_commits}}" = "true" ]; then
+        required_files+=(
+          "${repo_name}-all-chunks.json"
+          "${repo_name}-commit-analysis.json"
+        )
+      fi
+      
+      # Always required LLM analysis files
+      required_files+=(
+        "${repo_name}-pr-analysis.json"
+        "${repo_name}-deep-dives.json"
+      )
+      
+      # Check each required file
+      for file in "${required_files[@]}"; do
+        if [ -f "$file" ] && [ -s "$file" ]; then
+          files_written+=("$file")
+        else
+          if [ -f "$file" ]; then
+            partial_files+=("$file")
+            errors="${errors}File exists but empty: $file; "
+          else
+            errors="${errors}Missing file: $file; "
+          fi
+        fi
+      done
+      
+      # Add any chunk files that exist
+      for chunk_file in ${repo_name}-chunk-*-analysis.json; do
+        if [ -f "$chunk_file" ]; then
+          files_written+=("$chunk_file")
+        fi
+      done 2>/dev/null || true
+      
+      # Convert arrays to JSON
+      files_json=$(printf '%s\n' "${files_written[@]}" | jq -R . | jq -s .)
+      partial_json=$(printf '%s\n' "${partial_files[@]}" 2>/dev/null | jq -R . | jq -s . 2>/dev/null || echo "[]")
+      
+      if [ -z "$errors" ]; then
+        # SUCCESS: All files present
+        jq -n \
+          --argjson success true \
+          --arg repo "$repo_name" \
+          --arg manifest_path "{{working_dir}}/analyses/${repo_name}-manifest.json" \
+          --arg analysis_path "{{working_dir}}/analyses/${repo_name}-analysis.json" \
+          --argjson files_written "$files_json" \
+          --argjson commits "{{commits_data.total_commits}}" \
+          --argjson prs "{{prs_data.count}}" \
+          --argjson chunks "{{commits_data.num_chunks}}" \
+          '{
+            success: $success,
+            repo: $repo,
+            manifest_path: $manifest_path,
+            analysis_path: $analysis_path,
+            files_written: $files_written,
+            counts: {
+              commits: $commits,
+              prs: $prs,
+              chunks: $chunks
+            }
+          }'
+      else
+        # FAILURE: Missing or empty files
+        jq -n \
+          --argjson success false \
+          --arg repo "$repo_name" \
+          --arg error "$errors" \
+          --arg failed_step "final-validation" \
+          --argjson partial_files "$partial_json" \
+          '{
+            success: $success,
+            repo: $repo,
+            error: $error,
+            failed_step: $failed_step,
+            partial_files: $partial_files
+          }'
+        exit 1
+      fi
+    output: "final_output"
+    parse_json: true
+    timeout: 60
+    on_error: "fail"

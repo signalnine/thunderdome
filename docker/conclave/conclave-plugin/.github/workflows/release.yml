@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Validate tag matches plugin.json
+        run: |
+          PLUGIN_VERSION=$(grep '"version"' .claude-plugin/plugin.json | head -1 | sed 's/.*"version": *"//;s/".*//')
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$PLUGIN_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} (${TAG_VERSION}) does not match plugin.json version (${PLUGIN_VERSION})"
+            exit 1
+          fi
+          echo "Version validated: ${PLUGIN_VERSION}"
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          VERSION=$(grep '"version"' .claude-plugin/plugin.json | head -1 | sed 's/.*"version": *"//;s/".*//')
+          go build -ldflags "-X main.version=${VERSION}" \
+            -o conclave-${{ matrix.goos }}-${{ matrix.goarch }} \
+            ./cmd/conclave
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: conclave-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: conclave-${{ matrix.goos }}-${{ matrix.goarch }}
+
+  create-release:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: artifacts/*/conclave-*
