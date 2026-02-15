@@ -43,7 +43,7 @@ We named the impostor "Gas Station" (get it? smaller Gas Town) and kept it as a 
 
 Then the benchmarks came back. Gas Station scored 92.3%. The full Gas Town pipeline — Mayor planning, parallel Polecats, Refinery merge, post-merge fixup, 632 lines of orchestration — scored 92.8%. Half a percentage point better for 3x the cost and twice the wall-clock time.
 
-The single agent in a trench coat nearly beat the actual workforce. Gas Station is still in the benchmark suite as a permanent reminder that complexity needs to justify itself.
+The single agent in a trench coat is within margin of error of the actual workforce — 92.3% vs 92.8% — at a third of the cost ($11 vs $32) and half the wall-clock time. Gas Station is still in the benchmark suite as a permanent reminder that complexity needs to justify itself.
 
 ## Why This Exists
 
