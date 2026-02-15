@@ -6,31 +6,32 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Full suite results across all 10 tasks (single trial each, all Opus unless noted):
+Full suite results across all 10 tasks (single trial each, all Opus unless noted). Each cell shows **score | wall-clock time | cost**:
 
 | Task | Claude Code | Conclave | Superpowers | Gas Town | Gas Station | Amplifier | Aider* |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **T1** time-tracker | 92.7% $0.45 | 79.1% $1.48 | 94.0% $0.42 | 92.9% $0.47 | 93.2% $0.35 | 96.2% $0.28 | 93.6% $0.02 |
-| **T2** collab-server | 86.9% $2.90 | 82.2% $1.69 | 84.2% $0.72 | 87.9% $10.20 | 87.2% $1.58 | 96.2% ~$1.81 | 92.9% $0.03 |
-| **T3** fts-search | 90.6% $0.52 | 92.5% $1.01 | 93.2% $0.82 | 93.2% $0.59 | 93.2% $0.41 | 93.2% $0.57 | 93.2% $0.09 |
-| **T4** phantom-invoice | 92.5% $0.35 | 100.0% $0.50 | 100.0% $0.38 | 98.5% $0.35 | 100.0% $0.27 | 100.0% $0.30 | 100.0% $0.07 |
-| **T5** task-queue | 57.8% $1.13 | 73.8% $2.93 | 73.0% $1.16 | 88.4% $8.27 | 86.8% $3.25 | 94.0% $1.07 | 20.0% $0.01 |
-| **T6** monorepo-disaster | 98.5% $0.52 | 73.0% $1.00 | 94.0% $0.69 | 97.0% $0.63 | 96.2% $0.77 | 95.5% ~$0.30 | — |
-| **T7** plugin-marketplace | 91.4% $0.94 | 70.0% $3.71 | 70.7% $0.59 | 94.8% $4.27 | 92.6% $0.89 | 95.2% ~$0.44 | — |
-| **T8** analytics-dashboard | 82.8% $1.21 | 59.5% $2.47 | 70.0% $1.27 | 85.3% $5.31 | 85.3% $2.01 | 69.1% $0.67 | — |
-| **T9** ssg-toolkit | 83.5% $0.71 | 84.2% $1.64 | 70.7% $0.77 | 96.2% $0.90 | 94.0% $0.75 | 96.2% $0.78 | — |
-| **T10** ecommerce-backend | 90.1% $1.05 | 82.2% $2.77 | 70.7% $0.77 | 93.7% $0.63 | 93.9% $0.81 | 94.5% $0.54 | — |
-| **Average / Total** | **86.7% $9.79** | **79.7% $19.21** | **82.1% $7.60** | **92.8% $31.62** | **92.3% $11.09** | **93.0% ~$6.73** | **79.9% ~$0.22** |
+| **T1** time-tracker | 92.7% 2m05s $0.45 | 79.1% 5m19s $1.48 | 94.0% 1m23s $0.42 | 92.9% 2m38s $0.47 | 93.2% 2m09s $0.35 | 96.2% 1m58s $0.28 | 93.6% 26s $0.02 |
+| **T2** collab-server | 86.9% 12m16s $2.90 | 82.2% 13m56s $1.69 | 84.2% 2m21s $0.72 | 87.9% 27m54s $10.20 | 87.2% 8m22s $1.58 | 96.2% 20m14s ~$1.81 | 92.9% 59s $0.03 |
+| **T3** fts-search | 90.6% 1m30s $0.52 | 92.5% 3m33s $1.01 | 93.2% 2m48s $0.82 | 93.2% 2m05s $0.59 | 93.2% 1m54s $0.41 | 93.2% 4m39s $0.57 | 93.2% 1m54s $0.09 |
+| **T4** phantom-invoice | 92.5% 1m31s $0.35 | 100.0% 2m09s $0.50 | 100.0% 1m33s $0.38 | 98.5% 1m38s $0.35 | 100.0% 1m48s $0.27 | 100.0% 2m40s $0.30 | 100.0% 36s $0.07 |
+| **T5** task-queue | 57.8% 5m23s $1.13 | 73.8% 19m44s $2.93 | 73.0% 3m39s $1.16 | 88.4% 16m59s $8.27 | 86.8% 12m17s $3.25 | 94.0% 23m19s $1.07 | 20.0% 8s $0.01 |
+| **T6** monorepo-disaster | 98.5% 2m29s $0.52 | 73.0% 3m46s $1.00 | 94.0% 3m09s $0.69 | 97.0% 7m21s $0.63 | 96.2% 3m58s $0.77 | 95.5% 3m18s ~$0.30 | — |
+| **T7** plugin-marketplace | 91.4% 4m18s $0.94 | 70.0% 8m58s $3.71 | 70.7% 2m24s $0.59 | 94.8% 8m33s $4.27 | 92.6% 4m19s $0.89 | 95.2% 4m56s ~$0.44 | — |
+| **T8** analytics-dashboard | 82.8% 4m47s $1.21 | 59.5% 8m25s $2.47 | 70.0% 4m06s $1.27 | 85.3% 10m49s $5.31 | 85.3% 6m45s $2.01 | 69.1% 10m38s $0.67 | — |
+| **T9** ssg-toolkit | 83.5% 2m55s $0.71 | 84.2% 5m46s $1.64 | 70.7% 2m52s $0.77 | 96.2% 2m59s $0.90 | 94.0% 3m38s $0.75 | 96.2% 9m19s $0.78 | — |
+| **T10** ecommerce-backend | 90.1% 4m51s $1.05 | 82.2% 9m53s $2.77 | 70.7% 2m34s $0.77 | 93.7% 7m06s $0.63 | 93.9% 4m05s $0.81 | 94.5% 7m56s $0.54 | — |
+| **Avg / Total** | **86.7%** 42m05s **$9.79** | **79.7%** 1h21m **$19.21** | **82.1%** 26m49s **$7.60** | **92.8%** 1h28m **$31.62** | **92.3%** 49m15s **$11.09** | **93.0%** 1h28m **~$6.73** | **79.9%** 4m03s **~$0.22** |
 
 \*Aider uses Sonnet (one-shot, no iteration). `~` = extrapolated cost. Gas Town uses a multi-agent pipeline (Mayor planner -> parallel Polecats -> Refinery merge); Gas Station is its single-agent variant.
 
 ### Key Findings
 
-- **Amplifier** leads on both score (93.0%) and cost efficiency (~$6.73 total) among Opus orchestrators
-- **Gas Town** is #2 on score (92.8%) but 4.7x more expensive ($31.62) due to multi-agent overhead
-- **Gas Station** (single-agent) nearly matches Gas Town quality (92.3%) at 3.5x less cost ($11.09)
-- **Claude Code** struggles on marathon tasks (T5: 57.8%) but excels at recovery (T6: 98.5%)
-- **Aider** is absurdly cheap ($0.22) but collapses without iteration (T5: 20%) and only covers 5 tasks
+- **Amplifier** leads on score (93.0%) and cost efficiency (~$6.73) but takes the longest (1h28m tied with Gas Town)
+- **Gas Town** is #2 on score (92.8%) but most expensive ($31.62) due to multi-agent overhead
+- **Gas Station** (single-agent) nearly matches Gas Town quality (92.3%) in half the time (49m) at 3x less cost ($11.09)
+- **Superpowers** is fastest among full-suite runners (27m) and cheapest Opus ($7.60) but drops on complex tasks
+- **Claude Code** struggles on marathon tasks (T5: 57.8%) but excels at recovery (T6: 98.5%) with middle-of-pack speed (42m)
+- **Aider** is absurdly fast (4m) and cheap ($0.22) but collapses without iteration (T5: 20%) and only covers 5 tasks
 
 ## Why This Exists
 
