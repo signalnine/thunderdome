@@ -2,7 +2,35 @@
 
 Two agents enter, one agent leaves.
 
-A benchmarking framework that pits agentic coding orchestrators against standardized programming tasks and measures what matters: completion rate, token efficiency, error recovery, code quality, and context endurance.
+A benchmarking framework that pits agentic coding orchestrators against standardized programming tasks and measures what matters: completion rate, token efficiency, cost, and code quality.
+
+## Results
+
+Full suite results across all 10 tasks (single trial each, all Opus unless noted):
+
+| Task | Claude Code | Conclave | Superpowers | Gas Town | Gas Station | Amplifier | Aider* |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **T1** time-tracker | 92.7% $0.45 | 79.1% $1.48 | 94.0% $0.42 | 92.9% $0.47 | 93.2% $0.35 | 96.2% $0.28 | 93.6% $0.02 |
+| **T2** collab-server | 86.9% $2.90 | 82.2% $1.69 | 84.2% $0.72 | 87.9% $10.20 | 87.2% $1.58 | 96.2% ~$1.81 | 92.9% $0.03 |
+| **T3** fts-search | 90.6% $0.52 | 92.5% $1.01 | 93.2% $0.82 | 93.2% $0.59 | 93.2% $0.41 | 93.2% $0.57 | 93.2% $0.09 |
+| **T4** phantom-invoice | 92.5% $0.35 | 100.0% $0.50 | 100.0% $0.38 | 98.5% $0.35 | 100.0% $0.27 | 100.0% $0.30 | 100.0% $0.07 |
+| **T5** task-queue | 57.8% $1.13 | 73.8% $2.93 | 73.0% $1.16 | 88.4% $8.27 | 86.8% $3.25 | 94.0% $1.07 | 20.0% $0.01 |
+| **T6** monorepo-disaster | 98.5% $0.52 | 73.0% $1.00 | 94.0% $0.69 | 97.0% $0.63 | 96.2% $0.77 | 95.5% ~$0.30 | — |
+| **T7** plugin-marketplace | 91.4% $0.94 | 70.0% $3.71 | 70.7% $0.59 | 94.8% $4.27 | 92.6% $0.89 | 95.2% ~$0.44 | — |
+| **T8** analytics-dashboard | 82.8% $1.21 | 59.5% $2.47 | 70.0% $1.27 | 85.3% $5.31 | 85.3% $2.01 | 69.1% $0.67 | — |
+| **T9** ssg-toolkit | 83.5% $0.71 | 84.2% $1.64 | 70.7% $0.77 | 96.2% $0.90 | 94.0% $0.75 | 96.2% $0.78 | — |
+| **T10** ecommerce-backend | 90.1% $1.05 | 82.2% $2.77 | 70.7% $0.77 | 93.7% $0.63 | 93.9% $0.81 | 94.5% $0.54 | — |
+| **Average / Total** | **86.7% $9.79** | **79.7% $19.21** | **82.1% $7.60** | **92.8% $31.62** | **92.3% $11.09** | **93.0% ~$6.73** | **79.9% ~$0.22** |
+
+\*Aider uses Sonnet (one-shot, no iteration). `~` = extrapolated cost. Gas Town uses a multi-agent pipeline (Mayor planner -> parallel Polecats -> Refinery merge); Gas Station is its single-agent variant.
+
+### Key Findings
+
+- **Amplifier** leads on both score (93.0%) and cost efficiency (~$6.73 total) among Opus orchestrators
+- **Gas Town** is #2 on score (92.8%) but 4.7x more expensive ($31.62) due to multi-agent overhead
+- **Gas Station** (single-agent) nearly matches Gas Town quality (92.3%) at 3.5x less cost ($11.09)
+- **Claude Code** struggles on marathon tasks (T5: 57.8%) but excels at recovery (T6: 98.5%)
+- **Aider** is absurdly cheap ($0.22) but collapses without iteration (T5: 20%) and only covers 5 tasks
 
 ## Why This Exists
 
@@ -18,19 +46,16 @@ The framework tests five hypotheses:
 
 ## Contenders
 
-Ten orchestrators surveyed, spanning every major architecture:
-
-| Orchestrator | Archetype | Core Strength |
+| Orchestrator | Architecture | Key Differentiator |
 |---|---|---|
-| **Conclave** (Superpowers fork) | Cross-provider consensus | Only tool with Claude x Gemini x Codex consensus; 6-layer self-correction |
-| **Superpowers** (Original) | Skill-injection platform | Mandatory planning + TDD + two-stage review; strongest quality gates |
-| **Claude Code** | CLI agentic | Rich tool use, subagent delegation, flexible autonomy |
-| **Claude Squad** | Multi-instance orchestrator | Parallel Claude Code instances in isolated git worktrees via tmux |
-| **Gas Town** | Multi-agent workspace | Disposable sessions, parallel Polecats, supervisor hierarchy |
-| **Amplifier** | Micro-kernel platform | Swappable everything; ideal for gene ablation studies |
-| **OpenHands** | Multi-agent platform | Sandboxed execution, context condensation, inference-time scaling |
-| **Aider** | CLI turn-based | PageRank repo map, edit format research, token-efficient |
-| **SWE-agent** | Academic/research | Best instrumentation, syntax guardrails, ACI design |
+| **Claude Code** | CLI agentic (single agent) | Rich tool use, subagent delegation, flexible autonomy |
+| **Conclave** (Superpowers fork) | Cross-provider consensus | Claude x Gemini x Codex consensus; 6-layer self-correction |
+| **Superpowers** (Original) | Skill-injection platform | Mandatory planning + TDD + two-stage review |
+| **Gas Town** | Multi-agent pipeline | Mayor (planner) -> parallel Polecats (workers) -> Refinery (merge) |
+| **Gas Station** | Single-agent + context injection | Gas Town's prompt engineering without multi-agent overhead |
+| **Amplifier** | Micro-kernel platform | Swappable providers; minimal overhead |
+| **Aider** | CLI turn-based | One-shot Sonnet; PageRank repo map; token-efficient |
+| **SWE-agent** | Academic/research | Syntax guardrails, ACI design |
 
 See [`docs/survey/orchestrator-survey.md`](docs/survey/orchestrator-survey.md) for the full gene matrix and per-tool analysis.
 
@@ -57,7 +82,7 @@ None        Sequential     Mixed          Deceptive      DAG-Parallel     Pure P
 T1           T3,T5         T2,T6           T8              T9             T7,T10
 ```
 
-All 535 tests across 10 repos use TypeScript/Node.js with pre-written, read-only tests. Orchestrators cannot cheat by modifying tests. Validation runs `npm run build && npm run lint && npm test` -- no subjective grading.
+All 535 tests across 10 repos use TypeScript/Node.js with Vitest. Orchestrators cannot cheat by modifying tests. Validation runs `npm run build && npm run lint && npm test`.
 
 Each task includes at least one trap that punishes naive or template-driven approaches. See [`docs/plans/2026-02-11-survey-and-tasks-design.md`](docs/plans/2026-02-11-survey-and-tasks-design.md) for full task specifications.
 
@@ -67,20 +92,20 @@ Each task includes at least one trap that punishes naive or template-driven appr
 thunderdome run
   |
   ├─ Clone task repo at pinned tag
-  ├─ Start LiteLLM gateway (API proxy with budget caps and usage logging)
   ├─ Launch orchestrator in Docker container
   │    ├─ Mount adapter script, task description, workspace
   │    ├─ Orchestrator reads TASK.md, writes code to /workspace
   │    └─ Container exits on completion, timeout, or crash
   ├─ Capture git diff of workspace changes
   ├─ Run validation pipeline
-  │    ├─ Tests (in validation image)
-  │    ├─ Lint / static analysis
-  │    └─ LLM rubric judge (scored against task-specific criteria)
+  │    ├─ Tests (npm test in validation image)
+  │    ├─ Build + lint (npm run build && npm run lint)
+  │    ├─ LLM rubric judge (scored against task-specific criteria)
+  │    └─ Greenfield extras: hidden tests, coverage, code metrics
   └─ Write results (meta.json, diff.patch, scores)
 ```
 
-Each orchestrator plugs in through a shell adapter script mounted at `/adapter.sh`. The adapter translates between Thunderdome's interface (environment variables `TASK_DIR`, `TASK_DESCRIPTION`, `PROXY_URL`) and the orchestrator's native invocation.
+Each orchestrator plugs in through a shell adapter script mounted at `/adapter.sh`. The adapter translates between Thunderdome's interface (environment variables `TASK_DIR`, `TASK_DESCRIPTION`, `PROXY_URL`) and the orchestrator's native invocation. Adapters also parse their orchestrator's output to write `.thunderdome-metrics.json` with token usage and cost data.
 
 ## Usage
 
@@ -95,73 +120,21 @@ Each orchestrator plugs in through a shell adapter script mounted at `/adapter.s
 go build -o thunderdome .
 ```
 
-### Configure
-
-Create a `thunderdome.yaml`:
-
-```yaml
-orchestrators:
-  - name: conclave
-    adapter: ./adapters/conclave.sh
-    image: conclave:latest
-    env:
-      CONCLAVE_MODE: autopilot
-
-  - name: claude-code
-    adapter: ./adapters/claude-code.sh
-    image: claude-code:latest
-
-tasks:
-  - repo: ./benchmarks/cli-time-tracker
-    tag: v1
-    category: greenfield/simple
-    validation_image: node:20
-    install_cmd: npm install
-    test_cmd: npm test
-    lint_cmd: npm run lint
-    rubric:
-      - criterion: "Code is idiomatic TypeScript"
-        weight: 0.3
-      - criterion: "Error handling covers edge cases"
-        weight: 0.2
-    weights:
-      tests: 0.5
-      static_analysis: 0.2
-      rubric: 0.3
-
-trials: 3
-
-proxy:
-  gateway: litellm
-  log_dir: ./results/proxy-logs
-  budget_per_trial_usd: 5.00
-
-results:
-  dir: ./results
-```
-
 ### Run
 
 ```sh
 # Run all orchestrators against all tasks
-thunderdome run
+./thunderdome run
 
 # Filter to one orchestrator or task
-thunderdome run --orchestrator conclave
-thunderdome run --task cli-time-tracker
-thunderdome run --category greenfield/*
+./thunderdome run --orchestrator conclave-oauth-opus
+./thunderdome run --task T5
 
-# Run multiple trials in parallel
-thunderdome run --parallel 4 --trials 5
+# Run with parallel containers
+./thunderdome run --parallel 4 --trials 3
 
-# List configured orchestrators and tasks
-thunderdome list
-
-# Generate report from a previous run
-thunderdome report                          # latest run
-thunderdome report ./results/2026-02-11_001 # specific run
-thunderdome report --format markdown
-thunderdome report --format json
+# Validate a previous run's workspace
+./thunderdome validate ./results/runs/<run-id>/trials/<orch>/<task>/trial-1
 ```
 
 ### Results
@@ -169,13 +142,70 @@ thunderdome report --format json
 Each trial produces:
 
 ```
-results/<run-id>/<orchestrator>/<task>/<trial>/
+results/runs/<run-id>/trials/<orchestrator>/<task>/trial-1/
 ├── meta.json      # Duration, exit reason, scores, token usage, cost
 ├── diff.patch     # Git diff of all workspace changes
+├── task.md        # Task prompt given to the orchestrator
 └── workspace/     # Full workspace after orchestrator ran
+    └── .thunderdome-metrics.json  # Token/cost metrics from adapter
 ```
 
-The composite score blends test pass rate, static analysis, and rubric scores using task-specific weights.
+The composite score blends test pass rate, static analysis, and rubric scores. Greenfield tasks additionally include hidden tests, code coverage, and code metrics.
+
+## Writing an Adapter
+
+An adapter script bridges Thunderdome and an orchestrator. It receives these environment variables:
+
+| Variable | Value |
+|---|---|
+| `TASK_DIR` | `/workspace` -- the task repo, mounted read-write |
+| `TASK_DESCRIPTION` | `/task.md` -- the task prompt |
+| `PROXY_URL` | API gateway URL (if gateway is enabled) |
+
+The script must:
+
+1. Read the task description
+2. Invoke the orchestrator, pointing it at the workspace
+3. Write `/workspace/.thunderdome-metrics.json` with token/cost data
+4. Exit 0 on success, non-zero on error
+
+Example (Aider adapter with cost tracking):
+
+```sh
+#!/bin/bash
+set -e
+cd "$TASK_DIR"
+
+aider --yes-always --no-auto-commits \
+  --message-file "$TASK_DESCRIPTION" \
+  --model anthropic/claude-sonnet-4-5 \
+  | tee /workspace/.aider-stdout.log
+
+# Parse cost from stdout and write metrics
+python3 -c "
+import re, json
+last_cost = 0.0
+with open('/workspace/.aider-stdout.log') as f:
+    for line in f:
+        m = re.search(r'Cost:.*\\\$([\\d.]+) session', line)
+        if m: last_cost = float(m.group(1))
+json.dump({'total_cost_usd': last_cost},
+          open('/workspace/.thunderdome-metrics.json','w'))
+"
+```
+
+## Scoring
+
+| Axis | Method | Weight |
+|---|---|---|
+| **Tests** | Fraction of pre-written tests that pass | Task-specific |
+| **Static analysis** | Build + lint pass/fail (binary) | Task-specific |
+| **Rubric** | LLM judge scores the diff against task-specific criteria | Task-specific |
+| **Hidden tests** | Tests on `v1-validation` tag, not visible to orchestrator | Greenfield only |
+| **Coverage** | Statement coverage of agent-written tests | Greenfield only |
+| **Code metrics** | Lines of code, complexity, duplication | Greenfield only |
+
+The composite score is a weighted sum. Each task defines its own weights, so bugfix tasks weight tests higher; greenfield tasks include the full six-axis scoring.
 
 ## Project Structure
 
@@ -186,94 +216,33 @@ The composite score blends test pass rate, static analysis, and rubric scores us
 ├── internal/
 │   ├── config/                 # YAML config parsing and validation
 │   ├── docker/                 # Container lifecycle management
-│   ├── gateway/                # LiteLLM proxy start/stop, usage log parsing
+│   ├── gateway/                # API proxy (proxy.py), usage tracking
 │   ├── gitops/                 # Clone, checkout, diff capture
-│   ├── pricing/                # Token cost calculation from pricing.yaml
 │   ├── report/                 # Table, Markdown, JSON report generation
 │   ├── result/                 # Trial metadata types and storage
 │   ├── runner/                 # Trial execution, validation pipeline, pool
-│   └── validation/             # Test runner, lint, rubric judge, composite scoring
+│   └── validation/             # Tests, lint, rubric, hidden tests, coverage, code metrics
 ├── adapters/                   # Shell adapter scripts per orchestrator
 ├── benchmarks/                 # 10 standalone task repos (each with v1/v1-solution tags)
-│   ├── bench-time-tracker/     # T1: greenfield/simple (25 tests)
-│   ├── bench-collab-server/    # T2: greenfield/complex (45 tests)
-│   ├── bench-fts-search/       # T3: features/medium (35 tests)
-│   ├── bench-phantom-invoice/  # T4: bugfix/medium (41 tests)
-│   ├── bench-task-queue/       # T5: marathon (90 tests, 12 phases)
-│   ├── bench-monorepo-disaster/# T6: recovery (49 tests, 6 breakages)
-│   ├── bench-plugin-marketplace/# T7: greenfield/complex (55 tests)
-│   ├── bench-analytics-dashboard/# T8: greenfield/complex (50 tests, parallel trap)
-│   ├── bench-ssg-toolkit/      # T9: features/complex (75 tests, DAG plugins)
-│   └── bench-ecommerce-backend/# T10: greenfield/complex (70 tests, event-driven)
+├── docker/                     # Dockerfiles for orchestrator images
 ├── docs/
-│   ├── survey/                 # Orchestrator architecture survey (10 tools)
+│   ├── survey/                 # Orchestrator architecture survey
 │   └── plans/                  # Design documents
 ├── thunderdome.yaml            # Default configuration
-├── pricing.yaml                # Per-model token costs
 └── project.md                  # Full project specification
 ```
-
-## Writing an Adapter
-
-An adapter script bridges Thunderdome and an orchestrator. It receives three environment variables:
-
-| Variable | Value |
-|---|---|
-| `TASK_DIR` | `/workspace` -- the task repo, mounted read-write |
-| `TASK_DESCRIPTION` | `/task.md` -- the task prompt |
-| `PROXY_URL` | LiteLLM gateway URL for all LLM API calls |
-
-The script must:
-
-1. Read the task description
-2. Invoke the orchestrator, pointing it at the workspace and proxy
-3. Exit 0 on success, 2 if the orchestrator gives up, non-zero on error
-
-Example (null adapter that does nothing):
-
-```sh
-#!/bin/bash
-exit 0
-```
-
-## Scoring
-
-Thunderdome scores each trial on three axes:
-
-| Axis | Method |
-|---|---|
-| **Tests** | Fraction of pre-written tests that pass |
-| **Static analysis** | Lint pass/fail (binary) |
-| **Rubric** | LLM judge scores the diff against task-specific criteria |
-
-The composite score is a weighted sum. Each task defines its own weights, so bugfix tasks can weight tests higher; greenfield tasks can weight the rubric higher.
-
-## Orchestrator Genes
-
-Thunderdome treats orchestrator features as composable "genes" for ablation studies:
-
-| Gene | Description |
-|---|---|
-| `multi-agent-consensus` | Multiple models agree before proceeding |
-| `cross-provider-consensus` | Different providers vs same-model copies |
-| `ralph-loop` | Subagent execution pattern |
-| `fresh-context` | Clear context between loop iterations |
-| `plan-before-code` | Explicit architecture step before implementation |
-| `self-review` | Agent reviews own code before submitting |
-| `parallel-wave-execution` | Dependency-aware parallel dispatch |
-| `repo-mapping` | Build codebase understanding first |
-
-The goal: run ablation studies, add and subtract genes, and find the minimal effective set.
 
 ## Status
 
 - [x] Orchestrator survey (10 tools documented)
 - [x] Benchmark task design (10 tasks specified)
 - [x] Build benchmark task repos (10 repos, 535 tests, v1/v1-solution tags)
-- [ ] Harness implementation (run, list, report, validate commands)
-- [ ] Write orchestrator adapters
-- [ ] Run baseline comparisons
-- [ ] Publish results
+- [x] Harness implementation (run, list, report, validate commands)
+- [x] Write orchestrator adapters (8 orchestrators, 16 adapter variants)
+- [x] Run baseline comparisons (single-trial full suite for 7 orchestrators)
+- [ ] Multi-trial runs for statistical significance
+- [ ] Ablation studies (gene isolation)
+- [ ] Publish methodology paper
 
 ## License
 
