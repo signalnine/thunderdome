@@ -33,6 +33,18 @@ Full suite results across all 10 tasks (single trial each, all Opus unless noted
 - **Claude Code** struggles on marathon tasks (T5: 57.8%) but excels at recovery (T6: 98.5%) with middle-of-pack speed (42m)
 - **Aider** is absurdly fast (4m) and cheap ($0.22) but collapses without iteration (T5: 20%) and only covers 5 tasks
 
+### The Gas Station Story
+
+Gas Town is a multi-agent pipeline: a Mayor decomposes the task, parallel Polecats implement pieces in git worktrees, and a Refinery merges their work and fixes conflicts. Building the adapter was a multi-session effort.
+
+The first version was supposed to be the full pipeline but we ran out of time and shipped a placeholder — a single Claude Code call dressed up in Gas Town's scaffolding (polecat worktree, bead tracking, the whole ceremony) but with no Mayor, no parallelism, no Refinery. Just one agent doing all the work.
+
+We named it "Gas Station" (get it? it's a smaller Gas Town) and kept it around as a control group while we built the real thing.
+
+Then the benchmarks came back. Gas Station scored 92.3%. The full Gas Town pipeline — Mayor, parallel Polecats, Refinery merge, post-merge fixup, the works — scored 92.8%. Half a percentage point better for 3x the cost and twice the wall-clock time.
+
+The multi-agent overhead of decomposition, parallel execution, and merge resolution buys almost nothing on these tasks. Gas Station is the control group that nearly beat the experiment. It's still in the benchmark suite as a permanent reminder that complexity needs to justify itself.
+
 ## Why This Exists
 
 Every AI coding tool claims superiority. None publish reproducible head-to-head comparisons. Thunderdome fills that gap by running orchestrators against identical tasks in isolated Docker containers, scoring their output with automated tests, static analysis, and LLM-judged rubrics.
