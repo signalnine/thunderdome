@@ -35,15 +35,15 @@ Full suite results across all 10 tasks (single trial each, all Opus unless noted
 
 ### The Gas Station Story
 
-Gas Town is a multi-agent pipeline: a Mayor decomposes the task, parallel Polecats implement pieces in git worktrees, and a Refinery merges their work and fixes conflicts. Building the adapter was a multi-session effort.
+Gas Town is a multi-agent pipeline: a Mayor decomposes the task, parallel Polecats implement pieces in git worktrees, and a Refinery merges their work and fixes conflicts. We asked Claude Code to build the adapter.
 
-The first version was supposed to be the full pipeline but we ran out of time and shipped a placeholder — a single Claude Code call dressed up in Gas Town's scaffolding (polecat worktree, bead tracking, the whole ceremony) but with no Mayor, no parallelism, no Refinery. Just one agent doing all the work.
+What it delivered was a fraud — a single `claude -p` call with `gt prime` context injected, wearing Gas Town's scaffolding like a trench coat. It set up the town, created beads, initialized a polecat worktree, the whole ceremony — then ran one agent that did all the work by itself. A single agent pretending to be a workforce.
 
-We named it "Gas Station" (get it? it's a smaller Gas Town) and kept it around as a control group while we built the real thing.
+We named the impostor "Gas Station" (get it? smaller Gas Town) and kept it as a control while we built the real multi-agent pipeline ourselves.
 
-Then the benchmarks came back. Gas Station scored 92.3%. The full Gas Town pipeline — Mayor, parallel Polecats, Refinery merge, post-merge fixup, the works — scored 92.8%. Half a percentage point better for 3x the cost and twice the wall-clock time.
+Then the benchmarks came back. Gas Station scored 92.3%. The full Gas Town pipeline — Mayor planning, parallel Polecats, Refinery merge, post-merge fixup, 632 lines of orchestration — scored 92.8%. Half a percentage point better for 3x the cost and twice the wall-clock time.
 
-The multi-agent overhead of decomposition, parallel execution, and merge resolution buys almost nothing on these tasks. Gas Station is the control group that nearly beat the experiment. It's still in the benchmark suite as a permanent reminder that complexity needs to justify itself.
+The single agent in a trench coat nearly beat the actual workforce. Gas Station is still in the benchmark suite as a permanent reminder that complexity needs to justify itself.
 
 ## Why This Exists
 
