@@ -1649,21 +1649,24 @@ async def interactive_chat(
             except Exception:
                 pass  # If we can't get messages, assume no turns
 
+        sid = actual_session_id if "actual_session_id" in locals() else getattr(session, "session_id", None)
+
         if turn_count > 0:
             hooks = session.coordinator.get("hooks")
             if hooks:
                 from amplifier_core.events import SESSION_END
 
-                await hooks.emit(SESSION_END, {"session_id": actual_session_id})
+                await hooks.emit(SESSION_END, {"session_id": sid})
 
         await initialized.cleanup()
-        console.print(
-            "\n[yellow]Session exited - resume anytime with these commands:[/yellow]"
-        )
-        console.print("  [cyan]amplifier resume[/cyan]  # interactive list of sessions")
-        console.print(
-            f"  [cyan]amplifier session resume {actual_session_id[:8]}[/cyan]  # jump directly to this session"
-        )
+        if sid:
+            console.print(
+                "\n[yellow]Session exited - resume anytime with these commands:[/yellow]"
+            )
+            console.print("  [cyan]amplifier resume[/cyan]  # interactive list of sessions")
+            console.print(
+                f"  [cyan]amplifier session resume {sid[:8]}[/cyan]  # jump directly to this session"
+            )
         console.print()
 
 
@@ -1881,7 +1884,8 @@ async def execute_single(
         if hooks:
             from amplifier_core.events import SESSION_END
 
-            await hooks.emit(SESSION_END, {"session_id": actual_session_id})
+            sid = actual_session_id if "actual_session_id" in locals() else getattr(session, "session_id", None)
+            await hooks.emit(SESSION_END, {"session_id": sid})
         await initialized.cleanup()
         # Allow async tasks to complete before output
         if output_format in ["json", "json-trace"]:

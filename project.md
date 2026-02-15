@@ -126,9 +126,8 @@ Need to survey the landscape - probably missing good ideas to adapt:
 * OpenHands - open source, can inspect
 * SWE-agent - academic approach
 * Aider - simpler but effective patterns?
-* Continue.dev - IDE integration patterns
+* Claude Squad - multi-instance tmux orchestration
 * Mentat - ?
-* GPT-Engineer - ?
 * Smol Developer - minimalist approach
 * AutoGPT / BabyAGI - early patterns, what worked/failed?
 * Claude Code (this tool) - what patterns does Anthropic use?

@@ -13,9 +13,8 @@ Survey 8 agentic coding tools, one per architectural archetype:
 | Autonomous agent | Devin | Full autonomy with planning, browser, shell; ceiling of agent complexity |
 | Academic/research | SWE-agent | Published papers with ablations; best-documented architecture decisions |
 | Multi-agent platform | OpenHands | Open-source, multi-agent with delegation; contrasts single-agent tools |
-| IDE-integrated | Continue.dev | "Human-in-the-loop with agent assist" model |
 | Consensus/multi-model | Superpowers (Original) | Baseline our fork modifies; directly relevant to H1 and H2 |
-| Scaffold/generator | GPT-Engineer | "Plan-then-generate" one-shot approach; useful as a control |
+| Multi-instance orchestrator | Claude Squad | Parallel agent instances via tmux + git worktrees |
 
 Tools not surveyed in depth (brief appendix entries if architecturally distinct): Amplify, Gas Town, Mentat, Smol Developer, AutoGPT/BabyAGI.
 

@@ -25,13 +25,12 @@ Ten orchestrators surveyed, spanning every major architecture:
 | **Conclave** (Superpowers fork) | Cross-provider consensus | Only tool with Claude x Gemini x Codex consensus; 6-layer self-correction |
 | **Superpowers** (Original) | Skill-injection platform | Mandatory planning + TDD + two-stage review; strongest quality gates |
 | **Claude Code** | CLI agentic | Rich tool use, subagent delegation, flexible autonomy |
+| **Claude Squad** | Multi-instance orchestrator | Parallel Claude Code instances in isolated git worktrees via tmux |
 | **Gas Town** | Multi-agent workspace | Disposable sessions, parallel Polecats, supervisor hierarchy |
 | **Amplifier** | Micro-kernel platform | Swappable everything; ideal for gene ablation studies |
 | **OpenHands** | Multi-agent platform | Sandboxed execution, context condensation, inference-time scaling |
 | **Aider** | CLI turn-based | PageRank repo map, edit format research, token-efficient |
 | **SWE-agent** | Academic/research | Best instrumentation, syntax guardrails, ACI design |
-| **Continue.dev** | IDE-integrated | Multi-signal retrieval (RAG + FTS + tree-sitter) |
-| **GPT-Engineer** | Scaffold/generator | Minimal token cost (2 LLM calls); useful as a control |
 
 See [`docs/survey/orchestrator-survey.md`](docs/survey/orchestrator-survey.md) for the full gene matrix and per-tool analysis.
 

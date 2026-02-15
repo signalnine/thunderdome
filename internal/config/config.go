@@ -39,6 +39,9 @@ type Task struct {
 	TimeLimitMinutes int               `yaml:"time_limit_minutes"`
 	Rubric           []RubricCriterion `yaml:"rubric"`
 	Weights          ValidationWeights `yaml:"weights"`
+	Greenfield       bool              `yaml:"greenfield"`
+	ValidationTag    string            `yaml:"validation_tag"`
+	GreenWeights     GreenWeights      `yaml:"green_weights"`
 }
 
 type RubricCriterion struct {
@@ -50,6 +53,15 @@ type ValidationWeights struct {
 	Tests          float64 `yaml:"tests"`
 	StaticAnalysis float64 `yaml:"static_analysis"`
 	Rubric         float64 `yaml:"rubric"`
+}
+
+// GreenWeights defines scoring weights for greenfield tasks.
+type GreenWeights struct {
+	Rubric      float64 `yaml:"rubric"`
+	HiddenTests float64 `yaml:"hidden_tests"`
+	AgentTests  float64 `yaml:"agent_tests"`
+	BuildLint   float64 `yaml:"build_lint"`
+	CodeMetrics float64 `yaml:"code_metrics"`
 }
 
 type Proxy struct {
@@ -115,8 +127,11 @@ func validate(cfg *Config) error {
 		if t.ValidationImage == "" {
 			t.ValidationImage = "node:20"
 		}
-		if t.TestCmd == "" {
-			return fmt.Errorf("task %d: test_cmd is required", i)
+		if t.TestCmd == "" && !t.Greenfield {
+			return fmt.Errorf("task %d: test_cmd is required for non-greenfield tasks", i)
+		}
+		if t.Greenfield && t.ValidationTag == "" {
+			t.ValidationTag = "v1-validation"
 		}
 		if t.InstallCmd == "" {
 			t.InstallCmd = "npm install"

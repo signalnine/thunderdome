@@ -18,4 +18,8 @@ type Scores struct {
 	Tests          float64 `json:"tests"`
 	StaticAnalysis float64 `json:"static_analysis"`
 	Rubric         float64 `json:"rubric"`
+	HiddenTests    float64 `json:"hidden_tests,omitempty"`
+	AgentTests     float64 `json:"agent_tests,omitempty"`
+	Coverage       float64 `json:"coverage,omitempty"`
+	CodeMetrics    float64 `json:"code_metrics,omitempty"`
 }

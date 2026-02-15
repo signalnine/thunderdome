@@ -92,8 +92,10 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 	}
 
 	gwURL := ""
+	gwUsageLog := ""
 	if gw != nil {
 		gwURL = gw.URL()
+		gwUsageLog = gw.UsageLogPath
 	}
 
 	if flagParallel > 1 {
@@ -113,7 +115,7 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 							RunDir:        runDir,
 							Timeout:       timeoutForTask(&task),
 							Allowlist:     cfg.Network.Allowlist,
-							GatewayLogDir: cfg.Proxy.LogDir,
+							GatewayUsageLog: gwUsageLog,
 						})
 						if err != nil {
 							return err
@@ -146,7 +148,7 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 						TrialNum:      trial,
 						GatewayURL:    gwURL,
 						GatewayAddr:   gwAddr,
-						GatewayLogDir: cfg.Proxy.LogDir,
+						GatewayUsageLog: gwUsageLog,
 						RunDir:        runDir,
 						Timeout:       timeoutForTask(&task),
 						Allowlist:     cfg.Network.Allowlist,

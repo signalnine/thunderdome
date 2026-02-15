@@ -16,12 +16,18 @@ import (
 )
 
 type OrchestratorSummary struct {
-	Name        string  `json:"name"`
-	Trials      int     `json:"trials"`
-	PassRate    float64 `json:"pass_rate"`
-	MeanScore   float64 `json:"mean_score"`
-	MeanTokens  float64 `json:"mean_tokens"`
-	MeanCostUSD float64 `json:"mean_cost_usd"`
+	Name            string  `json:"name"`
+	Trials          int     `json:"trials"`
+	PassRate        float64 `json:"pass_rate"`
+	MeanScore       float64 `json:"mean_score"`
+	MeanTokens      float64 `json:"mean_tokens"`
+	MeanCostUSD     float64 `json:"mean_cost_usd"`
+	HasGreenfield   bool    `json:"has_greenfield,omitempty"`
+	MeanHiddenTests float64 `json:"mean_hidden_tests,omitempty"`
+	MeanAgentTests  float64 `json:"mean_agent_tests,omitempty"`
+	MeanCoverage    float64 `json:"mean_coverage,omitempty"`
+	MeanCodeMetrics float64 `json:"mean_code_metrics,omitempty"`
+	MeanRubric      float64 `json:"mean_rubric,omitempty"`
 }
 
 // Generate reads trial results and produces a summary report.
@@ -67,11 +73,17 @@ func collectMetas(runDir string) ([]*result.TrialMeta, error) {
 
 func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 	type accum struct {
-		count  int
-		passed int
-		score  float64
-		tokens float64
-		cost   float64
+		count        int
+		passed       int
+		score        float64
+		tokens       float64
+		cost         float64
+		hiddenTests  float64
+		agentTests   float64
+		coverage     float64
+		codeMetrics  float64
+		rubric       float64
+		hasGreenfield bool
 	}
 	byOrch := map[string]*accum{}
 
@@ -85,21 +97,39 @@ func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 		a.score += m.CompositeScore
 		a.tokens += float64(m.TotalTokens)
 		a.cost += m.TotalCostUSD
+		a.rubric += m.Scores.Rubric
 		if m.ExitReason == "completed" {
 			a.passed++
+		}
+		// Track greenfield-specific scores
+		if m.Scores.HiddenTests > 0 || m.Scores.AgentTests > 0 || m.Scores.CodeMetrics > 0 {
+			a.hasGreenfield = true
+			a.hiddenTests += m.Scores.HiddenTests
+			a.agentTests += m.Scores.AgentTests
+			a.coverage += m.Scores.Coverage
+			a.codeMetrics += m.Scores.CodeMetrics
 		}
 	}
 
 	var summaries []OrchestratorSummary
 	for name, a := range byOrch {
-		summaries = append(summaries, OrchestratorSummary{
+		s := OrchestratorSummary{
 			Name:        name,
 			Trials:      a.count,
 			PassRate:    float64(a.passed) / float64(a.count),
 			MeanScore:   a.score / float64(a.count),
 			MeanTokens:  a.tokens / float64(a.count),
 			MeanCostUSD: a.cost / float64(a.count),
-		})
+			MeanRubric:  a.rubric / float64(a.count),
+		}
+		if a.hasGreenfield {
+			s.HasGreenfield = true
+			s.MeanHiddenTests = a.hiddenTests / float64(a.count)
+			s.MeanAgentTests = a.agentTests / float64(a.count)
+			s.MeanCoverage = a.coverage / float64(a.count)
+			s.MeanCodeMetrics = a.codeMetrics / float64(a.count)
+		}
+		summaries = append(summaries, s)
 	}
 	sort.Slice(summaries, func(i, j int) bool {
 		return summaries[i].Name < summaries[j].Name
@@ -137,7 +167,33 @@ func writeTable(summaries []OrchestratorSummary, w io.Writer) error {
 		fmt.Fprintf(tw, "%s\t%d\t%.0f%%\t%.3f\t%.0f\t$%.2f\n",
 			s.Name, s.Trials, s.PassRate*100, s.MeanScore, s.MeanTokens, s.MeanCostUSD)
 	}
-	return tw.Flush()
+	if err := tw.Flush(); err != nil {
+		return err
+	}
+
+	// Print greenfield breakdown if any orchestrator has greenfield results
+	hasGreen := false
+	for _, s := range summaries {
+		if s.HasGreenfield {
+			hasGreen = true
+			break
+		}
+	}
+	if hasGreen {
+		fmt.Fprintln(w)
+		tw2 := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(tw2, "GREENFIELD BREAKDOWN")
+		fmt.Fprintln(tw2, "ORCHESTRATOR\tHIDDEN TESTS\tAGENT TESTS\tCOVERAGE\tCODE METRICS\tRUBRIC")
+		fmt.Fprintln(tw2, strings.Repeat("-", 80))
+		for _, s := range summaries {
+			if s.HasGreenfield {
+				fmt.Fprintf(tw2, "%s\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\n",
+					s.Name, s.MeanHiddenTests, s.MeanAgentTests, s.MeanCoverage, s.MeanCodeMetrics, s.MeanRubric)
+			}
+		}
+		return tw2.Flush()
+	}
+	return nil
 }
 
 func writeMarkdown(summaries []OrchestratorSummary, w io.Writer) error {

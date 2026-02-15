@@ -7,14 +7,16 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
 type Gateway struct {
-	Port    int
-	cmd     *exec.Cmd
-	logFile *os.File
+	Port         int
+	UsageLogPath string
+	cmd          *exec.Cmd
+	logFile      *os.File
 }
 
 type StartOpts struct {
@@ -43,55 +45,54 @@ func Start(ctx context.Context, opts *StartOpts) (*Gateway, error) {
 		return nil, err
 	}
 
-	logPath := fmt.Sprintf("%s/litellm-%d.log", opts.LogDir, port)
 	os.MkdirAll(opts.LogDir, 0o755)
-	logFile, err := os.Create(logPath)
+	usageLogPath := fmt.Sprintf("%s/proxy-usage-%d.jsonl", opts.LogDir, port)
+
+	// Find the proxy script next to this Go source file (embedded in repo).
+	proxyScript, err := findProxyScript()
+	if err != nil {
+		return nil, fmt.Errorf("finding proxy script: %w", err)
+	}
+
+	serverLogPath := fmt.Sprintf("%s/proxy-server-%d.log", opts.LogDir, port)
+	logFile, err := os.Create(serverLogPath)
 	if err != nil {
 		return nil, fmt.Errorf("creating log file: %w", err)
 	}
 
-	cmd := exec.CommandContext(ctx, "litellm", "--port", fmt.Sprintf("%d", port))
+	cmd := exec.CommandContext(ctx, "python3", proxyScript,
+		"--port", fmt.Sprintf("%d", port),
+		"--log", usageLogPath,
+	)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 
-	// Run LiteLLM from /tmp so python-dotenv won't walk up to ~/.env and
-	// pick up DATABASE_URL (which triggers Prisma dependency we don't need).
-	tmpDir, err := os.MkdirTemp("", "litellm-")
-	if err != nil {
-		logFile.Close()
-		return nil, fmt.Errorf("creating temp dir for litellm: %w", err)
-	}
-	cmd.Dir = tmpDir
-
-	// Strip DATABASE_URL and set LITELLM_MODE=PRODUCTION to prevent
-	// python-dotenv from loading ~/.env (which may contain DATABASE_URL).
-	cmd.Env = []string{"LITELLM_MODE=PRODUCTION"}
-	for _, e := range os.Environ() {
-		if !strings.HasPrefix(e, "DATABASE_URL=") && !strings.HasPrefix(e, "LITELLM_MODE=") {
-			cmd.Env = append(cmd.Env, e)
-		}
-	}
-	if opts.SecretsEnvFile != "" {
-		envVars, err := parseEnvFile(opts.SecretsEnvFile)
-		if err != nil {
-			logFile.Close()
-			return nil, fmt.Errorf("reading secrets env file: %w", err)
-		}
-		cmd.Env = append(cmd.Env, envVars...)
-	}
-
 	if err := cmd.Start(); err != nil {
 		logFile.Close()
-		return nil, fmt.Errorf("starting litellm: %w", err)
+		return nil, fmt.Errorf("starting proxy: %w", err)
 	}
 
-	if err := waitForPort(port, 30*time.Second); err != nil {
+	if err := waitForPort(port, 15*time.Second); err != nil {
 		cmd.Process.Kill()
 		logFile.Close()
-		return nil, fmt.Errorf("litellm did not start: %w", err)
+		return nil, fmt.Errorf("proxy did not start: %w", err)
 	}
 
-	return &Gateway{Port: port, cmd: cmd, logFile: logFile}, nil
+	return &Gateway{Port: port, cmd: cmd, logFile: logFile, UsageLogPath: usageLogPath}, nil
+}
+
+func findProxyScript() (string, error) {
+	// Look relative to the working directory (repo root).
+	candidates := []string{
+		"internal/gateway/proxy.py",
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			abs, _ := filepath.Abs(c)
+			return abs, nil
+		}
+	}
+	return "", fmt.Errorf("proxy.py not found in %v", candidates)
 }
 
 func (g *Gateway) Stop() error {
@@ -106,10 +107,13 @@ func (g *Gateway) Stop() error {
 }
 
 type UsageRecord struct {
-	Provider     string `json:"provider"`
-	Model        string `json:"model"`
-	InputTokens  int    `json:"input_tokens"`
-	OutputTokens int    `json:"output_tokens"`
+	Provider                string  `json:"provider"`
+	Model                   string  `json:"model"`
+	InputTokens             int     `json:"input_tokens"`
+	OutputTokens            int     `json:"output_tokens"`
+	CacheCreationTokens     int     `json:"cache_creation_input_tokens"`
+	CacheReadTokens         int     `json:"cache_read_input_tokens"`
+	Timestamp               float64 `json:"timestamp"`
 }
 
 func ParseUsageLogs(logPath string) ([]UsageRecord, error) {
@@ -139,6 +143,35 @@ func TotalUsage(records []UsageRecord) (inputTokens, outputTokens int) {
 		outputTokens += r.OutputTokens
 	}
 	return
+}
+
+// EstimateCost calculates approximate USD cost from usage records using
+// Anthropic's published per-token pricing (as of 2025-05).
+func EstimateCost(records []UsageRecord) float64 {
+	var total float64
+	for _, r := range records {
+		inputPrice, outputPrice, cacheWritePrice, cacheReadPrice := modelPricing(r.Model)
+		total += float64(r.InputTokens) * inputPrice / 1e6
+		total += float64(r.OutputTokens) * outputPrice / 1e6
+		total += float64(r.CacheCreationTokens) * cacheWritePrice / 1e6
+		total += float64(r.CacheReadTokens) * cacheReadPrice / 1e6
+	}
+	return total
+}
+
+// modelPricing returns per-million-token prices: (input, output, cacheWrite, cacheRead).
+func modelPricing(model string) (float64, float64, float64, float64) {
+	switch {
+	case strings.Contains(model, "opus"):
+		return 15.0, 75.0, 18.75, 1.50
+	case strings.Contains(model, "sonnet"):
+		return 3.0, 15.0, 3.75, 0.30
+	case strings.Contains(model, "haiku"):
+		return 0.80, 4.0, 1.0, 0.08
+	default:
+		// Default to Sonnet pricing
+		return 3.0, 15.0, 3.75, 0.30
+	}
 }
 
 func waitForPort(port int, timeout time.Duration) error {

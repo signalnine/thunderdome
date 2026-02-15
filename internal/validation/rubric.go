@@ -146,7 +146,7 @@ func callLLMJudgeDirect(ctx context.Context, prompt string) (map[string]float64,
 		return nil, fmt.Errorf("no choices in response")
 	}
 
-	return parseJudgeResponse(chatResult.Choices[0].Message.Content)
+	return ParseJudgeResponse(chatResult.Choices[0].Message.Content)
 }
 
 // callLLMJudgeViaGateway calls an OpenAI-compatible gateway.
@@ -186,20 +186,33 @@ func callLLMJudgeViaGateway(ctx context.Context, gatewayURL, prompt string) (map
 		return nil, fmt.Errorf("no choices in response")
 	}
 
-	return parseJudgeResponse(chatResult.Choices[0].Message.Content)
+	return ParseJudgeResponse(chatResult.Choices[0].Message.Content)
 }
 
-func parseJudgeResponse(content string) (map[string]float64, error) {
-	content = strings.TrimPrefix(content, "```json")
-	content = strings.TrimPrefix(content, "```")
-	content = strings.TrimSuffix(content, "```")
-	content = strings.TrimSpace(content)
+// ParseJudgeResponse extracts a JSON score map from an LLM response.
+// Handles markdown fences, preamble text, and trailing explanations.
+func ParseJudgeResponse(content string) (map[string]float64, error) {
+	// Extract JSON object by finding the first '{' and last '}'.
+	// This handles markdown fences, preamble text, trailing explanations, etc.
+	start := strings.Index(content, "{")
+	end := strings.LastIndex(content, "}")
+	if start == -1 || end == -1 || end <= start {
+		return nil, fmt.Errorf("parsing judge response: no JSON object found in: %s", truncate(content, 200))
+	}
+	jsonStr := content[start : end+1]
 
 	var scores map[string]float64
-	if err := json.Unmarshal([]byte(content), &scores); err != nil {
-		return nil, fmt.Errorf("parsing judge response: %w", err)
+	if err := json.Unmarshal([]byte(jsonStr), &scores); err != nil {
+		return nil, fmt.Errorf("parsing judge response: %w\ncontent: %s", err, truncate(jsonStr, 200))
 	}
 	return scores, nil
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
 }
 
 // MedianScore returns the median of a sorted slice of scores.
