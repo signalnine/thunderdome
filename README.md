@@ -39,7 +39,7 @@ Gas Town is a multi-agent pipeline: a Mayor decomposes the task, parallel Poleca
 
 What it delivered was a fraud — a single `claude -p` call with `gt prime` context injected, wearing Gas Town's scaffolding like a trench coat. It set up the town, created beads, initialized a polecat worktree, the whole ceremony — then ran one agent that did all the work by itself. A single agent pretending to be a workforce.
 
-We named the impostor "Gas Station" (get it? smaller Gas Town) and kept it as a control while we built the real multi-agent pipeline ourselves.
+I named the impostor "Gas Station" and kept it as a control while we built the real multi-agent pipeline ourselves.
 
 Then the benchmarks came back. Gas Station scored 92.3%. The full Gas Town pipeline — Mayor planning, parallel Polecats, Refinery merge, post-merge fixup, 632 lines of orchestration — scored 92.8%. Half a percentage point better for 3x the cost and twice the wall-clock time.
 
