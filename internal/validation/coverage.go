@@ -35,6 +35,14 @@ func RunCoverage(ctx context.Context, workDir, validationImage, installCmd strin
 		}
 	}
 
+	// Install @vitest/coverage-v8 (required for v8 coverage provider).
+	// Match the installed vitest version to avoid peer dependency conflicts.
+	coverageInstall := exec.CommandContext(ctx, "docker", "run", "--rm", "--init", seccomp, apparmor,
+		"-v", workDir+":/workspace", "-w", "/workspace",
+		validationImage, "sh", "-c",
+		`VITEST_VER=$(node -p "require('vitest/package.json').version" 2>/dev/null) && npm install --save-dev "@vitest/coverage-v8@^${VITEST_VER:-2.0.0}" 2>&1 || true`)
+	coverageInstall.CombinedOutput() // best-effort
+
 	// Run vitest with coverage enabled, outputting JSON summary.
 	// Use --coverage.enabled explicitly (vitest 2.x requires it).
 	// Exclude validation-tests/ in case they were already injected.

@@ -95,16 +95,30 @@ Respond with ONLY a JSON object mapping criterion name to score, e.g.:
 	return result, nil
 }
 
-// callLLMJudgeDirect calls the Gemini API via its OpenAI-compatible endpoint.
+// callLLMJudgeDirect calls an LLM API via its OpenAI-compatible endpoint.
+// Tries GEMINI_API_KEY first, then falls back to NVIDIA_API_KEY with OPENAI_BASE_URL.
 func callLLMJudgeDirect(ctx context.Context, prompt string) (map[string]float64, error) {
 	apiKey := os.Getenv("GEMINI_API_KEY")
+	baseURL := "https://generativelanguage.googleapis.com/v1beta/openai"
+	model := JudgeModel
+
 	if apiKey == "" {
-		return nil, fmt.Errorf("GEMINI_API_KEY not set")
+		// Fallback: NVIDIA inference API (OpenAI-compatible)
+		apiKey = os.Getenv("NVIDIA_API_KEY")
+		if envBase := os.Getenv("OPENAI_BASE_URL"); envBase != "" {
+			baseURL = strings.TrimRight(envBase, "/")
+		}
+		if envModel := os.Getenv("JUDGE_MODEL"); envModel != "" {
+			model = envModel
+		}
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("GEMINI_API_KEY or NVIDIA_API_KEY not set")
 	}
 
 	reqBody := map[string]interface{}{
-		"model":      JudgeModel,
-		"max_tokens": 1024,
+		"model":      model,
+		"max_tokens": 4096,
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},
 		},
@@ -112,7 +126,7 @@ func callLLMJudgeDirect(ctx context.Context, prompt string) (map[string]float64,
 	bodyBytes, _ := json.Marshal(reqBody)
 
 	req, err := http.NewRequestWithContext(ctx, "POST",
-		"https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+		baseURL+"/chat/completions",
 		bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, err

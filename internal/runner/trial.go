@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -143,6 +144,24 @@ func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
 			inTok, outTok := gateway.TotalUsage(records)
 			totalTokens = inTok + outTok
 			totalCostUSD = gateway.EstimateCost(records)
+		}
+	}
+
+	// Fallback: read adapter-written metrics file if gateway didn't capture usage.
+	if totalTokens == 0 {
+		metricsPath := filepath.Join(workDir, ".thunderdome-metrics.json")
+		if data, err := os.ReadFile(metricsPath); err == nil {
+			var adapterMetrics struct {
+				InputTokens        int     `json:"input_tokens"`
+				OutputTokens       int     `json:"output_tokens"`
+				CacheReadTokens    int     `json:"cache_read_tokens"`
+				CacheCreationTokens int    `json:"cache_creation_tokens"`
+				TotalCostUSD       float64 `json:"total_cost_usd"`
+			}
+			if err := json.Unmarshal(data, &adapterMetrics); err == nil {
+				totalTokens = adapterMetrics.InputTokens + adapterMetrics.OutputTokens + adapterMetrics.CacheReadTokens + adapterMetrics.CacheCreationTokens
+				totalCostUSD = adapterMetrics.TotalCostUSD
+			}
 		}
 	}
 
