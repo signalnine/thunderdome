@@ -1,0 +1,929 @@
+diff --git a/.runtime/agent.lock b/.runtime/agent.lock
+new file mode 100644
+index 0000000..04330a1
+--- /dev/null
++++ b/.runtime/agent.lock
+@@ -0,0 +1,6 @@
++{
++  "pid": 916,
++  "acquired_at": "2026-02-13T20:20:34.947458453Z",
++  "session_id": "bench/rust",
++  "hostname": "0556a8e53f78"
++}
+\ No newline at end of file
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..35fabf5
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,17 @@
++{
++  "input_tokens": 27,
++  "output_tokens": 14893,
++  "cache_read_tokens": 1167184,
++  "cache_creation_tokens": 47681,
++  "turns": 47,
++  "tools_used": [
++    "Task",
++    "Bash",
++    "Read",
++    "TodoWrite",
++    "Write",
++    "Edit"
++  ],
++  "duration_ms": 277891,
++  "total_cost_usd": 1.3325
++}
+\ No newline at end of file
+diff --git a/package-lock.json b/package-lock.json
+index 16cc798..4380b89 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1102,7 +1102,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1225,7 +1224,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1518,7 +1516,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2291,7 +2288,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -4636,7 +4632,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/app.ts b/src/app.ts
+new file mode 100644
+index 0000000..b1a86e9
+--- /dev/null
++++ b/src/app.ts
+@@ -0,0 +1,42 @@
++import express from 'express';
++import usersRouter from './users/router';
++import ingestRouter from './ingest/router';
++import queryRouter from './query/router';
++import dashboardsRouter from './dashboards/router';
++import exportRouter from './export/router';
++import { authMiddleware } from './auth';
++import { errorHandler } from './errors';
++
++export function createApp() {
++  const app = express();
++  app.use(express.json());
++
++  // Users router handles both public and protected routes.
++  // Public: POST / (register), POST /login
++  // Protected: GET /me, PATCH /:id/role
++  // We mount it with a middleware that optionally applies auth.
++  app.use('/users', optionalAuthForUsers, usersRouter);
++
++  // All other routes require auth
++  app.use('/events', authMiddleware, ingestRouter);
++  app.use('/query', authMiddleware, queryRouter);
++  app.use('/dashboards', authMiddleware, dashboardsRouter);
++  app.use('/export', authMiddleware, exportRouter);
++
++  app.use(errorHandler);
++  return app;
++}
++
++function optionalAuthForUsers(
++  req: express.Request,
++  res: express.Response,
++  next: express.NextFunction
++): void {
++  // Public routes - skip auth
++  if (req.method === 'POST' && (req.path === '/' || req.path === '/login')) {
++    next();
++    return;
++  }
++  // Protected routes - require auth
++  authMiddleware(req, res, next);
++}
+diff --git a/src/auth.ts b/src/auth.ts
+new file mode 100644
+index 0000000..8e2747b
+--- /dev/null
++++ b/src/auth.ts
+@@ -0,0 +1,38 @@
++import type { Request, Response, NextFunction } from 'express';
++import jwt from 'jsonwebtoken';
++
++export const JWT_SECRET = 'analytics-dashboard-secret';
++
++export interface AuthUser {
++  id: string;
++  tenantId: string;
++}
++
++export function authMiddleware(req: Request, _res: Response, next: NextFunction): void {
++  const header = req.headers.authorization;
++  if (!header || !header.startsWith('Bearer ')) {
++    next(new AuthError());
++    return;
++  }
++
++  const token = header.slice(7);
++  try {
++    const decoded = jwt.verify(token, JWT_SECRET) as { sub: string; tid: string };
++    (req as unknown as Record<string, unknown>).user = { id: decoded.sub, tenantId: decoded.tid };
++    next();
++  } catch {
++    next(new AuthError());
++  }
++}
++
++class AuthError extends Error {
++  public statusCode = 401;
++  public code = 'AUTH_ERROR';
++  constructor() {
++    super('Authentication required');
++  }
++}
++
++export function getUser(req: Request): AuthUser {
++  return (req as unknown as Record<string, unknown>).user as AuthUser;
++}
+diff --git a/src/dashboards/router.ts b/src/dashboards/router.ts
+new file mode 100644
+index 0000000..df1faef
+--- /dev/null
++++ b/src/dashboards/router.ts
+@@ -0,0 +1,187 @@
++import { Router } from 'express';
++import { v4 as uuidv4 } from 'uuid';
++import { getDb } from '../db';
++import { AppError } from '../errors';
++import { getUser } from '../auth';
++
++const router = Router();
++
++// POST /dashboards - Create a dashboard
++router.post('/', (req, res, next) => {
++  try {
++    const user = getUser(req);
++    const { name, config } = req.body;
++
++    if (!name) {
++      throw new AppError(400, 'Name is required', 'VALIDATION_ERROR');
++    }
++
++    const db = getDb();
++    const id = uuidv4();
++    const now = new Date().toISOString();
++    const configStr = config ? JSON.stringify(config) : '{}';
++
++    db.prepare(
++      'INSERT INTO dashboards (id, tenant_id, name, owner_id, config, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
++    ).run(id, user.tenantId, name, user.id, configStr, now, now);
++
++    const dashboard = db.prepare('SELECT * FROM dashboards WHERE id = ?').get(id) as Record<string, unknown>;
++    res.status(201).json({
++      ...dashboard,
++      config: JSON.parse(dashboard.config as string),
++    });
++  } catch (err) {
++    next(err);
++  }
++});
++
++// GET /dashboards - List dashboards for tenant
++router.get('/', (req, res, next) => {
++  try {
++    const user = getUser(req);
++    const db = getDb();
++    const dashboards = db.prepare('SELECT * FROM dashboards WHERE tenant_id = ?').all(user.tenantId) as Array<Record<string, unknown>>;
++
++    res.json(dashboards.map(d => ({
++      ...d,
++      config: JSON.parse(d.config as string),
++    })));
++  } catch (err) {
++    next(err);
++  }
++});
++
++// GET /dashboards/:id - Get dashboard by id with widgets
++router.get('/:id', (req, res, next) => {
++  try {
++    const user = getUser(req);
++    const db = getDb();
++
++    const dashboard = db.prepare('SELECT * FROM dashboards WHERE id = ? AND tenant_id = ?').get(req.params.id, user.tenantId) as Record<string, unknown> | undefined;
++
++    if (!dashboard) {
++      throw new AppError(404, 'Dashboard not found', 'NOT_FOUND');
++    }
++
++    const widgets = db.prepare('SELECT * FROM widgets WHERE dashboard_id = ?').all(req.params.id) as Array<Record<string, unknown>>;
++
++    res.json({
++      ...dashboard,
++      config: JSON.parse(dashboard.config as string),
++      widgets: widgets.map(w => ({
++        ...w,
++        config: JSON.parse(w.config as string),
++      })),
++    });
++  } catch (err) {
++    next(err);
++  }
++});
++
++// PATCH /dashboards/:id - Update a dashboard
++router.patch('/:id', (req, res, next) => {
++  try {
++    const user = getUser(req);
++    const db = getDb();
++
++    const dashboard = db.prepare('SELECT * FROM dashboards WHERE id = ? AND tenant_id = ?').get(req.params.id, user.tenantId) as Record<string, unknown> | undefined;
++
++    if (!dashboard) {
++      throw new AppError(404, 'Dashboard not found', 'NOT_FOUND');
++    }
++
++    const { name, config } = req.body;
++    const now = new Date().toISOString();
++
++    if (name !== undefined) {
++      db.prepare('UPDATE dashboards SET name = ?, updated_at = ? WHERE id = ?').run(name, now, req.params.id);
++    }
++    if (config !== undefined) {
++      db.prepare('UPDATE dashboards SET config = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(config), now, req.params.id);
++    }
++
++    const updated = db.prepare('SELECT * FROM dashboards WHERE id = ?').get(req.params.id) as Record<string, unknown>;
++    res.json({
++      ...updated,
++      config: JSON.parse(updated.config as string),
++    });
++  } catch (err) {
++    next(err);
++  }
++});
++
++// DELETE /dashboards/:id - Delete a dashboard
++router.delete('/:id', (req, res, next) => {
++  try {
++    const user = getUser(req);
++    const db = getDb();
++
++    const dashboard = db.prepare('SELECT * FROM dashboards WHERE id = ? AND tenant_id = ?').get(req.params.id, user.tenantId) as Record<string, unknown> | undefined;
++
++    if (!dashboard) {
++      throw new AppError(404, 'Dashboard not found', 'NOT_FOUND');
++    }
++
++    db.prepare('DELETE FROM widgets WHERE dashboard_id = ?').run(req.params.id);
++    db.prepare('DELETE FROM dashboards WHERE id = ?').run(req.params.id);
++    res.status(204).send();
++  } catch (err) {
++    next(err);
++  }
++});
++
++// POST /dashboards/:id/widgets - Add widget to dashboard
++router.post('/:id/widgets', (req, res, next) => {
++  try {
++    const user = getUser(req);
++    const db = getDb();
++
++    const dashboard = db.prepare('SELECT * FROM dashboards WHERE id = ? AND tenant_id = ?').get(req.params.id, user.tenantId) as Record<string, unknown> | undefined;
++
++    if (!dashboard) {
++      throw new AppError(404, 'Dashboard not found', 'NOT_FOUND');
++    }
++
++    const { type, config, position_x, position_y, width, height } = req.body;
++
++    if (!type || !['counter', 'timeseries', 'breakdown', 'funnel'].includes(type)) {
++      throw new AppError(400, 'Valid widget type is required', 'VALIDATION_ERROR');
++    }
++
++    const id = uuidv4();
++    const configStr = config ? JSON.stringify(config) : '{}';
++
++    db.prepare(
++      'INSERT INTO widgets (id, dashboard_id, type, config, position_x, position_y, width, height) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
++    ).run(id, req.params.id, type, configStr, position_x || 0, position_y || 0, width || 1, height || 1);
++
++    const widget = db.prepare('SELECT * FROM widgets WHERE id = ?').get(id) as Record<string, unknown>;
++    res.status(201).json({
++      ...widget,
++      config: JSON.parse(widget.config as string),
++    });
++  } catch (err) {
++    next(err);
++  }
++});
++
++// DELETE /dashboards/:id/widgets/:widgetId - Delete widget
++router.delete('/:id/widgets/:widgetId', (req, res, next) => {
++  try {
++    const user = getUser(req);
++    const db = getDb();
++
++    const dashboard = db.prepare('SELECT * FROM dashboards WHERE id = ? AND tenant_id = ?').get(req.params.id, user.tenantId) as Record<string, unknown> | undefined;
++
++    if (!dashboard) {
++      throw new AppError(404, 'Dashboard not found', 'NOT_FOUND');
++    }
++
++    db.prepare('DELETE FROM widgets WHERE id = ? AND dashboard_id = ?').run(req.params.widgetId, req.params.id);
++    res.status(204).send();
++  } catch (err) {
++    next(err);
++  }
++});
++
++export default router;
+diff --git a/src/db.ts b/src/db.ts
+new file mode 100644
+index 0000000..5e2821e
+--- /dev/null
++++ b/src/db.ts
+@@ -0,0 +1,30 @@
++import Database from 'better-sqlite3';
++import fs from 'fs';
++import path from 'path';
++
++let db: Database.Database | null = null;
++
++export function getDb(): Database.Database {
++  if (!db) {
++    throw new Error('Database not initialized');
++  }
++  return db;
++}
++
++export function setDb(database: Database.Database): void {
++  db = database;
++}
++
++export function createTestDb(): Database.Database {
++  const testDb = new Database(':memory:');
++  const schema = fs.readFileSync(path.join(__dirname, '..', 'schema.sql'), 'utf-8');
++  testDb.exec(schema);
++  return testDb;
++}
++
++export function closeDb(): void {
++  if (db) {
++    db.close();
++    db = null;
++  }
++}
+diff --git a/src/errors.ts b/src/errors.ts
+new file mode 100644
+index 0000000..b6c5371
+--- /dev/null
++++ b/src/errors.ts
+@@ -0,0 +1,32 @@
++import type { Request, Response, NextFunction } from 'express';
++
++export class AppError extends Error {
++  constructor(
++    public statusCode: number,
++    public error: string,
++    public code: string
++  ) {
++    super(error);
++  }
++}
++
++export function errorHandler(
++  err: Error,
++  _req: Request,
++  res: Response,
++  _next: NextFunction
++): void {
++  if (err instanceof AppError) {
++    res.status(err.statusCode).json({ error: err.error, code: err.code });
++    return;
++  }
++
++  const statusCode = (err as unknown as Record<string, unknown>).statusCode;
++  const code = (err as unknown as Record<string, unknown>).code;
++  if (typeof statusCode === 'number' && typeof code === 'string') {
++    res.status(statusCode).json({ error: err.message, code });
++    return;
++  }
++
++  res.status(500).json({ error: 'Internal server error', code: 'INTERNAL_ERROR' });
++}
+diff --git a/src/export/router.ts b/src/export/router.ts
+new file mode 100644
+index 0000000..1cdcdea
+--- /dev/null
++++ b/src/export/router.ts
+@@ -0,0 +1,82 @@
++import { Router } from 'express';
++import { getDb } from '../db';
++import { AppError } from '../errors';
++import { getUser } from '../auth';
++
++const router = Router();
++
++// GET /export/events?format=csv|json - Export events
++router.get('/events', (req, res, next) => {
++  try {
++    const user = getUser(req);
++    const format = req.query.format as string;
++
++    if (!format || !['json', 'csv'].includes(format)) {
++      throw new AppError(400, 'Valid format (json or csv) is required', 'VALIDATION_ERROR');
++    }
++
++    const db = getDb();
++    const events = db.prepare(
++      'SELECT * FROM events WHERE tenant_id = ? ORDER BY timestamp'
++    ).all(user.tenantId) as Array<Record<string, unknown>>;
++
++    if (format === 'json') {
++      const parsed = events.map(e => ({
++        ...e,
++        properties: JSON.parse(e.properties as string),
++      }));
++      res.json(parsed);
++    } else {
++      // CSV format
++      const headers = ['id', 'tenant_id', 'name', 'properties', 'timestamp', 'user_id', 'session_id'];
++      const lines = [headers.join(',')];
++      for (const event of events) {
++        const row = headers.map(h => {
++          const val = event[h];
++          if (val === null || val === undefined) return '';
++          return String(val);
++        });
++        lines.push(row.join(','));
++      }
++      res.setHeader('Content-Type', 'text/csv');
++      res.send(lines.join('\n'));
++    }
++  } catch (err) {
++    next(err);
++  }
++});
++
++// GET /export/dashboard/:id - Export dashboard data
++router.get('/dashboard/:id', (req, res, next) => {
++  try {
++    const user = getUser(req);
++    const db = getDb();
++
++    const dashboard = db.prepare(
++      'SELECT * FROM dashboards WHERE id = ? AND tenant_id = ?'
++    ).get(req.params.id, user.tenantId) as Record<string, unknown> | undefined;
++
++    if (!dashboard) {
++      throw new AppError(404, 'Dashboard not found', 'NOT_FOUND');
++    }
++
++    const widgets = db.prepare(
++      'SELECT * FROM widgets WHERE dashboard_id = ?'
++    ).all(req.params.id) as Array<Record<string, unknown>>;
++
++    res.json({
++      dashboard: {
++        ...dashboard,
++        config: JSON.parse(dashboard.config as string),
++      },
++      widgets: widgets.map(w => ({
++        ...w,
++        config: JSON.parse(w.config as string),
++      })),
++    });
++  } catch (err) {
++    next(err);
++  }
++});
++
++export default router;
+diff --git a/src/ingest/router.ts b/src/ingest/router.ts
+new file mode 100644
+index 0000000..b42b194
+--- /dev/null
++++ b/src/ingest/router.ts
+@@ -0,0 +1,91 @@
++import { Router } from 'express';
++import { v4 as uuidv4 } from 'uuid';
++import { getDb } from '../db';
++import { AppError } from '../errors';
++import { getUser } from '../auth';
++
++const router = Router();
++
++// POST /events - Ingest a single event
++router.post('/', (req, res, next) => {
++  try {
++    const user = getUser(req);
++    const { name, properties, timestamp, session_id } = req.body;
++
++    if (!name) {
++      throw new AppError(400, 'Event name is required', 'VALIDATION_ERROR');
++    }
++
++    const db = getDb();
++    const id = uuidv4();
++    const ts = timestamp || new Date().toISOString();
++    const props = properties ? JSON.stringify(properties) : '{}';
++
++    db.prepare(
++      'INSERT INTO events (id, tenant_id, name, properties, timestamp, user_id, session_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
++    ).run(id, user.tenantId, name, props, ts, user.id, session_id || null);
++
++    res.status(201).json({
++      id,
++      tenant_id: user.tenantId,
++      name,
++      properties: properties || {},
++      timestamp: ts,
++      user_id: user.id,
++      session_id: session_id || null,
++    });
++  } catch (err) {
++    next(err);
++  }
++});
++
++// POST /events/batch - Ingest multiple events
++router.post('/batch', (req, res, next) => {
++  try {
++    const user = getUser(req);
++    const { events } = req.body;
++
++    if (!events || !Array.isArray(events) || events.length === 0) {
++      throw new AppError(400, 'Events array is required and must not be empty', 'VALIDATION_ERROR');
++    }
++
++    const db = getDb();
++    const insert = db.prepare(
++      'INSERT INTO events (id, tenant_id, name, properties, timestamp, user_id, session_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
++    );
++
++    const results: Array<Record<string, unknown>> = [];
++
++    const insertMany = db.transaction(() => {
++      for (const event of events) {
++        if (!event.name) {
++          throw new AppError(400, 'Each event must have a name', 'VALIDATION_ERROR');
++        }
++        const id = uuidv4();
++        const ts = event.timestamp || new Date().toISOString();
++        const props = event.properties ? JSON.stringify(event.properties) : '{}';
++        insert.run(id, user.tenantId, event.name, props, ts, user.id, event.session_id || null);
++        results.push({
++          id,
++          tenant_id: user.tenantId,
++          name: event.name,
++          properties: event.properties || {},
++          timestamp: ts,
++          user_id: user.id,
++          session_id: event.session_id || null,
++        });
++      }
++    });
++
++    insertMany();
++
++    res.status(201).json({
++      inserted: results.length,
++      events: results,
++    });
++  } catch (err) {
++    next(err);
++  }
++});
++
++export default router;
+diff --git a/src/query/router.ts b/src/query/router.ts
+new file mode 100644
+index 0000000..b653636
+--- /dev/null
++++ b/src/query/router.ts
+@@ -0,0 +1,164 @@
++import { Router } from 'express';
++import { getDb } from '../db';
++import { AppError } from '../errors';
++import { getUser } from '../auth';
++
++const router = Router();
++
++// POST /query/count - Count events matching filter
++router.post('/count', (req, res, next) => {
++  try {
++    const user = getUser(req);
++    const { event_name, start, end } = req.body;
++
++    if (!event_name) {
++      throw new AppError(400, 'event_name is required', 'VALIDATION_ERROR');
++    }
++
++    const db = getDb();
++    let query = 'SELECT COUNT(*) as count FROM events WHERE tenant_id = ? AND name = ?';
++    const params: unknown[] = [user.tenantId, event_name];
++
++    if (start) {
++      query += ' AND timestamp >= ?';
++      params.push(start);
++    }
++    if (end) {
++      query += ' AND timestamp <= ?';
++      params.push(end);
++    }
++
++    const result = db.prepare(query).get(...params) as { count: number };
++    res.json({ count: result.count });
++  } catch (err) {
++    next(err);
++  }
++});
++
++// POST /query/timeseries - Time-bucketed event counts
++router.post('/timeseries', (req, res, next) => {
++  try {
++    const user = getUser(req);
++    const { event_name, bucket, start, end } = req.body;
++
++    if (!event_name) {
++      throw new AppError(400, 'event_name is required', 'VALIDATION_ERROR');
++    }
++
++    const db = getDb();
++    let bucketExpr: string;
++    if (bucket === 'hour') {
++      bucketExpr = "strftime('%Y-%m-%dT%H:00:00Z', timestamp)";
++    } else {
++      // default to day
++      bucketExpr = "strftime('%Y-%m-%d', timestamp)";
++    }
++
++    let query = `SELECT ${bucketExpr} as bucket, COUNT(*) as count FROM events WHERE tenant_id = ? AND name = ?`;
++    const params: unknown[] = [user.tenantId, event_name];
++
++    if (start) {
++      query += ' AND timestamp >= ?';
++      params.push(start);
++    }
++    if (end) {
++      query += ' AND timestamp <= ?';
++      params.push(end);
++    }
++
++    query += ` GROUP BY bucket ORDER BY bucket`;
++
++    const data = db.prepare(query).all(...params);
++    res.json({ data });
++  } catch (err) {
++    next(err);
++  }
++});
++
++// POST /query/breakdown - Event counts grouped by property
++router.post('/breakdown', (req, res, next) => {
++  try {
++    const user = getUser(req);
++    const { event_name, property_key } = req.body;
++
++    if (!event_name) {
++      throw new AppError(400, 'event_name is required', 'VALIDATION_ERROR');
++    }
++
++    const db = getDb();
++    const events = db.prepare(
++      'SELECT properties FROM events WHERE tenant_id = ? AND name = ?'
++    ).all(user.tenantId, event_name) as Array<{ properties: string }>;
++
++    // Aggregate by property value
++    const counts: Record<string, number> = {};
++    for (const event of events) {
++      const props = JSON.parse(event.properties);
++      const value = property_key ? props[property_key] : undefined;
++      const key = value !== undefined ? String(value) : '(none)';
++      counts[key] = (counts[key] || 0) + 1;
++    }
++
++    const data = Object.entries(counts).map(([property_value, count]) => ({
++      property_value,
++      count,
++    }));
++
++    res.json({ data });
++  } catch (err) {
++    next(err);
++  }
++});
++
++// POST /query/funnel - Multi-step funnel analysis
++router.post('/funnel', (req, res, next) => {
++  try {
++    const user = getUser(req);
++    const { steps } = req.body;
++
++    if (!steps || !Array.isArray(steps) || steps.length === 0) {
++      throw new AppError(400, 'steps array is required', 'VALIDATION_ERROR');
++    }
++
++    const db = getDb();
++
++    // Get all events for this tenant, grouped by session
++    const events = db.prepare(
++      'SELECT name, session_id, timestamp FROM events WHERE tenant_id = ? ORDER BY timestamp'
++    ).all(user.tenantId) as Array<{ name: string; session_id: string | null; timestamp: string }>;
++
++    // Group events by session_id
++    const sessions: Record<string, string[]> = {};
++    for (const event of events) {
++      const sid = event.session_id || event.timestamp; // fallback for events without session
++      if (!sessions[sid]) sessions[sid] = [];
++      sessions[sid].push(event.name);
++    }
++
++    // For each step, count how many sessions completed it in order
++    const stepsResult = steps.map((stepName: string, stepIndex: number) => {
++      let count = 0;
++      for (const sessionEvents of Object.values(sessions)) {
++        // Check if session has all steps up to and including this one in order
++        let pos = 0;
++        let completed = true;
++        for (let i = 0; i <= stepIndex; i++) {
++          const found = sessionEvents.indexOf(steps[i], pos);
++          if (found === -1) {
++            completed = false;
++            break;
++          }
++          pos = found + 1;
++        }
++        if (completed) count++;
++      }
++      return { step: stepName, count };
++    });
++
++    res.json({ steps: stepsResult });
++  } catch (err) {
++    next(err);
++  }
++});
++
++export default router;
+diff --git a/src/users/router.ts b/src/users/router.ts
+new file mode 100644
+index 0000000..b28636e
+--- /dev/null
++++ b/src/users/router.ts
+@@ -0,0 +1,128 @@
++import { Router } from 'express';
++import { v4 as uuidv4 } from 'uuid';
++import jwt from 'jsonwebtoken';
++import crypto from 'crypto';
++import { getDb } from '../db';
++import { AppError } from '../errors';
++import { JWT_SECRET, getUser } from '../auth';
++
++const router = Router();
++
++function hashPassword(password: string): string {
++  return crypto.createHash('sha256').update(password).digest('hex');
++}
++
++// POST /users - Register new user
++router.post('/', (req, res, next) => {
++  try {
++    const { email, password, tenant_id } = req.body;
++    if (!email || !password || !tenant_id) {
++      throw new AppError(400, 'Missing required fields', 'VALIDATION_ERROR');
++    }
++
++    const db = getDb();
++    const id = uuidv4();
++    const password_hash = hashPassword(password);
++
++    try {
++      db.prepare(
++        'INSERT INTO users (id, email, password_hash, tenant_id) VALUES (?, ?, ?, ?)'
++      ).run(id, email, password_hash, tenant_id);
++    } catch (err: unknown) {
++      if (err instanceof Error && err.message.includes('UNIQUE')) {
++        throw new AppError(409, 'Email already registered', 'DUPLICATE_EMAIL');
++      }
++      throw err;
++    }
++
++    const user = db.prepare('SELECT id, email, tenant_id, role, created_at FROM users WHERE id = ?').get(id) as Record<string, unknown>;
++    res.status(201).json(user);
++  } catch (err) {
++    next(err);
++  }
++});
++
++// POST /users/login - Login
++router.post('/login', (req, res, next) => {
++  try {
++    const { email, password } = req.body;
++    if (!email || !password) {
++      throw new AppError(400, 'Missing required fields', 'VALIDATION_ERROR');
++    }
++
++    const db = getDb();
++    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as Record<string, unknown> | undefined;
++
++    if (!user || user.password_hash !== hashPassword(password)) {
++      throw new AppError(401, 'Invalid credentials', 'AUTH_ERROR');
++    }
++
++    const token = jwt.sign(
++      { sub: user.id, tid: user.tenant_id },
++      JWT_SECRET,
++      { expiresIn: '24h' }
++    );
++
++    res.json({
++      token,
++      user: {
++        id: user.id,
++        email: user.email,
++        tenant_id: user.tenant_id,
++        role: user.role,
++      },
++    });
++  } catch (err) {
++    next(err);
++  }
++});
++
++// GET /users/me - Get current user profile
++router.get('/me', (req, res, next) => {
++  try {
++    const authUser = getUser(req);
++    const db = getDb();
++    const user = db.prepare('SELECT id, email, tenant_id, role, created_at FROM users WHERE id = ?').get(authUser.id) as Record<string, unknown> | undefined;
++
++    if (!user) {
++      throw new AppError(404, 'User not found', 'NOT_FOUND');
++    }
++
++    res.json(user);
++  } catch (err) {
++    next(err);
++  }
++});
++
++// PATCH /users/:id/role - Change user role (admin only)
++router.patch('/:id/role', (req, res, next) => {
++  try {
++    const authUser = getUser(req);
++    const db = getDb();
++
++    // Check if requesting user is admin
++    const requestingUser = db.prepare('SELECT role FROM users WHERE id = ?').get(authUser.id) as Record<string, unknown> | undefined;
++    if (!requestingUser || requestingUser.role !== 'admin') {
++      throw new AppError(403, 'Admin access required', 'FORBIDDEN');
++    }
++
++    const { role } = req.body;
++    if (!role || !['admin', 'viewer', 'editor'].includes(role)) {
++      throw new AppError(400, 'Invalid role', 'VALIDATION_ERROR');
++    }
++
++    const targetId = req.params.id;
++    db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, targetId);
++
++    const updatedUser = db.prepare('SELECT id, email, tenant_id, role, created_at FROM users WHERE id = ?').get(targetId) as Record<string, unknown> | undefined;
++    if (!updatedUser) {
++      throw new AppError(404, 'User not found', 'NOT_FOUND');
++    }
++
++    res.json(updatedUser);
++  } catch (err) {
++    next(err);
++  }
++});
++
++export default router;

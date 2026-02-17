@@ -1,0 +1,236 @@
+diff --git a/.amplifier/settings.local.yaml b/.amplifier/settings.local.yaml
+new file mode 100644
+index 0000000..87d3b35
+--- /dev/null
++++ b/.amplifier/settings.local.yaml
+@@ -0,0 +1,11 @@
++config:
++  providers:
++  - config:
++      api_key: ${ANTHROPIC_API_KEY}
++      base_url: https://api.anthropic.com
++      default_model: claude-sonnet-4-5
++      enable_1m_context: 'true'
++      enable_prompt_caching: 'true'
++      priority: 1
++    module: provider-anthropic
++    source: git+https://github.com/microsoft/amplifier-module-provider-anthropic@main
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..39c6667
+--- /dev/null
++++ b/.thunderdome-stderr.log
+@@ -0,0 +1,30 @@
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
+diff --git a/package-lock.json b/package-lock.json
+index 6f64a11..cd10380 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1016,7 +1016,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1061,7 +1060,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1341,7 +1339,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1695,7 +1692,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3017,7 +3013,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3049,7 +3044,6 @@
+       "integrity": "sha512-o5a9xKjbtuhY6Bi5S3+HvbRERmouabWbyUcpXXUA1u+GNUKoROi9byOJ8M0nHbHYHkYICiMlqxkg1KkYmm25Sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "esbuild": "^0.21.3",
+         "postcss": "^8.4.43",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..5c739a5
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,125 @@
++import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
++import { dirname } from 'path';
++
++export interface Entry {
++  taskName: string;
++  startTime: string;
++  endTime: string | null;
++}
++
++export class TimeTracker {
++  private filePath: string;
++  private entries: Entry[] = [];
++
++  constructor(filePath: string) {
++    this.filePath = filePath;
++    this.load();
++  }
++
++  private load(): void {
++    if (existsSync(this.filePath)) {
++      const data = readFileSync(this.filePath, 'utf-8');
++      this.entries = JSON.parse(data);
++    }
++  }
++
++  private save(): void {
++    const dir = dirname(this.filePath);
++    if (!existsSync(dir)) {
++      mkdirSync(dir, { recursive: true });
++    }
++    writeFileSync(this.filePath, JSON.stringify(this.entries, null, 2), 'utf-8');
++  }
++
++  start(taskName: string): Entry {
++    if (taskName === '') {
++      throw new Error('Task name cannot be empty');
++    }
++
++    // Auto-stop any running task
++    const activeTask = this.getActiveTask();
++    if (activeTask) {
++      activeTask.endTime = new Date().toISOString();
++    }
++
++    // Create new entry
++    const entry: Entry = {
++      taskName,
++      startTime: new Date().toISOString(),
++      endTime: null,
++    };
++
++    this.entries.push(entry);
++    this.save();
++
++    return entry;
++  }
++
++  stop(): Entry {
++    const activeTask = this.getActiveTask();
++    if (!activeTask) {
++      throw new Error('No task is currently running');
++    }
++
++    activeTask.endTime = new Date().toISOString();
++    this.save();
++
++    return activeTask;
++  }
++
++  getActiveTask(): Entry | null {
++    const activeEntry = this.entries.find(entry => entry.endTime === null);
++    return activeEntry || null;
++  }
++
++  getLog(options?: { since?: Date }): Entry[] {
++    if (!options?.since) {
++      return this.entries;
++    }
++
++    const sinceTime = options.since.getTime();
++
++    return this.entries.filter(entry => {
++      // Include if still running (no endTime)
++      if (entry.endTime === null) {
++        return true;
++      }
++
++      const startTime = new Date(entry.startTime).getTime();
++      const endTime = new Date(entry.endTime).getTime();
++
++      // Include if started on or after since date
++      if (startTime >= sinceTime) {
++        return true;
++      }
++
++      // Include if ended on or after since date (spanning boundary)
++      if (endTime >= sinceTime) {
++        return true;
++      }
++
++      return false;
++    });
++  }
++
++  getSummary(): Record<string, number> {
++    const summary: Record<string, number> = {};
++
++    for (const entry of this.entries) {
++      const startTime = new Date(entry.startTime).getTime();
++      const endTime = entry.endTime 
++        ? new Date(entry.endTime).getTime() 
++        : Date.now();
++      
++      const duration = endTime - startTime;
++
++      if (summary[entry.taskName]) {
++        summary[entry.taskName] += duration;
++      } else {
++        summary[entry.taskName] = duration;
++      }
++    }
++
++    return summary;
++  }
++}

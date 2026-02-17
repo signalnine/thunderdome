@@ -1,0 +1,129 @@
+diff --git a/.gitignore b/.gitignore
+index ec8ab24..2484d35 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,3 +1,4 @@
+ node_modules/
+ dist/
+ *.db
++.aider*
+diff --git a/src/db.ts b/src/db.ts
+index 810e0fd..f4608ea 100644
+--- a/src/db.ts
++++ b/src/db.ts
+@@ -18,6 +18,35 @@ export function createDatabase(path?: string): Database.Database {
+     )
+   `);
+ 
++  // Create FTS5 virtual table for full-text search
++  db.exec(`
++    CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
++      title,
++      body,
++      content='notes',
++      content_rowid='id'
++    );
++  `);
++
++  // Keep notes_fts in sync with notes
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_insert AFTER INSERT ON notes BEGIN
++      INSERT INTO notes_fts(rowid, title, body) VALUES (new.id, new.title, new.body);
++    END;
++  `);
++
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_update AFTER UPDATE ON notes BEGIN
++      UPDATE notes_fts SET title = new.title, body = new.body WHERE rowid = new.id;
++    END;
++  `);
++
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_delete AFTER DELETE ON notes BEGIN
++      DELETE FROM notes_fts WHERE rowid = old.id;
++    END;
++  `);
++
+   return db;
+ }
+ 
+diff --git a/src/routes.ts b/src/routes.ts
+index 013b2dc..73956d5 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -31,6 +31,75 @@ export function createRoutes(db: Database.Database): Router {
+     }
+   });
+ 
++  // GET /notes/search?q=keyword&page=1
++  router.get('/notes/search', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const query = req.query.q as string | undefined;
++      const page = parseInt(req.query.page as string || '1');
++      const perPage = 20;
++
++      if (!query || query.trim() === '') {
++        return res.status(400).json({ error: 'Missing or empty query parameter' });
++      }
++
++      const offset = (page - 1) * perPage;
++
++      // FTS5 ranking: bm25(table, boost_title, boost_body)
++      // Snippet: fts5(table, column, start_tag, end_tag, snippet_length)
++      const stmt = db.prepare(`
++        SELECT
++          notes.id,
++          notes.title,
++          snippet(notes_fts, 1, '<mark>', '</mark>', '...', 20) AS snippet,
++          bm25(notes_fts, 2.0, 1.0) AS rank
++        FROM notes_fts
++        JOIN notes ON notes_fts.rowid = notes.id
++        WHERE notes_fts MATCH ?
++        ORDER BY rank DESC
++        LIMIT ? OFFSET ?
++      `);
++
++      const results = stmt.all(query, perPage, offset) as any[];
++
++      const countStmt = db.prepare(`
++        SELECT COUNT(rowid) AS total FROM notes_fts WHERE notes_fts MATCH ?
++      `);
++      const total = (countStmt.get(query) as any).total;
++
++      res.json({
++        results,
++        total,
++        page,
++        perPage,
++      });
++    } catch (err) {
++      next(err);
++    }
++  });
++
++  // GET /notes/search/suggest?q=prefix
++  router.get('/notes/search/suggest', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const query = req.query.q as string | undefined;
++
++      if (!query || query.trim() === '') {
++        return res.status(400).json({ error: 'Missing or empty query parameter' });
++      }
++
++      const stmt = db.prepare(`
++        SELECT id, title FROM notes
++        WHERE title LIKE ?
++        LIMIT 5
++      `);
++
++      const results = stmt.all(query + '%') as any[];
++
++      res.json({ results });
++    } catch (err) {
++      next(err);
++    }
++  });
++
+   // GET /notes/:id - Get single note
+   router.get('/notes/:id', (req: Request, res: Response, next: NextFunction) => {
+     try {

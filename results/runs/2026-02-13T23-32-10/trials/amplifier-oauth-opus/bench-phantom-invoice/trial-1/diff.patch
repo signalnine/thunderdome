@@ -1,0 +1,112 @@
+diff --git a/.amplifier/settings.local.yaml b/.amplifier/settings.local.yaml
+new file mode 100644
+index 0000000..aacbe16
+--- /dev/null
++++ b/.amplifier/settings.local.yaml
+@@ -0,0 +1,11 @@
++config:
++  providers:
++  - config:
++      api_key: ${ANTHROPIC_API_KEY}
++      base_url: https://api.anthropic.com
++      default_model: claude-opus-4-6
++      enable_1m_context: 'true'
++      enable_prompt_caching: 'true'
++      priority: 1
++    module: provider-anthropic
++    source: git+https://github.com/microsoft/amplifier-module-provider-anthropic@main
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..fd371b2
+--- /dev/null
++++ b/.thunderdome-stderr.log
+@@ -0,0 +1,6 @@
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
+diff --git a/package-lock.json b/package-lock.json
+index 9c810a0..3562a1e 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1079,7 +1079,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1195,7 +1194,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1488,7 +1486,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2246,7 +2243,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -4506,7 +4502,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/db/queries.ts b/src/db/queries.ts
+index 40c4307..ccea42d 100644
+--- a/src/db/queries.ts
++++ b/src/db/queries.ts
+@@ -11,7 +11,7 @@ export function getInvoicesByDateRange(
+ ): Invoice[] {
+   const stmt = db.prepare(`
+     SELECT * FROM invoices
+-    WHERE date >= ? AND date < ?
++    WHERE date >= ? AND date <= ?
+     ORDER BY date ASC
+   `);
+   return stmt.all(startDate, endDate) as Invoice[];
+diff --git a/src/services/billing.ts b/src/services/billing.ts
+index b274692..3a1e841 100644
+--- a/src/services/billing.ts
++++ b/src/services/billing.ts
+@@ -15,7 +15,7 @@ export function calculateInvoiceTotal(
+   taxRate: number,
+ ): number {
+   const discounted = subtotal * (1 - discountRate);
+-  const total = discounted + subtotal * taxRate;
++  const total = discounted * (1 + taxRate);
+   return Math.round(total * 100) / 100;
+ }
+ 
+diff --git a/src/services/reporting.ts b/src/services/reporting.ts
+index 132a907..8fd136f 100644
+--- a/src/services/reporting.ts
++++ b/src/services/reporting.ts
+@@ -25,7 +25,7 @@ export function getMonthlyReport(
+ 
+   for (const inv of invoices) {
+     const d = new Date(inv.date + 'T00:00:00Z');
+-    const month = d.getMonth() + 1; // 1-indexed
++    const month = d.getUTCMonth() + 1; // 1-indexed
+ 
+     const current = monthlyMap.get(month) || { count: 0, total: 0 };
+     current.count += 1;

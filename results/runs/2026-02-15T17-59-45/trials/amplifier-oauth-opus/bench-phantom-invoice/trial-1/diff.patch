@@ -1,0 +1,583 @@
+diff --git a/.amplifier-stdout.log b/.amplifier-stdout.log
+new file mode 100644
+index 0000000..6a87a5a
+--- /dev/null
++++ b/.amplifier-stdout.log
+@@ -0,0 +1,449 @@
++Preparing bundle 'foundation'...
++Bundle 'foundation' prepared successfully
++
++Session ID: 488f0165-d29e-49dc-b090-ef938f214ca7
++Bundle: foundation | Provider: Anthropic | claude-opus-4-6
++
++[90m============================================================[0m
++[90mThinking:[0m
++[90m------------------------------------------------------------[0m
++[2mLet me start by understanding the project structure and     
++running the tests to see what's failing.[0m
++[90m============================================================[0m
++
++[2m│  📊 Token Usage[0m
++[2m└─ Input: 37,099 (97% cached) | Output: 226 | Total: 37,325[0m
++
++[36m🔧 Using tool: todo[0m
++   [2maction: create[0m
++   [2mtodos:[0m
++   [2m- content: Run tests and identify failing tests[0m
++   [2m  status: in_progress[0m
++   [2m  activeForm: Running tests and identifying failures[0m
++   [2m... (9 more lines)[0m
++[36m✅ Tool result: todo[0m
++[2m   status: created
++   count: 4
++   todos:
++   - content: Run tests and identify failing tests
++     status: in_progress
++   ... (10 more lines)[0m
++
++
++[2;37m┌─ Todo ─────────────────────────────────────────────────────┐[0m
++[2;37m│[0m                                                            [2;37m│[0m
++[2;37m│[0m [1;36m▶[0m [1;36mRunning tests and identifying failures[0m                   [2;37m│[0m
++[2;37m│[0m [2;37m○[0m [2;37mExplore source code to understand the bugs[0m               [2;37m│[0m
++[2;37m│[0m [2;37m○[0m [2;37mFix the bugs[0m                                             [2;37m│[0m
++[2;37m│[0m [2;37m○[0m [2;37mValidate all tests pass and constraints met[0m              [2;37m│[0m
++[2;37m│[0m                                                            [2;37m│[0m
++[2;37m│[0m [32m[0m[2;37m░░░░░░░░░░░░░░░░░░░░░░░░[0m 0/4                               [2;37m│[0m
++[2;37m│[0m                                                            [2;37m│[0m
++[2;37m└────────────────────────────────────────────────────────────┘[0m
++
++[38;5;110m▸[0m [38;5;188mLet me start by running the tests and exploring the project [0m
++  [38;5;188mstructure in parallel.[0m
++
++[2m│  📊 Token Usage[0m
++[2m└─ Input: 37,518 (96% cached) | Output: 82 | Total: 37,600[0m
++
++[36m🔧 Using tool: bash[0m
++   [2mcommand: cd /workspace && npm install 2>&1 | tail -5[0m
++[36m✅ Tool result: bash[0m
++[2m   npm notice
++   npm notice New major version of npm available! 10.8.2 -> 11.10.0
++   npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.10.0
++   npm notice To update run: npm install -g npm@11.10.0
++   npm notice
++   ... (1 more lines)[0m
++
++[2m│  📊 Token Usage[0m
++[2m└─ Input: 37,716 (95% cached) | Output: 61 | Total: 37,777[0m
++
++[36m🔧 Using tool: bash[0m
++   [2mcommand: cd /workspace && npm test 2>&1[0m
++[36m❌ Tool result: bash[0m
++[2m   
++   > bench-phantom-invoice@1.0.0 test
++   > vitest run
++   
++   
++   ... (238 more lines)[0m
++
++
++[90m============================================================[0m
++[90mThinking:[0m
++[90m------------------------------------------------------------[0m
++[2mNow I can see the failures. Let me analyze them:            
++
++ 1 Discount calculation bug: calculateInvoiceTotal is not   
++   applying discount correctly. Tests expect: subtotal * (1 
++   - discount) * (1 + tax), but the function seems to not be
++   applying the discount properly (e.g., 200 with 10%       
++   discount should be 180, then 8% tax = 194.4, but got 196 
++   which is 200 * 0.98... no, 200 * (1+0.08) * (1-0.1)...   
++   no. Let me think.                                        
++
++Actually: 196 = 200 * 0.98? No. 200 * 0.98 = 196.           
++
++Wait, let me verify the math. With 200 as the base, 10%     
++discount, and 8% tax, I should get 194.4 whether I apply    
++discount then tax or tax then discount. But the actual      
++result is 196, which doesn't match either calculation path. 
++Let me figure out what operation would produce 196 from 200.
++
++Ah, I found it: 200 * 1.08 = 216, then 216 - (200 * 0.1) =  
++196. So the discount is being subtracted from the final     
++taxed amount rather than applied to the subtotal first. Or  
++wait—actually, 200 * (1 - 0.1 + 0.08) = 200 * 0.98 = 196,   
++which means the discount and tax are being combined         
++additively instead of multiplicatively.                     
++
++Let me check this pattern against the other test cases to   
++confirm it's consistent.                                    
++
++So the issue is clear: the calculation is combining the     
++discount and tax additively instead of applying them        
++sequentially. The formula should apply the discount first,  
++then multiply by the tax factor, but instead it's treating  
++them as a single adjustment to the subtotal.                
++
++Now I'm looking at the second bug with the date range query 
++where the end date isn't being treated as inclusive.        
++
++And the third issue appears to be related to how invoices   
++are grouped by month—something about the boundary logic is  
++placing first-of-month invoices in the previous month. I    
++should check the source code to see whether it's the same < 
++versus <= problem or something different with the month     
++calculation itself.[0m
++[90m============================================================[0m
++
++
++[38;5;103m▍[0m [38;5;145mGood, I can see 3 distinct bug patterns across 11 failures: [0m
++[38;5;103m▍[0m [38;5;145m[0m
++[38;5;103m▍[0m [38;5;145m 1 Discount calculation - calculateInvoiceTotal computing   [0m
++[38;5;103m▍[0m [38;5;145m   wrong results (discount not applied correctly)           [0m
++[38;5;103m▍[0m [38;5;145m 2 Date range query - end date boundary not inclusive       [0m
++[38;5;103m▍[0m [38;5;145m 3 Month boundary grouping - invoices on month boundaries   [0m
++[38;5;103m▍[0m [38;5;145m   assigned to wrong month                                  [0m
++[38;5;103m▍[0m [38;5;145m[0m
++[38;5;103m▍[0m [38;5;145mLet me read the source files to find the bugs.[0m
++
++[2m│  📊 Token Usage[0m
++[2m└─ Input: 41,775 (86% cached) | Output: 1,164 | Total: 42,939[0m
++
++[36m🔧 Using tool: glob[0m
++   [2mpattern: src/**/*.ts[0m
++[36m✅ Tool result: glob[0m
++[2m   pattern: src/**/*.ts
++   base_path: /workspace
++   total_files: 8
++   count: 8
++   matches:
++   ... (24 more lines)[0m
++
++
++[90m============================================================[0m
++[90mThinking:[0m
++[90m------------------------------------------------------------[0m
++[2mLet me read the key source files to understand the bugs.    
++Based on the test failures, I need to look at:              
++
++ 1 src/services/billing.ts - for calculateInvoiceTotal      
++ 2 src/db/queries.ts - for getInvoicesByDateRange           
++ 3 src/services/reporting.ts - for monthly grouping[0m
++[90m============================================================[0m
++
++[2m│  📊 Token Usage[0m
++[2m└─ Input: 43,091 (83% cached) | Output: 260 | Total: 43,351[0m
++
++[36m🔧 Using tool: read_file[0m
++   [2mfile_path: /workspace/src/services/billing.ts[0m
++[36m✅ Tool result: read_file[0m
++[2m   file_path: /workspace/src/services/billing.ts
++   content: |
++            1	import type Database from 'better-sqlite3';
++            2	import type { InvoiceCreateInput, Invoice, LineItem } from '../models/invoice.js';
++            3	import { createInvoice } from '../db/queries.js';
++   ... (58 more lines)[0m
++
++
++[36m🔧 Using tool: read_file[0m
++   [2mfile_path: /workspace/src/db/queries.ts[0m
++[36m✅ Tool result: read_file[0m
++[2m   file_path: /workspace/src/db/queries.ts
++   content: |
++            1	import type Database from 'better-sqlite3';
++            2	import type { Invoice, LineItem } from '../models/invoice.js';
++            3	
++   ... (89 more lines)[0m
++
++
++[36m🔧 Using tool: read_file[0m
++   [2mfile_path: /workspace/src/services/reporting.ts[0m
++[36m✅ Tool result: read_file[0m
++[2m   file_path: /workspace/src/services/reporting.ts
++   content: |
++            1	import type Database from 'better-sqlite3';
++            2	import type { Invoice, InvoiceSummary, CustomerReport } from '../models/invoice.js';
++            3	
++   ... (95 more lines)[0m
++
++
++[90m============================================================[0m
++[90mThinking:[0m
++[90m------------------------------------------------------------[0m
++[2mNow I can see all three bugs clearly:                       
++
++Bug 1: calculateInvoiceTotal in src/services/billing.ts:18  
++Line 18: const total = discounted + subtotal * taxRate; This
++applies tax to the original subtotal instead of the         
++discounted amount. Should be: const total = discounted +    
++discounted * taxRate; or equivalently const total =         
++discounted * (1 + taxRate);                                 
++
++Let me verify:                                              
++
++ • 200 * (1-0.1) = 180 (discounted)                         
++ • Current: 180 + 200 * 0.08 = 180 + 16 = 196 (matches wrong
++   output)                                                  
++ • Fixed: 180 * (1 + 0.08) = 180 * 1.08 = 194.4 (matches    
++   expected)                                                
++
++Bug 2: getInvoicesByDateRange in src/db/queries.ts:14 Line  
++14: WHERE date >= ? AND date < ? The comment on line 5 says 
++"inclusive on both ends" but uses < instead of <=. Should   
++be: WHERE date >= ? AND date <= ?                           
++
++Bug 3: Monthly reporting - I need to look more carefully at 
++what the reporting test is actually checking. The test      
++failure mentions grouping invoices correctly, so there's    
++likely an issue with how the monthly aggregation is working.
++
++Looking at the date handling in reporting.ts:27, I see it's 
++creating a UTC date from the string and then calling        
++getMonth() on it. The problem is that getMonth() returns the
++month in local time, not UTC time. So if the server is      
++running in a timezone behind UTC, a date like               
++2024-02-01T00:00:00Z could get interpreted as the previous  
++month depending on the offset. of 3 because the February 1st
++invoice is being grouped into January. The fix is           
++straightforward—I need to use getUTCMonth() instead of      
++getMonth() on line 28 to match what the comment says the    
++function should do. Even though test environments are       
++typically UTC, something in the date parsing or timezone    
++handling is causing the mismatch, so I should align the code
++with its documented intent. The environment must be in a    
++non-UTC timezone, which explains why the date calculations  
++are off. Since the date strings use UTC notation with the Z 
++suffix, I need to use getUTCMonth() instead of getMonth() to
++properly extract the month. So the three fixes are: apply   
++the tax rate to the discounted amount rather than subtotal, 
++change the date comparison to use <= instead of <, and      
++switch to getUTCMonth() for the date extraction.[0m
++[90m============================================================[0m
++
++
++[38;5;110m▸[0m [38;5;188mI've identified all three bugs. Let me update my todo list  [0m
++  [38;5;188mand apply the fixes.[0m
++
++[2m│  📊 Token Usage[0m
++[2m└─ Input: 46,813 (77% cached) | Output: 1,594 | Total: 48,407[0m
++
++[36m🔧 Using tool: todo[0m
++   [2maction: update[0m
++   [2mtodos:[0m
++   [2m- content: Run tests and identify failing tests[0m
++   [2m  status: completed[0m
++   [2m  activeForm: Running tests and identifying failures[0m
++   [2m... (9 more lines)[0m
++[36m✅ Tool result: todo[0m
++[2m   status: updated
++   count: 4
++   pending: 1
++   in_progress: 1
++   completed: 2[0m
++
++
++[2;37m┌─ Todo ─────────────────────────────────────────────────────┐[0m
++[2;37m│[0m                                                            [2;37m│[0m
++[2;37m│[0m [2;32m✓[0m [2;32mRun tests and identify failing tests[0m                     [2;37m│[0m
++[2;37m│[0m [2;32m✓[0m [2;32mExplore source code to understand the bugs[0m               [2;37m│[0m
++[2;37m│[0m [1;36m▶[0m [1;36mFixing the bugs[0m                                          [2;37m│[0m
++[2;37m│[0m [2;37m○[0m [2;37mValidate all tests pass and constraints met[0m              [2;37m│[0m
++[2;37m│[0m                                                            [2;37m│[0m
++[2;37m│[0m [32m████████████[0m[2;37m░░░░░░░░░░░░[0m 2/4                               [2;37m│[0m
++[2;37m│[0m                                                            [2;37m│[0m
++[2;37m└────────────────────────────────────────────────────────────┘[0m
++
++[38;5;103m▍[0m [38;5;145mI've identified all three bugs. Let me apply the fixes:     [0m
++[38;5;103m▍[0m [38;5;145m[0m
++[38;5;103m▍[0m [38;5;145mBug 1 (src/services/billing.ts:18): Tax is applied to the   [0m
++[38;5;103m▍[0m [38;5;145moriginal subtotal instead of the discounted amount. E.g.,   [0m
++[38;5;103m▍[0m [38;5;145m200 * 0.9 + 200 * 0.08 = 196 instead of correct 200 * 0.9 * [0m
++[38;5;103m▍[0m [38;5;145m1.08 = 194.4.                                               [0m
++[38;5;103m▍[0m [38;5;145m[0m
++[38;5;103m▍[0m [38;5;145mBug 2 (src/db/queries.ts:14): Date range uses < instead of  [0m
++[38;5;103m▍[0m [38;5;145m<= for the end date, making it exclusive despite the comment[0m
++[38;5;103m▍[0m [38;5;145msaying "inclusive on both ends."                            [0m
++[38;5;103m▍[0m [38;5;145m[0m
++[38;5;103m▍[0m [38;5;145mBug 3 (src/services/reporting.ts:28): Uses getMonth() (local[0m
++[38;5;103m▍[0m [38;5;145mtime) instead of getUTCMonth() despite parsing dates as UTC [0m
++[38;5;103m▍[0m [38;5;145m(T00:00:00Z). In non-UTC timezones, dates like March 1st UTC[0m
++[38;5;103m▍[0m [38;5;145mget grouped into February.[0m
++
++[2m│  📊 Token Usage[0m
++[2m└─ Input: 48,406 (74% cached) | Output: 570 | Total: 48,976[0m
++
++[36m🔧 Using tool: edit_file[0m
++   [2mfile_path: /workspace/src/services/billing.ts[0m
++   [2mold_string:   const total = discounted + subtotal * taxRate;[0m
++   [2mnew_string:   const total = discounted + discounted * taxRate;[0m
++[36m✅ Tool result: edit_file[0m
++[2m   file_path: /workspace/src/services/billing.ts
++   replacements_made: 1
++   bytes_written: 1740[0m
++
++
++[36m🔧 Using tool: edit_file[0m
++   [2mfile_path: /workspace/src/db/queries.ts[0m
++   [2mold_string:     WHERE date >= ? AND date < ?[0m
++   [2mnew_string:     WHERE date >= ? AND date <= ?[0m
++[36m✅ Tool result: edit_file[0m
++[2m   file_path: /workspace/src/db/queries.ts
++   replacements_made: 1
++   bytes_written: 2241[0m
++
++
++[36m🔧 Using tool: edit_file[0m
++   [2mfile_path: /workspace/src/services/reporting.ts[0m
++   [2mold_string:     const month = d.getMonth() + 1; // 1-indexed[0m
++   [2mnew_string:     const month = d.getUTCMonth() + 1; // 1-indexed[0m
++[36m✅ Tool result: edit_file[0m
++[2m   file_path: /workspace/src/services/reporting.ts
++   replacements_made: 1
++   bytes_written: 2448[0m
++
++
++[38;5;110m▸[0m [38;5;188mNow let me validate everything passes:[0m
++
++[2m│  📊 Token Usage[0m
++[2m└─ Input: 49,192 (73% cached) | Output: 195 | Total: 49,387[0m
++
++[36m🔧 Using tool: todo[0m
++   [2maction: update[0m
++   [2mtodos:[0m
++   [2m- content: Run tests and identify failing tests[0m
++   [2m  status: completed[0m
++   [2m  activeForm: Running tests and identifying failures[0m
++   [2m... (9 more lines)[0m
++[36m✅ Tool result: todo[0m
++[2m   status: updated
++   count: 4
++   pending: 0
++   in_progress: 1
++   completed: 3[0m
++
++
++[2;37m┌─ Todo ─────────────────────────────────────────────────────┐[0m
++[2;37m│[0m                                                            [2;37m│[0m
++[2;37m│[0m [2;32m✓[0m [2;32mRun tests and identify failing tests[0m                     [2;37m│[0m
++[2;37m│[0m [2;32m✓[0m [2;32mExplore source code to understand the bugs[0m               [2;37m│[0m
++[2;37m│[0m [2;32m✓[0m [2;32mFix the bugs[0m                                             [2;37m│[0m
++[2;37m│[0m [1;36m▶[0m [1;36mValidating all tests pass[0m                                [2;37m│[0m
++[2;37m│[0m                                                            [2;37m│[0m
++[2;37m│[0m [32m██████████████████[0m[2;37m░░░░░░[0m 3/4                               [2;37m│[0m
++[2;37m│[0m                                                            [2;37m│[0m
++[2;37m└────────────────────────────────────────────────────────────┘[0m
++[2m│  📊 Token Usage[0m
++[2m└─ Input: 49,426 (72% cached) | Output: 61 | Total: 49,487[0m
++
++[36m🔧 Using tool: bash[0m
++   [2mcommand: cd /workspace && npm test 2>&1[0m
++[36m✅ Tool result: bash[0m
++[2m   
++   > bench-phantom-invoice@1.0.0 test
++   > vitest run
++   
++   
++   ... (12 more lines)[0m
++
++
++[38;5;110m▸[0m [38;5;188mAll 41 tests pass (30 visible + 10 regression + 1 diff-size [0m
++  [38;5;188mconstraint). Let me also verify build and lint:[0m
++
++[2m│  📊 Token Usage[0m
++[2m└─ Input: 49,699 (72% cached) | Output: 104 | Total: 49,803[0m
++
++[36m🔧 Using tool: bash[0m
++   [2mcommand: cd /workspace && npm run build 2>&1 && npm run lint 2>&1[0m
++[36m✅ Tool result: bash[0m
++[2m   
++   > bench-phantom-invoice@1.0.0 build
++   > tsc
++   
++   
++   ... (4 more lines)[0m
++
++[2m│  📊 Token Usage[0m
++[2m└─ Input: 49,882 (72% cached) | Output: 185 | Total: 50,067[0m
++
++[36m🔧 Using tool: todo[0m
++   [2maction: update[0m
++   [2mtodos:[0m
++   [2m- content: Run tests and identify failing tests[0m
++   [2m  status: completed[0m
++   [2m  activeForm: Running tests and identifying failures[0m
++   [2m... (9 more lines)[0m
++[36m✅ Tool result: todo[0m
++[2m   status: updated
++   count: 4
++   pending: 0
++   in_progress: 0
++   completed: 4[0m
++
++
++[2;37m┌─ Todo ─────────────────────────────────────────────────────┐[0m
++[2;37m│[0m                                                            [2;37m│[0m
++[2;37m│[0m [2;32m✓[0m [2;32mRun tests and identify failing tests[0m                     [2;37m│[0m
++[2;37m│[0m [2;32m✓[0m [2;32mExplore source code to understand the bugs[0m               [2;37m│[0m
++[2;37m│[0m [2;32m✓[0m [2;32mFix the bugs[0m                                             [2;37m│[0m
++[2;37m│[0m [2;32m✓[0m [2;32mValidate all tests pass and constraints met[0m              [2;37m│[0m
++[2;37m│[0m                                                            [2;37m│[0m
++[2;37m│[0m [32m████████████████████████[0m[2;37m[0m 4/4 [1;32m✓ Complete[0m                    [2;37m│[0m
++[2;37m│[0m                                                            [2;37m│[0m
++[2;37m└────────────────────────────────────────────────────────────┘[0m
++[2m│  📊 Token Usage[0m
++[2m└─ Input: 50,112 (71% cached) | Output: 328 | Total: 50,440[0m
++All done. Here's a summary of the three bugs fixed (3 lines changed total):     
++
++Bug 1 — Discount applied incorrectly (src/services/billing.ts:18) Tax was       
++computed on the original subtotal instead of the discounted amount:             
++
++                                                                                
++ - const total = discounted + subtotal * taxRate;                               
++ + const total = discounted + discounted * taxRate;                             
++                                                                                
++
++Bug 2 — Date range end was exclusive (src/db/queries.ts:14) The SQL query used <
++for the end date, excluding invoices on the boundary despite the docstring      
++saying "inclusive on both ends":                                                
++
++                                                                                
++ - WHERE date >= ? AND date < ?                                                 
++ + WHERE date >= ? AND date <= ?                                                
++                                                                                
++
++Bug 3 — Local time used for UTC dates (src/services/reporting.ts:28) Dates were 
++parsed as UTC (T00:00:00Z) but grouped using getMonth() (local time). In non-UTC
++timezones, dates like March 1st UTC get misassigned to February:                
++
++                                                                                
++ - const month = d.getMonth() + 1;                                              
++ + const month = d.getUTCMonth() + 1;                                           
++                                                                                
++
++All 41 tests pass, build and lint are clean, and the diff is 6 lines (3 added + 
++3 removed), well within the 20-line limit.                                      
++
+diff --git a/.amplifier/settings.local.yaml b/.amplifier/settings.local.yaml
+new file mode 100644
+index 0000000..64831cc
+--- /dev/null
++++ b/.amplifier/settings.local.yaml
+@@ -0,0 +1,11 @@
++config:
++  providers:
++  - config:
++      api_key: ${ANTHROPIC_API_KEY}
++      base_url: https://api.anthropic.com
++      default_model: claude-opus-4-6
++      enable_1m_context: 'true'
++      enable_prompt_caching: 'true'
++      priority: 1
++    module: provider-anthropic
++    source: /opt/amplifier-provider-anthropic
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..8df0826
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,7 @@
++{
++  "input_tokens": 14533,
++  "output_tokens": 328,
++  "cache_read_tokens": 35579,
++  "cache_creation_tokens": 0,
++  "total_cost_usd": 0.295963
++}
+\ No newline at end of file
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..447e0f3
+--- /dev/null
++++ b/.thunderdome-stderr.log
+@@ -0,0 +1,8 @@
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
+diff --git a/package-lock.json b/package-lock.json
+index 9c810a0..3562a1e 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1079,7 +1079,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1195,7 +1194,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1488,7 +1486,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2246,7 +2243,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -4506,7 +4502,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/db/queries.ts b/src/db/queries.ts
+index 40c4307..ccea42d 100644
+--- a/src/db/queries.ts
++++ b/src/db/queries.ts
+@@ -11,7 +11,7 @@ export function getInvoicesByDateRange(
+ ): Invoice[] {
+   const stmt = db.prepare(`
+     SELECT * FROM invoices
+-    WHERE date >= ? AND date < ?
++    WHERE date >= ? AND date <= ?
+     ORDER BY date ASC
+   `);
+   return stmt.all(startDate, endDate) as Invoice[];
+diff --git a/src/services/billing.ts b/src/services/billing.ts
+index b274692..03fb349 100644
+--- a/src/services/billing.ts
++++ b/src/services/billing.ts
+@@ -15,7 +15,7 @@ export function calculateInvoiceTotal(
+   taxRate: number,
+ ): number {
+   const discounted = subtotal * (1 - discountRate);
+-  const total = discounted + subtotal * taxRate;
++  const total = discounted + discounted * taxRate;
+   return Math.round(total * 100) / 100;
+ }
+ 
+diff --git a/src/services/reporting.ts b/src/services/reporting.ts
+index 132a907..8fd136f 100644
+--- a/src/services/reporting.ts
++++ b/src/services/reporting.ts
+@@ -25,7 +25,7 @@ export function getMonthlyReport(
+ 
+   for (const inv of invoices) {
+     const d = new Date(inv.date + 'T00:00:00Z');
+-    const month = d.getMonth() + 1; // 1-indexed
++    const month = d.getUTCMonth() + 1; // 1-indexed
+ 
+     const current = monthlyMap.get(month) || { count: 0, total: 0 };
+     current.count += 1;

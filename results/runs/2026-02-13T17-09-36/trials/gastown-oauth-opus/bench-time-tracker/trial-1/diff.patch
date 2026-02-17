@@ -1,0 +1,214 @@
+diff --git a/.runtime/agent.lock b/.runtime/agent.lock
+new file mode 100644
+index 0000000..4fc9fb9
+--- /dev/null
++++ b/.runtime/agent.lock
+@@ -0,0 +1,6 @@
++{
++  "pid": 868,
++  "acquired_at": "2026-02-13T17:09:41.507617917Z",
++  "session_id": "bench/rust",
++  "hostname": "d6600fd71211"
++}
+\ No newline at end of file
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..e61ab7e
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,16 @@
++{
++  "input_tokens": 9,
++  "output_tokens": 2269,
++  "cache_read_tokens": 136331,
++  "cache_creation_tokens": 25638,
++  "turns": 9,
++  "tools_used": [
++    "Task",
++    "Bash",
++    "Glob",
++    "Read",
++    "Write"
++  ],
++  "duration_ms": 85932,
++  "total_cost_usd": 0.3390883499999999
++}
+\ No newline at end of file
+diff --git a/package-lock.json b/package-lock.json
+index 6f64a11..cd10380 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1016,7 +1016,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1061,7 +1060,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1341,7 +1339,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1695,7 +1692,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3017,7 +3013,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3049,7 +3044,6 @@
+       "integrity": "sha512-o5a9xKjbtuhY6Bi5S3+HvbRERmouabWbyUcpXXUA1u+GNUKoROi9byOJ8M0nHbHYHkYICiMlqxkg1KkYmm25Sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "esbuild": "^0.21.3",
+         "postcss": "^8.4.43",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..93de35c
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,120 @@
++import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
++import { dirname } from "path";
++
++export interface Entry {
++  taskName: string;
++  startTime: string;
++  endTime: string | null;
++}
++
++export class TimeTracker {
++  private filePath: string;
++  private entries: Entry[];
++
++  constructor(filePath: string) {
++    this.filePath = filePath;
++    this.entries = [];
++    this.load();
++  }
++
++  private load(): void {
++    try {
++      if (existsSync(this.filePath)) {
++        const data = readFileSync(this.filePath, "utf-8");
++        this.entries = JSON.parse(data) as Entry[];
++      }
++    } catch {
++      this.entries = [];
++    }
++  }
++
++  private save(): void {
++    const dir = dirname(this.filePath);
++    if (!existsSync(dir)) {
++      mkdirSync(dir, { recursive: true });
++    }
++    writeFileSync(this.filePath, JSON.stringify(this.entries, null, 2), "utf-8");
++  }
++
++  start(taskName: string): Entry {
++    if (!taskName) {
++      throw new Error("Task name cannot be empty");
++    }
++
++    const active = this.getActiveTask();
++    if (active) {
++      active.endTime = new Date().toISOString();
++    }
++
++    const entry: Entry = {
++      taskName,
++      startTime: new Date().toISOString(),
++      endTime: null,
++    };
++
++    this.entries.push(entry);
++    this.save();
++    return entry;
++  }
++
++  stop(): Entry {
++    const active = this.getActiveTask();
++    if (!active) {
++      throw new Error("No task is currently running");
++    }
++
++    active.endTime = new Date().toISOString();
++    this.save();
++    return active;
++  }
++
++  getActiveTask(): Entry | null {
++    return this.entries.find((e) => e.endTime === null) ?? null;
++  }
++
++  getLog(options?: { since?: Date }): Entry[] {
++    if (!options?.since) {
++      return this.entries;
++    }
++
++    const sinceTime = options.since.getTime();
++
++    return this.entries.filter((entry) => {
++      // Still running
++      if (entry.endTime === null) {
++        return true;
++      }
++
++      // Started on or after since
++      if (new Date(entry.startTime).getTime() >= sinceTime) {
++        return true;
++      }
++
++      // End time on or after since (spanning the boundary)
++      if (new Date(entry.endTime).getTime() >= sinceTime) {
++        return true;
++      }
++
++      return false;
++    });
++  }
++
++  getSummary(): Record<string, number> {
++    const summary: Record<string, number> = {};
++
++    for (const entry of this.entries) {
++      const start = new Date(entry.startTime).getTime();
++      const end = entry.endTime
++        ? new Date(entry.endTime).getTime()
++        : Date.now();
++      const duration = end - start;
++
++      if (summary[entry.taskName] === undefined) {
++        summary[entry.taskName] = 0;
++      }
++      summary[entry.taskName] += duration;
++    }
++
++    return summary;
++  }
++}

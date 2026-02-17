@@ -1,0 +1,52 @@
+diff --git a/.gitignore b/.gitignore
+index 510782d..ccb011c 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -2,3 +2,4 @@ node_modules/
+ dist/
+ *.db
+ *.sqlite
++.aider*
+diff --git a/src/db.ts b/src/db.ts
+new file mode 100644
+index 0000000..f380c27
+--- /dev/null
++++ b/src/db.ts
+@@ -0,0 +1,37 @@
++import Database from 'better-sqlite3';
++
++export function createDb(dbPath: string): Database {
++  const db = new Database(dbPath);
++
++  // Enable foreign key constraints
++  db.pragma('foreign_keys = ON');
++
++  // Create tables if they don't exist
++  db.exec(`
++    CREATE TABLE IF NOT EXISTS documents (
++      id TEXT PRIMARY KEY,
++      title TEXT NOT NULL,
++      content TEXT NOT NULL DEFAULT '',
++      created_at TEXT NOT NULL DEFAULT (datetime('now')),
++      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
++    );
++
++    CREATE TABLE IF NOT EXISTS versions (
++      id INTEGER PRIMARY KEY AUTOINCREMENT,
++      document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
++      version INTEGER NOT NULL,
++      content TEXT NOT NULL,
++      operation TEXT, -- JSON of the operation that produced this version
++      created_at TEXT NOT NULL DEFAULT (datetime('now')),
++      UNIQUE(document_id, version)
++    );
++
++    CREATE TABLE IF NOT EXISTS active_connections (
++      id TEXT PRIMARY KEY,
++      document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
++      connected_at TEXT NOT NULL DEFAULT (datetime('now'))
++    );
++  `);
++
++  return db;
++}

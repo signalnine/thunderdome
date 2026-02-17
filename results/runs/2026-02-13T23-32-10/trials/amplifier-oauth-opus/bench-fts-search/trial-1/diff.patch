@@ -1,0 +1,231 @@
+diff --git a/.amplifier/settings.local.yaml b/.amplifier/settings.local.yaml
+new file mode 100644
+index 0000000..aacbe16
+--- /dev/null
++++ b/.amplifier/settings.local.yaml
+@@ -0,0 +1,11 @@
++config:
++  providers:
++  - config:
++      api_key: ${ANTHROPIC_API_KEY}
++      base_url: https://api.anthropic.com
++      default_model: claude-opus-4-6
++      enable_1m_context: 'true'
++      enable_prompt_caching: 'true'
++      priority: 1
++    module: provider-anthropic
++    source: git+https://github.com/microsoft/amplifier-module-provider-anthropic@main
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..fd371b2
+--- /dev/null
++++ b/.thunderdome-stderr.log
+@@ -0,0 +1,6 @@
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
++
++[36m🧠 Thinking...[0m
+diff --git a/package-lock.json b/package-lock.json
+index a3ad476..a7ecd82 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1131,7 +1131,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1247,7 +1246,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1540,7 +1538,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2301,7 +2298,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -4604,7 +4600,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/db.ts b/src/db.ts
+index 810e0fd..720c253 100644
+--- a/src/db.ts
++++ b/src/db.ts
+@@ -18,6 +18,33 @@ export function createDatabase(path?: string): Database.Database {
+     )
+   `);
+ 
++  // Create FTS5 virtual table for full-text search
++  db.exec(`
++    CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
++      title, body, content='notes', content_rowid='id'
++    )
++  `);
++
++  // Triggers to keep FTS index in sync with notes table
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_fts_insert AFTER INSERT ON notes BEGIN
++      INSERT INTO notes_fts(rowid, title, body) VALUES (new.id, new.title, new.body);
++    END
++  `);
++
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_fts_delete AFTER DELETE ON notes BEGIN
++      INSERT INTO notes_fts(notes_fts, rowid, title, body) VALUES('delete', old.id, old.title, old.body);
++    END
++  `);
++
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_fts_update AFTER UPDATE ON notes BEGIN
++      INSERT INTO notes_fts(notes_fts, rowid, title, body) VALUES('delete', old.id, old.title, old.body);
++      INSERT INTO notes_fts(rowid, title, body) VALUES (new.id, new.title, new.body);
++    END
++  `);
++
+   return db;
+ }
+ 
+diff --git a/src/routes.ts b/src/routes.ts
+index 013b2dc..0243f31 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -1,11 +1,114 @@
+ import { Router, Request, Response, NextFunction } from 'express';
+ import Database from 'better-sqlite3';
+-import { Note, NoteInput } from './models.js';
++import { Note, NoteInput, SearchResult, SuggestResult } from './models.js';
+ import { NotFoundError, ValidationError } from './errors.js';
+ 
++/**
++ * Sanitize a user query for FTS5 MATCH.
++ * Strips special characters and wraps each term in double quotes
++ * so they are treated as literals. Preserves quoted phrases.
++ */
++function sanitizeFtsQuery(query: string): string {
++  // Handle quoted phrases like "chocolate chip"
++  if (query.startsWith('"') && query.endsWith('"') && query.length > 2) {
++    const inner = query.slice(1, -1).replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
++    return inner ? `"${inner}"` : '';
++  }
++
++  const cleaned = query.replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
++  if (!cleaned) return '';
++
++  return cleaned.split(' ').filter(w => w).map(w => `"${w}"`).join(' ');
++}
++
++/**
++ * Sanitize a user query for FTS5 prefix matching (autocomplete).
++ * Each term gets a trailing * for prefix search.
++ */
++function sanitizeFtsPrefixQuery(query: string): string {
++  const cleaned = query.replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
++  if (!cleaned) return '';
++
++  return cleaned.split(' ').filter(w => w).map(w => `${w}*`).join(' ');
++}
++
+ export function createRoutes(db: Database.Database): Router {
+   const router = Router();
+ 
++  // --- Search routes (must be registered before /notes/:id) ---
++
++  // GET /notes/search/suggest?q=<prefix> - Autocomplete suggestions
++  router.get('/notes/search/suggest', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const q = req.query.q as string | undefined;
++      if (!q || q.trim() === '') {
++        throw new ValidationError('Search query is required');
++      }
++
++      const ftsQuery = sanitizeFtsPrefixQuery(q);
++      if (!ftsQuery) {
++        res.json({ results: [] });
++        return;
++      }
++
++      const stmt = db.prepare(`
++        SELECT notes.id, notes.title
++        FROM notes_fts
++        JOIN notes ON notes.id = notes_fts.rowid
++        WHERE notes_fts MATCH ?
++        LIMIT 5
++      `);
++
++      const results = stmt.all(ftsQuery) as SuggestResult[];
++      res.json({ results });
++    } catch (err) {
++      next(err);
++    }
++  });
++
++  // GET /notes/search?q=<query> - Full-text search with BM25 ranking
++  router.get('/notes/search', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const q = req.query.q as string | undefined;
++      if (!q || q.trim() === '') {
++        throw new ValidationError('Search query is required');
++      }
++
++      const page = Math.max(1, parseInt(req.query.page as string) || 1);
++      const perPage = 20;
++      const offset = (page - 1) * perPage;
++
++      const ftsQuery = sanitizeFtsQuery(q);
++      if (!ftsQuery) {
++        res.json({ results: [], total: 0, page, perPage });
++        return;
++      }
++
++      const countStmt = db.prepare(
++        'SELECT COUNT(*) as total FROM notes_fts WHERE notes_fts MATCH ?'
++      );
++      const { total } = countStmt.get(ftsQuery) as { total: number };
++
++      const stmt = db.prepare(`
++        SELECT notes.id, notes.title,
++          snippet(notes_fts, -1, '<mark>', '</mark>', '...', 32) as snippet,
++          rank
++        FROM notes_fts
++        JOIN notes ON notes.id = notes_fts.rowid
++        WHERE notes_fts MATCH ?
++        ORDER BY rank
++        LIMIT ? OFFSET ?
++      `);
++
++      const results = stmt.all(ftsQuery, perPage, offset) as SearchResult[];
++      res.json({ results, total, page, perPage });
++    } catch (err) {
++      next(err);
++    }
++  });
++
++  // --- CRUD routes ---
++
+   // GET /notes - List all notes (with optional tag filter)
+   router.get('/notes', (req: Request, res: Response, next: NextFunction) => {
+     try {

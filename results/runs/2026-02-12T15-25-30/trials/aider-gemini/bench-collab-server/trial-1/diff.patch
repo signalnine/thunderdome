@@ -1,0 +1,356 @@
+diff --git a/.gitignore b/.gitignore
+index 510782d..ccb011c 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -2,3 +2,4 @@ node_modules/
+ dist/
+ *.db
+ *.sqlite
++.aider*
+diff --git a/src/db.ts b/src/db.ts
+new file mode 100644
+index 0000000..6843a7c
+--- /dev/null
++++ b/src/db.ts
+@@ -0,0 +1,19 @@
++import Database from 'better-sqlite3';
++
++let db: Database | null = null;
++
++export function getDb(dbPath: string = 'data.db'): Database {
++  if (!db) {
++    db = new Database(dbPath);
++    // Enable foreign key constraints
++    db.pragma('foreign_keys = ON');
++  }
++  return db;
++}
++
++export function closeDb() {
++  if (db) {
++    db.close();
++    db = null;
++  }
++}
+diff --git a/src/models.ts b/src/models.ts
+new file mode 100644
+index 0000000..a9d45d5
+--- /dev/null
++++ b/src/models.ts
+@@ -0,0 +1,30 @@
++export interface Document {
++  id: string;
++  title: string;
++  content: string;
++  created_at: string;
++  updated_at: string;
++}
++
++export interface Version {
++  id: number;
++  document_id: string;
++  version: number;
++  content: string;
++  operation: string | null;
++  created_at: string;
++}
++
++export type Operation = InsertOperation | DeleteOperation;
++
++export interface InsertOperation {
++  type: 'insert';
++  position: number;
++  text: string;
++}
++
++export interface DeleteOperation {
++  type: 'delete';
++  position: number;
++  count: number;
++}
+diff --git a/src/ot.ts b/src/ot.ts
+new file mode 100644
+index 0000000..9eb702c
+--- /dev/null
++++ b/src/ot.ts
+@@ -0,0 +1,13 @@
++import { Operation } from './models';
++
++export function applyOperation(content: string, op: Operation): string {
++  throw new Error('Not implemented');
++}
++
++export function transformOperation(op1: Operation, op2: Operation): Operation {
++  throw new Error('Not implemented');
++}
++
++export function validateOperation(op: Operation, contentLength: number): boolean {
++  throw new Error('Not implemented');
++}
+diff --git a/src/routes.ts b/src/routes.ts
+new file mode 100644
+index 0000000..0aa267f
+--- /dev/null
++++ b/src/routes.ts
+@@ -0,0 +1,115 @@
++import express, { Router } from 'express';
++import { getDb } from './db';
++import { Document } from './models';
++import { randomUUID } from 'crypto';
++
++const router = Router();
++
++// POST /docs - Create document
++router.post('/docs', async (req, res) => {
++  const db = getDb();
++  const title = (req.body.title || 'Untitled').toString()
++  const id = randomUUID();
++  const stmt = db.prepare('INSERT INTO documents (id, title, content) VALUES (?, ?, ?)');
++  stmt.run(id, title, '');
++  res.status(201).json({ id, title });
++});
++
++// GET /docs - List documents
++router.get('/docs', async (req, res) => {
++  const db = getDb();
++  const stmt = db.prepare('SELECT id, title FROM documents');
++  const documents = stmt.all() as Document[];
++  res.json(documents);
++});
++
++// GET /docs/:id - Get document
++router.get('/docs/:id', async (req, res) => {
++  const db = getDb();
++  const id = req.params.id;
++  const stmt = db.prepare('SELECT * FROM documents WHERE id = ?');
++  const document = stmt.get(id) as Document;
++  if (document) {
++    res.json(document);
++  } else {
++    res.status(404).json({ error: 'Document not found' });
++  }
++});
++
++// PUT /docs/:id - Update document
++router.put('/docs/:id', async (req, res) => {
++  const db = getDb();
++  const id = req.params.id;
++  const title = req.body.title?.toString();
++  const content = req.body.content?.toString();
++
++  if (!title && !content) {
++    return res.status(400).json({ error: 'Must provide title or content to update' });
++  }
++
++  let query = 'UPDATE documents SET ';
++  const updates: string[] = [];
++  if (title) {
++    updates.push('title = ?');
++  }
++  if (content) {
++    updates.push('content = ?');
++  }
++  query += updates.join(', ') + ' WHERE id = ?';
++
++  const stmt = db.prepare(query);
++  const params: any[] = [];
++  if (title) {
++    params.push(title);
++  }
++  if (content) {
++    params.push(content);
++  }
++  params.push(id);
++
++  const result = stmt.run(...params);
++
++  if (result.changes > 0) {
++    res.json({ message: 'Document updated successfully' });
++  } else {
++    res.status(404).json({ error: 'Document not found' });
++  }
++});
++
++// DELETE /docs/:id - Delete document
++router.delete('/docs/:id', async (req, res) => {
++  const db = getDb();
++  const id = req.params.id;
++  const stmt = db.prepare('DELETE FROM documents WHERE id = ?');
++  const result = stmt.run(id);
++  if (result.changes > 0) {
++    res.json({ message: 'Document deleted successfully' });
++  } else {
++    res.status(404).json({ error: 'Document not found' });
++  }
++});
++
++// GET /docs/:id/versions - List version history
++router.get('/docs/:id/versions', async (req, res) => {
++  const db = getDb();
++  const documentId = req.params.id;
++  const stmt = db.prepare('SELECT id, version, created_at FROM versions WHERE document_id = ?');
++  const versions = stmt.all(documentId);
++  res.json(versions);
++});
++
++// GET /docs/:id/versions/:version - Get specific version
++router.get('/docs/:id/versions/:version', async (req, res) => {
++  const db = getDb();
++  const documentId = req.params.id;
++  const version = parseInt(req.params.version, 10);
++  const stmt = db.prepare('SELECT content FROM versions WHERE document_id = ? AND version = ?');
++  const result = stmt.get(documentId, version) as { content: string } | undefined;
++  if (result) {
++    res.json({ content: result.content });
++  } else {
++    res.status(404).json({ error: 'Version not found' });
++  }
++});
++
++export default router;
+diff --git a/src/server.ts b/src/server.ts
+new file mode 100644
+index 0000000..4997c92
+--- /dev/null
++++ b/src/server.ts
+@@ -0,0 +1,106 @@
++import express from 'express';
++import { createServer } from 'http';
++import { AddressInfo } from 'net';
++import { WebSocketServer } from 'ws';
++import routes from './routes';
++import { getDb, closeDb } from './db';
++import { createWebSocketServer } from './ws';
++import { applyMigrations } from './migrations';
++
++export function createApp(dbPath?: string) {
++  const app = express();
++  app.use(express.json());
++
++  const db = getDb(dbPath);
++  applyMigrations(db);
++
++  app.use(routes);
++
++  const server = createServer(app);
++  const wss = createWebSocketServer(server);
++
++  return { app, server, wss, db, 
++    start: (port: number = 0) => {
++      return new Promise<number>((resolve, reject) => {
++        server.listen(port, () => {
++          const actualPort = (server.address() as AddressInfo).port;
++          console.log(`Server listening on port ${actualPort}`);
++          resolve(actualPort);
++        });
++        server.on('error', (err) => {
++          reject(err);
++        });
++      });
++    },
++    stop: () => {
++      return new Promise<void>((resolve, reject) => {
++        wss.close((err) => {
++          if (err) {
++            console.error('Error closing WebSocket server:', err);
++            reject(err);
++            return;
++          }
++          server.close((err) => {
++            closeDb();
++            if (err) {
++              console.error('Error closing server:', err);
++              reject(err);
++              return;
++            }
++            console.log('Server stopped');
++            resolve();
++          });
++        });
++      });
++    }
++  };
++}
++
++// Apply migrations
++function applyMigrations(db: any) {
++  const migrations = [
++    `CREATE TABLE IF NOT EXISTS documents (
++      id TEXT PRIMARY KEY,
++      title TEXT NOT NULL,
++      content TEXT NOT NULL DEFAULT '',
++      created_at TEXT NOT NULL DEFAULT (datetime('now')),
++      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
++    )`,
++    `CREATE TABLE IF NOT EXISTS versions (
++      id INTEGER PRIMARY KEY AUTOINCREMENT,
++      document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
++      version INTEGER NOT NULL,
++      content TEXT NOT NULL,
++      operation TEXT, -- JSON of the operation that produced this version
++      created_at TEXT NOT NULL DEFAULT (datetime('now')),
++      UNIQUE(document_id, version)
++    )`,
++    `CREATE TABLE IF NOT EXISTS active_connections (
++      id TEXT PRIMARY KEY,
++      document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
++      connected_at TEXT NOT NULL DEFAULT (datetime('now'))
++    )`
++  ];
++
++  for (const migration of migrations) {
++    db.exec(migration);
++  }
++}
++
++if (require.main === module) {
++  const { app, server, start, stop } = createApp();
++  start(3000).then(() => {
++    // Graceful shutdown on Ctrl+C
++    process.on('SIGINT', () => {
++      console.log('Shutting down...');
++      stop().then(() => {
++        process.exit(0);
++      }).catch((err) => {
++        console.error('Error during shutdown:', err);
++        process.exit(1);
++      });
++    });
++  }).catch(err => {
++    console.error("Failed to start server", err)
++  });
++}
+diff --git a/src/ws.ts b/src/ws.ts
+new file mode 100644
+index 0000000..135c186
+--- /dev/null
++++ b/src/ws.ts
+@@ -0,0 +1,28 @@
++import { WebSocket, WebSocketServer } from 'ws';
++import { getDb } from './db';
++
++export function createWebSocketServer(server: any) {
++  const wss = new WebSocketServer({ noServer: true });
++
++  wss.on('connection', (ws: WebSocket, request: any, documentId: string) => {
++    console.log(`Client connected to document ${documentId}`);
++
++    // TODO: Validate document exists
++    // TODO: Send current state as { type: 'sync', content, version }
++
++    ws.on('message', (message: string) => {
++      console.log(`Received message: ${message}`);
++      // TODO: Validate, apply, transform against concurrent ops, broadcast to room
++    });
++
++    ws.on('close', () => {
++      console.log(`Client disconnected from document ${documentId}`);
++    });
++
++    ws.on('error', (error) => {
++      console.error(`WebSocket error: ${error}`);
++    });
++  });
++
++  return wss;
++}

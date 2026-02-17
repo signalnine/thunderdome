@@ -1,0 +1,133 @@
+diff --git a/.gitignore b/.gitignore
+index ec8ab24..2484d35 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,3 +1,4 @@
+ node_modules/
+ dist/
+ *.db
++.aider*
+diff --git a/src/db.ts b/src/db.ts
+index 810e0fd..27b3f90 100644
+--- a/src/db.ts
++++ b/src/db.ts
+@@ -18,6 +18,38 @@ export function createDatabase(path?: string): Database.Database {
+     )
+   `);
+ 
++  // Create FTS table
++  db.exec(`
++    CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
++      title,
++      body,
++      content='notes',
++      content_rowid='id'
++    )
++  `);
++
++  // Keep FTS index up to date
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_after_insert AFTER INSERT ON notes
++    BEGIN
++      INSERT INTO notes_fts(rowid, title, body) VALUES (new.id, new.title, new.body);
++    END;
++  `);
++
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_after_update AFTER UPDATE ON notes
++    BEGIN
++      UPDATE notes_fts SET title = new.title, body = new.body WHERE rowid = new.id;
++    END;
++  `);
++
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_after_delete AFTER DELETE ON notes
++    BEGIN
++      DELETE FROM notes_fts WHERE rowid = old.id;
++    END;
++  `);
++
+   return db;
+ }
+ 
+diff --git a/src/routes.ts b/src/routes.ts
+index 013b2dc..4689253 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -31,6 +31,76 @@ export function createRoutes(db: Database.Database): Router {
+     }
+   });
+ 
++  // GET /notes/search?q=keyword - Search notes
++  router.get('/notes/search', async (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const query = req.query.q as string | undefined;
++      const page = parseInt(req.query.page as string) || 1;
++      const perPage = 20;
++      const offset = (page - 1) * perPage;
++
++      if (!query || query.trim() === '') {
++        throw new ValidationError('Query parameter `q` is required');
++      }
++
++      // FTS5 query with BM25 ranking and snippet generation
++      const stmt = db.prepare(`
++        SELECT
++          notes.id,
++          notes.title,
++          snippet(notes_fts, 1, '<b><mark>', '</mark>', '...', 64) AS snippet,
++          bm25(notes_fts) AS rank
++        FROM notes
++        JOIN notes_fts ON notes.id = notes_fts.rowid
++        WHERE notes_fts MATCH ?
++        ORDER BY rank DESC
++        LIMIT ? OFFSET ?
++      `);
++
++      const results = stmt.all(query, perPage, offset) as SearchResult[];
++
++      // Get total count for pagination
++      const countStmt = db.prepare(`
++        SELECT COUNT(notes.id) AS total
++        FROM notes
++        JOIN notes_fts ON notes.id = notes_fts.rowid
++        WHERE notes_fts MATCH ?
++      `);
++      const total = (countStmt.get(query) as { total: number }).total;
++
++      res.json({ results, total, page, perPage });
++    } catch (err) {
++      next(err);
++    }
++  });
++
++  // GET /notes/search/suggest?q=prefix - Autocomplete suggestions
++  router.get('/notes/search/suggest', async (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const query = req.query.q as string | undefined;
++
++      if (!query || query.trim() === '') {
++        throw new ValidationError('Query parameter `q` is required');
++      }
++
++      const stmt = db.prepare(`
++        SELECT notes.id, notes.title
++        FROM notes
++        JOIN notes_fts ON notes.id = notes_fts.rowid
++        WHERE notes_fts MATCH ?
++        LIMIT 5
++      `);
++
++      // Tokenize the input query and use the first token for prefix matching
++      const firstToken = query.split(' ')[0];
++      const results = stmt.all(`${firstToken}*`) as SuggestResult[];
++
++      res.json({ results });
++    } catch (err) {
++      next(err);
++    }
++  });
++
+   // GET /notes/:id - Get single note
+   router.get('/notes/:id', (req: Request, res: Response, next: NextFunction) => {
+     try {

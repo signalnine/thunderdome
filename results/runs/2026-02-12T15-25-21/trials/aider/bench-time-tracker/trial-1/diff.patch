@@ -1,0 +1,136 @@
+diff --git a/.gitignore b/.gitignore
+index f4e2c6d..8ed75c9 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,3 +1,4 @@
+ node_modules/
+ dist/
+ *.tsbuildinfo
++.aider*
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..0ff65f0
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,121 @@
++import * as fs from 'fs';
++import * as path from 'path';
++
++export interface Entry {
++  taskName: string;
++  startTime: string;
++  endTime: string | null;
++}
++
++export class TimeTracker {
++  private filePath: string;
++  private entries: Entry[] = [];
++
++  constructor(filePath: string) {
++    this.filePath = filePath;
++    this.loadData();
++  }
++
++  private loadData(): void {
++    if (fs.existsSync(this.filePath)) {
++      const data = fs.readFileSync(this.filePath, 'utf-8');
++      this.entries = JSON.parse(data);
++    }
++  }
++
++  private saveData(): void {
++    const dir = path.dirname(this.filePath);
++    if (!fs.existsSync(dir)) {
++      fs.mkdirSync(dir, { recursive: true });
++    }
++    fs.writeFileSync(this.filePath, JSON.stringify(this.entries, null, 2), 'utf-8');
++  }
++
++  start(taskName: string): Entry {
++    if (!taskName || taskName.trim() === '') {
++      throw new Error('Task name cannot be empty');
++    }
++
++    // Auto-stop any currently running task
++    const activeTask = this.getActiveTask();
++    if (activeTask) {
++      this.stop();
++    }
++
++    const entry: Entry = {
++      taskName,
++      startTime: new Date().toISOString(),
++      endTime: null
++    };
++
++    this.entries.push(entry);
++    this.saveData();
++    return entry;
++  }
++
++  stop(): Entry {
++    const activeTask = this.getActiveTask();
++    if (!activeTask) {
++      throw new Error('No task is currently running');
++    }
++
++    activeTask.endTime = new Date().toISOString();
++    this.saveData();
++    return activeTask;
++  }
++
++  getActiveTask(): Entry | null {
++    const activeEntry = this.entries.find(entry => entry.endTime === null);
++    return activeEntry || null;
++  }
++
++  getLog(options?: { since?: Date }): Entry[] {
++    if (!options || !options.since) {
++      return [...this.entries];
++    }
++
++    const sinceTime = options.since.getTime();
++    
++    return this.entries.filter(entry => {
++      const startTime = new Date(entry.startTime).getTime();
++      
++      // Entry is still running
++      if (entry.endTime === null) {
++        return true;
++      }
++      
++      const endTime = new Date(entry.endTime).getTime();
++      
++      // Entry started on or after since date
++      if (startTime >= sinceTime) {
++        return true;
++      }
++      
++      // Entry ended on or after since date (spans the boundary)
++      if (endTime >= sinceTime) {
++        return true;
++      }
++      
++      return false;
++    });
++  }
++
++  getSummary(): Record<string, number> {
++    const summary: Record<string, number> = {};
++    const now = Date.now();
++
++    for (const entry of this.entries) {
++      const startTime = new Date(entry.startTime).getTime();
++      const endTime = entry.endTime ? new Date(entry.endTime).getTime() : now;
++      const duration = endTime - startTime;
++
++      if (summary[entry.taskName]) {
++        summary[entry.taskName] += duration;
++      } else {
++        summary[entry.taskName] = duration;
++      }
++    }
++
++    return summary;
++  }
++}

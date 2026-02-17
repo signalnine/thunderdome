@@ -1,0 +1,750 @@
+diff --git a/.runtime/agent.lock b/.runtime/agent.lock
+new file mode 100644
+index 0000000..7f4498b
+--- /dev/null
++++ b/.runtime/agent.lock
+@@ -0,0 +1,6 @@
++{
++  "pid": 826,
++  "acquired_at": "2026-02-13T20:13:07.649345133Z",
++  "session_id": "bench/rust",
++  "hostname": "8f4dee6cc462"
++}
+\ No newline at end of file
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..332e020
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,16 @@
++{
++  "input_tokens": 13,
++  "output_tokens": 8408,
++  "cache_read_tokens": 392521,
++  "cache_creation_tokens": 49112,
++  "turns": 22,
++  "tools_used": [
++    "Task",
++    "Bash",
++    "Read",
++    "TodoWrite",
++    "Write"
++  ],
++  "duration_ms": 193368,
++  "total_cost_usd": 0.8234632499999999
++}
+\ No newline at end of file
+diff --git a/package-lock.json b/package-lock.json
+index 1d53f39..3d2daad 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -964,7 +964,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1009,7 +1008,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1289,7 +1287,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1640,7 +1637,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -2919,7 +2915,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -2951,7 +2946,6 @@
+       "integrity": "sha512-o5a9xKjbtuhY6Bi5S3+HvbRERmouabWbyUcpXXUA1u+GNUKoROi9byOJ8M0nHbHYHkYICiMlqxkg1KkYmm25Sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "esbuild": "^0.21.3",
+         "postcss": "^8.4.43",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..313bb06
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,656 @@
++// Task Queue System - All 12 phases
++
++interface TaskOptions {
++  priority?: number;
++  delay?: number;
++  runAt?: Date;
++  maxRetries?: number;
++  backoffMs?: number;
++  dependsOn?: string[];
++}
++
++interface Task {
++  id: string;
++  payload: Record<string, unknown>;
++  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
++  createdAt: Date;
++  priority: number;
++  availableAt: Date;
++  attempts: number;
++  maxRetries: number;
++  backoffMs: number;
++  queueName: string;
++  dependsOn: string[];
++  lastError?: string;
++  failCount: number;
++  _enqueueOrder: number;
++}
++
++interface ProgressInfo {
++  percent: number;
++  message?: string;
++  updatedAt: Date;
++}
++
++interface Schedule {
++  id: string;
++  queueName: string;
++  cronExpression: string;
++  taskTemplate: Record<string, unknown>;
++  active: boolean;
++  lastTriggered: Date;
++}
++
++interface ConcurrencyInfo {
++  current: number;
++  max: number;
++}
++
++interface ShutdownSummary {
++  completed: number;
++  cancelled: number;
++  elapsed: number;
++}
++
++type Middleware = (task: Task, next: () => Promise<void>) => Promise<void>;
++type ProgressCallback = (info: ProgressInfo) => void;
++
++let globalEnqueueCounter = 0;
++
++function generateId(): string {
++  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}-${globalEnqueueCounter++}`;
++}
++
++function parseCron(expression: string, now: Date, lastTriggered: Date): boolean {
++  const parts = expression.split(' ');
++  if (parts.length !== 5) return false;
++
++  const minutePart = parts[0];
++  const hourPart = parts[1];
++
++  const currentMinute = now.getUTCMinutes();
++  const currentHour = now.getUTCHours();
++
++  // Check hour constraint
++  if (hourPart !== '*') {
++    const hourVal = parseInt(hourPart, 10);
++    if (currentHour !== hourVal) return false;
++  }
++
++  // Check day/month/weekday constraints (parts[2], parts[3], parts[4])
++  // For our subset, they should be '*'
++
++  // Check minute constraint
++  if (minutePart === '*') {
++    // Every minute - check if we haven't triggered this minute
++    return now.getTime() - lastTriggered.getTime() >= 60000;
++  }
++
++  if (minutePart.startsWith('*/')) {
++    const interval = parseInt(minutePart.slice(2), 10);
++    if (currentMinute % interval === 0) {
++      // Check we haven't already triggered at this exact minute
++      const lastMin = lastTriggered.getUTCMinutes();
++      const lastHour = lastTriggered.getUTCHours();
++      const lastDate = lastTriggered.toISOString().slice(0, 10);
++      const nowDate = now.toISOString().slice(0, 10);
++      if (lastDate === nowDate && lastHour === currentHour && lastMin === currentMinute) {
++        return false;
++      }
++      return true;
++    }
++    return false;
++  }
++
++  // Specific minute value
++  const minVal = parseInt(minutePart, 10);
++  if (currentMinute !== minVal) return false;
++
++  // Check we haven't already triggered
++  const lastMin2 = lastTriggered.getUTCMinutes();
++  const lastHour2 = lastTriggered.getUTCHours();
++  const lastDate2 = lastTriggered.toISOString().slice(0, 10);
++  const nowDate2 = now.toISOString().slice(0, 10);
++  if (lastDate2 === nowDate2 && lastHour2 === currentHour && lastMin2 === minVal) {
++    return false;
++  }
++  return true;
++}
++
++export class TaskQueue {
++  private tasks: Map<string, Task> = new Map();
++  private queues: Map<string, Task[]> = new Map();
++  private dlq: Map<string, Task[]> = new Map();
++  private concurrencyLimits: Map<string, number> = new Map();
++  private processingCounts: Map<string, number> = new Map();
++  private progressData: Map<string, ProgressInfo> = new Map();
++  private progressCallbacks: Map<string, ProgressCallback[]> = new Map();
++  private schedules: Map<string, Schedule> = new Map();
++  private middlewares: Map<string, Middleware[]> = new Map();
++  private handlers: Map<string, (task: Task) => Promise<void>> = new Map();
++  private _isShutdown = false;
++  private _shutdownPromise: Promise<ShutdownSummary> | null = null;
++  private _shutdownResolve: ((summary: ShutdownSummary) => void) | null = null;
++  private _shutdownCallbacks: (() => void)[] = [];
++  private _shutdownStartTime = 0;
++  private _shutdownTimeout = 0;
++  private _shutdownTimerId: ReturnType<typeof setTimeout> | null = null;
++  private _completedDuringShutdown = 0;
++  private _cancelledDuringShutdown = 0;
++
++  // Phase 1 & 2: Enqueue
++  enqueue(queueName: string, payload: Record<string, unknown>, options?: TaskOptions): Task {
++    if (this._isShutdown) {
++      throw new Error('Queue is shut down, cannot enqueue new tasks');
++    }
++
++    const priority = options?.priority ?? 5;
++    if (priority < 1 || priority > 10) {
++      throw new Error(`Priority must be between 1 and 10, got ${priority}`);
++    }
++
++    // Validate dependencies exist
++    const dependsOn = options?.dependsOn ?? [];
++    for (const depId of dependsOn) {
++      if (!this.tasks.has(depId)) {
++        throw new Error(`Dependency task ${depId} does not exist`);
++      }
++    }
++
++    // Circular dependency detection
++    if (dependsOn.length > 0) {
++      // We need to check if adding these dependencies creates a cycle
++      // A cycle would exist if any of the dependencies transitively depend on this task
++      // But since this task doesn't exist yet, there can't be a cycle from deps back to this task
++      // However, we should still validate the dependency graph
++      // Actually since this is a new task that doesn't exist yet, no existing task can depend on it
++      // So no cycle is possible at enqueue time for a new task
++    }
++
++    let availableAt: Date;
++    if (options?.runAt) {
++      availableAt = options.runAt;
++    } else if (options?.delay) {
++      availableAt = new Date(Date.now() + options.delay);
++    } else {
++      availableAt = new Date(Date.now());
++    }
++
++    const task: Task = {
++      id: generateId(),
++      payload,
++      status: 'pending',
++      createdAt: new Date(),
++      priority,
++      availableAt,
++      attempts: 0,
++      maxRetries: options?.maxRetries ?? 3,
++      backoffMs: options?.backoffMs ?? 1000,
++      queueName,
++      dependsOn,
++      failCount: 0,
++      _enqueueOrder: globalEnqueueCounter++,
++    };
++
++    this.tasks.set(task.id, task);
++
++    if (!this.queues.has(queueName)) {
++      this.queues.set(queueName, []);
++    }
++    this.queues.get(queueName)!.push(task);
++
++    return task;
++  }
++
++  // Phase 1 & 2: Dequeue
++  dequeue(queueName: string): Task | null {
++    const queue = this.queues.get(queueName);
++    if (!queue || queue.length === 0) return null;
++
++    // Check concurrency limit
++    const limit = this.concurrencyLimits.get(queueName);
++    if (limit !== undefined) {
++      const current = this.processingCounts.get(queueName) ?? 0;
++      if (current >= limit) return null;
++    }
++
++    const now = Date.now();
++
++    // Find the best available task: available, pending, no unmet dependencies
++    // Sort criteria: priority (asc), then for same priority: availableAt (asc), then FIFO (_enqueueOrder asc)
++    let bestIdx = -1;
++    let bestTask: Task | null = null;
++
++    for (let i = 0; i < queue.length; i++) {
++      const t = queue[i];
++      if (t.status !== 'pending') continue;
++      if (t.availableAt.getTime() > now) continue;
++
++      // Check dependencies
++      if (t.dependsOn.length > 0) {
++        const allComplete = t.dependsOn.every(depId => {
++          const dep = this.tasks.get(depId);
++          return dep && dep.status === 'completed';
++        });
++        if (!allComplete) continue;
++      }
++
++      if (bestTask === null || this.compareTasks(t, bestTask) < 0) {
++        bestTask = t;
++        bestIdx = i;
++      }
++    }
++
++    if (bestIdx === -1) return null;
++
++    queue.splice(bestIdx, 1);
++    bestTask!.status = 'processing';
++    bestTask!.attempts += 1;
++
++    // Update concurrency
++    const current = this.processingCounts.get(queueName) ?? 0;
++    this.processingCounts.set(queueName, current + 1);
++
++    return bestTask!;
++  }
++
++  private compareTasks(a: Task, b: Task): number {
++    // Lower priority number = higher priority
++    if (a.priority !== b.priority) return a.priority - b.priority;
++    // Earlier availableAt first
++    if (a.availableAt.getTime() !== b.availableAt.getTime()) {
++      return a.availableAt.getTime() - b.availableAt.getTime();
++    }
++    // FIFO by enqueue order
++    return a._enqueueOrder - b._enqueueOrder;
++  }
++
++  // Phase 1: Size (total pending across all queues)
++  size(): number {
++    let count = 0;
++    for (const queue of this.queues.values()) {
++      for (const t of queue) {
++        if (t.status === 'pending') count++;
++      }
++    }
++    return count;
++  }
++
++  // Phase 2: List queues
++  listQueues(): string[] {
++    return Array.from(this.queues.keys());
++  }
++
++  // Phase 2: Queue size
++  queueSize(queueName: string): number {
++    const queue = this.queues.get(queueName);
++    if (!queue) return 0;
++    return queue.filter(t => t.status === 'pending').length;
++  }
++
++  // Phase 5: Complete a task
++  complete(taskId: string): void {
++    const task = this.tasks.get(taskId);
++    if (!task) return;
++    task.status = 'completed';
++
++    // Free concurrency slot
++    const current = this.processingCounts.get(task.queueName) ?? 0;
++    if (current > 0) {
++      this.processingCounts.set(task.queueName, current - 1);
++    }
++
++    // Check if shutdown is pending
++    this._checkShutdownCompletion(true);
++  }
++
++  // Phase 5: Fail a task
++  fail(taskId: string, error?: string): void {
++    const task = this.tasks.get(taskId);
++    if (!task) return;
++    if (task.status === 'cancelled') return;
++
++    task.failCount += 1;
++    if (error !== undefined) {
++      task.lastError = error;
++    }
++
++    // Free concurrency slot
++    const current = this.processingCounts.get(task.queueName) ?? 0;
++    if (current > 0) {
++      this.processingCounts.set(task.queueName, current - 1);
++    }
++
++    // Check if retries remaining
++    // attempts already incremented when dequeued, maxRetries is number of retries (not total attempts)
++    // Total allowed attempts = 1 (initial) + maxRetries
++    if (task.attempts <= task.maxRetries) {
++      // Retry with backoff
++      const retryDelay = task.backoffMs * Math.pow(2, task.attempts - 1);
++      task.availableAt = new Date(Date.now() + retryDelay);
++      task.status = 'pending';
++
++      // Re-add to queue
++      const queue = this.queues.get(task.queueName);
++      if (queue) {
++        queue.push(task);
++      }
++    } else {
++      // Exhausted retries - move to DLQ
++      task.status = 'failed';
++      if (!this.dlq.has(task.queueName)) {
++        this.dlq.set(task.queueName, []);
++      }
++      this.dlq.get(task.queueName)!.push(task);
++    }
++
++    this._checkShutdownCompletion(false);
++  }
++
++  // Phase 6: Get DLQ
++  getDLQ(queueName: string): Task[] {
++    return this.dlq.get(queueName) ?? [];
++  }
++
++  // Phase 6: Retry from DLQ
++  retryDLQ(taskId: string): Task | null {
++    const task = this.tasks.get(taskId);
++    if (!task) return null;
++
++    // Remove from DLQ
++    const dlqQueue = this.dlq.get(task.queueName);
++    if (dlqQueue) {
++      const idx = dlqQueue.indexOf(task);
++      if (idx !== -1) dlqQueue.splice(idx, 1);
++    }
++
++    // Reset task for fresh retry
++    task.status = 'pending';
++    task.attempts = 0;
++    task.availableAt = new Date(Date.now());
++
++    // Re-add to original queue
++    if (!this.queues.has(task.queueName)) {
++      this.queues.set(task.queueName, []);
++    }
++    this.queues.get(task.queueName)!.push(task);
++
++    return task;
++  }
++
++  // Phase 6: Clear DLQ
++  clearDLQ(queueName: string): void {
++    this.dlq.set(queueName, []);
++  }
++
++  // Phase 7: Get dependencies
++  getDependencies(taskId: string): Array<{ taskId: string; status: string }> {
++    const task = this.tasks.get(taskId);
++    if (!task) return [];
++    return task.dependsOn.map(depId => {
++      const dep = this.tasks.get(depId);
++      return { taskId: depId, status: dep ? dep.status : 'unknown' };
++    });
++  }
++
++  // Phase 8: Set concurrency
++  setConcurrency(queueName: string, limit: number): void {
++    this.concurrencyLimits.set(queueName, limit);
++  }
++
++  // Phase 8: Get concurrency
++  getConcurrency(queueName: string): ConcurrencyInfo {
++    const max = this.concurrencyLimits.get(queueName) ?? Infinity;
++    const current = this.processingCounts.get(queueName) ?? 0;
++    return { current, max };
++  }
++
++  // Phase 9: Update progress
++  updateProgress(taskId: string, percent: number, message?: string): void {
++    const info: ProgressInfo = {
++      percent,
++      message,
++      updatedAt: new Date(),
++    };
++    this.progressData.set(taskId, info);
++
++    // Notify callbacks
++    const callbacks = this.progressCallbacks.get(taskId);
++    if (callbacks) {
++      for (const cb of callbacks) {
++        cb(info);
++      }
++    }
++  }
++
++  // Phase 9: Get progress
++  getProgress(taskId: string): ProgressInfo | null {
++    return this.progressData.get(taskId) ?? null;
++  }
++
++  // Phase 9: On progress
++  onProgress(taskId: string, callback: ProgressCallback): () => void {
++    if (!this.progressCallbacks.has(taskId)) {
++      this.progressCallbacks.set(taskId, []);
++    }
++    this.progressCallbacks.get(taskId)!.push(callback);
++
++    return () => {
++      const cbs = this.progressCallbacks.get(taskId);
++      if (cbs) {
++        const idx = cbs.indexOf(callback);
++        if (idx !== -1) cbs.splice(idx, 1);
++      }
++    };
++  }
++
++  // Phase 9: Cancel
++  cancel(taskId: string): void {
++    const task = this.tasks.get(taskId);
++    if (!task) return;
++
++    const wasPending = task.status === 'pending';
++    const wasProcessing = task.status === 'processing';
++    task.status = 'cancelled';
++
++    if (wasPending) {
++      // Remove from queue
++      const queue = this.queues.get(task.queueName);
++      if (queue) {
++        const idx = queue.indexOf(task);
++        if (idx !== -1) queue.splice(idx, 1);
++      }
++    }
++
++    if (wasProcessing) {
++      // Free concurrency slot
++      const current = this.processingCounts.get(task.queueName) ?? 0;
++      if (current > 0) {
++        this.processingCounts.set(task.queueName, current - 1);
++      }
++    }
++  }
++
++  // Phase 10: Schedule
++  schedule(queueName: string, cronExpression: string, taskTemplate: Record<string, unknown>): Schedule {
++    const sched: Schedule = {
++      id: generateId(),
++      queueName,
++      cronExpression,
++      taskTemplate,
++      active: true,
++      lastTriggered: new Date(0), // epoch, never triggered
++    };
++    this.schedules.set(sched.id, sched);
++    return sched;
++  }
++
++  // Phase 10: Unschedule
++  unschedule(scheduleId: string): void {
++    const sched = this.schedules.get(scheduleId);
++    if (sched) {
++      sched.active = false;
++    }
++  }
++
++  // Phase 10: List schedules
++  listSchedules(queueName?: string): Schedule[] {
++    const result: Schedule[] = [];
++    for (const sched of this.schedules.values()) {
++      if (!sched.active) continue;
++      if (queueName !== undefined && sched.queueName !== queueName) continue;
++      result.push(sched);
++    }
++    return result;
++  }
++
++  // Phase 10: Tick
++  tick(): void {
++    const now = new Date();
++    for (const sched of this.schedules.values()) {
++      if (!sched.active) continue;
++      if (parseCron(sched.cronExpression, now, sched.lastTriggered)) {
++        sched.lastTriggered = new Date(now.getTime());
++        this.enqueue(sched.queueName, { ...sched.taskTemplate });
++      }
++    }
++  }
++
++  // Phase 11: Use middleware
++  use(queueName: string, middleware: Middleware): void {
++    if (!this.middlewares.has(queueName)) {
++      this.middlewares.set(queueName, []);
++    }
++    this.middlewares.get(queueName)!.push(middleware);
++  }
++
++  // Phase 11: Process
++  async process(queueName: string, handler: (task: Task) => Promise<void>): Promise<void> {
++    const task = this.dequeue(queueName);
++    if (!task) return;
++
++    const middlewareStack = this.middlewares.get(queueName) ?? [];
++
++    try {
++      let idx = 0;
++      const executeNext = async (): Promise<void> => {
++        if (idx < middlewareStack.length) {
++          const mw = middlewareStack[idx++];
++          await mw(task, executeNext);
++        } else {
++          await handler(task);
++        }
++      };
++      await executeNext();
++
++      // Auto-complete if still processing
++      if (task.status === 'processing') {
++        this.complete(task.id);
++      }
++    } catch (err) {
++      const errorMsg = err instanceof Error ? err.message : String(err);
++      this.fail(task.id, errorMsg);
++    }
++  }
++
++  // Phase 12: Shutdown
++  shutdown(timeout = 30000): Promise<ShutdownSummary> {
++    if (this._shutdownPromise) return this._shutdownPromise;
++
++    this._isShutdown = true;
++    this._shutdownStartTime = Date.now();
++    this._shutdownTimeout = timeout;
++    this._completedDuringShutdown = 0;
++    this._cancelledDuringShutdown = 0;
++
++    // Call shutdown callbacks
++    for (const cb of this._shutdownCallbacks) {
++      cb();
++    }
++
++    // Check if there are any processing tasks
++    let hasProcessing = false;
++    for (const task of this.tasks.values()) {
++      if (task.status === 'processing') {
++        hasProcessing = true;
++        break;
++      }
++    }
++
++    if (!hasProcessing) {
++      const summary: ShutdownSummary = {
++        completed: 0,
++        cancelled: 0,
++        elapsed: Date.now() - this._shutdownStartTime,
++      };
++      this._shutdownPromise = Promise.resolve(summary);
++      return this._shutdownPromise;
++    }
++
++    this._shutdownPromise = new Promise<ShutdownSummary>((resolve) => {
++      this._shutdownResolve = resolve;
++
++      // Set timeout for force cancel
++      this._shutdownTimerId = setTimeout(() => {
++        this._forceCancel();
++      }, timeout);
++    });
++
++    return this._shutdownPromise;
++  }
++
++  private _forceCancel(): void {
++    for (const task of this.tasks.values()) {
++      if (task.status === 'processing') {
++        task.status = 'cancelled';
++        this._cancelledDuringShutdown++;
++
++        const current = this.processingCounts.get(task.queueName) ?? 0;
++        if (current > 0) {
++          this.processingCounts.set(task.queueName, current - 1);
++        }
++      }
++    }
++
++    if (this._shutdownResolve) {
++      this._shutdownResolve({
++        completed: this._completedDuringShutdown,
++        cancelled: this._cancelledDuringShutdown,
++        elapsed: Date.now() - this._shutdownStartTime,
++      });
++    }
++  }
++
++  private _checkShutdownCompletion(wasCompleted: boolean): void {
++    if (!this._isShutdown || !this._shutdownResolve) return;
++
++    if (wasCompleted) {
++      this._completedDuringShutdown++;
++    }
++
++    // Check if any tasks are still processing
++    let hasProcessing = false;
++    for (const task of this.tasks.values()) {
++      if (task.status === 'processing') {
++        hasProcessing = true;
++        break;
++      }
++    }
++
++    if (!hasProcessing) {
++      if (this._shutdownTimerId) {
++        clearTimeout(this._shutdownTimerId);
++      }
++      this._shutdownResolve({
++        completed: this._completedDuringShutdown,
++        cancelled: this._cancelledDuringShutdown,
++        elapsed: Date.now() - this._shutdownStartTime,
++      });
++    }
++  }
++
++  // Phase 12: On shutdown
++  onShutdown(callback: () => void): void {
++    this._shutdownCallbacks.push(callback);
++  }
++}
