@@ -118,7 +118,11 @@ func newValidateCmd() *cobra.Command {
 				oldRubric := meta.Scores.Rubric
 
 				meta.Scores.Rubric = rubricScore
-				meta.CompositeScore = validation.CompositeScore(meta.Scores, task.Weights)
+				if task.Greenfield {
+					meta.CompositeScore = validation.GreenfieldCompositeScore(meta.Scores, task.GreenWeights)
+				} else {
+					meta.CompositeScore = validation.CompositeScore(meta.Scores, task.Weights)
+				}
 
 				// Write updated meta
 				if err := result.WriteTrialMeta(trialDir, meta); err != nil {
