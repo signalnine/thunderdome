@@ -109,6 +109,14 @@ func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
 				Source: credsFile, Target: "/tmp/.claude-credentials.json", ReadOnly: true,
 			})
 		}
+
+		// Mount host ~/.gemini to /tmp/.gemini-host if it exists (for Gemini CLI OAuth).
+		geminiDir := filepath.Join(home, ".gemini")
+		if info, err := os.Stat(geminiDir); err == nil && info.IsDir() {
+			extraMounts = append(extraMounts, docker.Mount{
+				Source: geminiDir, Target: "/tmp/.gemini-host", ReadOnly: true,
+			})
+		}
 	}
 
 	containerResult, err := docker.RunContainer(ctx, &docker.RunOpts{

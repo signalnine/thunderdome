@@ -6,32 +6,54 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Full suite results across all 10 tasks (single trial each, all Opus unless noted). Each cell shows **score | wall-clock time | cost**:
+Full suite results across all 10 tasks (single trial each). Scores are composite (tests + build/lint + rubric + greenfield extras where applicable).
 
-| Task | Claude Code | Conclave | Superpowers | Gas Town | Gas Station | Amplifier | Aider* |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **T1** time-tracker | 92.7% 2m05s $0.45 | 79.1% 5m19s $1.48 | 94.0% 1m23s $0.42 | 92.9% 2m38s $0.47 | 93.2% 2m09s $0.35 | 96.2% 1m58s $0.28 | 93.6% 26s $0.02 |
-| **T2** collab-server | 86.9% 12m16s $2.90 | 82.2% 13m56s $1.69 | 84.2% 2m21s $0.72 | 87.9% 27m54s $10.20 | 87.2% 8m22s $1.58 | 96.2% 20m14s ~$1.81 | 92.9% 59s $0.03 |
-| **T3** fts-search | 90.6% 1m30s $0.52 | 92.5% 3m33s $1.01 | 93.2% 2m48s $0.82 | 93.2% 2m05s $0.59 | 93.2% 1m54s $0.41 | 93.2% 4m39s $0.57 | 93.2% 1m54s $0.09 |
-| **T4** phantom-invoice | 92.5% 1m31s $0.35 | 100.0% 2m09s $0.50 | 100.0% 1m33s $0.38 | 98.5% 1m38s $0.35 | 100.0% 1m48s $0.27 | 100.0% 2m40s $0.30 | 100.0% 36s $0.07 |
-| **T5** task-queue | 57.8% 5m23s $1.13 | 73.8% 19m44s $2.93 | 73.0% 3m39s $1.16 | 88.4% 16m59s $8.27 | 86.8% 12m17s $3.25 | 94.0% 23m19s $1.07 | 20.0% 8s $0.01 |
-| **T6** monorepo-disaster | 98.5% 2m29s $0.52 | 73.0% 3m46s $1.00 | 94.0% 3m09s $0.69 | 97.0% 7m21s $0.63 | 96.2% 3m58s $0.77 | 95.5% 3m18s ~$0.30 | — |
-| **T7** plugin-marketplace | 91.4% 4m18s $0.94 | 70.0% 8m58s $3.71 | 70.7% 2m24s $0.59 | 94.8% 8m33s $4.27 | 92.6% 4m19s $0.89 | 95.2% 4m56s ~$0.44 | — |
-| **T8** analytics-dashboard | 82.8% 4m47s $1.21 | 59.5% 8m25s $2.47 | 70.0% 4m06s $1.27 | 85.3% 10m49s $5.31 | 85.3% 6m45s $2.01 | 69.1% 10m38s $0.67 | — |
-| **T9** ssg-toolkit | 83.5% 2m55s $0.71 | 84.2% 5m46s $1.64 | 70.7% 2m52s $0.77 | 96.2% 2m59s $0.90 | 94.0% 3m38s $0.75 | 96.2% 9m19s $0.78 | — |
-| **T10** ecommerce-backend | 90.1% 4m51s $1.05 | 82.2% 9m53s $2.77 | 70.7% 2m34s $0.77 | 93.7% 7m06s $0.63 | 93.9% 4m05s $0.81 | 94.5% 7m56s $0.54 | — |
-| **Avg / Total** | **86.7%** 42m05s **$9.79** | **79.7%** 1h21m **$19.21** | **82.1%** 26m49s **$7.60** | **92.8%** 1h28m **$31.62** | **92.3%** 49m15s **$11.09** | **93.0%** 1h28m **~$6.73** | **79.9%** 4m03s **~$0.22** |
+### Score Matrix
 
-\*Aider uses Sonnet (one-shot, no iteration). `~` = extrapolated cost. Gas Town uses a multi-agent pipeline (Mayor planner -> parallel Polecats -> Refinery merge); Gas Station is its single-agent variant.
+| Task | Agent Teams | Amplifier | Gas Town | Gas Station | Gemini CLI | Claude Code | Metacog | Amp Flash | Superpowers | Conclave | Aider* |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **T1** time-tracker | 95.4% | 96.2% | 92.9% | 93.2% | 94.0% | 92.7% | 87.0% | 69.3% | 94.0% | 79.1% | 93.6% |
+| **T2** collab-server | 88.4% | 96.2% | 87.9% | 87.2% | 85.2% | 86.9% | 85.0% | 79.7% | 84.2% | 82.2% | 92.9% |
+| **T3** fts-search | 94.7% | 93.2% | 93.2% | 93.2% | 96.2% | 90.6% | 92.0% | 94.0% | 93.2% | 92.5% | 93.2% |
+| **T4** phantom-invoice | 100.0% | 100.0% | 98.5% | 100.0% | 100.0% | 92.5% | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% |
+| **T5** task-queue | 89.3% | 94.0% | 88.4% | 86.8% | 92.7% | 57.8% | 61.0% | 75.1% | 73.0% | 73.8% | 20.0% |
+| **T6** monorepo-disaster | 97.7% | 95.5% | 97.0% | 96.2% | 97.0% | 98.5% | 94.0% | 94.0% | 94.0% | 73.0% | — |
+| **T7** plugin-marketplace | 94.8% | 95.2% | 94.8% | 92.6% | 92.0% | 91.4% | 91.0% | 85.4% | 70.7% | 70.0% | — |
+| **T8** analytics-dashboard | 84.2% | 69.1% | 85.3% | 85.3% | 70.6% | 82.8% | 78.0% | 56.0% | 70.0% | 59.5% | — |
+| **T9** ssg-toolkit | 96.2% | 96.2% | 96.2% | 94.0% | 96.2% | 83.5% | 75.0% | 96.6% | 70.7% | 84.2% | — |
+| **T10** ecommerce-backend | 91.8% | 94.5% | 93.7% | 93.9% | 91.0% | 90.1% | 91.0% | 63.0% | 70.7% | 82.2% | — |
+| **Mean** | **93.3%** | **93.0%** | **92.8%** | **92.3%** | **91.5%** | **86.7%** | **85.4%** | **81.3%** | **82.1%** | **79.7%** | **79.9%** |
+
+### Cost and Speed Summary
+
+All costs are equivalent API token costs (what the tokens would cost at published per-token rates). All contenders run on subscriptions (Claude Max, Google One) with no actual per-token billing.
+
+| Orchestrator | Mean Score | Total Time | Token Cost | Model | Notes |
+|---|---:|---:|---:|---|---|
+| **Agent Teams** | 93.3% | ~87m | ~$20 est | Opus 4.6 | Interactive mode (tmux harness); cost estimated |
+| **Amplifier** | 93.0% | 1h28m | ~$6.73 | Sonnet 4.5 | Best cost/score ratio among Claude contenders |
+| **Gas Town** | 92.8% | 1h28m | $31.62 | Opus 4.6 | Multi-agent pipeline (Mayor/Polecats/Refinery) |
+| **Gas Station** | 92.3% | 49m | $11.09 | Opus 4.6 | Single-agent + context injection |
+| **Gemini CLI** | 91.5% | ~54m | **$0.45** | Gemini 3 Flash | 20x cheaper than cheapest Claude contender |
+| **Claude Code** | 86.7% | 42m | $9.79 | Opus 4.6 | Vanilla `-p` mode, no orchestration |
+| **Metacog** | 85.4% | ~46m | $10.42 | Opus 4.6 | Metacognitive skill injection |
+| **Superpowers** | 82.1% | 27m | $7.60 | Opus 4.6 | Fastest full-suite; drops on complex tasks |
+| **Amp Flash** | 81.3% | 1h42m | **~$0.07** | Gemini 3 Flash | Amplifier + Flash; cheapest but slowest |
+| **Conclave** | 79.7% | 1h21m | $19.21 | Multi-provider | Cross-provider consensus (Claude/Gemini/Codex) |
+| **Aider** | 79.9% | 4m | ~$0.22 | Sonnet 4.5 | One-shot, no iteration; only 5 tasks |
+
+\*Aider uses Sonnet (one-shot, no iteration). `~` = estimated. Agent Teams cost estimated from Opus pricing.
 
 ### Key Findings
 
-- **Amplifier** leads on score (93.0%) and cost efficiency (~$6.73) but takes the longest (1h28m tied with Gas Town)
-- **Gas Town** is #2 on score (92.8%) but most expensive ($31.62) due to multi-agent overhead
-- **Gas Station** (single-agent) nearly matches Gas Town quality (92.3%) in half the time (49m) at 3x less cost ($11.09)
-- **Superpowers** is fastest among full-suite runners (27m) and cheapest Opus ($7.60) but drops on complex tasks
-- **Claude Code** struggles on marathon tasks (T5: 57.8%) but excels at recovery (T6: 98.5%) with middle-of-pack speed (42m)
-- **Aider** is absurdly fast (4m) and cheap ($0.22) but collapses without iteration (T5: 20%) and only covers 5 tasks
+- **Agent Teams** leads on score (93.3%) using Claude Code's interactive mode with experimental agent teams enabled and a tmux harness for idle detection
+- **Amplifier** is the best value — #2 on score (93.0%) at the lowest cost of any Claude-based contender (~$6.73) using Sonnet 4.5
+- **Gemini CLI** is the cost story — 91.5% mean score at $0.45 equivalent token cost (20x cheaper than Amplifier). Uses Gemini 3 Flash with aggressive caching
+- **Amplifier + Flash** (81.3%) vs **Gemini CLI** (91.5%) — same Flash model, 10 points apart. Amplifier's orchestration overhead hurts more than it helps on a fast, cheap model
+- **Gas Station** (single-agent) nearly matches Gas Town quality (92.3% vs 92.8%) in half the time at 3x less cost
+- **Claude Code** struggles on marathon tasks (T5: 57.8%) but excels at recovery (T6: 98.5%)
+- **T4** (bugfix) is the great equalizer — 6 contenders score 100%, the task is too easy
+- **T8** (analytics dashboard) is the hardest task — most contenders cluster around 70-85% (Conclave Review hit 90%)
 
 ### The Gas Station Story
 
@@ -44,6 +66,275 @@ I named the impostor "Gas Station" and kept it as a control while we built the r
 Then the benchmarks came back. Gas Station scored 92.3%. The full Gas Town pipeline — Mayor planning, parallel Polecats, Refinery merge, post-merge fixup, 632 lines of orchestration — scored 92.8%. Half a percentage point better for 3x the cost and twice the wall-clock time.
 
 The single agent in a trench coat is within margin of error of the actual workforce — 92.3% vs 92.8% — at a third of the cost ($11 vs $32) and half the wall-clock time. Gas Station is still in the benchmark suite as a permanent reminder that complexity needs to justify itself.
+
+### The Gemini CLI Surprise
+
+We added Gemini CLI almost as an afterthought — Google's answer to Claude Code, running on a $20/month Google One subscription. It scored 91.5%, beating vanilla Claude Code (86.7%) and landing just 1.5 points behind Gas Station. Perfect score on the bugfix task (T4), 97% on monorepo recovery (T6), and 92.7% on the marathon (T5) — a task where Claude Code scored 57.8%.
+
+At equivalent API token rates, the entire 10-task suite costs $0.45 in Gemini 3 Flash tokens — that's 20x cheaper than Amplifier ($6.73 in Sonnet tokens) and 70x cheaper than Gas Town ($31.62 in Opus tokens). Gemini CLI uses aggressive prompt caching (3.3M cached tokens on T5 alone) and a cheap model (Flash, not Pro) to achieve this.
+
+The catch: Google One's rate limits (~60 RPM) mean you can only run one or two tasks concurrently. But for individual developer use, Gemini CLI delivers 91.5% of the best score at a fraction of the token cost.
+
+### Ablation Studies
+
+We're isolating individual orchestrator "genes" — composable features like multi-agent consensus, skill injection, parallel execution — to measure which actually help. Each ablation holds everything constant except one gene.
+
+#### TypeScript Expertise: Amplifier + ts-dev Bundle
+
+**Hypothesis:** Giving the agent TypeScript-specific tools (LSP code intelligence, code quality analysis, a specialized TS expert agent) improves performance on TypeScript benchmarks.
+
+**Setup:** Amplifier with Opus 4.6, comparing bare foundation bundle vs foundation + [ts-dev](https://github.com/microsoft/amplifier-bundle-ts-dev) app bundle. Same model, same provider, same tasks.
+
+| Task | Amplifier (bare) | Amplifier + ts-dev | Delta |
+| --- | ---: | ---: | ---: |
+| **T1** time-tracker | 96.2% | 93.3% | -2.9 |
+| **T2** collab-server | 96.2% | 86.3% | -9.9 |
+| **T3** fts-search | 93.2% | 94.0% | +0.8 |
+| **T4** phantom-invoice | 100.0% | 100.0% | 0.0 |
+| **T5** task-queue | 94.0% | 90.8% | -3.2 |
+| **T6** monorepo-disaster | 95.5% | 92.5% | -3.0 |
+| **T7** plugin-marketplace | 95.2% | 92.4% | -2.8 |
+| **T8** analytics-dashboard | 69.1% | 69.1% | 0.0 |
+| **T9** ssg-toolkit | 96.2% | 93.0% | -3.2 |
+| **T10** ecommerce-backend | 94.5% | 73.0% | -21.5 |
+| **Mean** | **93.0%** | **88.4%** | **-4.6** |
+
+**Finding:** The ts-dev bundle is a net negative (-4.6 points average). The extra system prompt context and tools burn tokens without providing useful signal — the base model already knows TypeScript well enough. T10 was the worst regression (-21.5 points). Only T3 showed a marginal improvement.
+
+**Caveat:** Single-trial data. The bare Amplifier scores above are best-of-N from earlier multi-trial runs, while ts-dev scores are single trials. A fair comparison needs matched trial counts.
+
+#### Consensus Code Review: Conclave Review vs Claude Code vs Full Conclave
+
+**Hypothesis:** Multi-agent consensus code review (Claude + Gemini + Codex reviewing the diff) catches defects that a single agent misses, improving final code quality.
+
+**Setup:** Three variants, all using Opus 4.6:
+- **Claude Code** — vanilla single agent, no review
+- **Conclave Review** — vanilla agent + one round of `conclave consensus --mode=code-review` after implementation, then fix findings. No skills, no planning ceremonies.
+- **Conclave (full)** — mandatory skill pipeline: brainstorm → plan → implement → verify → finish, with consensus woven throughout
+
+| Task | Claude Code | Conclave Review | Full Conclave | Review delta |
+| --- | ---: | ---: | ---: | ---: |
+| **T1** time-tracker | 92.7% | 91.9% | 79.1% | -0.8 |
+| **T2** collab-server | 86.9% | 91.2% | 82.2% | +4.3 |
+| **T3** fts-search | 90.6% | 93.2% | 92.5% | +2.6 |
+| **T4** phantom-invoice | 92.5% | 100.0% | 100.0% | +7.5 |
+| **T5** task-queue | 57.8% | 72.0% | 73.8% | +14.2 |
+| **T6** monorepo-disaster | 98.5% | 98.5% | 73.0% | 0.0 |
+| **T7** plugin-marketplace | 91.4% | 94.0% | 70.0% | +2.6 |
+| **T8** analytics-dashboard | 82.8% | 90.0% | 59.5% | +7.2 |
+| **T9** ssg-toolkit | 83.5% | 93.6% | 84.2% | +10.1 |
+| **T10** ecommerce-backend | 90.1% | 91.9% | 82.2% | +1.8 |
+| **Mean** | **86.7%** | **91.6%** | **79.7%** | **+5.0** |
+
+**Findings:**
+
+1. **Consensus review is a net positive (+5.0 points).** The three-provider code review catches real issues. Biggest gains on marathon (T5: +14.2), complex features (T9: +10.1), and the hardest greenfield task (T8: +7.2).
+
+2. **Stripping Conclave to just the review beats the full pipeline by 12 points** (91.6% vs 79.7%). The mandatory brainstorm → plan → implement workflow burns context and constrains the agent's natural problem-solving. The review gene is valuable; the methodology gene is not.
+
+3. **New best on T8** — Conclave Review scored 90.0% on Analytics Dashboard, the hardest task. Previous best was Agent Teams at 84.2%.
+
+4. **Cost tradeoff is reasonable** — $1.89/task average vs Claude Code's ~$0.98. The consensus review adds ~$0.90 per task for a 5-point improvement.
+
+**Caveat:** Single-trial data for Conclave Review. Claude Code and full Conclave scores are best-of-N from earlier runs.
+
+#### Systematic Debugging: Superpowers Debug Skill vs Claude Code
+
+**Hypothesis:** A structured four-phase debugging methodology (root cause investigation → pattern analysis → hypothesis testing → implementation) improves defect resolution on hard debugging tasks.
+
+**Setup:** We built T11 (Debug Nightmare), a new hard debugging benchmark with 6 cascading bugs in an event-driven order processing system. The bugs feature multi-level indirection (symptom in Module A, root cause in Module C), cascading failures (fixing Bug 1 unmasks Bug 3), and red herrings. T4 and T6 were too easy — both agents scored 0.96+ on every trial.
+
+Three variants tested, all using Opus 4.6 on T11:
+- **Claude Code** — vanilla single agent, no methodology
+- **Superpowers Debug (opt-in)** — systematic-debugging skill available but invocation left to the agent's discretion
+- **Superpowers Debug (forced)** — system prompt mandates invoking the skill before every fix
+
+| Variant | Trial 1 | Trial 2 | Trial 3 | Mean | Mean Cost |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **Claude Code** | 70.7% | 73.0% | 70.0% | **71.2%** | $0.84 |
+| **Debug skill (opt-in)** | 73.0% | 70.0% | 71.0% | **71.3%** | $0.70 |
+| **Debug skill (forced)** | 71.0% | 72.0% | 72.0% | **71.7%** | $1.34 |
+
+**Findings:**
+
+1. **Systematic debugging has no measurable effect.** All three variants cluster at 71-72% across 9 trials. The skill adds 0.1-0.5 points — well within noise.
+
+2. **When opt-in, the agent never invokes it.** Across 6 opt-in trials (T4, T6, T11), the Skill tool appeared in tools_used zero times. The agent prefers to debug directly rather than consult a methodology.
+
+3. **When forced, it burns tokens for nothing.** Forcing skill invocation costs 60% more ($1.34 vs $0.84) and takes 48% longer (297s vs 201s) with no score improvement. The four-phase ceremony adds process overhead without changing outcomes.
+
+4. **The model already debugs systematically.** Both variants fix all 6 bugs in every trial. The difference is only in rubric quality scores. The model reads errors, traces data flow, and fixes root causes without needing a skill to tell it to.
+
+**Contrast with consensus code review (+5.0 points):** Review adds a *concrete action* — three independent models examining the diff — that catches bugs the solo agent missed. Systematic debugging adds *process* — phases, checklists, red-flag lists — that the agent already follows instinctively. Concrete actions beat process guidance.
+
+#### Test-Driven Development: Forced TDD vs Claude Code on Greenfield Tasks
+
+**Hypothesis:** Writing failing tests before implementation code produces higher-quality greenfield projects — better test coverage, fewer defects, more robust architecture.
+
+**Setup:** Claude Code Opus with the TDD skill forcibly invoked. System prompt mandates strict red-green-refactor: write one failing test, implement minimally to pass, refactor, repeat. Compared against vanilla Claude Code on 4 greenfield tasks.
+
+| Task | Claude Code | TDD (forced) | Delta | TDD Cost |
+| --- | ---: | ---: | ---: | ---: |
+| **T2** collab-server | 86.9% | 72.6% | -14.3 | $1.90 |
+| **T5** task-queue | 57.8% | 63.1% | +5.3 | $5.90 |
+| **T7** plugin-marketplace | 91.4% | 90.0% | -1.4 | $1.36 |
+| **T8** analytics-dashboard | 82.8% | 80.6% | -2.2 | $2.75 |
+| **Mean** | **79.7%** | **76.6%** | **-3.2** | **$2.98** |
+
+Greenfield breakdown (TDD):
+
+| Task | Hidden Tests | Agent Tests | Coverage | Code Metrics | Rubric |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **T2** collab-server | 1.000 | 1.000 | 0.896 | 1.000 | 0.275 |
+| **T5** task-queue | 1.000 | 1.000 | 0.929 | 0.600 | 0.100 |
+| **T7** plugin-marketplace | 1.000 | 1.000 | 0.939 | 1.000 | 0.750 |
+| **T8** analytics-dashboard | 1.000 | 1.000 | 0.906 | 1.000 | 0.500 |
+
+**Findings:**
+
+1. **TDD is a net negative (-3.2 points average).** The red-green-refactor ceremony burns tokens without improving outcomes. T2 was the worst hit (-14.3 points) — the agent spent so many turns on the TDD cycle that it likely exhausted context before completing the implementation.
+
+2. **TDD helped on the marathon (+5.3 on T5).** The one task where Claude Code struggles most (57.8%) saw a meaningful improvement. Hypothesis: the forced incremental approach prevented the agent from attempting too much at once, which is exactly what kills marathon performance.
+
+3. **Perfect hidden test scores across the board.** TDD achieved 1.000 on hidden tests for all 4 tasks — the agent's own tests were thorough enough that the hidden validation suite passed automatically. This is the one clear win for TDD methodology.
+
+4. **But the cost is brutal.** Average $2.98/task vs ~$1.00 for vanilla. The TDD ceremony roughly triples token consumption. The 128-turn T5 run cost $5.90.
+
+5. **Rubric scores are low.** Despite perfect test coverage, the rubric judge scored TDD implementations lower (0.100-0.750) — likely because the incremental build-up produces less cohesive architecture than writing the full solution directly.
+
+**The emerging pattern:** Rigid process skills (TDD, systematic debugging) hurt or have no effect — the model already follows good practices by default. What works is review: self-review discipline (+4.7 points, free) and real multi-model consensus (+2.2 points on top, ~$0.30/task). Combined, they yield +7.0 points — the largest improvement found. See "Decomposing Self-Review vs Consensus" below.
+
+#### Consensus Design Review: Pre-Implementation Architecture Guidance
+
+**Hypothesis:** If consensus *code review* after implementation helps (+5.0 points), then consensus *design review* before implementation should help even more — preventing bad architecture choices rather than catching them after the fact.
+
+**Setup:** Before the agent writes any code, the adapter runs `conclave consensus --mode=general-prompt` on the task description. Claude, Gemini, and Codex independently analyze the task and recommend file structure, abstractions, data flow, edge cases, implementation order, and testing strategy. A chairman synthesizes their recommendations. The agent then receives the consensus architecture guidance prepended to its task prompt. No mandatory workflow — the agent codes freely with richer context.
+
+Compared against vanilla Claude Code (Opus 4.6, same model) on 4 greenfield tasks.
+
+| Task | Claude Code | Design Review | Delta | Trials |
+| --- | ---: | ---: | ---: | ---: |
+| **T1** time-tracker | 91.0% (n=2) | 94.4% (n=3) | +3.4 | 5 |
+| **T5** task-queue | 70.0% (n=2) | 79.7% (n=3) | +9.7 | 5 |
+| **T7** plugin-marketplace | 91.4% (n=1) | 91.0% (n=1) | -0.4 | 2 |
+| **T8** analytics-dashboard | 82.8% (n=1) | 83.0% (n=1) | +0.2 | 2 |
+| **Weighted mean** | | | **+3.8** | |
+
+**Findings:**
+
+1. **Design review is a net positive (+3.8 points weighted mean).** The effect is consistent across tasks, with the largest gain on T5 marathon (+9.7 points) where architectural guidance helps the most.
+
+2. **Biggest impact on the hardest task.** T5 (marathon, 12 phases) went from 70.0% to 79.7%. The consensus recommendations gave the agent a better mental model of the full system before it started, reducing mid-implementation architectural pivots.
+
+3. **Minimal effect on tasks the model already handles well.** T7 and T8 show noise-level deltas (-0.4, +0.2). When the task is clear enough that a single model can architect it correctly, three models agreeing doesn't add much.
+
+4. **Overhead is modest.** The consensus step adds ~80-100 seconds of wall time and ~$0.10-0.30 in hidden API costs (3 models + chairman). The agent itself costs slightly more due to the larger prompt (~$0.56 vs $0.36 on T1). Total overhead is less than the consensus code review adds.
+
+5. **Design review vs code review:** Design review (+3.8) and code review (+5.0) both help, through different mechanisms. Design review prevents bad architecture upfront. Code review catches implementation bugs afterward. They're complementary — stacking both is the obvious next experiment.
+
+#### Stacked Double Review: Decomposing Self-Review vs Consensus
+
+**Hypothesis:** Stacking design review + code review should be additive. But how much of the improvement comes from self-review *discipline* (pausing to re-examine your work) vs actual multi-model *consensus* (three models finding things one model misses)?
+
+**Setup:** Same adapter run twice — once with `env: {}` (no API keys, consensus fails, agent self-reviews), once with API keys (real consensus from Claude + Gemini + Codex). This cleanly separates the two effects.
+
+| Task | Baseline | Self-Review Only | Real Consensus | Self-Review Δ | Consensus Δ |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **T1** time-tracker | 91.0% (n=2) | 92.4% (n=2) | 91.6% (n=2) | +1.4 | -0.8 |
+| **T5** task-queue | 70.0% (n=2) | 80.4% (n=2) | 84.1% (n=2) | +10.4 | +3.7 |
+| **T7** plugin-marketplace | 91.4% (n=1) | 92.6% (n=2) | 94.9% (n=2) | +1.2 | +2.3 |
+| **T8** analytics-dashboard | 82.8% (n=1) | 88.8% (n=2) | 92.4% (n=2) | +6.0 | +3.6 |
+| **Mean delta vs baseline** | — | **+4.7** | **+7.0** | — | **+2.2** |
+
+**Decomposition:**
+
+The +7.0 total improvement breaks down into two independent genes:
+
+1. **Self-review discipline: +4.7 points (free).** Tell the agent "commit, review your diff, fix issues" and it scores nearly 5 points higher. No API keys, no external tools, no extra cost beyond a few additional turns. This is the bigger contributor — 68% of the total effect.
+
+2. **Multi-model consensus: +2.2 points ($0.20-0.40/task).** Three models independently reviewing the task and code do find things the solo agent misses. The effect is consistent on complex tasks (T5: +3.7, T7: +2.3, T8: +3.6) but absent on simple ones (T1: -0.8). This is the smaller contributor — 32% of the total effect.
+
+**Correcting the original conclave-review-opus finding:** The +5.0 from "consensus code review" in the full suite was a mix of both genes. That adapter used `env: {}`, so the consensus command failed and the agent self-reviewed. The +5.0 was mostly self-review discipline. With real consensus, the effect would be larger (~+7.0).
+
+**New highs:** Real consensus + self-review hit 0.949 on T7 and 0.924 on T8 (Analytics Dashboard) — the hardest task in the suite. T8's best single trial was 0.950, the highest score any variant has achieved on that task.
+
+**Implications:**
+
+1. **Self-review is the low-hanging fruit.** Adding "commit and self-review your diff before finishing" to any adapter's system prompt yields +4.7 points at zero marginal cost. Every contender should do this.
+
+2. **Consensus adds real but modest value.** +2.2 points on top of self-review, primarily on complex tasks. Whether the extra API cost ($0.20-0.40/task) is worth it depends on the task complexity.
+
+3. **The combined effect (+7.0) is the largest improvement found.** Larger than any single gene tested: ts-dev (-4.6), TDD (-3.2), systematic debugging (0), self-review (+4.7), consensus alone (+2.2).
+
+**Caveat:** 2 trials per variant per task. The T5 results have the highest variance (self-review: 0.730-0.880, consensus: 0.790-0.890). More trials needed for confidence intervals.
+
+#### The Gas Station Mystery: +18.9 Points From Scaffolding That Shouldn't Matter
+
+**Hypothesis:** Gas Station's advantage over vanilla Claude Code comes from its `--disallowed-tools` flag and "you're headless" system prompt.
+
+**Setup:** Three variants, all Opus 4.6 on the same 4 greenfield tasks:
+- **Vanilla Claude Code** — no system prompt, no disallowed tools
+- **Claude Code Headless** — adds `--disallowed-tools "AskUserQuestion,EnterPlanMode"` + headless system prompt (the only two functional differences between Gas Station and vanilla)
+- **Gas Station** — full Gas Town scaffolding: creates real git branch, bare clone, polecat worktree, beads database, captures `gt prime` context (but never injects it)
+
+| Task | Vanilla (n=2) | Headless (n=2) | Gas Station (n=2) |
+| --- | ---: | ---: | ---: |
+| **T1** time-tracker | 91.0% | 92.0%* | 93.9% |
+| **T5** task-queue | 70.0% | 59.6% | **89.9%** |
+| **T7** plugin-marketplace | 91.4% | 90.9% | 91.6% |
+| **T8** analytics-dashboard | 82.8% | 83.0% | 70.4% |
+
+\*T1 headless trial 2 excluded (rubric judge rate-limited → 0 rubric score)
+
+The headless hints explain nothing. T1/T7/T8 are noise-level. T5 headless is *worse* than vanilla (59.6% vs 70.0%). The disallowed tools and system prompt are not the active ingredient.
+
+But Gas Station's T5 result demanded investigation. We ran 3 more trials:
+
+| Gas Station T5 | Trial 1 | Trial 2 | Trial 3 | Trial 4 | Trial 5 | Mean |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| **Score** | 89.0% | 90.8% | 91.0% | 83.0% | 90.7% | **88.9%** |
+
+Five trials, mean 88.9%. Vanilla Claude Code T5 mean: 70.0% (n=4). The gap is **+18.9 points** and it's consistent.
+
+**What Gas Station does differently (that shouldn't matter):**
+
+The adapter runs ~30 seconds of Git scaffolding before Claude Code starts:
+1. Creates a real branch from detached HEAD (`git checkout -b main`)
+2. Makes a bare clone of the workspace
+3. Creates a polecat worktree via `git worktree add`
+4. Initializes a beads database
+5. Captures `gt prime` output (19K chars) — **but never passes it to the agent**
+6. Runs Claude Code in the polecat worktree directory, then copies files back
+
+The agent receives the exact same task prompt. It has the same model, same tools, same permissions. The only environmental difference is that it's working in a git worktree with a real branch instead of a detached HEAD shallow clone.
+
+**The mystery:** A real git branch + worktree setup yields +18.9 points on the marathon task. We have no explanation for this. Possibilities:
+- The git worktree provides a cleaner working environment that prevents some class of git-related errors
+- The real branch (vs detached HEAD) changes how Claude Code's internal git operations behave
+- The worktree path (`/tmp/town/bench/polecats/rust/bench`) is so deep that it changes how the agent explores the filesystem
+- It's a coincidence and 5 trials isn't enough (but the variance is low: 83.0-91.0%)
+
+This is the only result in the entire ablation study we cannot explain. Every other finding has a clear mechanism. Gas Station's marathon advantage remains a genuine mystery.
+
+#### Planned Ablations
+
+| Ablation | A | B | Gene Isolated | Status |
+|---|---|---|---|---|
+| Parallelism | Gas Town | Gas Station | Mayor + parallel polecats + refinery | Data exists (needs more trials) |
+| Gas Station scaffolding | Gas Station | Claude Code + Headless | Git worktree + branch setup (gt prime discarded) | **Done — +18.9 on T5 (unexplained)** |
+| Consensus review only | Conclave Review | Claude Code | Multi-agent code review (no skills) | **Done — +5.0 points** |
+| Full skill pipeline | Full Conclave | Conclave Review | Brainstorm/plan/implement workflow | **Done — -11.9 points** |
+| Systematic debugging | Superpowers Debug | Claude Code | Four-phase debugging methodology | **Done — +0.5 points (noise)** |
+| Test-driven development | Superpowers TDD | Claude Code | Forced red-green-refactor cycle | **Done — -3.2 points** |
+| Consensus design review | Conclave Design | Claude Code | Pre-implementation multi-model architecture guidance | **Done — +3.8 points** |
+| Self-review discipline | Double Review (no keys) | Claude Code | "Commit, review your diff, fix" in system prompt | **Done — +4.7 points (free)** |
+| Self-review + consensus | Double Review (keys) | Claude Code | Self-review + real multi-model consensus | **Done — +7.0 points (best result)** |
+| Mandatory skills | Conclave | Claude Code | Conclave plugin (TDD, debugging, planning) | Data exists (needs more trials) |
+| Skill optionality | Conclave | Superpowers | Mandatory vs optional skill invocation | Data exists (needs more trials) |
+| Metacognitive reframing | Metacog | Claude Code | Pre-implementation thinking skill | Data exists (needs more trials) |
+| Agent teams | Agent Teams | Claude Code | In-process teammate coordination | Data exists (needs more trials) |
+| Structured recipes | Amplifier + recipes | Amplifier | Multi-step orchestration behaviors | Not started |
+| Agent delegation | Amplifier + delegate | Amplifier | Sub-session spawning | Not started |
 
 ## Why This Exists
 
@@ -61,20 +352,26 @@ The framework tests five hypotheses:
 
 | Orchestrator | Architecture | Key Differentiator |
 |---|---|---|
-| **Claude Code** | CLI agentic (single agent) | Rich tool use, subagent delegation, flexible autonomy |
-| **Conclave** (Superpowers fork) | Cross-provider consensus | Claude x Gemini x Codex consensus; 6-layer self-correction |
-| **Superpowers** (Original) | Skill-injection platform | Mandatory planning + TDD + two-stage review |
+| **Agent Teams** | Claude Code interactive + teams | Experimental agent teams feature; tmux harness for idle detection |
+| **Amplifier** | Micro-kernel platform | Swappable providers; minimal overhead; Sonnet 4.5 |
+| **Amplifier + ts-dev** | Amplifier + TypeScript bundle | LSP code intelligence, TS expert agent (ablation study) |
+| **Conclave Review** | Claude Code + consensus review | Code review only — no skills, no planning (ablation study) |
+| **Conclave Design** | Claude Code + consensus design | Pre-implementation architecture review (ablation study) |
 | **Gas Town** | Multi-agent pipeline | Mayor (planner) -> parallel Polecats (workers) -> Refinery (merge) |
 | **Gas Station** | Single-agent + context injection | Gas Town's prompt engineering without multi-agent overhead |
-| **Amplifier** | Micro-kernel platform | Swappable providers; minimal overhead |
+| **Gemini CLI** | Google's agentic CLI | Gemini 3 models; free via Google One OAuth; headless `-p` mode |
+| **Amp Flash** | Amplifier + Gemini Flash | Amplifier orchestration with Gemini 3 Flash via API |
+| **Claude Code** | CLI agentic (single agent) | Rich tool use, subagent delegation, flexible autonomy |
+| **Metacog** | Claude Code + metacognitive skill | Perspective-shifting plugin; methodology guidance |
+| **Superpowers** (Original) | Skill-injection platform | Mandatory planning + TDD + two-stage review |
+| **Conclave** (Superpowers fork) | Cross-provider consensus | Claude x Gemini x Codex consensus; 6-layer self-correction |
 | **Aider** | CLI turn-based | One-shot Sonnet; PageRank repo map; token-efficient |
-| **SWE-agent** | Academic/research | Syntax guardrails, ACI design |
 
 See [`docs/survey/orchestrator-survey.md`](docs/survey/orchestrator-survey.md) for the full gene matrix and per-tool analysis.
 
 ## Benchmark Suite
 
-Ten tasks span five categories and the full parallelism spectrum:
+Eleven tasks span six categories and the full parallelism spectrum:
 
 | # | Task | Category | Parallelism | Timeout | Tests |
 |---|------|----------|-------------|---------|-------|
@@ -88,6 +385,7 @@ Ten tasks span five categories and the full parallelism spectrum:
 | 8 | Analytics Dashboard | greenfield/complex | Deceptive parallel | 45m | 50 |
 | 9 | SSG Toolkit | features/complex | DAG parallel | 45m | 75 |
 | 10 | E-Commerce Backend | greenfield/complex | Pure parallel (max) | 45m | 70 |
+| 11 | Debug Nightmare | bugfix/hard | Sequential | 30m | 49 |
 
 ```
 None        Sequential     Mixed          Deceptive      DAG-Parallel     Pure Parallel
@@ -95,7 +393,7 @@ None        Sequential     Mixed          Deceptive      DAG-Parallel     Pure P
 T1           T3,T5         T2,T6           T8              T9             T7,T10
 ```
 
-All 535 tests across 10 repos use TypeScript/Node.js with Vitest. Orchestrators cannot cheat by modifying tests. Validation runs `npm run build && npm run lint && npm test`.
+All 584 tests across 11 repos use TypeScript/Node.js with Vitest. Orchestrators cannot cheat by modifying tests. Validation runs `npm run build && npm run lint && npm test`.
 
 Each task includes at least one trap that punishes naive or template-driven approaches. See [`docs/plans/2026-02-11-survey-and-tasks-design.md`](docs/plans/2026-02-11-survey-and-tasks-design.md) for full task specifications.
 
@@ -236,7 +534,7 @@ The composite score is a weighted sum. Each task defines its own weights, so bug
 │   ├── runner/                 # Trial execution, validation pipeline, pool
 │   └── validation/             # Tests, lint, rubric, hidden tests, coverage, code metrics
 ├── adapters/                   # Shell adapter scripts per orchestrator
-├── benchmarks/                 # 10 standalone task repos (each with v1/v1-solution tags)
+├── benchmarks/                 # 11 standalone task repos (each with v1/v1-solution tags)
 ├── docker/                     # Dockerfiles for orchestrator images
 ├── docs/
 │   ├── survey/                 # Orchestrator architecture survey
@@ -248,13 +546,13 @@ The composite score is a weighted sum. Each task defines its own weights, so bug
 ## Status
 
 - [x] Orchestrator survey (10 tools documented)
-- [x] Benchmark task design (10 tasks specified)
-- [x] Build benchmark task repos (10 repos, 535 tests, v1/v1-solution tags)
+- [x] Benchmark task design (11 tasks specified)
+- [x] Build benchmark task repos (11 repos, 584 tests, v1/v1-solution tags)
 - [x] Harness implementation (run, list, report, validate commands)
-- [x] Write orchestrator adapters (8 orchestrators, 16 adapter variants)
-- [x] Run baseline comparisons (single-trial full suite for 7 orchestrators)
+- [x] Write orchestrator adapters (10 orchestrators, 20+ adapter variants)
+- [x] Run baseline comparisons (single-trial full suite for 10 orchestrators)
 - [ ] Multi-trial runs for statistical significance
-- [ ] Ablation studies (gene isolation)
+- [ ] Ablation studies (gene isolation) — 8 done: ts-dev (-4.6), consensus review (+5.0), systematic debugging (no effect), TDD (-3.2), design review (+3.8), self-review (+4.7), self-review+consensus (+7.0), Gas Station mystery (+18.9 on T5)
 - [ ] Publish methodology paper
 
 ## License

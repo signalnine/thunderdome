@@ -25,6 +25,14 @@ RUN pip install --break-system-packages /opt/amplifier
 COPY amplifier-provider-anthropic /opt/amplifier-provider-anthropic
 RUN pip install --break-system-packages /opt/amplifier-provider-anthropic
 
+# Pre-install OpenAI provider module
+COPY amplifier-provider-openai /opt/amplifier-provider-openai
+RUN pip install --break-system-packages /opt/amplifier-provider-openai
+
+# Pre-install Gemini provider module
+COPY amplifier-provider-gemini /opt/amplifier-provider-gemini
+RUN pip install --break-system-packages /opt/amplifier-provider-gemini
+
 # Allow non-root users to install Python packages at runtime
 # (Amplifier's bundle system needs to install packages dynamically)
 RUN rm -f /usr/lib/python3.11/EXTERNALLY-MANAGED && \
@@ -35,6 +43,9 @@ RUN rm -f /usr/lib/python3.11/EXTERNALLY-MANAGED && \
 RUN git config --system user.name "Thunderdome" && \
     git config --system user.email "bench@localhost" && \
     git config --system --add safe.directory /workspace
+
+# TypeScript language server for ts-dev bundle LSP support
+RUN npm install -g typescript-language-server typescript
 
 WORKDIR /workspace
 CMD ["/bin/bash", "/adapter.sh"]
