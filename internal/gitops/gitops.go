@@ -92,6 +92,29 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	return err
 }
 
+// ReconstructFromDiff clones a repo at a tag into a temp directory and applies a diff patch.
+// Returns the temp directory path and a cleanup function. Caller must call cleanup when done.
+func ReconstructFromDiff(repo, tag string, diff []byte) (string, func(), error) {
+	tmpDir, err := CloneTag(repo, tag)
+	if err != nil {
+		return "", nil, err
+	}
+	cleanup := func() { os.RemoveAll(tmpDir) }
+
+	if len(diff) == 0 {
+		return tmpDir, cleanup, nil
+	}
+
+	cmd := exec.Command("git", "apply", "--allow-empty", "-")
+	cmd.Dir = tmpDir
+	cmd.Stdin = strings.NewReader(string(diff))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("git apply: %s: %w", out, err)
+	}
+	return tmpDir, cleanup, nil
+}
+
 // CaptureChanges stages all changes (including untracked files) and returns the diff.
 func CaptureChanges(repoDir string) ([]byte, error) {
 	add := exec.Command("git", "add", "-A")

@@ -11,6 +11,7 @@ import (
 
 	"github.com/signalnine/thunderdome/internal/config"
 	"github.com/signalnine/thunderdome/internal/gateway"
+	"github.com/signalnine/thunderdome/internal/gitops"
 	"github.com/signalnine/thunderdome/internal/result"
 	"github.com/signalnine/thunderdome/internal/validation"
 	"github.com/spf13/cobra"
@@ -124,7 +125,19 @@ func newValidateCmd() *cobra.Command {
 
 				// For greenfield tasks, collect source files
 				if task.Greenfield {
-					judgeInput.SourceFiles = validation.CollectSourceFiles(workDir, 100_000)
+					sourceDir := workDir
+					// If workspace is gone, reconstruct from v1 + diff
+					if _, err := os.Stat(filepath.Join(workDir, "src")); os.IsNotExist(err) {
+						repoAbs, _ := filepath.Abs(task.Repo)
+						tmpDir, cleanup, err := gitops.ReconstructFromDiff(repoAbs, task.Tag, diff)
+						if err != nil {
+							log.Printf("  warning: could not reconstruct workspace: %v", err)
+						} else {
+							defer cleanup()
+							sourceDir = tmpDir
+						}
+					}
+					judgeInput.SourceFiles = validation.CollectSourceFiles(sourceDir, 100_000)
 					judgeInput.TestScore = meta.Scores.HiddenTests
 				}
 
