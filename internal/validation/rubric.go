@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/signalnine/thunderdome/internal/config"
 )
@@ -35,8 +36,15 @@ func ComputeRubricScore(rubric []config.RubricCriterion, scores map[string]float
 	return weightedSum / totalWeight
 }
 
-// JudgeModel is the model used for rubric evaluation.
+// JudgeModel is the default model used for rubric evaluation (used when panel is unavailable).
 var JudgeModel = "gemini-2.0-flash"
+
+// judgePanel defines the three models for the judge panel via OpenRouter.
+var judgePanel = []string{
+	"google/gemini-2.5-flash",
+	"anthropic/claude-sonnet-4-5",
+	"openai/gpt-4.1",
+}
 
 // RubricJudgeInput contains all context for the rubric judge.
 type RubricJudgeInput struct {
@@ -49,8 +57,10 @@ type RubricJudgeInput struct {
 	LintScore   float64
 }
 
-// RunRubricJudge evaluates code against a rubric using an LLM.
-// Runs 5 evaluations and takes the median per criterion for reproducibility.
+// RunRubricJudge evaluates code against a rubric using a three-judge panel.
+// Calls Gemini, Claude, and Codex via OpenRouter in parallel (2 evals each),
+// then takes the median per criterion across all 6 results.
+// Falls back to single-model direct/gateway calls if OPENROUTER_API_KEY is not set.
 func RunRubricJudge(ctx context.Context, gatewayURL string, input RubricJudgeInput) (map[string]float64, error) {
 	if len(input.Rubric) == 0 {
 		return nil, nil
@@ -58,6 +68,125 @@ func RunRubricJudge(ctx context.Context, gatewayURL string, input RubricJudgeInp
 
 	prompt := buildRubricPrompt(input)
 
+	// Try three-judge panel via OpenRouter first
+	openRouterKey := os.Getenv("OPENROUTER_API_KEY")
+	if openRouterKey != "" {
+		return runJudgePanel(ctx, openRouterKey, prompt)
+	}
+
+	// Fallback: single-model path (legacy)
+	log.Printf("OPENROUTER_API_KEY not set, falling back to single-model judge")
+	return runSingleModelJudge(ctx, gatewayURL, prompt)
+}
+
+// runJudgePanel calls three models via OpenRouter in parallel, 2 evals each.
+// Returns median scores per criterion across all successful evaluations.
+func runJudgePanel(ctx context.Context, apiKey, prompt string) (map[string]float64, error) {
+	const evalsPerModel = 2
+	const openRouterURL = "https://openrouter.ai/api/v1/chat/completions"
+
+	type evalResult struct {
+		model  string
+		scores map[string]float64
+		err    error
+	}
+
+	var wg sync.WaitGroup
+	results := make(chan evalResult, len(judgePanel)*evalsPerModel)
+
+	for _, model := range judgePanel {
+		for i := 0; i < evalsPerModel; i++ {
+			wg.Add(1)
+			go func(model string, attempt int) {
+				defer wg.Done()
+				scores, err := callOpenRouter(ctx, openRouterURL, apiKey, model, prompt)
+				results <- evalResult{model: model, scores: scores, err: err}
+			}(model, i)
+		}
+	}
+
+	// Close channel when all goroutines complete
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	allScores := make(map[string][]float64)
+	successCount := 0
+	for r := range results {
+		if r.err != nil {
+			log.Printf("rubric judge %s failed: %v", r.model, r.err)
+			continue
+		}
+		successCount++
+		for k, v := range r.scores {
+			allScores[k] = append(allScores[k], v)
+		}
+	}
+
+	if successCount == 0 {
+		return nil, fmt.Errorf("all judge panel evaluations failed")
+	}
+
+	log.Printf("rubric judge panel: %d/%d evaluations succeeded", successCount, len(judgePanel)*evalsPerModel)
+
+	result := make(map[string]float64)
+	for k, v := range allScores {
+		result[k] = MedianScore(v)
+	}
+	return result, nil
+}
+
+// callOpenRouter calls an OpenRouter model with the given prompt.
+func callOpenRouter(ctx context.Context, url, apiKey, model, prompt string) (map[string]float64, error) {
+	reqBody := map[string]interface{}{
+		"model":       model,
+		"temperature": 0,
+		"max_tokens":  4096,
+		"messages": []map[string]string{
+			{"role": "user", "content": prompt},
+		},
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var errBody map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&errBody)
+		return nil, fmt.Errorf("%s returned %d: %v", model, resp.StatusCode, errBody)
+	}
+
+	var chatResult struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&chatResult); err != nil {
+		return nil, fmt.Errorf("%s: %w", model, err)
+	}
+	if len(chatResult.Choices) == 0 {
+		return nil, fmt.Errorf("%s: no choices in response", model)
+	}
+
+	return ParseJudgeResponse(chatResult.Choices[0].Message.Content)
+}
+
+// runSingleModelJudge is the legacy fallback: 5 evals with a single model.
+func runSingleModelJudge(ctx context.Context, gatewayURL, prompt string) (map[string]float64, error) {
 	allScores := make(map[string][]float64)
 	for i := 0; i < 5; i++ {
 		var scores map[string]float64
