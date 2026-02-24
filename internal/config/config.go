@@ -45,8 +45,9 @@ type Task struct {
 }
 
 type RubricCriterion struct {
-	Criterion string  `yaml:"criterion"`
-	Weight    float64 `yaml:"weight"`
+	Criterion   string  `yaml:"criterion"`
+	Weight      float64 `yaml:"weight"`
+	Description string  `yaml:"description"`
 }
 
 type ValidationWeights struct {

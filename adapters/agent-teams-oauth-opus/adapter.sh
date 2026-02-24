@@ -46,12 +46,17 @@ printf '%s' "$TASK_PROMPT" > /tmp/task-prompt.txt
 
 # Build the claude command. Use -- to pass the prompt as a positional arg.
 # Single-quote the prompt in a file and use cat to avoid shell escaping issues.
-cat > /tmp/run-claude.sh <<'CLAUDE_SCRIPT'
+cat > /tmp/run-claude.sh <<CLAUDE_SCRIPT
 #!/bin/bash
 export HOME=/tmp
 export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS=128000
 export TERM=xterm-256color
+$([ -n "$PROXY_URL" ] && echo "export ANTHROPIC_BASE_URL=\"$PROXY_URL\"")
+CLAUDE_SCRIPT
+
+# Append the rest with single-quoted heredoc (no variable expansion)
+cat >> /tmp/run-claude.sh <<'CLAUDE_SCRIPT'
 
 claude \
   --model claude-opus-4-6 \
@@ -123,6 +128,13 @@ handle_dialogs
 # We detect this by looking for patterns that indicate Claude is waiting for input.
 # Also monitor the done-signal file as a fallback.
 
+# ============================================================================
+# Capture /cost output before exiting
+# ============================================================================
+# No-op: /cost doesn't work with OAuth (just says "using subscription").
+# Token data is extracted from session JSONL files instead.
+capture_cost() { :; }
+
 IDLE_COUNT=0
 CHECK_INTERVAL=15
 MAX_IDLE=8  # 8 * 15s = 2 minutes of idle before we call it done
@@ -143,7 +155,8 @@ while true; do
 
   # Check done signal
   if [ -f /tmp/claude-done ]; then
-    echo "Claude signaled completion" >&2
+    echo "Claude signaled completion, capturing /cost" >&2
+    capture_cost
     break
   fi
 
@@ -151,7 +164,8 @@ while true; do
   NOW=$(date +%s)
   ELAPSED=$(( NOW - WALL_START ))
   if [ "$ELAPSED" -gt "$MAX_WALL" ]; then
-    echo "Wall clock limit reached (${ELAPSED}s), sending /exit" >&2
+    echo "Wall clock limit reached (${ELAPSED}s), capturing /cost then exiting" >&2
+    capture_cost
     tmux send-keys -t bench "/exit" Enter
     sleep 10
     break
@@ -187,7 +201,8 @@ while true; do
 
   # If idle long enough, Claude is done
   if [ "$IDLE_COUNT" -ge "$MAX_IDLE" ]; then
-    echo "Idle threshold reached, sending /exit" >&2
+    echo "Idle threshold reached, capturing /cost then exiting" >&2
+    capture_cost
     tmux send-keys -t bench "/exit" Enter
     sleep 10
     break
@@ -212,54 +227,94 @@ tmux kill-session -t bench 2>/dev/null || true
 # Capture final pane content for metrics
 # (tmux may be gone, so this might fail)
 
-node -e '
+cat > /tmp/extract-metrics.js <<'METRICS_JS'
 const fs = require("fs");
+const path = require("path");
 try {
-  // Read any available output files
-  let combined = "";
-  for (const f of ["/workspace/.thunderdome-interactive.log", "/workspace/.thunderdome-output.txt"]) {
-    try { combined += fs.readFileSync(f, "utf8") + "\n"; } catch(e) {}
-  }
-
-  // Strip ANSI escape codes
-  const clean = combined.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "").replace(/\x1b\][^\x07]*\x07/g, "");
-
   const metrics = {
-    input_tokens: 0,
-    output_tokens: 0,
-    cache_read_tokens: 0,
-    cache_creation_tokens: 0,
-    turns: 0,
-    tools_used: [],
-    duration_ms: 0,
-    total_cost_usd: 0,
-    note: "interactive-mode-metrics-approximate"
+    input_tokens: 0, output_tokens: 0,
+    cache_read_tokens: 0, cache_creation_tokens: 0,
+    turns: 0, tools_used: [], duration_ms: 0,
+    total_cost_usd: 0, note: "interactive-mode-session-jsonl"
   };
 
-  // Look for dollar amounts
-  const costMatches = clean.match(/\$(\d+\.\d+)/g);
-  if (costMatches && costMatches.length > 0) {
-    const costs = costMatches.map(m => parseFloat(m.slice(1)));
-    metrics.total_cost_usd = Math.max(...costs);
+  // Find Claude Code session JSONL files (HOME=/tmp in container)
+  const projectsDir = "/tmp/.claude/projects";
+  const jsonlFiles = [];
+  const findJsonl = (dir) => {
+    try {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) findJsonl(full);
+        else if (entry.name.endsWith(".jsonl")) jsonlFiles.push(full);
+      }
+    } catch(e) {}
+  };
+  if (fs.existsSync(projectsDir)) findJsonl(projectsDir);
+  console.error("Found " + jsonlFiles.length + " session JSONL files");
+
+  const toolsSeen = new Set();
+  for (const file of jsonlFiles) {
+    console.error("Processing: " + file + " (" + fs.statSync(file).size + " bytes)");
+    try { fs.copyFileSync(file, "/workspace/.thunderdome-session.jsonl"); } catch(e) {}
+
+    // Split on actual newlines (JSONL = one JSON object per line)
+    const lines = fs.readFileSync(file, "utf8").split("\n");
+    console.error("Lines in file: " + lines.length);
+
+    // Deduplicate by requestId — streaming chunks repeat usage data.
+    // Keep last usage per requestId.
+    const usageByRequest = new Map();
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const msg = JSON.parse(line);
+
+        // Usage is at msg.message.usage for assistant messages
+        if (msg.type === "assistant" && msg.message && msg.message.usage) {
+          const reqId = msg.requestId || msg.uuid;
+          usageByRequest.set(reqId, msg.message.usage);
+        }
+
+        // Detect tools from assistant message content
+        if (msg.type === "assistant" && msg.message && Array.isArray(msg.message.content)) {
+          for (const block of msg.message.content) {
+            if (block.type === "tool_use" && block.name && !toolsSeen.has(block.name)) {
+              toolsSeen.add(block.name);
+              metrics.tools_used.push(block.name);
+            }
+          }
+        }
+      } catch(e) {}
+    }
+
+    // Sum usage across unique API requests
+    for (const [, usage] of usageByRequest) {
+      metrics.input_tokens += usage.input_tokens || 0;
+      metrics.output_tokens += usage.output_tokens || 0;
+      metrics.cache_read_tokens += usage.cache_read_input_tokens || 0;
+      metrics.cache_creation_tokens += usage.cache_creation_input_tokens || 0;
+    }
+    metrics.turns = usageByRequest.size;
+    console.error("Unique API requests: " + usageByRequest.size);
   }
 
-  // Tool detection
-  const toolNames = ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Task",
-                     "Skill", "TodoWrite", "WebFetch", "WebSearch", "NotebookEdit",
-                     "SpawnTeammate", "MessageTeammate", "ShutdownTeammate",
-                     "TaskCreate", "TaskUpdate", "TaskList"];
-  for (const tool of toolNames) {
-    if (clean.includes(tool)) {
-      metrics.tools_used.push(tool);
-    }
-  }
+  // Estimate cost: Opus $15/$75 per M input/output, cache read $1.50/M, cache write $18.75/M
+  const cost = (metrics.input_tokens * 15 + metrics.output_tokens * 75 +
+    metrics.cache_read_tokens * 1.50 + metrics.cache_creation_tokens * 18.75) / 1_000_000;
+  metrics.total_cost_usd = Math.round(cost * 10000) / 10000;
+
+  if (jsonlFiles.length === 0) metrics.note = "no-session-files-found";
 
   fs.writeFileSync("/workspace/.thunderdome-metrics.json", JSON.stringify(metrics, null, 2));
-  console.error("Metrics (approximate): " + JSON.stringify(metrics));
+  console.error("Metrics: " + JSON.stringify(metrics));
 } catch(e) {
   console.error("Metrics extraction failed: " + e.message);
-  fs.writeFileSync("/workspace/.thunderdome-metrics.json", JSON.stringify({note: "extraction-failed", error: e.message}, null, 2));
+  fs.writeFileSync("/workspace/.thunderdome-metrics.json",
+    JSON.stringify({note: "extraction-failed", error: e.message}, null, 2));
 }
-' || true
+METRICS_JS
+node /tmp/extract-metrics.js || true
 
 exit 0

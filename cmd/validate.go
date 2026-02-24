@@ -44,6 +44,10 @@ func newValidateCmd() *cobra.Command {
 				}
 			}
 
+			if cfg.Proxy.JudgeModel != "" {
+				validation.JudgeModel = cfg.Proxy.JudgeModel
+			}
+
 			// Build task lookup by TaskName (filepath.Base of repo)
 			taskByName := make(map[string]*config.Task)
 			for i := range cfg.Tasks {
@@ -104,10 +108,27 @@ func newValidateCmd() *cobra.Command {
 				}
 
 				taskDesc, _ := os.ReadFile(filepath.Join(trialDir, "task.md"))
+				workDir := filepath.Join(trialDir, "workspace")
 
 				fmt.Printf("Scoring %s/%s (trial %d)...\n", meta.Orchestrator, meta.Task, meta.Trial)
 
-				rubricScores, err := validation.RunRubricJudge(ctx, "", task.Rubric, string(diff), string(taskDesc))
+				// Build judge input with context
+				judgeInput := validation.RubricJudgeInput{
+					Rubric:    task.Rubric,
+					Diff:      string(diff),
+					TaskDesc:  string(taskDesc),
+					Category:  task.Category,
+					TestScore: meta.Scores.Tests,
+					LintScore: meta.Scores.StaticAnalysis,
+				}
+
+				// For greenfield tasks, collect source files
+				if task.Greenfield {
+					judgeInput.SourceFiles = validation.CollectSourceFiles(workDir, 100_000)
+					judgeInput.TestScore = meta.Scores.HiddenTests
+				}
+
+				rubricScores, err := validation.RunRubricJudge(ctx, "", judgeInput)
 				if err != nil {
 					log.Printf("  rubric judge failed: %v", err)
 					continue
@@ -118,6 +139,7 @@ func newValidateCmd() *cobra.Command {
 				oldRubric := meta.Scores.Rubric
 
 				meta.Scores.Rubric = rubricScore
+				meta.RubricScores = rubricScores
 				if task.Greenfield {
 					meta.CompositeScore = validation.GreenfieldCompositeScore(meta.Scores, task.GreenWeights)
 				} else {

@@ -187,6 +187,11 @@ orchestrators:
     image: thunderdome/claude-code:latest
     env: {}
 
+  - name: claude-code-nogit-opus
+    adapter: ./adapters/claude-code-nogit-opus/adapter.sh
+    image: thunderdome/claude-code:latest
+    env: {}
+
   - name: conclave-double-review-keys-opus
     adapter: ./adapters/conclave-double-review-opus/adapter.sh
     image: thunderdome/conclave:latest
@@ -221,15 +226,74 @@ orchestrators:
     image: thunderdome/gemini-cli:latest
     env: {}
 
-rubric: &default_rubric
-  - criterion: "Concise"
+rubric_greenfield_simple: &rubric_greenfield_simple
+  - criterion: "Architecture"
+    weight: 2
+    description: "Separation of concerns, no god-objects, clean module boundaries. Score 0.8+ if each module has a single responsibility."
+  - criterion: "Error Handling"
+    weight: 2
+    description: "Explicit error paths, edge cases covered, meaningful error messages. Score 0.8+ if all public functions handle invalid input gracefully."
+  - criterion: "API Design"
     weight: 1
-  - criterion: "Correct"
+    description: "Intuitive public API, well-typed exports, consistent naming. Score 0.8+ if a new developer could use the API without reading internals."
+
+rubric_greenfield_complex: &rubric_greenfield_complex
+  - criterion: "Architecture"
+    weight: 2
+    description: "Clean layering, no circular dependencies, clear module boundaries. Score 0.8+ if dependencies flow in one direction."
+  - criterion: "Error Handling"
+    weight: 2
+    description: "Comprehensive error handling at all layers, proper HTTP status codes, user-facing messages. Score 0.8+ if errors propagate cleanly without swallowing."
+  - criterion: "Security & Isolation"
     weight: 1
-  - criterion: "Elegant"
+    description: "Tenant/resource isolation, input validation, no injection vectors. Score 0.8+ if untrusted input is validated before use."
+  - criterion: "API Consistency"
     weight: 1
-  - criterion: "Idiomatic"
+    description: "RESTful conventions, consistent response shapes, predictable URL patterns. Score 0.8+ if all endpoints follow the same conventions."
+
+rubric_bugfix: &rubric_bugfix
+  - criterion: "Surgical Precision"
+    weight: 3
+    description: "Minimal targeted changes addressing only the bug. Score 0.8+ if the diff touches only files directly related to the fix."
+  - criterion: "Root Cause Fix"
+    weight: 3
+    description: "Addresses the actual root cause, not symptoms. Score 0.8+ if the fix prevents recurrence rather than papering over the failure."
+  - criterion: "Regression Safety"
     weight: 1
+    description: "Changes are safe with respect to existing functionality. Score 0.8+ if no existing behavior is altered beyond the bug fix."
+
+rubric_marathon: &rubric_marathon
+  - criterion: "Incremental Design"
+    weight: 2
+    description: "Architecture evolves cleanly across phases with no mid-task rewrites. Score 0.8+ if later phases extend earlier ones without restructuring."
+  - criterion: "State Management"
+    weight: 2
+    description: "Clean lifecycle management, no global mutable state, concurrency-safe patterns. Score 0.8+ if state is encapsulated and predictable."
+  - criterion: "Extensibility"
+    weight: 2
+    description: "Design anticipates growth, open/closed principle, new features plug in. Score 0.8+ if adding a new queue type or handler requires no existing code changes."
+
+rubric_recovery: &rubric_recovery
+  - criterion: "Diagnostic Approach"
+    weight: 2
+    description: "Independent fixes per breakage, no shotgun debugging. Score 0.8+ if each fix is isolated and targeted to a specific issue."
+  - criterion: "Minimal Intervention"
+    weight: 2
+    description: "Small targeted fixes, no unnecessary restructuring. Score 0.8+ if the diff is proportional to the problems found."
+  - criterion: "Structural Integrity"
+    weight: 2
+    description: "Clean monorepo structure after fixes, packages build independently. Score 0.8+ if workspace topology is correct post-fix."
+
+rubric_features: &rubric_features
+  - criterion: "Integration Quality"
+    weight: 2
+    description: "Follows existing code patterns, uses existing utilities, consistent style. Score 0.8+ if new code is indistinguishable from existing code."
+  - criterion: "Completeness"
+    weight: 2
+    description: "All requirements addressed, edge cases handled, no partial implementations. Score 0.8+ if the feature works end-to-end as specified."
+  - criterion: "Code Organization"
+    weight: 1
+    description: "Well-organized, consistent naming, logical file placement. Score 0.8+ if a reader can predict where to find things."
 
 tasks:
   # T1: CLI Time Tracker — greenfield/simple
@@ -245,7 +309,7 @@ tasks:
     build_cmd: "npm run build"
     lint_cmd: "npm run lint"
     time_limit_minutes: 15
-    rubric: *default_rubric
+    rubric: *rubric_greenfield_simple
     green_weights:
       rubric: 0.35
       hidden_tests: 0.25
@@ -266,7 +330,7 @@ tasks:
     build_cmd: "npm run build"
     lint_cmd: "npm run lint"
     time_limit_minutes: 45
-    rubric: *default_rubric
+    rubric: *rubric_greenfield_complex
     green_weights:
       rubric: 0.35
       hidden_tests: 0.25
@@ -285,7 +349,7 @@ tasks:
     build_cmd: "npm run build"
     lint_cmd: "npm run lint"
     time_limit_minutes: 30
-    rubric: *default_rubric
+    rubric: *rubric_features
 
   # T4: Phantom Invoice Bug — bugfix/medium (41 tests: 30 visible + 10 regression + 1 diff-size)
   - id: T4
@@ -298,7 +362,7 @@ tasks:
     build_cmd: "npm run build"
     lint_cmd: "npm run lint"
     time_limit_minutes: 20
-    rubric: *default_rubric
+    rubric: *rubric_bugfix
 
   # T5: Task Queue Marathon — marathon (12 phases)
   - id: T5
@@ -313,7 +377,7 @@ tasks:
     build_cmd: "npm run build"
     lint_cmd: "npm run lint"
     time_limit_minutes: 60
-    rubric: *default_rubric
+    rubric: *rubric_marathon
     green_weights:
       rubric: 0.35
       hidden_tests: 0.25
@@ -332,7 +396,7 @@ tasks:
     build_cmd: "npm run build"
     lint_cmd: "npm run lint"
     time_limit_minutes: 30
-    rubric: *default_rubric
+    rubric: *rubric_recovery
 
   # T7: Plugin Marketplace — greenfield/complex
   - id: T7
@@ -347,7 +411,7 @@ tasks:
     build_cmd: "npm run build"
     lint_cmd: "npm run lint"
     time_limit_minutes: 45
-    rubric: *default_rubric
+    rubric: *rubric_greenfield_complex
     green_weights:
       rubric: 0.35
       hidden_tests: 0.25
@@ -368,7 +432,7 @@ tasks:
     build_cmd: "npm run build"
     lint_cmd: "npm run lint"
     time_limit_minutes: 45
-    rubric: *default_rubric
+    rubric: *rubric_greenfield_complex
     green_weights:
       rubric: 0.35
       hidden_tests: 0.25
@@ -387,7 +451,7 @@ tasks:
     build_cmd: "npm run build"
     lint_cmd: "npm run lint"
     time_limit_minutes: 45
-    rubric: *default_rubric
+    rubric: *rubric_features
 
   # T10: E-Commerce Backend — greenfield/complex
   - id: T10
@@ -402,7 +466,7 @@ tasks:
     build_cmd: "npm run build"
     lint_cmd: "npm run lint"
     time_limit_minutes: 45
-    rubric: *default_rubric
+    rubric: *rubric_greenfield_complex
     green_weights:
       rubric: 0.35
       hidden_tests: 0.25
@@ -422,7 +486,7 @@ tasks:
     build_cmd: "npm run build"
     lint_cmd: "npm run lint"
     time_limit_minutes: 30
-    rubric: *default_rubric
+    rubric: *rubric_bugfix
 
 trials: 1
 

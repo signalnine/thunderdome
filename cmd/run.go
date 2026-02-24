@@ -13,6 +13,7 @@ import (
 	"github.com/signalnine/thunderdome/internal/report"
 	"github.com/signalnine/thunderdome/internal/result"
 	"github.com/signalnine/thunderdome/internal/runner"
+	"github.com/signalnine/thunderdome/internal/validation"
 	"github.com/spf13/cobra"
 )
 
@@ -62,6 +63,10 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 			}
 		}
 		expandOrchEnv(cfg.Orchestrators, secrets)
+	}
+
+	if cfg.Proxy.JudgeModel != "" {
+		validation.JudgeModel = cfg.Proxy.JudgeModel
 	}
 
 	orchestrators := filterOrchestrators(cfg.Orchestrators, flagOrchestrator)
@@ -121,7 +126,7 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 							return err
 						}
 						trialDir := result.TrialDir(runDir, orch.Name, runner.TaskName(&task), trial)
-						scored, err := runner.ValidateAndScore(ctx, trialDir, &task, gwURL)
+						scored, err := runner.ValidateAndScore(ctx, trialDir, &task, "")
 						if err != nil {
 							fmt.Printf("  WARNING: validation failed for %s trial %d: %v\n", task.Category, trial, err)
 							fmt.Printf("  %s (duration: %ds)\n", meta.ExitReason, meta.DurationS)
@@ -158,7 +163,7 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 						continue
 					}
 					trialDir := result.TrialDir(runDir, orch.Name, runner.TaskName(&task), trial)
-					scored, err := runner.ValidateAndScore(ctx, trialDir, &task, gwURL)
+					scored, err := runner.ValidateAndScore(ctx, trialDir, &task, "")
 					if err != nil {
 						fmt.Printf("  WARNING: validation failed for %s trial %d: %v\n", task.Category, trial, err)
 						fmt.Printf("  %s (duration: %ds)\n", meta.ExitReason, meta.DurationS)

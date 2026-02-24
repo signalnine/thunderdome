@@ -231,11 +231,19 @@ func validateStandard(ctx context.Context, trialDir, workDir string, meta *resul
 	// Run rubric judge
 	diff, _ := os.ReadFile(filepath.Join(trialDir, "diff.patch"))
 	taskDesc, _ := os.ReadFile(filepath.Join(trialDir, "task.md"))
-	rubricScores, err := validation.RunRubricJudge(ctx, gatewayURL, task.Rubric, string(diff), string(taskDesc))
+	rubricScores, err := validation.RunRubricJudge(ctx, gatewayURL, validation.RubricJudgeInput{
+		Rubric:    task.Rubric,
+		Diff:      string(diff),
+		TaskDesc:  string(taskDesc),
+		Category:  task.Category,
+		TestScore: meta.Scores.Tests,
+		LintScore: meta.Scores.StaticAnalysis,
+	})
 	if err != nil {
 		log.Printf("warning: rubric judge failed for %s trial %d: %v", meta.Task, meta.Trial, err)
 	} else {
 		meta.Scores.Rubric = validation.ComputeRubricScore(task.Rubric, rubricScores)
+		meta.RubricScores = rubricScores
 	}
 
 	// Compute composite score
@@ -301,11 +309,21 @@ func validateGreenfield(ctx context.Context, trialDir, workDir string, meta *res
 	// 6. Rubric judge
 	diff, _ := os.ReadFile(filepath.Join(trialDir, "diff.patch"))
 	taskDesc, _ := os.ReadFile(filepath.Join(trialDir, "task.md"))
-	rubricScores, err := validation.RunRubricJudge(ctx, gatewayURL, task.Rubric, string(diff), string(taskDesc))
+	sourceFiles := validation.CollectSourceFiles(workDir, 100_000)
+	rubricScores, err := validation.RunRubricJudge(ctx, gatewayURL, validation.RubricJudgeInput{
+		Rubric:      task.Rubric,
+		Diff:        string(diff),
+		SourceFiles: sourceFiles,
+		TaskDesc:    string(taskDesc),
+		Category:    task.Category,
+		TestScore:   meta.Scores.HiddenTests,
+		LintScore:   meta.Scores.StaticAnalysis,
+	})
 	if err != nil {
 		log.Printf("warning: rubric judge failed for %s trial %d: %v", meta.Task, meta.Trial, err)
 	} else {
 		meta.Scores.Rubric = validation.ComputeRubricScore(task.Rubric, rubricScores)
+		meta.RubricScores = rubricScores
 	}
 
 	// Compute greenfield composite score
