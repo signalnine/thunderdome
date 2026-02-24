@@ -9,16 +9,17 @@ import (
 )
 
 func TestCompositeScore(t *testing.T) {
-	scores := result.Scores{Tests: 0.9, StaticAnalysis: 0.8, Rubric: 0.7}
-	weights := config.ValidationWeights{Tests: 0.5, StaticAnalysis: 0.2, Rubric: 0.3}
+	scores := result.Scores{Tests: 0.9, StaticAnalysis: 0.8}
+	weights := config.ValidationWeights{Tests: 0.7, StaticAnalysis: 0.3}
 	got := validation.CompositeScore(scores, weights)
-	if absf(got-0.82) > 0.001 {
-		t.Errorf("got %f, want 0.82", got)
+	// (0.9*0.7 + 0.8*0.3) / 1.0 = 0.63 + 0.24 = 0.87
+	if absf(got-0.87) > 0.001 {
+		t.Errorf("got %f, want 0.87", got)
 	}
 }
 
 func TestCompositeScoreDefaultWeights(t *testing.T) {
-	scores := result.Scores{Tests: 1.0, StaticAnalysis: 1.0, Rubric: 1.0}
+	scores := result.Scores{Tests: 1.0, StaticAnalysis: 1.0}
 	weights := config.ValidationWeights{}
 	got := validation.CompositeScore(scores, weights)
 	if absf(got-1.0) > 0.001 {

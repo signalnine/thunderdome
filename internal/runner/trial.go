@@ -194,7 +194,7 @@ func TaskName(t *config.Task) string {
 	return filepath.Base(t.Repo)
 }
 
-// ValidateAndScore runs the validation pipeline (tests, lint, rubric judge)
+// ValidateAndScore runs the validation pipeline (tests, lint)
 // against a completed trial and updates the meta with scores.
 func ValidateAndScore(ctx context.Context, trialDir string, task *config.Task, gatewayURL string) (*result.TrialMeta, error) {
 	meta, err := result.ReadTrialMeta(filepath.Join(trialDir, "meta.json"))
@@ -226,24 +226,6 @@ func validateStandard(ctx context.Context, trialDir, workDir string, meta *resul
 		log.Printf("warning: lint failed for %s trial %d: %v", meta.Task, meta.Trial, err)
 	} else {
 		meta.Scores.StaticAnalysis = lintResult.Score
-	}
-
-	// Run rubric judge
-	diff, _ := os.ReadFile(filepath.Join(trialDir, "diff.patch"))
-	taskDesc, _ := os.ReadFile(filepath.Join(trialDir, "task.md"))
-	rubricScores, err := validation.RunRubricJudge(ctx, gatewayURL, validation.RubricJudgeInput{
-		Rubric:    task.Rubric,
-		Diff:      string(diff),
-		TaskDesc:  string(taskDesc),
-		Category:  task.Category,
-		TestScore: meta.Scores.Tests,
-		LintScore: meta.Scores.StaticAnalysis,
-	})
-	if err != nil {
-		log.Printf("warning: rubric judge failed for %s trial %d: %v", meta.Task, meta.Trial, err)
-	} else {
-		meta.Scores.Rubric = validation.ComputeRubricScore(task.Rubric, rubricScores)
-		meta.RubricScores = rubricScores
 	}
 
 	// Compute composite score
@@ -304,26 +286,6 @@ func validateGreenfield(ctx context.Context, trialDir, workDir string, meta *res
 		} else {
 			meta.Scores.HiddenTests = hiddenResult.Score
 		}
-	}
-
-	// 6. Rubric judge
-	diff, _ := os.ReadFile(filepath.Join(trialDir, "diff.patch"))
-	taskDesc, _ := os.ReadFile(filepath.Join(trialDir, "task.md"))
-	sourceFiles := validation.CollectSourceFiles(workDir, 100_000)
-	rubricScores, err := validation.RunRubricJudge(ctx, gatewayURL, validation.RubricJudgeInput{
-		Rubric:      task.Rubric,
-		Diff:        string(diff),
-		SourceFiles: sourceFiles,
-		TaskDesc:    string(taskDesc),
-		Category:    task.Category,
-		TestScore:   meta.Scores.HiddenTests,
-		LintScore:   meta.Scores.StaticAnalysis,
-	})
-	if err != nil {
-		log.Printf("warning: rubric judge failed for %s trial %d: %v", meta.Task, meta.Trial, err)
-	} else {
-		meta.Scores.Rubric = validation.ComputeRubricScore(task.Rubric, rubricScores)
-		meta.RubricScores = rubricScores
 	}
 
 	// Compute greenfield composite score

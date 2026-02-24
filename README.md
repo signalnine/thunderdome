@@ -6,9 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across all 10 tasks (tests + build/lint + rubric + greenfield extras where applicable). Data includes 467 trials across 39 orchestrator variants.
-
-**Note on scoring (Feb 2026):** All results were re-scored with a three-judge rubric panel (Gemini 2.5 Flash + Claude Sonnet 4.5 + GPT-4.1 via OpenRouter, 6 evaluations per trial) using task-specific criteria. The original single-model rubric systematically penalized large diffs regardless of code quality — see "Rubric Judge Overhaul" at end of Results section.
+Composite scores across all 10 tasks (tests + build/lint for standard tasks; hidden_tests + agent_tests + coverage + code_metrics + lint for greenfield). Data includes 467 trials across 39 orchestrator variants. Scoring is purely deterministic — no LLM judges.
 
 ### Leaderboard
 
@@ -52,62 +50,6 @@ What it delivered was a fraud — a single `claude -p` call with `gt prime` cont
 I named the impostor "Gas Station" and kept it as a control while we built the real multi-agent pipeline ourselves.
 
 Then the benchmarks came back. Gas Station scored 93.6% (n=22 trials). The single agent in a trench coat is the most consistent performer in the entire benchmark suite — 90% mean on the marathon task (T5) across 6 trials with low variance (87.7%-92.2%). Gas Station is still in the benchmark suite as a permanent reminder that complexity needs to justify itself.
-
-### Rubric Judge Overhaul
-
-The original rubric judge used a single Gemini 2.0 Flash model scoring against four generic criteria (Concise, Correct, Elegant, Idiomatic). This was fundamentally broken:
-
-1. **"Concise" penalized marathon tasks for being marathon tasks** — large diffs always scored near-zero regardless of code quality
-2. **"Correct" flipped 0/1 across calls** — temperature wasn't set to 0 on the direct API path
-3. **Same criteria for all task types** — bugfix tasks were judged on the same axes as greenfield projects
-
-The fix (Feb 2026): task-specific criteria with scoring descriptions (6 rubric types), a three-judge panel (Gemini 2.5 Flash + Claude Sonnet 4.5 + GPT-4.1 via OpenRouter, 2 evals each, median per criterion), temperature=0, and source file reconstruction for greenfield tasks. All 467 trials were re-scored.
-
-**Impact:** Mean rubric score went from 0.566 to 0.762. The 44 trials still scoring near-zero are legitimate failures (empty diffs, crashed agents), not judge noise. Several ablation conclusions changed — see updated sections below.
-
-### Rubric vs No-Rubric: Sensitivity Analysis
-
-To verify the rubric isn't distorting results, we recomputed all composite scores with rubric weight set to zero (remaining weights renormalized). This isolates the purely functional signal: tests, build/lint, hidden tests, coverage, and code metrics.
-
-#### Overall Rankings
-
-| Orchestrator | With Rubric | No Rubric | Delta | Trials |
-|---|---:|---:|---:|---:|
-| Conclave Review | 94.9% | 97.3% | +2.5% | 11 |
-| Metacog | 95.1% | 96.6% | +1.5% | 11 |
-| Conclave Design | 94.3% | 95.8% | +1.5% | 9 |
-| Conclave Double Review + Keys | 93.5% | 95.2% | +1.7% | 9 |
-| Ralph Fresh | 91.0% | 94.4% | +3.4% | 4 |
-| Claude Code Worktree | 90.4% | 94.5% | +4.1% | 3 |
-| Claude Code Headless | 92.1% | 94.2% | +2.1% | 9 |
-| Gas Station | 91.6% | 92.9% | +1.3% | 22 |
-| Claude Code | 87.7% | 85.3% | -2.4% | 24 |
-| Agent Teams | 84.4% | 86.2% | +1.8% | 28 |
-
-**Finding: Rankings are stable.** The top-tier orchestrators shift by +1-4% when rubric is removed — the rubric scores 0.83-0.90 for successful trials, slightly below the functional metrics, so removing it lifts scores marginally. Crucially, no orchestrator changes rank position by more than one slot. The rubric is well-calibrated and consistent with functional outcomes.
-
-#### T5 Marathon (Key Ablation Metric)
-
-| Variant | With Rubric | No Rubric | N |
-|---|---:|---:|---:|
-| Conclave Design | 92.7% | 95.1% | 3 |
-| Ralph Fresh | 91.3% | 94.1% | 3 |
-| Worktree | 90.7% | 93.2% | 2 |
-| Gas Station | 90.0% | 91.9% | 6 |
-| Headless | 87.3% | 87.9% | 2 |
-| Branch | 82.2% | 82.2% | 2 |
-| Claude Code (baseline) | 75.7% | 71.6% | 4 |
-| No-Git | 66.7% | 54.6% | 4 |
-
-**The ablation story holds without rubric.** Top variants (Ralph Fresh, Worktree, Gas Station) all cluster at 92-95% on pure functional metrics. The no-git ablation looks *worse* without rubric (54.6% vs 66.7%) because its two failed trials (hidden_tests=0, coverage=0) get zero functional score — the rubric was actually giving them partial credit for code that was written but didn't work.
-
-#### Where Rubric Matters
-
-The rubric primarily helps partially-working agents — those that produce code but fail tests. For top-tier orchestrators that pass tests consistently, rubric adds 1-3% of signal. This means:
-
-1. **Top-tier comparisons are robust** — rankings hold with or without rubric
-2. **Bottom-tier scores are inflated by rubric** — agents that crash or produce broken code get some rubric credit for "code was written"
-3. **The rubric's main value is differentiating between agents that both pass tests** — code quality differences (architecture, error handling, extensibility) only matter when functional metrics are saturated
 
 ### Ablation Studies
 
@@ -191,8 +133,6 @@ Variants tested, all using Opus 4.6 on T11:
 
 3. **The model already debugs systematically.** It reads errors, traces data flow, and fixes root causes without needing a skill to tell it to.
 
-**Note:** The original analysis (pre-rubric-fix) showed both variants at ~71% — the broken rubric was penalizing the large debugging diffs. The corrected rubric reveals that both approaches solve the task equally well at 99%.
-
 **Contrast with consensus code review (+5.3 points):** Review adds a *concrete action* — three independent models examining the diff — that catches bugs the solo agent missed. Systematic debugging adds *process* — phases, checklists, red-flag lists — that the agent already follows instinctively. Concrete actions beat process guidance.
 
 #### Test-Driven Development: Forced TDD vs Claude Code on Greenfield Tasks
@@ -209,7 +149,7 @@ Variants tested, all using Opus 4.6 on T11:
 | **T8** analytics-dashboard | 87.9% (n=1) | 94.9% (n=1) | +7.0 |
 | **Mean** | **80.9%** | **92.8%** | **+11.9** |
 
-**Caveat: This comparison is unreliable.** The Claude Code baseline has mixed trial counts (n=1-4) including some failed trials, while TDD has clean n=1 data. The apparent +11.9 advantage is partly an artifact of baseline pollution. The original controlled comparison (single trials for both) showed TDD as a net negative (-3.2 points), driven by a broken rubric that penalized the TDD approach's incremental code style. The truth likely lies somewhere in between — TDD neither dramatically helps nor hurts, but the data is too noisy to draw conclusions.
+**Caveat: This comparison is unreliable.** The Claude Code baseline has mixed trial counts (n=1-4) including some failed trials, while TDD has clean n=1 data. The apparent +11.9 advantage is partly an artifact of baseline pollution. The truth likely lies somewhere in between — TDD neither dramatically helps nor hurts, but the data is too noisy to draw conclusions.
 
 **What is clear:** TDD achieved 1.000 on hidden tests for all 4 tasks — the agent's own tests were thorough enough that the hidden validation suite passed automatically. This is the one unambiguous win for TDD methodology. But the cost is high (~$2.98/task vs ~$1.00 for vanilla) and the score impact is uncertain.
 
@@ -307,9 +247,7 @@ Compared against vanilla Claude Code (Opus 4.6, same model) on 4 greenfield task
 | **Vanilla Claude Code** | — | — | 75.7% (n=4) |
 | **Claude Code + Branch** | 90.6% | 73.8% | 82.2% (n=2) |
 
-**Finding:** Creating a real branch shows mixed results (+6.5 points mean, but high variance: 90.6% vs 73.8%). The original analysis showed this as a clear negative (-7.6 points) due to the broken rubric penalizing the large diffs. With corrected scoring, the branch effect is ambiguous — one trial matches Gas Station, the other is mediocre. Not enough data to conclude.
-
-**Note:** The original finding of "54.5% mean" was entirely a rubric artifact. The corrected data shows 82.2%, making this ablation inconclusive rather than clearly negative.
+**Finding:** Creating a real branch shows mixed results (+6.5 points mean, but high variance: 90.6% vs 73.8%). The branch effect is ambiguous — one trial matches Gas Station, the other is mediocre. Not enough data to conclude.
 
 #### Worktree Ablation: Git Worktree vs Vanilla
 
@@ -403,11 +341,11 @@ Compared against vanilla Claude Code (stale context — one long session where c
 
 Greenfield breakdown (Ralph Fresh):
 
-| Trial | Hidden Tests | Coverage | Rubric | Cost |
-| --- | ---: | ---: | ---: | ---: |
-| **Trial 1** | 1.000 | 0.890 | 0.850 | $1.28 |
-| **Trial 2** | 1.000 | 0.941 | 0.867 | $1.68 |
-| **Trial 3** | 1.000 | 0.915 | 0.850 | $2.73 |
+| Trial | Hidden Tests | Coverage | Cost |
+| --- | ---: | ---: | ---: |
+| **Trial 1** | 1.000 | 0.890 | $1.28 |
+| **Trial 2** | 1.000 | 0.941 | $1.68 |
+| **Trial 3** | 1.000 | 0.915 | $2.73 |
 
 **Findings:**
 
@@ -417,9 +355,7 @@ Greenfield breakdown (Ralph Fresh):
 
 3. **H3 is supported.** Fresh context (+15.6 points over baseline, $1.90) provides a large, consistent improvement on the marathon task. The mechanism: resetting the conversation clears accumulated noise and lets the agent re-approach remaining problems with a clean mental model.
 
-4. **The original analysis significantly undervalued Ralph Fresh.** The prior report showed 75.1% mean with high variance (86.5% vs 63.8%). The 63.8% outlier was largely caused by the broken rubric scoring "Concise" near-zero on large diffs. With the corrected three-judge panel, all 3 trials score 0.85+ on rubric and the variance disappears.
-
-5. **Comparable to worktree but through a different mechanism.** Ralph Fresh (91.3%) and worktree (90.7%) achieve similar scores. Worktree prevents `.git` noise from entering context. Ralph Fresh resets accumulated noise between iterations. Both work; Ralph Fresh costs more ($1.90 vs $1.61) but is more robust (3/3 successes vs 2/2).
+4. **Comparable to worktree but through a different mechanism.** Ralph Fresh (91.3%) and worktree (90.7%) achieve similar scores. Worktree prevents `.git` noise from entering context. Ralph Fresh resets accumulated noise between iterations. Both work; Ralph Fresh costs more ($1.90 vs $1.61) but is more robust (3/3 successes vs 2/2).
 
 **Caveat:** 3 trials for Ralph Fresh, 4 for vanilla (including 1 failed trial at 31%).
 
@@ -449,7 +385,7 @@ Greenfield breakdown (Ralph Fresh):
 
 ## Why This Exists
 
-Every AI coding tool claims superiority. None publish reproducible head-to-head comparisons. Thunderdome fills that gap by running orchestrators against identical tasks in isolated Docker containers, scoring their output with automated tests, static analysis, and LLM-judged rubrics.
+Every AI coding tool claims superiority. None publish reproducible head-to-head comparisons. Thunderdome fills that gap by running orchestrators against identical tasks in isolated Docker containers, scoring their output with automated tests and static analysis.
 
 The framework tests five hypotheses:
 
@@ -522,7 +458,6 @@ thunderdome run
   ├─ Run validation pipeline
   │    ├─ Tests (npm test in validation image)
   │    ├─ Build + lint (npm run build && npm run lint)
-  │    ├─ LLM rubric judge (scored against task-specific criteria)
   │    └─ Greenfield extras: hidden tests, coverage, code metrics
   └─ Write results (meta.json, diff.patch, scores)
 ```
@@ -555,8 +490,6 @@ go build -o thunderdome .
 # Run with parallel containers
 ./thunderdome run --parallel 4 --trials 3
 
-# Validate a previous run's workspace
-./thunderdome validate ./results/runs/<run-id>/trials/<orch>/<task>/trial-1
 ```
 
 ### Results
@@ -572,7 +505,7 @@ results/runs/<run-id>/trials/<orchestrator>/<task>/trial-1/
     └── .thunderdome-metrics.json  # Token/cost metrics from adapter
 ```
 
-The composite score blends test pass rate, static analysis, and rubric scores. Greenfield tasks additionally include hidden tests, code coverage, and code metrics.
+The composite score blends test pass rate and static analysis. Greenfield tasks additionally include hidden tests, code coverage, and code metrics.
 
 ## Writing an Adapter
 
@@ -622,7 +555,6 @@ json.dump({'total_cost_usd': last_cost},
 |---|---|---|
 | **Tests** | Fraction of pre-written tests that pass | Task-specific |
 | **Static analysis** | Build + lint pass/fail (binary) | Task-specific |
-| **Rubric** | LLM judge scores the diff against task-specific criteria | Task-specific |
 | **Hidden tests** | Tests on `v1-validation` tag, not visible to orchestrator | Greenfield only |
 | **Coverage** | Statement coverage of agent-written tests | Greenfield only |
 | **Code metrics** | Lines of code, complexity, duplication | Greenfield only |
@@ -634,7 +566,7 @@ The composite score is a weighted sum. Each task defines its own weights, so bug
 ```
 .
 ├── main.go                     # Entry point
-├── cmd/                        # CLI commands (run, list, report, validate)
+├── cmd/                        # CLI commands (run, list, report)
 ├── internal/
 │   ├── config/                 # YAML config parsing and validation
 │   ├── docker/                 # Container lifecycle management
@@ -643,7 +575,7 @@ The composite score is a weighted sum. Each task defines its own weights, so bug
 │   ├── report/                 # Table, Markdown, JSON report generation
 │   ├── result/                 # Trial metadata types and storage
 │   ├── runner/                 # Trial execution, validation pipeline, pool
-│   └── validation/             # Tests, lint, rubric, hidden tests, coverage, code metrics
+│   └── validation/             # Tests, lint, hidden tests, coverage, code metrics
 ├── adapters/                   # Shell adapter scripts per orchestrator
 ├── benchmarks/                 # 11 standalone task repos (each with v1/v1-solution tags)
 ├── docker/                     # Dockerfiles for orchestrator images
@@ -663,7 +595,7 @@ The composite score is a weighted sum. Each task defines its own weights, so bug
 - [x] Write orchestrator adapters (10 orchestrators, 20+ adapter variants)
 - [x] Run baseline comparisons (single-trial full suite for 10 orchestrators)
 - [ ] Multi-trial runs for statistical significance
-- [ ] Ablation studies (gene isolation) — 13 done: ts-dev (inconclusive), consensus review (+5.3), systematic debugging (no effect), TDD (inconclusive), design review (+7.5), self-review (~+7, free), self-review+consensus (~+7.7), worktree matches Gas Station, agent teams (hurts on T5), branch (inconclusive), worktree (+15 on T5), Ralph fresh-context (+15.6 on T5, top-tier), no-git (unstable). **All re-scored with three-judge rubric panel (Feb 2026)**
+- [ ] Ablation studies (gene isolation) — 13 done: ts-dev (inconclusive), consensus review (+5.3), systematic debugging (no effect), TDD (inconclusive), design review (+7.5), self-review (~+7, free), self-review+consensus (~+7.7), worktree matches Gas Station, agent teams (hurts on T5), branch (inconclusive), worktree (+15 on T5), Ralph fresh-context (+15.6 on T5, top-tier), no-git (unstable)
 - [ ] Publish methodology paper
 
 ## License

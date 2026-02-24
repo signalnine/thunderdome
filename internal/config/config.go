@@ -37,28 +37,19 @@ type Task struct {
 	BuildCmd         string            `yaml:"build_cmd"`
 	LintCmd          string            `yaml:"lint_cmd"`
 	TimeLimitMinutes int               `yaml:"time_limit_minutes"`
-	Rubric           []RubricCriterion `yaml:"rubric"`
 	Weights          ValidationWeights `yaml:"weights"`
 	Greenfield       bool              `yaml:"greenfield"`
 	ValidationTag    string            `yaml:"validation_tag"`
 	GreenWeights     GreenWeights      `yaml:"green_weights"`
 }
 
-type RubricCriterion struct {
-	Criterion   string  `yaml:"criterion"`
-	Weight      float64 `yaml:"weight"`
-	Description string  `yaml:"description"`
-}
-
 type ValidationWeights struct {
 	Tests          float64 `yaml:"tests"`
 	StaticAnalysis float64 `yaml:"static_analysis"`
-	Rubric         float64 `yaml:"rubric"`
 }
 
 // GreenWeights defines scoring weights for greenfield tasks.
 type GreenWeights struct {
-	Rubric      float64 `yaml:"rubric"`
 	HiddenTests float64 `yaml:"hidden_tests"`
 	AgentTests  float64 `yaml:"agent_tests"`
 	BuildLint   float64 `yaml:"build_lint"`
@@ -69,7 +60,6 @@ type Proxy struct {
 	Gateway           string  `yaml:"gateway"`
 	LogDir            string  `yaml:"log_dir"`
 	BudgetPerTrialUSD float64 `yaml:"budget_per_trial_usd"`
-	JudgeModel        string  `yaml:"judge_model"`
 }
 
 type Network struct {

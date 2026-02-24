@@ -27,7 +27,6 @@ type OrchestratorSummary struct {
 	MeanAgentTests  float64 `json:"mean_agent_tests,omitempty"`
 	MeanCoverage    float64 `json:"mean_coverage,omitempty"`
 	MeanCodeMetrics float64 `json:"mean_code_metrics,omitempty"`
-	MeanRubric      float64 `json:"mean_rubric,omitempty"`
 }
 
 // Generate reads trial results and produces a summary report.
@@ -82,7 +81,6 @@ func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 		agentTests   float64
 		coverage     float64
 		codeMetrics  float64
-		rubric       float64
 		hasGreenfield bool
 	}
 	byOrch := map[string]*accum{}
@@ -97,7 +95,6 @@ func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 		a.score += m.CompositeScore
 		a.tokens += float64(m.TotalTokens)
 		a.cost += m.TotalCostUSD
-		a.rubric += m.Scores.Rubric
 		if m.ExitReason == "completed" {
 			a.passed++
 		}
@@ -120,7 +117,6 @@ func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 			MeanScore:   a.score / float64(a.count),
 			MeanTokens:  a.tokens / float64(a.count),
 			MeanCostUSD: a.cost / float64(a.count),
-			MeanRubric:  a.rubric / float64(a.count),
 		}
 		if a.hasGreenfield {
 			s.HasGreenfield = true
@@ -183,12 +179,12 @@ func writeTable(summaries []OrchestratorSummary, w io.Writer) error {
 		fmt.Fprintln(w)
 		tw2 := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
 		fmt.Fprintln(tw2, "GREENFIELD BREAKDOWN")
-		fmt.Fprintln(tw2, "ORCHESTRATOR\tHIDDEN TESTS\tAGENT TESTS\tCOVERAGE\tCODE METRICS\tRUBRIC")
+		fmt.Fprintln(tw2, "ORCHESTRATOR\tHIDDEN TESTS\tAGENT TESTS\tCOVERAGE\tCODE METRICS")
 		fmt.Fprintln(tw2, strings.Repeat("-", 80))
 		for _, s := range summaries {
 			if s.HasGreenfield {
-				fmt.Fprintf(tw2, "%s\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\n",
-					s.Name, s.MeanHiddenTests, s.MeanAgentTests, s.MeanCoverage, s.MeanCodeMetrics, s.MeanRubric)
+				fmt.Fprintf(tw2, "%s\t%.3f\t%.3f\t%.3f\t%.3f\n",
+					s.Name, s.MeanHiddenTests, s.MeanAgentTests, s.MeanCoverage, s.MeanCodeMetrics)
 			}
 		}
 		return tw2.Flush()

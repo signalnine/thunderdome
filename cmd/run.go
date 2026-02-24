@@ -13,7 +13,6 @@ import (
 	"github.com/signalnine/thunderdome/internal/report"
 	"github.com/signalnine/thunderdome/internal/result"
 	"github.com/signalnine/thunderdome/internal/runner"
-	"github.com/signalnine/thunderdome/internal/validation"
 	"github.com/spf13/cobra"
 )
 
@@ -51,7 +50,6 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 	}
 
 	// Expand ${VAR} references in orchestrator env from secrets file
-	// Also set secrets in process env so the rubric judge can access API keys
 	if cfg.Secrets.EnvFile != "" {
 		secrets, err := gateway.ParseEnvFile(cfg.Secrets.EnvFile)
 		if err != nil {
@@ -63,10 +61,6 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 			}
 		}
 		expandOrchEnv(cfg.Orchestrators, secrets)
-	}
-
-	if cfg.Proxy.JudgeModel != "" {
-		validation.JudgeModel = cfg.Proxy.JudgeModel
 	}
 
 	orchestrators := filterOrchestrators(cfg.Orchestrators, flagOrchestrator)

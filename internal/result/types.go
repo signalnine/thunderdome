@@ -12,13 +12,11 @@ type TrialMeta struct {
 	TotalTokens    int                `json:"total_tokens"`
 	TotalCostUSD   float64            `json:"total_cost_usd"`
 	BudgetExceeded bool               `json:"budget_exceeded"`
-	RubricScores   map[string]float64 `json:"rubric_scores,omitempty"`
 }
 
 type Scores struct {
 	Tests          float64 `json:"tests"`
 	StaticAnalysis float64 `json:"static_analysis"`
-	Rubric         float64 `json:"rubric"`
 	HiddenTests    float64 `json:"hidden_tests,omitempty"`
 	AgentTests     float64 `json:"agent_tests,omitempty"`
 	Coverage       float64 `json:"coverage,omitempty"`

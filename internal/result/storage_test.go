@@ -17,7 +17,7 @@ func TestWriteAndReadTrialMeta(t *testing.T) {
 		DurationS:      42,
 		ExitCode:       0,
 		ExitReason:     "completed",
-		Scores:         result.Scores{Tests: 0.9, StaticAnalysis: 0.8, Rubric: 0.7},
+		Scores:         result.Scores{Tests: 0.9, StaticAnalysis: 0.8},
 		CompositeScore: 0.85,
 		TotalTokens:    1000,
 		TotalCostUSD:   0.50,
