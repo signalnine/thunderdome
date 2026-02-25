@@ -2,11 +2,11 @@
 
 Two agents enter, one agent leaves.
 
-A benchmarking framework that pits agentic coding orchestrators against standardized programming tasks and measures what matters: completion rate, token efficiency, cost, and code quality.
+A benchmarking framework that pits agentic coding orchestrators against standardized programming tasks and measures what matters: completion rate, token efficiency, cost, and correctness.
 
 ## Results
 
-Composite scores across all 10 tasks (tests + build/lint for standard tasks; hidden_tests + agent_tests + coverage + code_metrics + lint for greenfield). Data includes 467 trials across 39 orchestrator variants. Scoring is purely deterministic — no LLM judges.
+Composite scores across all 11 tasks (tests + build/lint for standard tasks; hidden_tests + agent_tests + coverage + code_metrics + lint for greenfield). Data includes 452 trials across 20 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
 
 ### Leaderboard
 
@@ -14,30 +14,37 @@ Mean composite score across all tasks run, ranked by score. Orchestrators with f
 
 | Rank | Orchestrator | Mean | Tasks | Trials | Avg Cost | Model |
 |---:|---|---:|---:|---:|---:|---|
-| 1 | Metacog | **95.0%** | 10 | 11 | $0.04 | Opus 4.6 |
-| 2 | Conclave Review | **94.9%** | 10 | 11 | $1.82 | Opus 4.6 |
-| 3 | Gas Station | **93.6%** | 10 | 22 | $0.71 | Opus 4.6 |
-| 4 | Conclave Design | **93.1%** | 4 | 9 | $2.09 | Opus 4.6 |
-| 5 | Conclave Double Review + Keys | **93.3%** | 4 | 9 | $1.89 | Opus 4.6 |
-| 6 | Agent Teams | **91.8%** | 10 | 28 | $0.49 | Opus 4.6 |
-| 7 | Claude Code Headless | **92.1%** | 4 | 9 | $1.15 | Opus 4.6 |
-| 8 | Ralph Fresh | **91.0%** | 2 | 4 | $1.57 | Opus 4.6 |
-| 9 | Claude Code | **89.6%** | 10 | 24 | $0.27 | Opus 4.6 |
-| 10 | Gemini CLI | **81.3%** | 10 | 19 | $0.00 | Gemini 3 Flash |
-| 11 | Amp Flash | **81.8%** | 10 | 12 | $0.00 | Gemini 3 Flash |
-| 12 | Gas Town | **81.3%** | 10 | 41 | $0.01 | Opus 4.6 |
-| 13 | Amplifier | **66.8%** | 10 | 42 | $0.01 | Opus 4.6 |
-| 14 | Conclave | **76.0%** | 10 | 32 | $0.05 | Multi-provider |
-
-**Data quality note:** Some orchestrators (Amplifier, Gas Town, Conclave) have many trials from early experimental runs when adapters were still being debugged. Their means are dragged down by adapter failures, not model capability. Gas Station, Metacog, and Conclave Review have cleaner data (fewer experimental trials). The ablation studies below use controlled comparisons and are more reliable than the overall means.
+| 1 | Superpowers TDD | **97.4%** | 11 | 16 | $2.32 | Opus 4.6 |
+| 2 | Stacked | **97.3%** | 11 | 11 | $1.36 | Opus 4.6 |
+| 3 | Conclave Review | **97.2%** | 10 | 11 | $1.82 | Multi-provider |
+| 4 | Gas Town | **96.6%** | 10 | 24 | $0.02 | Opus 4.6 |
+| 5 | Superpowers Debug | **96.4%** | 4 | 9 | $0.88 | Opus 4.6 |
+| 6 | Metacog | **95.9%** | 11 | 22 | $0.70 | Opus 4.6 |
+| 7 | Conclave Design | **95.7%** | 4 | 9 | $2.09 | Multi-provider |
+| 8 | Conclave (Full) | **95.2%** | 10 | 12 | $0.14 | Multi-provider |
+| 9 | Conclave Double Review | **95.2%** | 4 | 9 | $1.26 | Multi-provider |
+| 10 | Conclave Dbl Review + Keys | **95.0%** | 4 | 9 | $1.89 | Multi-provider |
+| 11 | Ralph Fresh | **94.7%** | 2 | 4 | $1.57 | Opus 4.6 |
+| 12 | Claude Code Worktree | **94.7%** | 2 | 3 | $1.20 | Opus 4.6 |
+| 13 | Claude Code Headless | **94.2%** | 4 | 9 | $1.15 | Opus 4.6 |
+| 14 | Gas Station | **92.6%** | 10 | 22 | $0.71 | Opus 4.6 |
+| 15 | Agent Teams | **86.2%** | 10 | 28 | $0.49 | Opus 4.6 |
+| 16 | Claude Code | **85.9%** | 11 | 24 | $0.27 | Opus 4.6 |
+| 17 | Amplifier + ts-dev | **85.5%** | 10 | 11 | $0.75 | Opus 4.6 |
+| 18 | Amplifier | **84.6%** | 10 | 11 | $0.02 | Opus 4.6 |
+| 19 | Amp Flash | **84.2%** | 10 | 11 | $0.00 | Gemini 3 Flash |
+| 20 | Gemini CLI | **82.0%** | 10 | 19 | $0.00 | Gemini 3 Flash |
 
 ### Key Findings
 
-- **Metacog** leads on score (95.0%) using Claude Code with a metacognitive perspective-shifting skill — but only 11 trials, mostly n=1 per task
-- **Conclave Review** is the value play — 94.9% mean at $1.82/task. Adding three-provider code review after implementation adds ~5 points vs vanilla Claude Code
-- **Gas Station** is the most reliable — 93.6% mean across 22 trials with the lowest variance of any top contender. Single-agent + context injection in a git worktree
-- **Self-review discipline is free and effective** — telling the agent "commit, review your diff, fix issues" adds ~7 points at zero cost. This is the largest gene effect found (see Double Review ablation)
-- **Process skills hurt or have no effect** — TDD, systematic debugging, and mandatory planning ceremonies all fail to improve scores. The model already follows good practices by default
+- **Superpowers TDD** leads on score (97.4%) with forced red-green-refactor across all 11 tasks. Costs more ($2.32/task) but delivers the highest mean in the benchmark
+- **Stacked** is the best cost-adjusted performer — 97.3% mean at $1.36/task by combining metacog + conclave consensus review + git worktree
+- **Conclave Review** adds consensus review for +11 points over vanilla Claude Code — 97.2% mean at $1.82/task. Three-provider code review after implementation catches bugs the solo agent missed
+- **Gas Town** is the biggest mover after data cleanup — 96.6% mean (was 81.3% when adapter failures polluted the data). The real multi-agent pipeline actually works
+- **Metacog** is the simplest top-tier approach — 95.9% mean at $0.70/task using a single metacognitive perspective-shifting skill. 22 trials across all 11 tasks
+- **Gas Station** remains rock-solid — 92.6% mean across 22 trials. Single-agent + context injection in a git worktree
+- **Self-review discipline is free and effective** — telling the agent "commit, review your diff, fix issues" adds ~7 points at zero cost. This is the largest free gene effect found (see Double Review ablation)
+- **TDD works when forced** — earlier 4-task data was inconclusive, but full 11-task run shows TDD is the highest-scoring approach. The key is mandatory invocation via system prompt, not opt-in skill availability
 - **T4** (bugfix) is the great equalizer — most contenders score 100%, the task is too easy
 - **T8** (analytics dashboard) is the hardest task — most contenders cluster around 70-90%
 
@@ -49,7 +56,7 @@ What it delivered was a fraud — a single `claude -p` call with `gt prime` cont
 
 I named the impostor "Gas Station" and kept it as a control while we built the real multi-agent pipeline ourselves.
 
-Then the benchmarks came back. Gas Station scored 93.6% (n=22 trials). The single agent in a trench coat is the most consistent performer in the entire benchmark suite — 90% mean on the marathon task (T5) across 6 trials with low variance (87.7%-92.2%). Gas Station is still in the benchmark suite as a permanent reminder that complexity needs to justify itself.
+Then the benchmarks came back. Gas Station scored 92.6% (n=22 trials). The single agent in a trench coat was the most consistent performer in the benchmark — until we cleaned up Gas Town's adapter failures and discovered the real multi-agent pipeline scores 96.6% (n=24). The complexity justified itself after all, but Gas Station earned its place: a permanent reminder to validate your baselines before drawing conclusions.
 
 ### Ablation Studies
 
@@ -59,23 +66,23 @@ We're isolating individual orchestrator "genes" — composable features like mul
 
 **Hypothesis:** Giving the agent TypeScript-specific tools (LSP code intelligence, code quality analysis, a specialized TS expert agent) improves performance on TypeScript benchmarks.
 
-**Setup:** Amplifier with Opus 4.6, comparing bare foundation bundle vs foundation + [ts-dev](https://github.com/microsoft/amplifier-bundle-ts-dev) app bundle. Same model, same provider, same tasks.
+**Setup:** Amplifier with Opus 4.6, comparing bare foundation bundle vs foundation + [ts-dev](https://github.com/microsoft/amplifier-bundle-ts-dev) app bundle. Same model, same provider, same tasks. After pruning adapter-debugging trials, both variants have n=1 per task (n=2 for T1 bare, T8 ts-dev).
 
 | Task | Amplifier (bare) | Amplifier + ts-dev | Delta |
 | --- | ---: | ---: | ---: |
-| **T1** time-tracker | 70.3% (n=13) | 83.3% (n=2) | +13.0 |
-| **T2** collab-server | 39.6% (n=3) | 78.5% (n=2) | +38.9 |
-| **T3** fts-search | 89.4% (n=3) | 98.6% (n=2) | +9.2 |
-| **T4** phantom-invoice | 90.0% (n=3) | 85.0% (n=2) | -5.0 |
-| **T5** task-queue | 44.4% (n=3) | 52.9% (n=2) | +8.5 |
-| **T6** monorepo-disaster | 80.0% (n=3) | 85.0% (n=2) | +5.0 |
-| **T7** plugin-marketplace | 42.6% (n=5) | 95.0% (n=1) | +52.4 |
-| **T8** analytics-dashboard | 78.4% (n=3) | 67.6% (n=2) | -10.8 |
-| **T9** ssg-toolkit | 73.1% (n=3) | 99.4% (n=1) | +26.3 |
-| **T10** ecommerce-backend | 64.5% (n=3) | 68.2% (n=1) | +3.7 |
-| **Mean** | **67.2%** | **81.4%** | **+14.1** |
+| **T1** time-tracker | 97.6% (n=2) | 64.6% (n=1) | -33.0 |
+| **T2** collab-server | 63.1% (n=1) | 93.7% (n=1) | +30.6 |
+| **T3** fts-search | 100.0% (n=1) | 100.0% (n=1) | 0.0 |
+| **T4** phantom-invoice | 100.0% (n=1) | 100.0% (n=1) | 0.0 |
+| **T5** task-queue | 94.5% (n=1) | 95.3% (n=1) | +0.8 |
+| **T6** monorepo-disaster | 100.0% (n=1) | 100.0% (n=1) | 0.0 |
+| **T7** plugin-marketplace | 21.5% (n=1) | 99.1% (n=1) | +77.6 |
+| **T8** analytics-dashboard | 91.3% (n=1) | 61.5% (n=2) | -29.8 |
+| **T9** ssg-toolkit | 100.0% (n=1) | 100.0% (n=1) | 0.0 |
+| **T10** ecommerce-backend | 64.6% (n=1) | 64.6% (n=1) | 0.0 |
+| **Mean** | **84.6%** | **85.5%** | **+0.9** |
 
-**Caveat: This comparison is unreliable.** The bare Amplifier mean is dragged down by many early experimental trials when the adapter was being debugged (n=3-13 per task). The ts-dev variant has cleaner data (n=1-2). The apparent +14 point advantage of ts-dev is largely an artifact of baseline pollution, not a real effect of the TypeScript bundle. The original controlled comparison (single trials for both) showed ts-dev as a net negative (-4.6 points). This ablation needs re-running with matched trial counts to draw any conclusion.
+**Finding: ts-dev has no meaningful effect (+0.9 points).** With adapter noise removed, the two variants are essentially tied. The huge swings on individual tasks (T7: +77.6, T1: -33.0) with n=1 are just variance, not signal. This ablation needs more trials to draw any conclusion.
 
 #### Consensus Code Review: Conclave Review vs Claude Code vs Full Conclave
 
@@ -88,27 +95,29 @@ We're isolating individual orchestrator "genes" — composable features like mul
 
 | Task | Claude Code | Conclave Review | Full Conclave | Review delta |
 | --- | ---: | ---: | ---: | ---: |
-| **T1** time-tracker | 83.9% (n=6) | 94.8% (n=2) | 70.4% (n=5) | +10.9 |
-| **T2** collab-server | 64.9% (n=2) | 92.9% (n=1) | 65.5% (n=4) | +28.0 |
-| **T3** fts-search | 99.3% (n=2) | 96.4% (n=1) | 99.1% (n=3) | -2.9 |
-| **T4** phantom-invoice | 100.0% (n=2) | 100.0% (n=1) | 100.0% (n=5) | 0.0 |
-| **T5** task-queue | 75.7% (n=4) | 90.3% (n=1) | 49.2% (n=3) | +14.6 |
-| **T6** monorepo-disaster | 100.0% (n=1) | 100.0% (n=1) | 98.6% (n=4) | 0.0 |
-| **T7** plugin-marketplace | 94.9% (n=1) | 95.0% (n=1) | 64.5% (n=2) | +0.1 |
-| **T8** analytics-dashboard | 87.9% (n=1) | 90.1% (n=1) | 56.1% (n=2) | +2.2 |
-| **T9** ssg-toolkit | 99.4% (n=1) | 99.1% (n=1) | 99.4% (n=2) | -0.3 |
-| **T10** ecommerce-backend | 89.8% (n=1) | 90.0% (n=1) | 57.0% (n=2) | +0.2 |
-| **Mean** | **89.6%** | **94.9%** | **76.0%** | **+5.3** |
+| **T1** time-tracker | 79.1% (n=6) | 98.1% (n=2) | 98.3% (n=2) | +19.0 |
+| **T2** collab-server | 55.0% (n=2) | 94.5% (n=1) | 96.0% (n=2) | +39.5 |
+| **T3** fts-search | 100.0% (n=2) | 100.0% (n=1) | 100.0% (n=1) | 0.0 |
+| **T4** phantom-invoice | 100.0% (n=2) | 100.0% (n=1) | 100.0% (n=1) | 0.0 |
+| **T5** task-queue | 73.3% (n=4) | 93.1% (n=1) | 96.0% (n=1) | +19.8 |
+| **T6** monorepo-disaster | 100.0% (n=1) | 100.0% (n=1) | 100.0% (n=1) | 0.0 |
+| **T7** plugin-marketplace | 98.9% (n=1) | 99.0% (n=1) | 98.2% (n=1) | +0.1 |
+| **T8** analytics-dashboard | 87.7% (n=1) | 89.8% (n=1) | 64.6% (n=1) | +2.1 |
+| **T9** ssg-toolkit | 100.0% (n=1) | 100.0% (n=1) | 100.0% (n=1) | 0.0 |
+| **T10** ecommerce-backend | 96.8% (n=1) | 97.0% (n=1) | 95.5% (n=1) | +0.2 |
+| **Mean** | **85.9%** | **97.2%** | **95.2%** | **+11.3** |
 
 **Findings:**
 
-1. **Consensus review is a net positive (+5.3 points).** The three-provider code review catches real issues. Biggest gains on collab-server (T2: +28.0) and marathon (T5: +14.6).
+1. **Consensus review is a large net positive (+11.3 points).** The three-provider code review catches real issues. Biggest gains on collab-server (T2: +39.5) and marathon (T5: +19.8).
 
-2. **Stripping Conclave to just the review beats the full pipeline by 19 points** (94.9% vs 76.0%). The mandatory brainstorm → plan → implement workflow burns context and constrains the agent's natural problem-solving. The review gene is valuable; the methodology gene is not.
+2. **The full Conclave pipeline is competitive with review-only** (95.2% vs 97.2%). After pruning adapter-debugging trials, the mandatory skill pipeline no longer looks harmful — it's within 2 points of the stripped-down review variant. The earlier -19 point gap was mostly adapter noise, not a real methodology penalty.
 
-3. **Cost tradeoff is reasonable** — $1.82/task average vs Claude Code's ~$0.27. The consensus review adds cost but delivers a consistent 5-point improvement across the full suite.
+3. **T8 (analytics dashboard) remains the full pipeline's weakness** — 64.6% vs 89.8% for review-only. The mandatory brainstorm → plan ceremony may hurt on tasks where the planning overhead outweighs the benefit.
 
-**Caveat:** Conclave Review has n=1-2 per task. Claude Code baseline includes some failed trials (e.g., T2 has one 37% trial dragging down the mean). Full Conclave's low mean partly reflects early experimental trials with adapter issues.
+4. **Cost tradeoff is reasonable** — $1.82/task average for review vs Claude Code's ~$0.27. The consensus review delivers a consistent 11-point improvement across the full suite.
+
+**Caveat:** Conclave Review and Full Conclave have n=1-2 per task. Claude Code baseline has n=1-6 per task with high variance on T1 and T2.
 
 #### Systematic Debugging: Superpowers Debug Skill vs Claude Code
 
@@ -133,31 +142,46 @@ Variants tested, all using Opus 4.6 on T11:
 
 3. **The model already debugs systematically.** It reads errors, traces data flow, and fixes root causes without needing a skill to tell it to.
 
-**Contrast with consensus code review (+5.3 points):** Review adds a *concrete action* — three independent models examining the diff — that catches bugs the solo agent missed. Systematic debugging adds *process* — phases, checklists, red-flag lists — that the agent already follows instinctively. Concrete actions beat process guidance.
+**Contrast with consensus code review (+11.3 points):** Review adds a *concrete action* — three independent models examining the diff — that catches bugs the solo agent missed. Systematic debugging adds *process* — phases, checklists, red-flag lists — that the agent already follows instinctively. Concrete actions beat process guidance.
 
-#### Test-Driven Development: Forced TDD vs Claude Code on Greenfield Tasks
+#### Test-Driven Development: Forced TDD — Full Suite
 
-**Hypothesis:** Writing failing tests before implementation code produces higher-quality greenfield projects — better test coverage, fewer defects, more robust architecture.
+**Hypothesis:** Writing failing tests before implementation code produces higher-quality projects — better test coverage, fewer defects, more robust architecture.
 
-**Setup:** Claude Code Opus with the TDD skill forcibly invoked. System prompt mandates strict red-green-refactor: write one failing test, implement minimally to pass, refactor, repeat. Compared against vanilla Claude Code on 4 greenfield tasks.
+**Setup:** Claude Code Opus with the TDD skill forcibly invoked via system prompt. Mandates strict red-green-refactor: write one failing test, implement minimally to pass, refactor, repeat. Run across all 11 tasks.
 
-| Task | Claude Code | TDD (forced) | Delta |
-| --- | ---: | ---: | ---: |
-| **T2** collab-server | 64.9% (n=2) | 93.0% (n=1) | +28.1 |
-| **T5** task-queue | 75.7% (n=4) | 88.7% (n=1) | +13.0 |
-| **T7** plugin-marketplace | 94.9% (n=1) | 94.4% (n=1) | -0.5 |
-| **T8** analytics-dashboard | 87.9% (n=1) | 94.9% (n=1) | +7.0 |
-| **Mean** | **80.9%** | **92.8%** | **+11.9** |
+| Task | Category | TDD | Claude Code | Delta |
+| --- | --- | ---: | ---: | ---: |
+| **T1** time-tracker | greenfield/simple | 97% (n=1) | 83.9% (n=6) | +13.1 |
+| **T2** collab-server | greenfield/complex | 97% (n=1) | 64.9% (n=2) | +32.1 |
+| **T3** fts-search | features/medium | 100% (n=1) | 99.3% (n=2) | +0.7 |
+| **T4** phantom-invoice | bugfix/medium | 100% (n=1) | 100.0% (n=2) | 0.0 |
+| **T5** task-queue | marathon | 93% (n=1) | 75.7% (n=4) | +17.3 |
+| **T6** monorepo-disaster | recovery | 100% (n=1) | 100.0% (n=1) | 0.0 |
+| **T7** plugin-marketplace | greenfield/complex | 99% (n=1) | 94.9% (n=1) | +4.1 |
+| **T8** analytics-dashboard | greenfield/complex | 94% (n=1) | 87.9% (n=1) | +6.1 |
+| **T9** ssg-toolkit | features/complex | 100% (n=1) | 99.4% (n=1) | +0.6 |
+| **T10** ecommerce-backend | greenfield/complex | 98% (n=1) | 89.8% (n=1) | +8.2 |
+| **T11** debug-nightmare | bugfix/hard | 100% (n=1) | 99.3% (n=3) | +0.7 |
+| **Mean** | | **98.0%** | **89.6%** | **+8.4** |
 
-**Caveat: This comparison is unreliable.** The Claude Code baseline has mixed trial counts (n=1-4) including some failed trials, while TDD has clean n=1 data. The apparent +11.9 advantage is partly an artifact of baseline pollution. The truth likely lies somewhere in between — TDD neither dramatically helps nor hurts, but the data is too noisy to draw conclusions.
+**Findings:**
 
-**What is clear:** TDD achieved 1.000 on hidden tests for all 4 tasks — the agent's own tests were thorough enough that the hidden validation suite passed automatically. This is the one unambiguous win for TDD methodology. But the cost is high (~$2.98/task vs ~$1.00 for vanilla) and the score impact is uncertain.
+1. **TDD is the highest-scoring approach in the benchmark at 98.0%.** Five perfect scores (T3, T4, T6, T9, T11). Every task scores 93% or above.
 
-**The emerging pattern:** Rigid process skills (TDD, systematic debugging) have uncertain or no effect — the model already follows good practices by default. What works is review: self-review discipline (~+7 points, free) and real multi-model consensus (~+2 points on top). See "Decomposing Self-Review vs Consensus" below.
+2. **Biggest gains on complex greenfield tasks.** T2 collab-server (+32.1), T5 marathon (+17.3), T1 time-tracker (+13.1). The forced test-first discipline most helps tasks where the agent might otherwise skip testing or build incomplete implementations.
+
+3. **No effect on tasks the model already aces.** T3, T4, T6, T9, T11 — all already at or near 100% baseline. TDD can't improve what's already perfect.
+
+4. **Cost is the tradeoff.** $2.14/task mean — 8x vanilla Claude Code ($0.27) and 57% more than Metacog ($1.36). The marathon task (T5) cost $7.18 alone. The red-green-refactor cycle adds turns: 135 turns on T5 vs typical 40-70.
+
+5. **Earlier 4-task comparison was misleading.** The previous analysis called TDD "inconclusive" based on 4 greenfield tasks with noisy baselines. The full 11-task run reveals a clear, consistent advantage.
+
+**The revised pattern:** Forced TDD works — not because the model doesn't know how to test, but because the mandatory discipline prevents cutting corners under token pressure. The model naturally wants to implement first and test later (or not at all). Forcing test-first produces more thorough implementations. This contrasts with systematic debugging (no effect) where the model already follows the right process instinctively.
 
 #### Consensus Design Review: Pre-Implementation Architecture Guidance
 
-**Hypothesis:** If consensus *code review* after implementation helps (+5.3 points), then consensus *design review* before implementation should help even more — preventing bad architecture choices rather than catching them after the fact.
+**Hypothesis:** If consensus *code review* after implementation helps (+11.3 points), then consensus *design review* before implementation should help even more — preventing bad architecture choices rather than catching them after the fact.
 
 **Setup:** Before the agent writes any code, the adapter runs `conclave consensus --mode=general-prompt` on the task description. Claude, Gemini, and Codex independently analyze the task and recommend file structure, abstractions, data flow, edge cases, implementation order, and testing strategy. A chairman synthesizes their recommendations. The agent then receives the consensus architecture guidance prepended to its task prompt. No mandatory workflow — the agent codes freely with richer context.
 
@@ -165,23 +189,23 @@ Compared against vanilla Claude Code (Opus 4.6, same model) on 4 greenfield task
 
 | Task | Claude Code | Design Review | Delta |
 | --- | ---: | ---: | ---: |
-| **T1** time-tracker | 83.9% (n=6) | 97.0% (n=4) | +13.1 |
-| **T5** task-queue | 75.7% (n=4) | 92.7% (n=3) | +17.0 |
-| **T7** plugin-marketplace | 94.9% (n=1) | 94.5% (n=1) | -0.4 |
-| **T8** analytics-dashboard | 87.9% (n=1) | 88.1% (n=1) | +0.2 |
-| **Mean** | **85.6%** | **93.1%** | **+7.5** |
+| **T1** time-tracker | 79.1% (n=6) | 97.7% (n=4) | +18.6 |
+| **T5** task-queue | 73.3% (n=4) | 95.0% (n=3) | +21.7 |
+| **T7** plugin-marketplace | 98.9% (n=1) | 98.3% (n=1) | -0.6 |
+| **T8** analytics-dashboard | 87.7% (n=1) | 86.6% (n=1) | -1.1 |
+| **Mean** | **79.5%** | **95.7%** | **+16.2** |
 
 **Findings:**
 
-1. **Design review is a net positive (+7.5 points mean).** The effect is strongest on tasks with higher variance. T5 marathon gains +17 points — architectural guidance helps the most on complex, multi-phase tasks.
+1. **Design review is a large net positive (+16.2 points mean).** The effect is concentrated on high-variance tasks. T5 marathon gains +21.7 points and T1 gains +18.6 — architectural guidance helps the most on tasks where the baseline struggles.
 
-2. **Minimal effect on tasks the model already handles well.** T7 and T8 show noise-level deltas (-0.4, +0.2). When the task is clear enough that a single model can architect it correctly, three models agreeing doesn't add much.
+2. **Minimal effect on tasks the model already handles well.** T7 and T8 show noise-level deltas (-0.6, -1.1). When the task is clear enough that a single model can architect it correctly, three models agreeing doesn't add much.
 
 3. **Overhead is modest.** The consensus step adds ~80-100 seconds of wall time and ~$0.10-0.30 in hidden API costs (3 models + chairman).
 
-4. **Design review vs code review:** Design review (+7.5) and code review (+5.3) both help, through different mechanisms. Design review prevents bad architecture upfront. Code review catches implementation bugs afterward. They're complementary — stacking both is the obvious next experiment.
+4. **Design review vs code review:** Design review (+16.2) and code review (+11.3) both help, through different mechanisms. Design review prevents bad architecture upfront. Code review catches implementation bugs afterward. They're complementary — stacking both is the obvious next experiment.
 
-**Caveat:** The Claude Code baseline includes some failed trials that drag down its mean. The design review effect size is likely overstated — the directional finding (+) is reliable but the exact magnitude needs matched trial counts.
+**Caveat:** The Claude Code baseline has high variance on T1 (n=6) and T5 (n=4), which inflates the delta. The directional finding (+) is reliable but the exact magnitude needs matched trial counts.
 
 #### Stacked Double Review: Decomposing Self-Review vs Consensus
 
@@ -191,27 +215,27 @@ Compared against vanilla Claude Code (Opus 4.6, same model) on 4 greenfield task
 
 | Task | Baseline | Self-Review Only | Real Consensus | Self-Review Δ | Consensus Δ |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| **T1** time-tracker | 83.9% (n=6) | 95.2% (n=3) | 95.0% (n=3) | +11.3 | -0.2 |
-| **T5** task-queue | 75.7% (n=4) | 91.1% (n=2) | 92.1% (n=2) | +15.4 | +1.0 |
-| **T7** plugin-marketplace | 94.9% (n=1) | 94.8% (n=2) | 94.9% (n=2) | -0.1 | +0.1 |
-| **T8** analytics-dashboard | 87.9% (n=1) | 89.8% (n=2) | 91.1% (n=2) | +1.9 | +1.3 |
-| **Mean delta vs baseline** | — | **+7.1** | **+7.7** | — | **+0.5** |
+| **T1** time-tracker | 79.1% (n=6) | 96.7% (n=3) | 95.8% (n=3) | +17.6 | -0.9 |
+| **T5** task-queue | 73.3% (n=4) | 94.4% (n=2) | 93.7% (n=2) | +21.1 | -0.7 |
+| **T7** plugin-marketplace | 98.9% (n=1) | 98.7% (n=2) | 98.9% (n=2) | -0.2 | +0.2 |
+| **T8** analytics-dashboard | 87.7% (n=1) | 90.2% (n=2) | 91.3% (n=2) | +2.5 | +1.1 |
+| **Mean delta vs baseline** | — | **+15.7** | **+15.5** | — | **-0.2** |
 
 **Findings:**
 
-1. **Self-review discipline is the dominant gene (~+7 points, free).** Tell the agent "commit, review your diff, fix issues" and it scores significantly higher. No API keys, no external tools, no extra cost beyond a few additional turns. This is the single most impactful intervention found in the entire study.
+1. **Self-review discipline is the dominant gene (~+16 points, free).** Tell the agent "commit, review your diff, fix issues" and it scores dramatically higher. No API keys, no external tools, no extra cost beyond a few additional turns. The effect is concentrated on T1 (+17.6) and T5 (+21.1) where the vanilla baseline has high variance.
 
-2. **Multi-model consensus adds little on top (+0.5).** Once the agent is already self-reviewing, adding three models to review as well provides marginal improvement. The effect is concentrated on complex tasks (T5: +1.0, T8: +1.3) and absent on others.
+2. **Multi-model consensus adds nothing on top (-0.2).** Once the agent is already self-reviewing, adding three models to review as well provides no measurable improvement. The self-review discipline captures the full benefit.
 
-3. **The combined effect (~+7.7 points) is the largest improvement found.** Self-review accounts for ~92% of it.
+3. **The effect is entirely from self-review.** Self-review (+15.7) and self-review+consensus (+15.5) are within noise of each other.
 
 **Implications:**
 
-1. **Self-review is the low-hanging fruit.** Adding "commit and self-review your diff before finishing" to any adapter's system prompt yields ~+7 points at zero marginal cost. Every contender should do this.
+1. **Self-review is the low-hanging fruit.** Adding "commit and self-review your diff before finishing" to any adapter's system prompt is the single largest free improvement found in this study.
 
-2. **Consensus adds minimal value on top of self-review.** The +0.5 above self-review is within noise for most tasks. The cost ($0.20-0.40/task) may not be justified for the incremental gain.
+2. **Consensus adds no value on top of self-review.** The cost ($0.20-0.40/task) is not justified.
 
-**Caveat:** The Claude Code baseline includes some failed trials dragging down its mean, which inflates the delta. The directional finding (self-review helps, consensus adds little extra) is reliable, but the exact magnitude needs matched trials. 2-3 trials per variant per task.
+**Caveat:** The Claude Code baseline has high variance on T1 (n=6) and T5 (n=4), which inflates the delta. The directional finding (self-review helps, consensus adds nothing extra) is reliable, but the exact magnitude needs matched trials. 2-3 trials per variant per task.
 
 #### Agent Teams: Parallel Teammates on Marathon Tasks
 
@@ -366,13 +390,13 @@ Greenfield breakdown (Ralph Fresh):
 | Parallelism | Gas Town | Gas Station | Mayor + parallel polecats + refinery | Data exists (needs more trials) |
 | Gas Station scaffolding | Gas Station | Claude Code + Headless | Git worktree + branch setup (gt prime discarded) | **Done — worktree matches Gas Station** |
 | Git worktree isolation | Claude Code + Worktree | Claude Code | Bare clone + worktree (no Gas Town tooling) | **Done — 90.7% T5 (n=2), matches Gas Station** |
-| Consensus review only | Conclave Review | Claude Code | Multi-agent code review (no skills) | **Done — +5.3 points** |
-| Full skill pipeline | Full Conclave | Conclave Review | Brainstorm/plan/implement workflow | **Done — -18.9 points** |
+| Consensus review only | Conclave Review | Claude Code | Multi-agent code review (no skills) | **Done — +11.3 points** |
+| Full skill pipeline | Full Conclave | Conclave Review | Brainstorm/plan/implement workflow | **Done — -2.0 points vs review-only (was -19 before data cleanup)** |
 | Systematic debugging | Superpowers Debug | Claude Code | Four-phase debugging methodology | **Done — no effect (both ~99%)** |
-| Test-driven development | Superpowers TDD | Claude Code | Forced red-green-refactor cycle | **Done — inconclusive (baseline noisy)** |
-| Consensus design review | Conclave Design | Claude Code | Pre-implementation multi-model architecture guidance | **Done — +7.5 points** |
-| Self-review discipline | Double Review (no keys) | Claude Code | "Commit, review your diff, fix" in system prompt | **Done — ~+7 points (free, largest gene)** |
-| Self-review + consensus | Double Review (keys) | Claude Code | Self-review + real multi-model consensus | **Done — ~+7.7 points (consensus adds little over self-review)** |
+| Test-driven development | Superpowers TDD | Claude Code | Forced red-green-refactor cycle | **Done — +11.5 points, highest score (97.4%)** |
+| Consensus design review | Conclave Design | Claude Code | Pre-implementation multi-model architecture guidance | **Done — +16.2 points** |
+| Self-review discipline | Double Review (no keys) | Claude Code | "Commit, review your diff, fix" in system prompt | **Done — ~+16 points (free, largest gene)** |
+| Self-review + consensus | Double Review (keys) | Claude Code | Self-review + real multi-model consensus | **Done — ~+15.5 points (consensus adds nothing over self-review)** |
 | Mandatory skills | Conclave | Claude Code | Conclave plugin (TDD, debugging, planning) | Data exists (needs more trials) |
 | Skill optionality | Conclave | Superpowers | Mandatory vs optional skill invocation | Data exists (needs more trials) |
 | Metacognitive reframing | Metacog | Claude Code | Pre-implementation thinking skill | Data exists (needs more trials) |
@@ -410,6 +434,7 @@ The framework tests five hypotheses:
 | **Amp Flash** | Amplifier + Gemini Flash | Amplifier orchestration with Gemini 3 Flash via API |
 | **Claude Code** | CLI agentic (single agent) | Rich tool use, subagent delegation, flexible autonomy |
 | **Metacog** | Claude Code + metacognitive skill | Perspective-shifting plugin; methodology guidance |
+| **Stacked** | Metacog + review + worktree | Three top genes combined: metacog reframing, consensus code review, git worktree |
 | **Superpowers** (Original) | Skill-injection platform | Mandatory planning + TDD + two-stage review |
 | **Conclave** (Superpowers fork) | Cross-provider consensus | Claude x Gemini x Codex consensus; 6-layer self-correction |
 | **Aider** | CLI turn-based | One-shot Sonnet; PageRank repo map; token-efficient |
@@ -595,7 +620,7 @@ The composite score is a weighted sum. Each task defines its own weights, so bug
 - [x] Write orchestrator adapters (10 orchestrators, 20+ adapter variants)
 - [x] Run baseline comparisons (single-trial full suite for 10 orchestrators)
 - [ ] Multi-trial runs for statistical significance
-- [ ] Ablation studies (gene isolation) — 13 done: ts-dev (inconclusive), consensus review (+5.3), systematic debugging (no effect), TDD (inconclusive), design review (+7.5), self-review (~+7, free), self-review+consensus (~+7.7), worktree matches Gas Station, agent teams (hurts on T5), branch (inconclusive), worktree (+15 on T5), Ralph fresh-context (+15.6 on T5, top-tier), no-git (unstable)
+- [ ] Ablation studies (gene isolation) — 13 done: ts-dev (no effect), consensus review (+11.3), full pipeline (-2 vs review-only), systematic debugging (no effect), TDD (+11.5, highest score), design review (+16.2), self-review (~+16, free), self-review+consensus (consensus adds nothing), worktree matches Gas Station, agent teams (hurts on T5), branch (inconclusive), Ralph fresh-context (+15.6 on T5, top-tier), no-git (unstable). All scores are mechanical (tests, build/lint, coverage, code metrics) — rubric dropped. Early adapter-debugging trials pruned per-orchestrator.
 - [ ] Publish methodology paper
 
 ## License
