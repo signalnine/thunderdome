@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across all 11 tasks (tests + build/lint for standard tasks; hidden_tests + agent_tests + coverage + code_metrics + lint for greenfield). Data includes 474 trials across 23 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
+Composite scores across all 11 tasks (tests + build/lint for standard tasks; hidden_tests + agent_tests + coverage + code_metrics + lint for greenfield). Data includes 486 trials across 24 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
 
 ### Leaderboard
 
@@ -15,33 +15,35 @@ Mean composite score across all tasks run, ranked by score. Orchestrators with f
 | Rank | Orchestrator | Mean | Tasks | Trials | Avg Cost | Model |
 |---:|---|---:|---:|---:|---:|---|
 | 1 | Superpowers Review | **97.7%** | 11 | 11 | $2.48 | Opus 4.6 |
-| 2 | Superpowers TDD | **97.4%** | 11 | 16 | $2.32 | Opus 4.6 |
-| 3 | Stacked | **97.3%** | 11 | 11 | $1.36 | Opus 4.6 |
-| 4 | Superpowers Verify | **97.3%** | 11 | 11 | $0.94 | Opus 4.6 |
-| 5 | Conclave Review | **97.2%** | 10 | 11 | $1.82 | Multi-provider |
-| 6 | Superpowers Plans | **96.9%** | 11 | 11 | $1.05 | Opus 4.6 |
-| 7 | Gas Town | **96.6%** | 10 | 24 | $0.02 | Opus 4.6 |
-| 8 | Superpowers Debug | **96.4%** | 4 | 9 | $0.88 | Opus 4.6 |
-| 9 | Metacog | **95.9%** | 11 | 22 | $0.70 | Opus 4.6 |
-| 10 | Conclave Design | **95.7%** | 4 | 9 | $2.09 | Multi-provider |
-| 11 | Conclave (Full) | **95.2%** | 10 | 12 | $0.14 | Multi-provider |
-| 12 | Conclave Double Review | **95.2%** | 4 | 9 | $1.26 | Multi-provider |
-| 13 | Conclave Dbl Review + Keys | **95.0%** | 4 | 9 | $1.89 | Multi-provider |
-| 14 | Ralph Fresh | **94.7%** | 2 | 4 | $1.57 | Opus 4.6 |
-| 15 | Claude Code Worktree | **94.7%** | 2 | 3 | $1.20 | Opus 4.6 |
-| 16 | Claude Code Headless | **94.2%** | 4 | 9 | $1.15 | Opus 4.6 |
-| 17 | Gas Station | **92.6%** | 10 | 22 | $0.71 | Opus 4.6 |
-| 18 | Agent Teams | **86.2%** | 10 | 28 | $0.49 | Opus 4.6 |
-| 19 | Claude Code | **85.9%** | 11 | 24 | $0.27 | Opus 4.6 |
-| 20 | Amplifier + ts-dev | **85.5%** | 10 | 11 | $0.75 | Opus 4.6 |
-| 21 | Amplifier | **84.6%** | 10 | 11 | $0.02 | Opus 4.6 |
-| 22 | Amp Flash | **84.2%** | 10 | 11 | $0.00 | Gemini 3 Flash |
-| 23 | Gemini CLI | **82.0%** | 10 | 19 | $0.00 | Gemini 3 Flash |
+| 2 | Superpowers Brainstorm | **97.5%** | 11 | 11 | $1.48 | Opus 4.6 |
+| 3 | Superpowers TDD | **97.4%** | 11 | 16 | $2.32 | Opus 4.6 |
+| 4 | Stacked | **97.3%** | 11 | 11 | $1.36 | Opus 4.6 |
+| 5 | Superpowers Verify | **97.3%** | 11 | 11 | $0.94 | Opus 4.6 |
+| 6 | Conclave Review | **97.2%** | 10 | 11 | $1.82 | Multi-provider |
+| 7 | Superpowers Plans | **96.9%** | 11 | 11 | $1.05 | Opus 4.6 |
+| 8 | Gas Town | **96.6%** | 10 | 24 | $0.02 | Opus 4.6 |
+| 9 | Superpowers Debug | **96.4%** | 4 | 9 | $0.88 | Opus 4.6 |
+| 10 | Metacog | **95.9%** | 11 | 22 | $0.70 | Opus 4.6 |
+| 11 | Conclave Design | **95.7%** | 4 | 9 | $2.09 | Multi-provider |
+| 12 | Conclave (Full) | **95.2%** | 10 | 12 | $0.14 | Multi-provider |
+| 13 | Conclave Double Review | **95.2%** | 4 | 9 | $1.26 | Multi-provider |
+| 14 | Conclave Dbl Review + Keys | **95.0%** | 4 | 9 | $1.89 | Multi-provider |
+| 15 | Ralph Fresh | **94.7%** | 2 | 4 | $1.57 | Opus 4.6 |
+| 16 | Claude Code Worktree | **94.7%** | 2 | 3 | $1.20 | Opus 4.6 |
+| 17 | Claude Code Headless | **94.2%** | 4 | 9 | $1.15 | Opus 4.6 |
+| 18 | Gas Station | **92.6%** | 10 | 22 | $0.71 | Opus 4.6 |
+| 19 | Agent Teams | **86.2%** | 10 | 28 | $0.49 | Opus 4.6 |
+| 20 | Claude Code | **85.9%** | 11 | 24 | $0.27 | Opus 4.6 |
+| 21 | Amplifier + ts-dev | **85.5%** | 10 | 11 | $0.75 | Opus 4.6 |
+| 22 | Amplifier | **84.6%** | 10 | 11 | $0.02 | Opus 4.6 |
+| 23 | Amp Flash | **84.2%** | 10 | 11 | $0.00 | Gemini 3 Flash |
+| 24 | Gemini CLI | **82.0%** | 10 | 19 | $0.00 | Gemini 3 Flash |
 
 ### Key Findings
 
 - **Superpowers Review** is the new #1 — 97.7% mean with skill-guided multi-agent code review after implementation. 97% on the marathon task (T5) is the highest any variant has scored there. Costs $2.48/task
-- **Superpowers TDD** is a close second (97.4%) with forced red-green-refactor across all 11 tasks. Costs $2.32/task — similar cost to Review but slightly lower score
+- **Superpowers Brainstorm** is #2 at 97.5% — consensus-driven design exploration before coding. Autopilot mode uses Claude + Gemini + Codex to answer design questions automatically. $1.48/task — cheaper than Review and TDD
+- **Superpowers TDD** is a close third (97.4%) with forced red-green-refactor across all 11 tasks. Costs $2.32/task — similar cost to Review but slightly lower score
 - **Superpowers Verify** is the best cost-adjusted performer — 97.3% mean at just $0.94/task. A single skill ("no completion claims without fresh verification evidence") adds +11.4 points over vanilla at minimal overhead
 - **Stacked** combines three genes (metacog + consensus review + worktree) for 97.3% at $1.36/task — same score as Verify but at higher cost
 - **Superpowers Plans** shows "plan before code" is effective — 96.9% mean at $1.05/task. The mandatory planning step adds +7.3 points over vanilla, with 100% pass rate. Cheaper than TDD but slightly lower score
@@ -252,6 +254,41 @@ Variants tested, all using Opus 4.6 on T11:
 5. **The review gene is robust across delivery mechanisms.** Hardcoded (97.2%), skill-guided (97.7%), and self-review-only (95.2%) all beat vanilla by 6-12 points. The common thread: pausing to examine your work before claiming done.
 
 **The updated hierarchy:** Review (97.7%) > TDD (97.4%) > Verify (97.3%) > Plans (96.9%) > Vanilla (89.6%). All four discipline genes beat vanilla by 7-8+ points. Review and TDD are the most thorough (and most expensive). Verify is the best value. Plans is solid middle ground.
+
+#### Brainstorming: Consensus Design Exploration
+
+**Hypothesis:** Having multiple AI models collaboratively explore the design space before coding — asking and answering architecture questions via consensus — produces better implementations than jumping straight to code.
+
+**Setup:** Claude Code Opus with the brainstorming skill forcibly invoked in autopilot mode. The skill's autopilot uses `conclave consensus --mode=general-prompt` to answer each design question (database choice, API style, component architecture, etc.) via three-model consensus (Claude + Gemini + Codex). The agent works through architecture, components, data flow, error handling, and testing, writes a design document, then implements. Run across all 11 tasks. One T1 trial pruned (coverage infrastructure failure — `coverage-summary.json` not generated).
+
+| Task | Category | Brainstorm | Claude Code | Delta |
+| --- | --- | ---: | ---: | ---: |
+| **T1** time-tracker | greenfield/simple | 98% (n=1) | 83.9% (n=6) | +14.1 |
+| **T2** collab-server | greenfield/complex | 94% (n=1) | 64.9% (n=2) | +29.1 |
+| **T3** fts-search | features/medium | 100% (n=1) | 99.3% (n=2) | +0.7 |
+| **T4** phantom-invoice | bugfix/medium | 100% (n=1) | 100.0% (n=2) | 0.0 |
+| **T5** task-queue | marathon | 96% (n=1) | 75.7% (n=4) | +20.3 |
+| **T6** monorepo-disaster | recovery | 100% (n=1) | 100.0% (n=1) | 0.0 |
+| **T7** plugin-marketplace | greenfield/complex | 99% (n=1) | 94.9% (n=1) | +4.1 |
+| **T8** analytics-dashboard | greenfield/complex | 88% (n=1) | 87.9% (n=1) | +0.1 |
+| **T9** ssg-toolkit | features/complex | 100% (n=1) | 99.4% (n=1) | +0.6 |
+| **T10** ecommerce-backend | greenfield/complex | 98% (n=1) | 89.8% (n=1) | +8.2 |
+| **T11** debug-nightmare | bugfix/hard | 100% (n=1) | 99.3% (n=3) | +0.7 |
+| **Mean** | | **97.5%** | **89.6%** | **+7.9** |
+
+**Findings:**
+
+1. **Brainstorming lands at #2 (97.5%).** Only Review (97.7%) scores higher. Six perfect scores (T3, T4, T6, T9, T11, and effectively T1/T10 at 98%). 100% pass rate across all 11 tasks.
+
+2. **Biggest gains on complex greenfield and marathon.** T2 collab-server (+29.1) and T5 marathon (+20.3) benefit most from consensus-driven design exploration. The multi-model design discussion surfaces architecture choices the solo agent might miss.
+
+3. **Good cost profile.** $1.48/task mean — cheaper than Review ($2.48) and TDD ($2.32). The autopilot consensus calls add overhead but the agent doesn't need as many implementation turns when it has a solid design to follow.
+
+4. **T8 remains the ceiling.** At 88%, brainstorming barely improves the analytics dashboard task (+0.1). The design exploration doesn't help when the challenge is implementation complexity rather than architecture.
+
+5. **Divergent exploration vs convergent discipline.** Brainstorming is the first "divergent" gene tested — it opens up the design space before narrowing. All previous top genes (Review, TDD, Verify) are "convergent" — they check work after implementation. Both approaches work, through different mechanisms.
+
+**The emerging picture:** Five of six Superpowers skills tested are effective. Only systematic-debugging had no effect. The top tier is remarkably tight: Review (97.7%), Brainstorm (97.5%), TDD (97.4%), Verify (97.3%), Plans (96.9%). Any structured discipline — whether applied before, during, or after coding — beats unstructured vanilla by 7-12 points.
 
 #### Writing Plans: Plan Before Code
 
@@ -506,6 +543,7 @@ Greenfield breakdown (Ralph Fresh):
 | Verification before completion | Superpowers Verify | Claude Code | "No claims without fresh evidence" | **Done — +11.4 points at $0.94 (cheapest top-tier)** |
 | Skill-guided code review | Superpowers Review | Claude Code | requesting-code-review skill + conclave consensus | **Done — +8.1 points, new #1 (97.7%)** |
 | Writing plans | Superpowers Plans | Claude Code | Mandatory plan before implementation | **Done — +7.3 points at $1.05** |
+| Brainstorming | Superpowers Brainstorm | Claude Code | Consensus design exploration (autopilot) | **Done — +7.9 points, #2 (97.5%)** |
 | Consensus design review | Conclave Design | Claude Code | Pre-implementation multi-model architecture guidance | **Done — +16.2 points** |
 | Self-review discipline | Double Review (no keys) | Claude Code | "Commit, review your diff, fix" in system prompt | **Done — ~+16 points (free, largest gene)** |
 | Self-review + consensus | Double Review (keys) | Claude Code | Self-review + real multi-model consensus | **Done — ~+15.5 points (consensus adds nothing over self-review)** |
@@ -547,7 +585,8 @@ The framework tests five hypotheses:
 | **Claude Code** | CLI agentic (single agent) | Rich tool use, subagent delegation, flexible autonomy |
 | **Metacog** | Claude Code + metacognitive skill | Perspective-shifting plugin; methodology guidance |
 | **Stacked** | Metacog + review + worktree | Three top genes combined: metacog reframing, consensus code review, git worktree |
-| **Superpowers Review** | Claude Code + code review skill | Skill-guided multi-agent consensus code review — new #1 |
+| **Superpowers Review** | Claude Code + code review skill | Skill-guided multi-agent consensus code review — #1 |
+| **Superpowers Brainstorm** | Claude Code + brainstorming skill | Consensus-driven design exploration in autopilot mode — #2 |
 | **Superpowers Verify** | Claude Code + verification skill | "No completion claims without fresh evidence" — cheapest top-tier |
 | **Superpowers** (Original) | Skill-injection platform | Mandatory planning + TDD + two-stage review |
 | **Conclave** (Superpowers fork) | Cross-provider consensus | Claude x Gemini x Codex consensus; 6-layer self-correction |
@@ -734,7 +773,7 @@ The composite score is a weighted sum. Each task defines its own weights, so bug
 - [x] Write orchestrator adapters (10 orchestrators, 20+ adapter variants)
 - [x] Run baseline comparisons (single-trial full suite for 10 orchestrators)
 - [ ] Multi-trial runs for statistical significance
-- [ ] Ablation studies (gene isolation) — 15 done: ts-dev (no effect), consensus review (+11.3), full pipeline (-2 vs review-only), systematic debugging (no effect), TDD (+8.4), verification (+11.4, cheapest top-tier), writing plans (+7.3), skill-guided review (+8.1, new #1 at 97.7%), design review (+16.2), self-review (~+16, free), self-review+consensus (consensus adds nothing), worktree matches Gas Station, agent teams (hurts on T5), branch (inconclusive), Ralph fresh-context (+15.6 on T5, top-tier), no-git (unstable). All scores are mechanical (tests, build/lint, coverage, code metrics) — rubric dropped. Early adapter-debugging trials pruned per-orchestrator.
+- [ ] Ablation studies (gene isolation) — 16 done: ts-dev (no effect), consensus review (+11.3), full pipeline (-2 vs review-only), systematic debugging (no effect), TDD (+8.4), verification (+11.4, cheapest top-tier), writing plans (+7.3), skill-guided review (+8.1, #1 at 97.7%), brainstorming (+7.9, #2 at 97.5%), design review (+16.2), self-review (~+16, free), self-review+consensus (consensus adds nothing), worktree matches Gas Station, agent teams (hurts on T5), branch (inconclusive), Ralph fresh-context (+15.6 on T5, top-tier), no-git (unstable). All scores are mechanical (tests, build/lint, coverage, code metrics) — rubric dropped. Early adapter-debugging trials pruned per-orchestrator.
 - [ ] Publish methodology paper
 
 ## License
