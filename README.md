@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across all 11 tasks (tests + build/lint for standard tasks; hidden_tests + agent_tests + coverage + code_metrics + lint for greenfield). Data includes 486 trials across 24 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
+Composite scores across all 11 tasks (tests + build/lint for standard tasks; hidden_tests + agent_tests + coverage + code_metrics + lint for greenfield). Data includes 497 trials across 25 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
 
 ### Leaderboard
 
@@ -19,25 +19,26 @@ Mean composite score across all tasks run, ranked by score. Orchestrators with f
 | 3 | Superpowers TDD | **97.4%** | 11 | 16 | $2.32 | Opus 4.6 |
 | 4 | Stacked | **97.3%** | 11 | 11 | $1.36 | Opus 4.6 |
 | 5 | Superpowers Verify | **97.3%** | 11 | 11 | $0.94 | Opus 4.6 |
-| 6 | Conclave Review | **97.2%** | 10 | 11 | $1.82 | Multi-provider |
-| 7 | Superpowers Plans | **96.9%** | 11 | 11 | $1.05 | Opus 4.6 |
-| 8 | Gas Town | **96.6%** | 10 | 24 | $0.02 | Opus 4.6 |
-| 9 | Superpowers Debug | **96.4%** | 4 | 9 | $0.88 | Opus 4.6 |
-| 10 | Metacog | **95.9%** | 11 | 22 | $0.70 | Opus 4.6 |
-| 11 | Conclave Design | **95.7%** | 4 | 9 | $2.09 | Multi-provider |
-| 12 | Conclave (Full) | **95.2%** | 10 | 12 | $0.14 | Multi-provider |
-| 13 | Conclave Double Review | **95.2%** | 4 | 9 | $1.26 | Multi-provider |
-| 14 | Conclave Dbl Review + Keys | **95.0%** | 4 | 9 | $1.89 | Multi-provider |
-| 15 | Ralph Fresh | **94.7%** | 2 | 4 | $1.57 | Opus 4.6 |
-| 16 | Claude Code Worktree | **94.7%** | 2 | 3 | $1.20 | Opus 4.6 |
-| 17 | Claude Code Headless | **94.2%** | 4 | 9 | $1.15 | Opus 4.6 |
-| 18 | Gas Station | **92.6%** | 10 | 22 | $0.71 | Opus 4.6 |
-| 19 | Agent Teams | **86.2%** | 10 | 28 | $0.49 | Opus 4.6 |
-| 20 | Claude Code | **85.9%** | 11 | 24 | $0.27 | Opus 4.6 |
-| 21 | Amplifier + ts-dev | **85.5%** | 10 | 11 | $0.75 | Opus 4.6 |
-| 22 | Amplifier | **84.6%** | 10 | 11 | $0.02 | Opus 4.6 |
-| 23 | Amp Flash | **84.2%** | 10 | 11 | $0.00 | Gemini 3 Flash |
-| 24 | Gemini CLI | **82.0%** | 10 | 19 | $0.00 | Gemini 3 Flash |
+| 6 | Review + Verify | **97.2%** | 11 | 11 | $2.28 | Opus 4.6 |
+| 7 | Conclave Review | **97.2%** | 10 | 11 | $1.82 | Multi-provider |
+| 8 | Superpowers Plans | **96.9%** | 11 | 11 | $1.05 | Opus 4.6 |
+| 9 | Gas Town | **96.6%** | 10 | 24 | $0.02 | Opus 4.6 |
+| 10 | Superpowers Debug | **96.4%** | 4 | 9 | $0.88 | Opus 4.6 |
+| 11 | Metacog | **95.9%** | 11 | 22 | $0.70 | Opus 4.6 |
+| 12 | Conclave Design | **95.7%** | 4 | 9 | $2.09 | Multi-provider |
+| 13 | Conclave (Full) | **95.2%** | 10 | 12 | $0.14 | Multi-provider |
+| 14 | Conclave Double Review | **95.2%** | 4 | 9 | $1.26 | Multi-provider |
+| 15 | Conclave Dbl Review + Keys | **95.0%** | 4 | 9 | $1.89 | Multi-provider |
+| 16 | Ralph Fresh | **94.7%** | 2 | 4 | $1.57 | Opus 4.6 |
+| 17 | Claude Code Worktree | **94.7%** | 2 | 3 | $1.20 | Opus 4.6 |
+| 18 | Claude Code Headless | **94.2%** | 4 | 9 | $1.15 | Opus 4.6 |
+| 19 | Gas Station | **92.6%** | 10 | 22 | $0.71 | Opus 4.6 |
+| 20 | Agent Teams | **86.2%** | 10 | 28 | $0.49 | Opus 4.6 |
+| 21 | Claude Code | **85.9%** | 11 | 24 | $0.27 | Opus 4.6 |
+| 22 | Amplifier + ts-dev | **85.5%** | 10 | 11 | $0.75 | Opus 4.6 |
+| 23 | Amplifier | **84.6%** | 10 | 11 | $0.02 | Opus 4.6 |
+| 24 | Amp Flash | **84.2%** | 10 | 11 | $0.00 | Gemini 3 Flash |
+| 25 | Gemini CLI | **82.0%** | 10 | 19 | $0.00 | Gemini 3 Flash |
 
 ### Key Findings
 
@@ -53,6 +54,7 @@ Mean composite score across all tasks run, ranked by score. Orchestrators with f
 - **Gas Station** remains rock-solid — 92.6% mean across 22 trials. Single-agent + context injection in a git worktree
 - **Self-review discipline is free and effective** — telling the agent "commit, review your diff, fix issues" adds ~7 points at zero cost. This is the largest free gene effect found (see Double Review ablation)
 - **TDD works when forced** — earlier 4-task data was inconclusive, but full 11-task run shows TDD is the highest-scoring approach. The key is mandatory invocation via system prompt, not opt-in skill availability
+- **Gene stacking has diminishing returns** — Review + Verify (97.2%) scores *lower* than Review alone (97.7%). Two discipline checkpoints interfere rather than compound. The ceiling appears to be ~97-98% with current approaches
 - **T4** (bugfix) is the great equalizer — most contenders score 100%, the task is too easy
 - **T8** (analytics dashboard) is the hardest task — most contenders cluster around 70-90%
 
@@ -289,6 +291,41 @@ Variants tested, all using Opus 4.6 on T11:
 5. **Divergent exploration vs convergent discipline.** Brainstorming is the first "divergent" gene tested — it opens up the design space before narrowing. All previous top genes (Review, TDD, Verify) are "convergent" — they check work after implementation. Both approaches work, through different mechanisms.
 
 **The emerging picture:** Five of six Superpowers skills tested are effective. Only systematic-debugging had no effect. The top tier is remarkably tight: Review (97.7%), Brainstorm (97.5%), TDD (97.4%), Verify (97.3%), Plans (96.9%). Any structured discipline — whether applied before, during, or after coding — beats unstructured vanilla by 7-12 points.
+
+#### Gene Stacking: Review + Verify (Diminishing Returns)
+
+**Hypothesis:** Stacking the #1 scorer (Review, 97.7%) with the cheapest top-tier (Verify, 97.3%) should push past 98%. Review catches bugs via consensus, Verify ensures nothing ships unchecked — complementary mechanisms.
+
+**Setup:** Claude Code Opus with both requesting-code-review and verification-before-completion skills forcibly invoked. The agent implements, commits, runs multi-agent code review, fixes findings, then runs fresh verification (tests, build, lint) before claiming completion. Run across all 11 tasks.
+
+| Task | Category | Review+Verify | Review | Verify | Claude Code |
+| --- | --- | ---: | ---: | ---: | ---: |
+| **T1** time-tracker | greenfield/simple | 97% | 99% | 98% | 83.9% |
+| **T2** collab-server | greenfield/complex | 93% | 93% | 93% | 64.9% |
+| **T3** fts-search | features/medium | 100% | 100% | 100% | 99.3% |
+| **T4** phantom-invoice | bugfix/medium | 100% | 100% | 100% | 100.0% |
+| **T5** task-queue | marathon | 94% | 97% | 96% | 75.7% |
+| **T6** monorepo-disaster | recovery | 100% | 100% | 100% | 100.0% |
+| **T7** plugin-marketplace | greenfield/complex | 99% | 99% | 99% | 94.9% |
+| **T8** analytics-dashboard | greenfield/complex | 90% | 90% | 88% | 87.9% |
+| **T9** ssg-toolkit | features/complex | 100% | 100% | 100% | 99.4% |
+| **T10** ecommerce-backend | greenfield/complex | 97% | 97% | 96% | 89.8% |
+| **T11** debug-nightmare | bugfix/hard | 100% | 100% | 100% | 99.3% |
+| **Mean** | | **97.2%** | **97.7%** | **97.3%** | **89.6%** |
+
+**Findings:**
+
+1. **Stacking doesn't help — it slightly hurts.** Review + Verify (97.2%) scores lower than Review alone (97.7%) and matches Verify alone (97.3%). Two discipline checkpoints are not additive.
+
+2. **The marathon tells the story.** T5 drops from 97% (Review) to 94% (Review+Verify). The extra verification cycle after an already-thorough review adds turns without catching anything new, and the longer session may introduce regression.
+
+3. **T8 is unchanged.** The hardest task scores 90% with or without stacking — the ceiling on analytics-dashboard isn't about discipline, it's about implementation complexity.
+
+4. **More expensive for less.** $2.28/task — cheaper than Review alone ($2.48) oddly, but the score is lower. The agent may be spending the verification turns less productively when it's already done a thorough review.
+
+5. **This mirrors the Double Review finding.** The earlier ablation showed consensus adds nothing on top of self-review (+15.7 vs +15.5). Here, verification adds nothing on top of code review. **One quality checkpoint is sufficient. Adding a second doesn't compound.**
+
+**Implication:** The ~97-98% ceiling appears to be a hard limit with current single-session approaches. Breaking through likely requires fundamentally different architectures (fresh-context iteration, parallel decomposition) rather than stacking more discipline on a single session.
 
 #### Writing Plans: Plan Before Code
 
@@ -544,6 +581,7 @@ Greenfield breakdown (Ralph Fresh):
 | Skill-guided code review | Superpowers Review | Claude Code | requesting-code-review skill + conclave consensus | **Done — +8.1 points, new #1 (97.7%)** |
 | Writing plans | Superpowers Plans | Claude Code | Mandatory plan before implementation | **Done — +7.3 points at $1.05** |
 | Brainstorming | Superpowers Brainstorm | Claude Code | Consensus design exploration (autopilot) | **Done — +7.9 points, #2 (97.5%)** |
+| Gene stacking: Review + Verify | Review+Verify | Review / Verify | Two discipline checkpoints stacked | **Done — 97.2% (worse than either alone, diminishing returns)** |
 | Consensus design review | Conclave Design | Claude Code | Pre-implementation multi-model architecture guidance | **Done — +16.2 points** |
 | Self-review discipline | Double Review (no keys) | Claude Code | "Commit, review your diff, fix" in system prompt | **Done — ~+16 points (free, largest gene)** |
 | Self-review + consensus | Double Review (keys) | Claude Code | Self-review + real multi-model consensus | **Done — ~+15.5 points (consensus adds nothing over self-review)** |
@@ -587,6 +625,7 @@ The framework tests five hypotheses:
 | **Stacked** | Metacog + review + worktree | Three top genes combined: metacog reframing, consensus code review, git worktree |
 | **Superpowers Review** | Claude Code + code review skill | Skill-guided multi-agent consensus code review — #1 |
 | **Superpowers Brainstorm** | Claude Code + brainstorming skill | Consensus-driven design exploration in autopilot mode — #2 |
+| **Review + Verify** | Claude Code + review + verify stacked | Gene stacking study — diminishing returns (97.2%, both genes combined) |
 | **Superpowers Verify** | Claude Code + verification skill | "No completion claims without fresh evidence" — cheapest top-tier |
 | **Superpowers** (Original) | Skill-injection platform | Mandatory planning + TDD + two-stage review |
 | **Conclave** (Superpowers fork) | Cross-provider consensus | Claude x Gemini x Codex consensus; 6-layer self-correction |
@@ -773,7 +812,7 @@ The composite score is a weighted sum. Each task defines its own weights, so bug
 - [x] Write orchestrator adapters (10 orchestrators, 20+ adapter variants)
 - [x] Run baseline comparisons (single-trial full suite for 10 orchestrators)
 - [ ] Multi-trial runs for statistical significance
-- [ ] Ablation studies (gene isolation) — 16 done: ts-dev (no effect), consensus review (+11.3), full pipeline (-2 vs review-only), systematic debugging (no effect), TDD (+8.4), verification (+11.4, cheapest top-tier), writing plans (+7.3), skill-guided review (+8.1, #1 at 97.7%), brainstorming (+7.9, #2 at 97.5%), design review (+16.2), self-review (~+16, free), self-review+consensus (consensus adds nothing), worktree matches Gas Station, agent teams (hurts on T5), branch (inconclusive), Ralph fresh-context (+15.6 on T5, top-tier), no-git (unstable). All scores are mechanical (tests, build/lint, coverage, code metrics) — rubric dropped. Early adapter-debugging trials pruned per-orchestrator.
+- [ ] Ablation studies (gene isolation) — 17 done: ts-dev (no effect), consensus review (+11.3), full pipeline (-2 vs review-only), systematic debugging (no effect), TDD (+8.4), verification (+11.4, cheapest top-tier), writing plans (+7.3), skill-guided review (+8.1, #1 at 97.7%), brainstorming (+7.9, #2 at 97.5%), review+verify stacking (diminishing returns, 97.2%), design review (+16.2), self-review (~+16, free), self-review+consensus (consensus adds nothing), worktree matches Gas Station, agent teams (hurts on T5), branch (inconclusive), Ralph fresh-context (+15.6 on T5, top-tier), no-git (unstable). All scores are mechanical (tests, build/lint, coverage, code metrics) — rubric dropped. Early adapter-debugging trials pruned per-orchestrator.
 - [ ] Publish methodology paper
 
 ## License
