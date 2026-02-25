@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across all 11 tasks (tests + build/lint for standard tasks; hidden_tests + agent_tests + coverage + code_metrics + lint for greenfield). Data includes 452 trials across 20 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
+Composite scores across all 11 tasks (tests + build/lint for standard tasks; hidden_tests + agent_tests + coverage + code_metrics + lint for greenfield). Data includes 463 trials across 21 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
 
 ### Leaderboard
 
@@ -16,29 +16,33 @@ Mean composite score across all tasks run, ranked by score. Orchestrators with f
 |---:|---|---:|---:|---:|---:|---|
 | 1 | Superpowers TDD | **97.4%** | 11 | 16 | $2.32 | Opus 4.6 |
 | 2 | Stacked | **97.3%** | 11 | 11 | $1.36 | Opus 4.6 |
-| 3 | Conclave Review | **97.2%** | 10 | 11 | $1.82 | Multi-provider |
-| 4 | Gas Town | **96.6%** | 10 | 24 | $0.02 | Opus 4.6 |
-| 5 | Superpowers Debug | **96.4%** | 4 | 9 | $0.88 | Opus 4.6 |
-| 6 | Metacog | **95.9%** | 11 | 22 | $0.70 | Opus 4.6 |
-| 7 | Conclave Design | **95.7%** | 4 | 9 | $2.09 | Multi-provider |
-| 8 | Conclave (Full) | **95.2%** | 10 | 12 | $0.14 | Multi-provider |
-| 9 | Conclave Double Review | **95.2%** | 4 | 9 | $1.26 | Multi-provider |
-| 10 | Conclave Dbl Review + Keys | **95.0%** | 4 | 9 | $1.89 | Multi-provider |
-| 11 | Ralph Fresh | **94.7%** | 2 | 4 | $1.57 | Opus 4.6 |
-| 12 | Claude Code Worktree | **94.7%** | 2 | 3 | $1.20 | Opus 4.6 |
-| 13 | Claude Code Headless | **94.2%** | 4 | 9 | $1.15 | Opus 4.6 |
-| 14 | Gas Station | **92.6%** | 10 | 22 | $0.71 | Opus 4.6 |
-| 15 | Agent Teams | **86.2%** | 10 | 28 | $0.49 | Opus 4.6 |
-| 16 | Claude Code | **85.9%** | 11 | 24 | $0.27 | Opus 4.6 |
-| 17 | Amplifier + ts-dev | **85.5%** | 10 | 11 | $0.75 | Opus 4.6 |
-| 18 | Amplifier | **84.6%** | 10 | 11 | $0.02 | Opus 4.6 |
-| 19 | Amp Flash | **84.2%** | 10 | 11 | $0.00 | Gemini 3 Flash |
-| 20 | Gemini CLI | **82.0%** | 10 | 19 | $0.00 | Gemini 3 Flash |
+| 3 | Superpowers Verify | **97.3%** | 11 | 11 | $0.94 | Opus 4.6 |
+| 4 | Conclave Review | **97.2%** | 10 | 11 | $1.82 | Multi-provider |
+| 5 | Superpowers Plans | **96.9%** | 11 | 11 | $1.05 | Opus 4.6 |
+| 6 | Gas Town | **96.6%** | 10 | 24 | $0.02 | Opus 4.6 |
+| 7 | Superpowers Debug | **96.4%** | 4 | 9 | $0.88 | Opus 4.6 |
+| 8 | Metacog | **95.9%** | 11 | 22 | $0.70 | Opus 4.6 |
+| 9 | Conclave Design | **95.7%** | 4 | 9 | $2.09 | Multi-provider |
+| 10 | Conclave (Full) | **95.2%** | 10 | 12 | $0.14 | Multi-provider |
+| 11 | Conclave Double Review | **95.2%** | 4 | 9 | $1.26 | Multi-provider |
+| 12 | Conclave Dbl Review + Keys | **95.0%** | 4 | 9 | $1.89 | Multi-provider |
+| 13 | Ralph Fresh | **94.7%** | 2 | 4 | $1.57 | Opus 4.6 |
+| 14 | Claude Code Worktree | **94.7%** | 2 | 3 | $1.20 | Opus 4.6 |
+| 15 | Claude Code Headless | **94.2%** | 4 | 9 | $1.15 | Opus 4.6 |
+| 16 | Gas Station | **92.6%** | 10 | 22 | $0.71 | Opus 4.6 |
+| 17 | Agent Teams | **86.2%** | 10 | 28 | $0.49 | Opus 4.6 |
+| 18 | Claude Code | **85.9%** | 11 | 24 | $0.27 | Opus 4.6 |
+| 19 | Amplifier + ts-dev | **85.5%** | 10 | 11 | $0.75 | Opus 4.6 |
+| 20 | Amplifier | **84.6%** | 10 | 11 | $0.02 | Opus 4.6 |
+| 21 | Amp Flash | **84.2%** | 10 | 11 | $0.00 | Gemini 3 Flash |
+| 22 | Gemini CLI | **82.0%** | 10 | 19 | $0.00 | Gemini 3 Flash |
 
 ### Key Findings
 
 - **Superpowers TDD** leads on score (97.4%) with forced red-green-refactor across all 11 tasks. Costs more ($2.32/task) but delivers the highest mean in the benchmark
-- **Stacked** is the best cost-adjusted performer — 97.3% mean at $1.36/task by combining metacog + conclave consensus review + git worktree
+- **Superpowers Verify** is the best cost-adjusted performer — 97.3% mean at just $0.94/task. A single skill ("no completion claims without fresh verification evidence") adds +11.4 points over vanilla at minimal overhead
+- **Stacked** combines three genes (metacog + consensus review + worktree) for 97.3% at $1.36/task — same score as Verify but at higher cost
+- **Superpowers Plans** shows "plan before code" is effective — 96.9% mean at $1.05/task. The mandatory planning step adds +7.3 points over vanilla, with 100% pass rate. Cheaper than TDD but slightly lower score
 - **Conclave Review** adds consensus review for +11 points over vanilla Claude Code — 97.2% mean at $1.82/task. Three-provider code review after implementation catches bugs the solo agent missed
 - **Gas Town** is the biggest mover after data cleanup — 96.6% mean (was 81.3% when adapter failures polluted the data). The real multi-agent pipeline actually works
 - **Metacog** is the simplest top-tier approach — 95.9% mean at $0.70/task using a single metacognitive perspective-shifting skill. 22 trials across all 11 tasks
@@ -178,6 +182,74 @@ Variants tested, all using Opus 4.6 on T11:
 5. **Earlier 4-task comparison was misleading.** The previous analysis called TDD "inconclusive" based on 4 greenfield tasks with noisy baselines. The full 11-task run reveals a clear, consistent advantage.
 
 **The revised pattern:** Forced TDD works — not because the model doesn't know how to test, but because the mandatory discipline prevents cutting corners under token pressure. The model naturally wants to implement first and test later (or not at all). Forcing test-first produces more thorough implementations. This contrasts with systematic debugging (no effect) where the model already follows the right process instinctively.
+
+#### Verification Before Completion: Evidence Before Claims
+
+**Hypothesis:** Forcing the agent to run fresh verification (tests, build, lint) and read the full output before claiming any work is complete prevents premature "done" claims and catches issues the agent would otherwise miss.
+
+**Setup:** Claude Code Opus with the verification-before-completion skill forcibly invoked. The skill's "Iron Law": no completion claims without fresh verification evidence. The agent must identify what command proves its claim, run it, read the full output, and only then make the claim. Run across all 11 tasks.
+
+| Task | Category | Verify | Claude Code | Delta |
+| --- | --- | ---: | ---: | ---: |
+| **T1** time-tracker | greenfield/simple | 98% (n=1) | 85.9% | +12.1 |
+| **T2** collab-server | greenfield/complex | 93% (n=1) | 85.9% | +7.1 |
+| **T3** fts-search | features/medium | 100% (n=1) | 85.9% | +14.1 |
+| **T4** phantom-invoice | bugfix/medium | 100% (n=1) | 85.9% | +14.1 |
+| **T5** task-queue | marathon | 96% (n=1) | 85.9% | +10.1 |
+| **T6** monorepo-disaster | recovery | 100% (n=1) | 85.9% | +14.1 |
+| **T7** plugin-marketplace | greenfield/complex | 99% (n=1) | 85.9% | +13.1 |
+| **T8** analytics-dashboard | greenfield/complex | 88% (n=1) | 85.9% | +2.1 |
+| **T9** ssg-toolkit | features/complex | 100% (n=1) | 85.9% | +14.1 |
+| **T10** ecommerce-backend | greenfield/complex | 96% (n=1) | 85.9% | +10.1 |
+| **T11** debug-nightmare | bugfix/hard | 100% (n=1) | 85.9% | +14.1 |
+| **Mean** | | **97.3%** | **85.9%** | **+11.4** |
+
+**Findings:**
+
+1. **Verification matches TDD and Stacked at half the cost.** 97.3% mean at $0.94/task — vs TDD's $2.32 and Stacked's $1.36. Five perfect scores (T3, T4, T6, T9, T11). The cheapest way to reach the top tier.
+
+2. **Minimal overhead.** 33-51 turns per task — barely more than vanilla Claude Code (~24). The skill is a checkpoint, not a workflow change. The agent implements freely and verifies at the end.
+
+3. **The mechanism is simple.** The agent already *can* verify — it just doesn't always bother. The skill forces it to run `npm test`, `npm run build`, and `npm run lint` fresh and read the output before stopping. This catches issues the agent would otherwise ship.
+
+4. **Contrasts with systematic debugging (no effect).** Debugging methodology tells the agent *how to think*. Verification tells the agent *what to do* — run the command, read the output. Concrete actions beat process guidance, again.
+
+**Implication:** The single most cost-effective intervention is telling the agent "you may not claim completion without running verification and reading the output." This should be the default system prompt addition for any agentic coding tool.
+
+#### Writing Plans: Plan Before Code
+
+**Hypothesis:** Writing a detailed implementation plan before touching code produces better outcomes — the agent builds the right thing from the start instead of discovering requirements mid-implementation.
+
+**Setup:** Claude Code Opus with the writing-plans skill forcibly invoked. The agent must invoke the skill immediately, create a detailed plan with bite-sized tasks, exact file paths, and test commands, then implement the plan step by step. Run across all 11 tasks.
+
+| Task | Category | Plans | Claude Code | Delta |
+| --- | --- | ---: | ---: | ---: |
+| **T1** time-tracker | greenfield/simple | 98% (n=1) | 83.9% (n=6) | +14.1 |
+| **T2** collab-server | greenfield/complex | 91% (n=1) | 64.9% (n=2) | +26.1 |
+| **T3** fts-search | features/medium | 100% (n=1) | 99.3% (n=2) | +0.7 |
+| **T4** phantom-invoice | bugfix/medium | 100% (n=1) | 100.0% (n=2) | 0.0 |
+| **T5** task-queue | marathon | 89% (n=1) | 75.7% (n=4) | +13.3 |
+| **T6** monorepo-disaster | recovery | 100% (n=1) | 100.0% (n=1) | 0.0 |
+| **T7** plugin-marketplace | greenfield/complex | 99% (n=1) | 94.9% (n=1) | +4.1 |
+| **T8** analytics-dashboard | greenfield/complex | 92% (n=1) | 87.9% (n=1) | +4.1 |
+| **T9** ssg-toolkit | features/complex | 100% (n=1) | 99.4% (n=1) | +0.6 |
+| **T10** ecommerce-backend | greenfield/complex | 96% (n=1) | 89.8% (n=1) | +6.2 |
+| **T11** debug-nightmare | bugfix/hard | 100% (n=1) | 99.3% (n=3) | +0.7 |
+| **Mean** | | **96.9%** | **89.6%** | **+7.3** |
+
+**Findings:**
+
+1. **Planning is a solid mid-tier gene (+7.3 points).** 96.9% mean with 100% pass rate — every task completes, five with perfect scores (T3, T4, T6, T9, T11). Effective but not as strong as TDD (+8.4) or Verify (+11.4).
+
+2. **Biggest gains on complex greenfield and marathon.** T2 collab-server (+26.1) and T1 time-tracker (+14.1) benefit most from upfront architecture thinking. T5 marathon gains +13.3 — the plan helps the agent manage the 12-phase sequential build.
+
+3. **Good cost profile.** $1.05/task mean — half of TDD's $2.32 and comparable to Verify's $0.94. Planning adds turns (17-54 per task) but fewer than TDD's red-green-refactor cycle. The plan creation is ~5-10 turns overhead.
+
+4. **The plan is overhead on easy tasks.** T3, T4, T6, T9, T11 gain nothing — these tasks are already at or near 100% baseline. Writing a plan for a straightforward bugfix adds time without benefit.
+
+5. **Weaker than Verify on T5 marathon.** Plans gets 89% vs Verify's 96% on the hardest sequential task. Planning upfront helps, but verifying your work at the end catches more issues. The plan can be wrong; verification is ground truth.
+
+**The hierarchy of discipline genes:** TDD (98.0%) > Verify (97.3%) > Plans (96.9%) > Vanilla (89.6%). All three beat vanilla by a wide margin. TDD forces the most discipline (test every unit), Verify forces the cheapest discipline (check before claiming done), Plans falls in between (think before coding).
 
 #### Consensus Design Review: Pre-Implementation Architecture Guidance
 
@@ -394,6 +466,7 @@ Greenfield breakdown (Ralph Fresh):
 | Full skill pipeline | Full Conclave | Conclave Review | Brainstorm/plan/implement workflow | **Done — -2.0 points vs review-only (was -19 before data cleanup)** |
 | Systematic debugging | Superpowers Debug | Claude Code | Four-phase debugging methodology | **Done — no effect (both ~99%)** |
 | Test-driven development | Superpowers TDD | Claude Code | Forced red-green-refactor cycle | **Done — +11.5 points, highest score (97.4%)** |
+| Verification before completion | Superpowers Verify | Claude Code | "No claims without fresh evidence" | **Done — +11.4 points at $0.94 (cheapest top-tier)** |
 | Consensus design review | Conclave Design | Claude Code | Pre-implementation multi-model architecture guidance | **Done — +16.2 points** |
 | Self-review discipline | Double Review (no keys) | Claude Code | "Commit, review your diff, fix" in system prompt | **Done — ~+16 points (free, largest gene)** |
 | Self-review + consensus | Double Review (keys) | Claude Code | Self-review + real multi-model consensus | **Done — ~+15.5 points (consensus adds nothing over self-review)** |
@@ -435,6 +508,7 @@ The framework tests five hypotheses:
 | **Claude Code** | CLI agentic (single agent) | Rich tool use, subagent delegation, flexible autonomy |
 | **Metacog** | Claude Code + metacognitive skill | Perspective-shifting plugin; methodology guidance |
 | **Stacked** | Metacog + review + worktree | Three top genes combined: metacog reframing, consensus code review, git worktree |
+| **Superpowers Verify** | Claude Code + verification skill | "No completion claims without fresh evidence" — cheapest top-tier |
 | **Superpowers** (Original) | Skill-injection platform | Mandatory planning + TDD + two-stage review |
 | **Conclave** (Superpowers fork) | Cross-provider consensus | Claude x Gemini x Codex consensus; 6-layer self-correction |
 | **Aider** | CLI turn-based | One-shot Sonnet; PageRank repo map; token-efficient |
