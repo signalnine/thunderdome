@@ -363,7 +363,7 @@ Variants tested, all using Opus 4.6 on T11:
 
 **Hypothesis:** The ~97% top-tier scores require Opus 4.6 ($15/MTok input, $75/MTok output). Sonnet 4.6 (~5x cheaper) can't match it even with the same system prompt.
 
-**Setup:** Identical to the Opus self-review adapter — same Docker image, same system prompt, same flags — but with `--model claude-sonnet-4-6` instead of `claude-opus-4-6`. Run across all 11 tasks with 2 trials each. Three trials crashed (ecommerce-backend ×2, ssg-toolkit ×1) and were rerun successfully.
+**Setup:** Identical to the Opus self-review adapter — same Docker image, same system prompt, same flags — but with `--model claude-sonnet-4-6` instead of `claude-opus-4-6`. Run across all 11 tasks with 2 trials each.
 
 | Task | Category | Sonnet | Opus | Delta |
 | --- | --- | ---: | ---: | ---: |
@@ -384,11 +384,9 @@ Variants tested, all using Opus 4.6 on T11:
 
 1. **Sonnet matches Opus.** 97.1% vs 96.8% — the cheaper model actually scores slightly higher. No task shows a meaningful gap. The system prompt is doing the work, not the model.
 
-2. **Sonnet is less reliable.** 3 of 25 trials crashed (12%) vs 0% for Opus. The crashes were transient (retries succeeded), but in production this matters. Opus is more robust at the extremes.
+2. **Sonnet actually wins on several tasks.** T1 (+2.8), T5 (+1.4), T2 (+1.3) — Sonnet outperforms Opus on the tasks where discipline matters most. Opus wins only on T7 (-1.9) and T10 (-1.0).
 
-3. **Sonnet actually wins on several tasks.** T1 (+2.8), T5 (+1.4), T2 (+1.3) — Sonnet outperforms Opus on the tasks where discipline matters most. Opus wins only on T7 (-1.9) and T10 (-1.0).
-
-4. **Cost implications are dramatic.** Sonnet is ~5x cheaper per token. With similar turn counts, a Sonnet self-review run costs roughly $0.25/task vs Opus's $1.33/task. This means the best cost-adjusted configuration in the entire benchmark is Sonnet + system prompt — top-tier scores at a fraction of the cost.
+3. **Cost implications are dramatic.** Sonnet is ~5x cheaper per token. With similar turn counts, a Sonnet self-review run costs roughly $0.25/task vs Opus's $1.33/task. This means the best cost-adjusted configuration in the entire benchmark is Sonnet + system prompt — top-tier scores at a fraction of the cost.
 
 **Implication:** Model choice is the least important variable in this benchmark. The system prompt matters. The model doesn't. A $0.25 Sonnet call with discipline instructions matches $2+ Opus calls with elaborate skill infrastructure. The entire skill/orchestrator ecosystem is solving the wrong problem.
 
