@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across all 11 tasks (tests + build/lint for standard tasks; hidden_tests + agent_tests + coverage + code_metrics + lint for greenfield). Data includes 508 trials across 26 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
+Composite scores across all 11 tasks (tests + build/lint for standard tasks; hidden_tests + agent_tests + coverage + code_metrics + lint for greenfield). Data includes 620 trials across 26 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
 
 ### Leaderboard
 
@@ -14,15 +14,15 @@ Mean composite score across all tasks run, ranked by score. Orchestrators with f
 
 | Rank | Orchestrator | Mean | Tasks | Trials | Avg Cost | Model |
 |---:|---|---:|---:|---:|---:|---|
-| 1 | Superpowers Review | **97.7%** | 11 | 11 | $2.48 | Opus 4.6 |
-| 2 | Superpowers Brainstorm | **97.5%** | 11 | 11 | $1.48 | Opus 4.6 |
-| 3 | Superpowers TDD | **97.4%** | 11 | 16 | $2.32 | Opus 4.6 |
-| 4 | Stacked | **97.3%** | 11 | 11 | $1.36 | Opus 4.6 |
-| 5 | Superpowers Verify | **97.3%** | 11 | 11 | $0.94 | Opus 4.6 |
-| 6 | Self-Review (system prompt) | **97.2%** | 11 | 11 | $1.33 | Opus 4.6 |
-| 7 | Review + Verify | **97.2%** | 11 | 11 | $2.28 | Opus 4.6 |
-| 8 | Conclave Review | **97.2%** | 10 | 11 | $1.82 | Multi-provider |
-| 9 | Superpowers Plans | **96.9%** | 11 | 11 | $1.05 | Opus 4.6 |
+| 1 | Superpowers Brainstorm | **97.4%** | 11 | 38 | $1.43 | Opus 4.6 |
+| 2 | Superpowers TDD | **97.4%** | 11 | 16 | $2.32 | Opus 4.6 |
+| 3 | Stacked | **97.3%** | 11 | 11 | $1.36 | Opus 4.6 |
+| 4 | Superpowers Verify | **97.3%** | 11 | 11 | $0.94 | Opus 4.6 |
+| 5 | Conclave Review | **97.2%** | 10 | 11 | $1.82 | Multi-provider |
+| 5 | Review + Verify | **97.2%** | 11 | 11 | $2.28 | Opus 4.6 |
+| 6 | Superpowers Review | **97.0%** | 11 | 34 | $2.01 | Opus 4.6 |
+| 7 | Superpowers Plans | **96.9%** | 11 | 11 | $1.05 | Opus 4.6 |
+| 8 | Self-Review (system prompt) | **96.8%** | 11 | 40 | $1.33 | Opus 4.6 |
 | 9 | Gas Town | **96.6%** | 10 | 24 | $0.02 | Opus 4.6 |
 | 10 | Superpowers Debug | **96.4%** | 4 | 9 | $0.88 | Opus 4.6 |
 | 11 | Metacog | **95.9%** | 11 | 22 | $0.70 | Opus 4.6 |
@@ -43,16 +43,17 @@ Mean composite score across all tasks run, ranked by score. Orchestrators with f
 
 ### Key Findings
 
-- **A system prompt is all you need.** Self-Review (system prompt only) scores 97.2% at $1.33/task — no plugins, no skills, no consensus, no external tools. Just telling the agent "verify, commit, review your diff, fix issues" in the system prompt. This matches Conclave Review (97.2%) and Review+Verify (97.2%). The entire skill infrastructure adds ~0.5 points over a well-worded system prompt
-- **Superpowers Review** is #1 at 97.7% but the margin over the free baseline is razor-thin. Multi-agent consensus code review adds only 0.5 points over system-prompt self-review. The $2.48/task cost buys almost nothing
-- **Superpowers Brainstorm** is #2 at 97.5% — consensus-driven design exploration. $1.48/task for 0.3 points over the free baseline
-- **Superpowers Verify** is the best cost-adjusted skill — 97.3% at $0.94/task, but even this is only 0.1 points above the free system prompt baseline
-- **The real gap is vanilla vs any discipline.** Claude Code without any review instruction scores 85.9%. Adding "verify and review your diff" to the system prompt jumps to 97.2% — an 11.3 point improvement for free. All the skill infrastructure, consensus protocols, and multi-agent reviews fight over the last 0.5 points
-- **Gene stacking has diminishing returns** — Review + Verify (97.2%) scores *lower* than Review alone (97.7%). Two discipline checkpoints interfere rather than compound. The ceiling appears to be ~97-98% with current approaches
+- **Multi-trial data compresses the spread.** With n=34-40 trials per orchestrator, the top 9 contenders cluster within 0.6 points (96.8%-97.4%). The n=1 rankings were noise — what looked like meaningful differences between skill-based approaches was just variance
+- **A system prompt is (almost) all you need.** Self-Review (system prompt only) scores 96.8% at $1.33/task with n=40 trials — no plugins, no skills, no consensus. The entire skill infrastructure adds ~0.6 points over a well-worded system prompt. The gap is real but tiny
+- **The real gap is vanilla vs any discipline.** Claude Code without any review instruction scores 85.9%. Adding "verify and review your diff" to the system prompt jumps to 96.8% — an 10.9 point improvement for free. All the skill infrastructure, consensus protocols, and multi-agent reviews fight over the last 0.6 points
+- **Superpowers Brainstorm** is #1 at 97.4% (n=38) — consensus-driven design exploration held up best with more data. $1.43/task
+- **Superpowers Verify** is the best cost-adjusted skill — 97.3% at $0.94/task (n=11, needs more trials to confirm)
+- **Superpowers Review regressed the most** — from 97.7% (n=1) to 97.0% (n=34). The original score was an outlier. Still effective but not the clear #1 it appeared to be
+- **Gene stacking has diminishing returns** — Review + Verify (97.2%) scores at the same level as either alone. Two discipline checkpoints don't compound. The ceiling appears to be ~97% with current single-session approaches
 - **Gas Town** is the biggest mover after data cleanup — 96.6% mean (was 81.3% when adapter failures polluted the data). The real multi-agent pipeline actually works
-- **TDD works when forced** — 97.4% with forced red-green-refactor. The key is mandatory invocation via system prompt, not opt-in skill availability. But TDD costs $2.32/task — 0.2 points above the free baseline
+- **TDD works when forced** — 97.4% with forced red-green-refactor (n=16). Tied with Brainstorm for #1 but costs $2.32/task vs $1.43
 - **T4** (bugfix) is the great equalizer — most contenders score 100%, the task is too easy
-- **T8** (analytics dashboard) is the hardest task — most contenders cluster around 70-90%
+- **T8** (analytics dashboard) is the hardest task — most contenders cluster around 87-90%
 
 ### The Gas Station Story
 
@@ -226,32 +227,30 @@ Variants tested, all using Opus 4.6 on T11:
 
 | Task | Category | Review | Claude Code | Delta |
 | --- | --- | ---: | ---: | ---: |
-| **T1** time-tracker | greenfield/simple | 99% (n=1) | 83.9% (n=6) | +15.1 |
-| **T2** collab-server | greenfield/complex | 93% (n=1) | 64.9% (n=2) | +28.1 |
-| **T3** fts-search | features/medium | 100% (n=1) | 99.3% (n=2) | +0.7 |
-| **T4** phantom-invoice | bugfix/medium | 100% (n=1) | 100.0% (n=2) | 0.0 |
-| **T5** task-queue | marathon | 97% (n=1) | 75.7% (n=4) | +21.3 |
-| **T6** monorepo-disaster | recovery | 100% (n=1) | 100.0% (n=1) | 0.0 |
-| **T7** plugin-marketplace | greenfield/complex | 99% (n=1) | 94.9% (n=1) | +4.1 |
-| **T8** analytics-dashboard | greenfield/complex | 90% (n=1) | 87.9% (n=1) | +2.1 |
-| **T9** ssg-toolkit | features/complex | 100% (n=1) | 99.4% (n=1) | +0.6 |
-| **T10** ecommerce-backend | greenfield/complex | 97% (n=1) | 89.8% (n=1) | +7.2 |
-| **T11** debug-nightmare | bugfix/hard | 100% (n=1) | 99.3% (n=3) | +0.7 |
-| **Mean** | | **97.7%** | **89.6%** | **+8.1** |
+| **T1** time-tracker | greenfield/simple | 97.3% (n=3) | 83.9% (n=6) | +13.4 |
+| **T2** collab-server | greenfield/complex | 90.7% (n=4) | 64.9% (n=2) | +25.8 |
+| **T3** fts-search | features/medium | 100% (n=3) | 99.3% (n=2) | +0.7 |
+| **T4** phantom-invoice | bugfix/medium | 100% (n=3) | 100.0% (n=2) | 0.0 |
+| **T5** task-queue | marathon | 94.5% (n=3) | 75.7% (n=4) | +18.8 |
+| **T6** monorepo-disaster | recovery | 100% (n=3) | 100.0% (n=1) | 0.0 |
+| **T7** plugin-marketplace | greenfield/complex | 98.9% (n=3) | 94.9% (n=1) | +4.0 |
+| **T8** analytics-dashboard | greenfield/complex | 89.1% (n=3) | 87.9% (n=1) | +1.2 |
+| **T9** ssg-toolkit | features/complex | 100% (n=3) | 99.4% (n=1) | +0.6 |
+| **T10** ecommerce-backend | greenfield/complex | 96.6% (n=3) | 89.8% (n=1) | +6.8 |
+| **T11** debug-nightmare | bugfix/hard | 100% (n=3) | 99.3% (n=3) | +0.7 |
+| **Mean** | | **97.0%** | **89.6%** | **+7.4** |
 
 **Findings:**
 
-1. **New #1 in the benchmark at 97.7%.** Six perfect scores (T3, T4, T6, T9, T11, and effectively T1 at 99%). 100% pass rate. Edges out TDD (97.4%) by 0.3 points.
+1. **Multi-trial data settled Review at 97.0% (n=34).** The original n=1 score of 97.7% regressed — the highest-scoring tasks (T1: 99%→97.3%, T5: 97%→94.5%) came back to earth with more data. Still effective, but no longer the clear #1.
 
-2. **Best marathon score ever.** T5 at 97% is the highest any variant has achieved on the hardest sequential task — beating TDD (93%), Verify (96%), and Plans (89%). The review cycle catches implementation gaps the agent missed on first pass.
+2. **Five perfect scores hold up.** T3, T4, T6, T9, T11 remain at 100% across all trials. The review cycle is most impactful on complex greenfield (T2: +25.8) and marathon (T5: +18.8) tasks.
 
-3. **Expensive but effective.** $2.48/task mean — in the same cost tier as TDD ($2.32). The review process adds 30-40 extra turns per task (103 turns on T5). The cost comes from both the agent's review-fix cycle and the hidden consensus API calls.
+3. **Expensive for the tier.** $2.01/task mean — the most expensive contender in the top tier. Brainstorm achieves 97.4% at $1.43, and Self-Review achieves 96.8% at $1.33 with no infrastructure at all.
 
-4. **Skill-guided vs hardcoded review.** Conclave Review (hardcoded instructions, Skills disabled) scores 97.2%. Superpowers Review (skill-guided, same mechanism) scores 97.7%. The skill adds slight benefit — possibly because the skill's structured guidance (commit → review → prioritize → fix → re-verify) is more thorough than ad-hoc instructions.
+4. **The review gene is robust across delivery mechanisms.** Skill-guided (97.0%, n=34), hardcoded (97.2%, n=11), and system-prompt self-review (96.8%, n=40) all cluster within 0.4 points. The common thread: pausing to examine your work before claiming done.
 
-5. **The review gene is robust across delivery mechanisms.** Hardcoded (97.2%), skill-guided (97.7%), and self-review-only (95.2%) all beat vanilla by 6-12 points. The common thread: pausing to examine your work before claiming done.
-
-**The updated hierarchy:** Review (97.7%) > TDD (97.4%) > Verify (97.3%) > Plans (96.9%) > Vanilla (89.6%). All four discipline genes beat vanilla by 7-8+ points. Review and TDD are the most thorough (and most expensive). Verify is the best value. Plans is solid middle ground.
+**The multi-trial hierarchy:** Brainstorm (97.4%) ≈ TDD (97.4%) > Verify (97.3%) > Review (97.0%) > Plans (96.9%) > Self-Review (96.8%) > Vanilla (85.9%). All discipline genes cluster within 0.6 points of each other and beat vanilla by 11+ points.
 
 #### Brainstorming: Consensus Design Exploration
 
@@ -261,32 +260,32 @@ Variants tested, all using Opus 4.6 on T11:
 
 | Task | Category | Brainstorm | Claude Code | Delta |
 | --- | --- | ---: | ---: | ---: |
-| **T1** time-tracker | greenfield/simple | 98% (n=1) | 83.9% (n=6) | +14.1 |
-| **T2** collab-server | greenfield/complex | 94% (n=1) | 64.9% (n=2) | +29.1 |
-| **T3** fts-search | features/medium | 100% (n=1) | 99.3% (n=2) | +0.7 |
-| **T4** phantom-invoice | bugfix/medium | 100% (n=1) | 100.0% (n=2) | 0.0 |
-| **T5** task-queue | marathon | 96% (n=1) | 75.7% (n=4) | +20.3 |
-| **T6** monorepo-disaster | recovery | 100% (n=1) | 100.0% (n=1) | 0.0 |
-| **T7** plugin-marketplace | greenfield/complex | 99% (n=1) | 94.9% (n=1) | +4.1 |
-| **T8** analytics-dashboard | greenfield/complex | 88% (n=1) | 87.9% (n=1) | +0.1 |
-| **T9** ssg-toolkit | features/complex | 100% (n=1) | 99.4% (n=1) | +0.6 |
-| **T10** ecommerce-backend | greenfield/complex | 98% (n=1) | 89.8% (n=1) | +8.2 |
-| **T11** debug-nightmare | bugfix/hard | 100% (n=1) | 99.3% (n=3) | +0.7 |
-| **Mean** | | **97.5%** | **89.6%** | **+7.9** |
+| **T1** time-tracker | greenfield/simple | 97.4% (n=6) | 83.9% (n=6) | +13.5 |
+| **T2** collab-server | greenfield/complex | 93.5% (n=4) | 64.9% (n=2) | +28.6 |
+| **T3** fts-search | features/medium | 100% (n=4) | 99.3% (n=2) | +0.7 |
+| **T4** phantom-invoice | bugfix/medium | 100% (n=3) | 100.0% (n=2) | 0.0 |
+| **T5** task-queue | marathon | 94.8% (n=3) | 75.7% (n=4) | +19.1 |
+| **T6** monorepo-disaster | recovery | 100% (n=3) | 100.0% (n=1) | 0.0 |
+| **T7** plugin-marketplace | greenfield/complex | 99.1% (n=3) | 94.9% (n=1) | +4.2 |
+| **T8** analytics-dashboard | greenfield/complex | 88.6% (n=3) | 87.9% (n=1) | +0.7 |
+| **T9** ssg-toolkit | features/complex | 100% (n=3) | 99.4% (n=1) | +0.6 |
+| **T10** ecommerce-backend | greenfield/complex | 98.3% (n=3) | 89.8% (n=1) | +8.5 |
+| **T11** debug-nightmare | bugfix/hard | 100% (n=3) | 99.3% (n=3) | +0.7 |
+| **Mean** | | **97.4%** | **89.6%** | **+7.8** |
 
 **Findings:**
 
-1. **Brainstorming lands at #2 (97.5%).** Only Review (97.7%) scores higher. Six perfect scores (T3, T4, T6, T9, T11, and effectively T1/T10 at 98%). 100% pass rate across all 11 tasks.
+1. **Brainstorming holds at #1 with multi-trial data (97.4%, n=38).** Barely moved from the n=1 reading of 97.5% — the most stable top-tier contender. Tied with TDD for the highest mean. Six perfect scores (T3, T4, T6, T9, T11, and effectively T10 at 98.3%). 100% pass rate across all trials.
 
-2. **Biggest gains on complex greenfield and marathon.** T2 collab-server (+29.1) and T5 marathon (+20.3) benefit most from consensus-driven design exploration. The multi-model design discussion surfaces architecture choices the solo agent might miss.
+2. **Biggest gains on complex greenfield and marathon.** T2 collab-server (+28.6) and T5 marathon (+19.1) benefit most from consensus-driven design exploration. The multi-model design discussion surfaces architecture choices the solo agent might miss.
 
-3. **Good cost profile.** $1.48/task mean — cheaper than Review ($2.48) and TDD ($2.32). The autopilot consensus calls add overhead but the agent doesn't need as many implementation turns when it has a solid design to follow.
+3. **Best cost/performance ratio in the top tier.** $1.43/task mean — cheaper than Review ($2.01) and TDD ($2.32). The autopilot consensus calls add overhead but the agent doesn't need as many implementation turns when it has a solid design to follow.
 
-4. **T8 remains the ceiling.** At 88%, brainstorming barely improves the analytics dashboard task (+0.1). The design exploration doesn't help when the challenge is implementation complexity rather than architecture.
+4. **T8 remains the ceiling.** At 88.6%, brainstorming barely improves the analytics dashboard task (+0.7). The design exploration doesn't help when the challenge is implementation complexity rather than architecture.
 
 5. **Divergent exploration vs convergent discipline.** Brainstorming is the first "divergent" gene tested — it opens up the design space before narrowing. All previous top genes (Review, TDD, Verify) are "convergent" — they check work after implementation. Both approaches work, through different mechanisms.
 
-**The emerging picture:** Five of six Superpowers skills tested are effective. Only systematic-debugging had no effect. The top tier is remarkably tight: Review (97.7%), Brainstorm (97.5%), TDD (97.4%), Verify (97.3%), Plans (96.9%). Any structured discipline — whether applied before, during, or after coding — beats unstructured vanilla by 7-12 points.
+**The multi-trial picture:** All discipline genes cluster within 0.6 points: Brainstorm (97.4%) ≈ TDD (97.4%) > Verify (97.3%) > Review (97.0%) > Plans (96.9%) > Self-Review (96.8%). The spread is noise. Any structured discipline beats unstructured vanilla by 11+ points.
 
 #### Gene Stacking: Review + Verify (Diminishing Returns)
 
@@ -331,30 +330,30 @@ Variants tested, all using Opus 4.6 on T11:
 
 | Task | Category | Self-Review | Claude Code | Delta |
 | --- | --- | ---: | ---: | ---: |
-| **T1** time-tracker | greenfield/simple | 98% (n=1) | 83.9% (n=6) | +14.1 |
-| **T2** collab-server | greenfield/complex | 94% (n=1) | 64.9% (n=2) | +29.1 |
-| **T3** fts-search | features/medium | 100% (n=1) | 99.3% (n=2) | +0.7 |
-| **T4** phantom-invoice | bugfix/medium | 100% (n=1) | 100.0% (n=2) | 0.0 |
-| **T5** task-queue | marathon | 93% (n=1) | 75.7% (n=4) | +17.3 |
-| **T6** monorepo-disaster | recovery | 100% (n=1) | 100.0% (n=1) | 0.0 |
-| **T7** plugin-marketplace | greenfield/complex | 99% (n=1) | 94.9% (n=1) | +4.1 |
-| **T8** analytics-dashboard | greenfield/complex | 88% (n=1) | 87.9% (n=1) | +0.1 |
-| **T9** ssg-toolkit | features/complex | 100% (n=1) | 99.4% (n=1) | +0.6 |
-| **T10** ecommerce-backend | greenfield/complex | 97% (n=1) | 89.8% (n=1) | +7.2 |
-| **T11** debug-nightmare | bugfix/hard | 100% (n=1) | 99.3% (n=3) | +0.7 |
-| **Mean** | | **97.2%** | **89.6%** | **+7.6** |
+| **T1** time-tracker | greenfield/simple | 96.2% (n=5) | 83.9% (n=6) | +12.3 |
+| **T2** collab-server | greenfield/complex | 92.0% (n=5) | 64.9% (n=2) | +27.1 |
+| **T3** fts-search | features/medium | 100% (n=5) | 99.3% (n=2) | +0.7 |
+| **T4** phantom-invoice | bugfix/medium | 100% (n=4) | 100.0% (n=2) | 0.0 |
+| **T5** task-queue | marathon | 92.6% (n=3) | 75.7% (n=4) | +16.9 |
+| **T6** monorepo-disaster | recovery | 100% (n=3) | 100.0% (n=1) | 0.0 |
+| **T7** plugin-marketplace | greenfield/complex | 98.8% (n=3) | 94.9% (n=1) | +3.9 |
+| **T8** analytics-dashboard | greenfield/complex | 88.8% (n=3) | 87.9% (n=1) | +0.9 |
+| **T9** ssg-toolkit | features/complex | 100% (n=3) | 99.4% (n=1) | +0.6 |
+| **T10** ecommerce-backend | greenfield/complex | 96.5% (n=3) | 89.8% (n=1) | +6.7 |
+| **T11** debug-nightmare | bugfix/hard | 100% (n=3) | 99.3% (n=3) | +0.7 |
+| **Mean** | | **96.8%** | **89.6%** | **+7.2** |
 
 **Findings:**
 
-1. **A system prompt matches skill-based approaches.** 97.2% at $1.33/task — identical to Conclave Review (97.2%) and Review+Verify (97.2%), within 0.5 points of the #1 Superpowers Review (97.7%). No plugins loaded, no conclave binary, no consensus API calls. Just nine lines of instructions.
+1. **A system prompt nearly matches skill-based approaches — confirmed with n=40 trials.** 96.8% at $1.33/task — within 0.6 points of Brainstorm (97.4%, #1) and within 0.2 points of Review (97.0%). No plugins loaded, no conclave binary, no consensus API calls. Just nine lines of instructions. The slight regression from the n=1 reading (97.2%) confirms the gap is real but tiny.
 
-2. **The gap that matters is vanilla vs discipline, not skill vs no-skill.** Vanilla Claude Code scores 85.9%. Adding "verify, commit, review your diff" to the system prompt jumps to 97.2% — an 11.3 point improvement for free. All the skill infrastructure fights over the remaining 0.5 points.
+2. **The gap that matters is vanilla vs discipline, not skill vs no-skill.** Vanilla Claude Code scores 85.9%. Adding "verify, commit, review your diff" to the system prompt jumps to 96.8% — a 10.9 point improvement for free. All the skill infrastructure fights over the remaining 0.6 points.
 
-3. **100% pass rate, six perfect scores.** T3, T4, T6, T9, T10, T11 all at 100%. The same pattern as every other discipline gene: huge gains on complex greenfield (T2: +29.1) and marathon (T5: +17.3), no effect on easy tasks.
+3. **100% pass rate, five perfect scores.** T3, T4, T6, T9, T11 remain at 100% across all trials. T10 ecommerce at 96.5% is remarkably tight (96.2-96.7%). The same pattern as every other discipline gene: huge gains on complex greenfield (T2: +27.1) and marathon (T5: +16.9), no effect on easy tasks.
 
-4. **Cost is mid-tier.** $1.33/task — cheaper than Review ($2.48), TDD ($2.32), and Brainstorm ($1.48), but more than Verify ($0.94) and Plans ($1.05). The self-review loop adds turns but no external API calls.
+4. **Cost is mid-tier.** $1.33/task — cheaper than Review ($2.01), TDD ($2.32), and Brainstorm ($1.43), but more than Verify ($0.94) and Plans ($1.05). The self-review loop adds turns but no external API calls.
 
-5. **Reframes the entire study.** Every Superpowers ablation has been testing variations on a theme: "tell the agent to check its work before stopping." The skill infrastructure (plugin loading, conclave binary, consensus protocols) is scaffolding around a simple instruction. The instruction is what matters.
+5. **Reframes the entire study — and multi-trial data makes the case stronger.** With 40 trials, the system prompt baseline is the most-tested variant in the benchmark. Its 96.8% mean is statistically robust. The skill infrastructure (plugin loading, conclave binary, consensus protocols) buys 0.2-0.6 points over this free baseline. The instruction is what matters; the infrastructure is optional.
 
 **Implication:** The single most impactful change to any agentic coding tool is adding "verify your work, commit, review your diff, fix issues, repeat until clean" to the system prompt. This is free, requires no infrastructure, and captures ~95% of the benefit of elaborate skill-based approaches.
 
@@ -609,11 +608,11 @@ Greenfield breakdown (Ralph Fresh):
 | Systematic debugging | Superpowers Debug | Claude Code | Four-phase debugging methodology | **Done — no effect (both ~99%)** |
 | Test-driven development | Superpowers TDD | Claude Code | Forced red-green-refactor cycle | **Done — +11.5 points, highest score (97.4%)** |
 | Verification before completion | Superpowers Verify | Claude Code | "No claims without fresh evidence" | **Done — +11.4 points at $0.94 (cheapest top-tier)** |
-| Skill-guided code review | Superpowers Review | Claude Code | requesting-code-review skill + conclave consensus | **Done — +8.1 points, new #1 (97.7%)** |
+| Skill-guided code review | Superpowers Review | Claude Code | requesting-code-review skill + conclave consensus | **Done — +7.4 points, 97.0% (n=34)** |
 | Writing plans | Superpowers Plans | Claude Code | Mandatory plan before implementation | **Done — +7.3 points at $1.05** |
-| Brainstorming | Superpowers Brainstorm | Claude Code | Consensus design exploration (autopilot) | **Done — +7.9 points, #2 (97.5%)** |
+| Brainstorming | Superpowers Brainstorm | Claude Code | Consensus design exploration (autopilot) | **Done — +7.8 points, #1 (97.4%, n=38)** |
 | Gene stacking: Review + Verify | Review+Verify | Review / Verify | Two discipline checkpoints stacked | **Done — 97.2% (worse than either alone, diminishing returns)** |
-| System prompt self-review | Self-Review | Claude Code | "Verify, commit, review diff, fix" — no plugins | **Done — 97.2% at $1.33 (matches skill-based approaches)** |
+| System prompt self-review | Self-Review | Claude Code | "Verify, commit, review diff, fix" — no plugins | **Done — 96.8% at $1.33 (n=40, within 0.6 of skills)** |
 | Consensus design review | Conclave Design | Claude Code | Pre-implementation multi-model architecture guidance | **Done — +16.2 points** |
 | Self-review discipline | Double Review (no keys) | Claude Code | "Commit, review your diff, fix" in system prompt | **Done — ~+16 points (free, largest gene)** |
 | Self-review + consensus | Double Review (keys) | Claude Code | Self-review + real multi-model consensus | **Done — ~+15.5 points (consensus adds nothing over self-review)** |
