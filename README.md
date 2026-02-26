@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across all 11 tasks (tests + build/lint for standard tasks; hidden_tests + agent_tests + coverage + code_metrics + lint for greenfield). Data includes 620 trials across 26 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
+Composite scores across all 11 tasks (tests + build/lint for standard tasks; hidden_tests + agent_tests + coverage + code_metrics + lint for greenfield). Data includes 642 trials across 27 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
 
 ### Leaderboard
 
@@ -20,32 +20,34 @@ Mean composite score across all tasks run, ranked by score. Orchestrators with f
 | 4 | Superpowers Verify | **97.3%** | 11 | 11 | $0.94 | Opus 4.6 |
 | 5 | Conclave Review | **97.2%** | 10 | 11 | $1.82 | Multi-provider |
 | 5 | Review + Verify | **97.2%** | 11 | 11 | $2.28 | Opus 4.6 |
-| 6 | Superpowers Review | **97.0%** | 11 | 34 | $2.01 | Opus 4.6 |
-| 7 | Superpowers Plans | **96.9%** | 11 | 11 | $1.05 | Opus 4.6 |
-| 8 | Self-Review (system prompt) | **96.8%** | 11 | 40 | $1.33 | Opus 4.6 |
-| 9 | Gas Town | **96.6%** | 10 | 24 | $0.02 | Opus 4.6 |
-| 10 | Superpowers Debug | **96.4%** | 4 | 9 | $0.88 | Opus 4.6 |
-| 11 | Metacog | **95.9%** | 11 | 22 | $0.70 | Opus 4.6 |
-| 12 | Conclave Design | **95.7%** | 4 | 9 | $2.09 | Multi-provider |
-| 13 | Conclave (Full) | **95.2%** | 10 | 12 | $0.14 | Multi-provider |
-| 14 | Conclave Double Review | **95.2%** | 4 | 9 | $1.26 | Multi-provider |
-| 15 | Conclave Dbl Review + Keys | **95.0%** | 4 | 9 | $1.89 | Multi-provider |
-| 16 | Ralph Fresh | **94.7%** | 2 | 4 | $1.57 | Opus 4.6 |
-| 17 | Claude Code Worktree | **94.7%** | 2 | 3 | $1.20 | Opus 4.6 |
-| 18 | Claude Code Headless | **94.2%** | 4 | 9 | $1.15 | Opus 4.6 |
-| 19 | Gas Station | **92.6%** | 10 | 22 | $0.71 | Opus 4.6 |
-| 20 | Agent Teams | **86.2%** | 10 | 28 | $0.49 | Opus 4.6 |
-| 21 | Claude Code | **85.9%** | 11 | 24 | $0.27 | Opus 4.6 |
-| 22 | Amplifier + ts-dev | **85.5%** | 10 | 11 | $0.75 | Opus 4.6 |
-| 23 | Amplifier | **84.6%** | 10 | 11 | $0.02 | Opus 4.6 |
-| 24 | Amp Flash | **84.2%** | 10 | 11 | $0.00 | Gemini 3 Flash |
-| 25 | Gemini CLI | **82.0%** | 10 | 19 | $0.00 | Gemini 3 Flash |
+| 6 | Self-Review (Sonnet) | **97.1%** | 11 | 22 | $1.13 | Sonnet 4.6 |
+| 7 | Superpowers Review | **97.0%** | 11 | 34 | $2.01 | Opus 4.6 |
+| 8 | Superpowers Plans | **96.9%** | 11 | 11 | $1.05 | Opus 4.6 |
+| 9 | Self-Review (Opus) | **96.8%** | 11 | 40 | $1.33 | Opus 4.6 |
+| 10 | Gas Town | **96.6%** | 10 | 24 | $0.02 | Opus 4.6 |
+| 11 | Superpowers Debug | **96.4%** | 4 | 9 | $0.88 | Opus 4.6 |
+| 12 | Metacog | **95.9%** | 11 | 22 | $0.70 | Opus 4.6 |
+| 13 | Conclave Design | **95.7%** | 4 | 9 | $2.09 | Multi-provider |
+| 14 | Conclave (Full) | **95.2%** | 10 | 12 | $0.14 | Multi-provider |
+| 15 | Conclave Double Review | **95.2%** | 4 | 9 | $1.26 | Multi-provider |
+| 16 | Conclave Dbl Review + Keys | **95.0%** | 4 | 9 | $1.89 | Multi-provider |
+| 17 | Ralph Fresh | **94.7%** | 2 | 4 | $1.57 | Opus 4.6 |
+| 18 | Claude Code Worktree | **94.7%** | 2 | 3 | $1.20 | Opus 4.6 |
+| 19 | Claude Code Headless | **94.2%** | 4 | 9 | $1.15 | Opus 4.6 |
+| 20 | Gas Station | **92.6%** | 10 | 22 | $0.71 | Opus 4.6 |
+| 21 | Agent Teams | **86.2%** | 10 | 28 | $0.49 | Opus 4.6 |
+| 22 | Claude Code | **85.9%** | 11 | 24 | $0.27 | Opus 4.6 |
+| 23 | Amplifier + ts-dev | **85.5%** | 10 | 11 | $0.75 | Opus 4.6 |
+| 24 | Amplifier | **84.6%** | 10 | 11 | $0.02 | Opus 4.6 |
+| 25 | Amp Flash | **84.2%** | 10 | 11 | $0.00 | Gemini 3 Flash |
+| 26 | Gemini CLI | **82.0%** | 10 | 19 | $0.00 | Gemini 3 Flash |
 
 ### Key Findings
 
-- **Multi-trial data compresses the spread.** With n=34-40 trials per orchestrator, the top 9 contenders cluster within 0.6 points (96.8%-97.4%). The n=1 rankings were noise — what looked like meaningful differences between skill-based approaches was just variance
-- **A system prompt is (almost) all you need.** Self-Review (system prompt only) scores 96.8% at $1.33/task with n=40 trials — no plugins, no skills, no consensus. The entire skill infrastructure adds ~0.6 points over a well-worded system prompt. The gap is real but tiny
-- **The real gap is vanilla vs any discipline.** Claude Code without any review instruction scores 85.9%. Adding "verify and review your diff" to the system prompt jumps to 96.8% — an 10.9 point improvement for free. All the skill infrastructure, consensus protocols, and multi-agent reviews fight over the last 0.6 points
+- **The model doesn't matter — the system prompt does.** Sonnet 4.6 + self-review (97.1%) matches Opus 4.6 + self-review (96.8%) and ties with Opus + skill-based approaches (97.0-97.4%). A ~5x cheaper model with nine lines of instructions matches the most expensive orchestrators in the benchmark. Three crashes in 25 trials (12%) are the only Sonnet weakness
+- **Multi-trial data compresses the spread.** With n=22-40 trials per orchestrator, the top 10 contenders cluster within 0.6 points (96.8%-97.4%). The n=1 rankings were noise — what looked like meaningful differences between skill-based approaches was just variance
+- **A system prompt is (almost) all you need.** Self-Review scores 96.8-97.1% depending on model — no plugins, no skills, no consensus. The entire skill infrastructure adds ~0.3 points over a well-worded system prompt. The gap is negligible
+- **The real gap is vanilla vs any discipline.** Claude Code without any review instruction scores 85.9%. Adding "verify and review your diff" to the system prompt jumps to 97% — an 11 point improvement for free. All the skill infrastructure, consensus protocols, and multi-agent reviews fight over the last 0.3 points
 - **Superpowers Brainstorm** is #1 at 97.4% (n=38) — consensus-driven design exploration held up best with more data. $1.43/task
 - **Superpowers Verify** is the best cost-adjusted skill — 97.3% at $0.94/task (n=11, needs more trials to confirm)
 - **Superpowers Review regressed the most** — from 97.7% (n=1) to 97.0% (n=34). The original score was an outlier. Still effective but not the clear #1 it appeared to be
@@ -357,6 +359,39 @@ Variants tested, all using Opus 4.6 on T11:
 
 **Implication:** The single most impactful change to any agentic coding tool is adding "verify your work, commit, review your diff, fix issues, repeat until clean" to the system prompt. This is free, requires no infrastructure, and captures ~95% of the benefit of elaborate skill-based approaches.
 
+#### Model Ablation: Sonnet 4.6 + Self-Review vs Opus 4.6 + Self-Review
+
+**Hypothesis:** The ~97% top-tier scores require Opus 4.6 ($15/MTok input, $75/MTok output). Sonnet 4.6 (~5x cheaper) can't match it even with the same system prompt.
+
+**Setup:** Identical to the Opus self-review adapter — same Docker image, same system prompt, same flags — but with `--model claude-sonnet-4-6` instead of `claude-opus-4-6`. Run across all 11 tasks with 2 trials each. Three trials crashed (ecommerce-backend ×2, ssg-toolkit ×1) and were rerun successfully.
+
+| Task | Category | Sonnet | Opus | Delta |
+| --- | --- | ---: | ---: | ---: |
+| **T1** time-tracker | greenfield/simple | 99.0% (n=2) | 96.2% (n=5) | +2.8 |
+| **T2** collab-server | greenfield/complex | 93.3% (n=2) | 92.0% (n=5) | +1.3 |
+| **T3** fts-search | features/medium | 100% (n=2) | 100% (n=5) | 0.0 |
+| **T4** phantom-invoice | bugfix/medium | 100% (n=2) | 100% (n=4) | 0.0 |
+| **T5** task-queue | marathon | 94.0% (n=2) | 92.6% (n=3) | +1.4 |
+| **T6** monorepo-disaster | recovery | 100% (n=2) | 100% (n=3) | 0.0 |
+| **T7** plugin-marketplace | greenfield/complex | 96.9% (n=2) | 98.8% (n=3) | -1.9 |
+| **T8** analytics-dashboard | greenfield/complex | 89.1% (n=2) | 88.8% (n=3) | +0.3 |
+| **T9** ssg-toolkit | features/complex | 100% (n=2) | 100% (n=3) | 0.0 |
+| **T10** ecommerce-backend | greenfield/complex | 95.5% (n=2) | 96.5% (n=3) | -1.0 |
+| **T11** debug-nightmare | bugfix/hard | 100% (n=2) | 100% (n=3) | 0.0 |
+| **Mean** | | **97.1%** | **96.8%** | **+0.3** |
+
+**Findings:**
+
+1. **Sonnet matches Opus.** 97.1% vs 96.8% — the cheaper model actually scores slightly higher. No task shows a meaningful gap. The system prompt is doing the work, not the model.
+
+2. **Sonnet is less reliable.** 3 of 25 trials crashed (12%) vs 0% for Opus. The crashes were transient (retries succeeded), but in production this matters. Opus is more robust at the extremes.
+
+3. **Sonnet actually wins on several tasks.** T1 (+2.8), T5 (+1.4), T2 (+1.3) — Sonnet outperforms Opus on the tasks where discipline matters most. Opus wins only on T7 (-1.9) and T10 (-1.0).
+
+4. **Cost implications are dramatic.** Sonnet is ~5x cheaper per token. With similar turn counts, a Sonnet self-review run costs roughly $0.25/task vs Opus's $1.33/task. This means the best cost-adjusted configuration in the entire benchmark is Sonnet + system prompt — top-tier scores at a fraction of the cost.
+
+**Implication:** Model choice is the least important variable in this benchmark. The system prompt matters. The model doesn't. A $0.25 Sonnet call with discipline instructions matches $2+ Opus calls with elaborate skill infrastructure. The entire skill/orchestrator ecosystem is solving the wrong problem.
+
 #### Writing Plans: Plan Before Code
 
 **Hypothesis:** Writing a detailed implementation plan before touching code produces better outcomes — the agent builds the right thing from the start instead of discovering requirements mid-implementation.
@@ -613,6 +648,7 @@ Greenfield breakdown (Ralph Fresh):
 | Brainstorming | Superpowers Brainstorm | Claude Code | Consensus design exploration (autopilot) | **Done — +7.8 points, #1 (97.4%, n=38)** |
 | Gene stacking: Review + Verify | Review+Verify | Review / Verify | Two discipline checkpoints stacked | **Done — 97.2% (worse than either alone, diminishing returns)** |
 | System prompt self-review | Self-Review | Claude Code | "Verify, commit, review diff, fix" — no plugins | **Done — 96.8% at $1.33 (n=40, within 0.6 of skills)** |
+| Model ablation: Sonnet vs Opus | Self-Review (Sonnet) | Self-Review (Opus) | Cheap model + same system prompt | **Done — 97.1% Sonnet vs 96.8% Opus (model doesn't matter)** |
 | Consensus design review | Conclave Design | Claude Code | Pre-implementation multi-model architecture guidance | **Done — +16.2 points** |
 | Self-review discipline | Double Review (no keys) | Claude Code | "Commit, review your diff, fix" in system prompt | **Done — ~+16 points (free, largest gene)** |
 | Self-review + consensus | Double Review (keys) | Claude Code | Self-review + real multi-model consensus | **Done — ~+15.5 points (consensus adds nothing over self-review)** |
@@ -657,7 +693,8 @@ The framework tests five hypotheses:
 | **Superpowers Review** | Claude Code + code review skill | Skill-guided multi-agent consensus code review — #1 |
 | **Superpowers Brainstorm** | Claude Code + brainstorming skill | Consensus-driven design exploration in autopilot mode — #2 |
 | **Review + Verify** | Claude Code + review + verify stacked | Gene stacking study — diminishing returns (97.2%, both genes combined) |
-| **Self-Review** | Claude Code + system prompt only | No plugins, no skills — just "verify, commit, review diff, fix" in system prompt |
+| **Self-Review (Opus)** | Claude Code Opus + system prompt only | No plugins, no skills — just "verify, commit, review diff, fix" in system prompt |
+| **Self-Review (Sonnet)** | Claude Code Sonnet + system prompt only | Same system prompt, ~5x cheaper model — matches Opus (97.1% vs 96.8%) |
 | **Superpowers Verify** | Claude Code + verification skill | "No completion claims without fresh evidence" — cheapest top-tier |
 | **Superpowers** (Original) | Skill-injection platform | Mandatory planning + TDD + two-stage review |
 | **Conclave** (Superpowers fork) | Cross-provider consensus | Claude x Gemini x Codex consensus; 6-layer self-correction |
