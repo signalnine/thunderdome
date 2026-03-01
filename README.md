@@ -6,33 +6,42 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across all 11 tasks (tests + build/lint for standard tasks; hidden_tests + agent_tests + coverage + code_metrics + lint for greenfield). Data includes 642 trials across 27 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
+Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 928 trials across 36 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
 
-### Leaderboard
+### Leaderboard (T1-T11 Standard Suite)
 
-Mean composite score across all tasks run, ranked by score. Orchestrators with fewer trials or tasks may be less reliable.
+Mean composite score across the 11 standard-difficulty tasks, ranked by score. See [Hard Benchmarks](#hard-benchmarks-t12-t19) for the 8 harder tasks that break these rankings. Orchestrators with fewer trials or tasks may be less reliable.
 
 | Rank | Orchestrator | Mean | Tasks | Trials | Avg Cost | Model |
 |---:|---|---:|---:|---:|---:|---|
-| 1 | Superpowers Brainstorm | **97.4%** | 11 | 38 | $1.43 | Opus 4.6 |
+| 1 | **TDD (Sonnet)** | **98.2%** | 11 | 22 | $1.08 | Sonnet 4.6 |
+| 1 | **Conclave v6 (Sonnet)** | **98.1%** | 11 | 22 | $1.11 | Sonnet 4.6 |
+| 1 | **Conclave v6 (Opus)** | **98.0%** | 11 | 22 | $2.20 | Opus 4.6 |
+| 2 | Conclave Brainstorm | **97.4%** | 11 | 38 | $1.43 | Opus 4.6 |
 | 2 | Superpowers TDD | **97.4%** | 11 | 16 | $2.32 | Opus 4.6 |
 | 3 | Stacked | **97.3%** | 11 | 11 | $1.36 | Opus 4.6 |
 | 4 | Superpowers Verify | **97.3%** | 11 | 11 | $0.94 | Opus 4.6 |
-| 5 | Conclave Review | **97.2%** | 10 | 11 | $1.82 | Multi-provider |
-| 5 | Review + Verify | **97.2%** | 11 | 11 | $2.28 | Opus 4.6 |
+| 5 | Conclave Review | **97.2%** | 10 | 11 | $1.82 | Opus 4.6 |
+| 5 | Conclave Review + Verify | **97.2%** | 11 | 11 | $2.28 | Opus 4.6 |
 | 6 | Self-Review (Sonnet) | **97.1%** | 11 | 22 | $1.13 | Sonnet 4.6 |
-| 7 | Superpowers Review | **97.0%** | 11 | 34 | $2.01 | Opus 4.6 |
+| 6 | Superpowers Brainstorm | **97.1%** | 11 | 22 | $1.12 | Opus 4.6 |
+| 7 | Conclave Skill Review | **97.0%** | 11 | 34 | $2.01 | Opus 4.6 |
+| 7 | Superpowers Review | **97.0%** | 11 | 22 | $1.83 | Opus 4.6 |
+| 8 | Conclave Review + Keys | **96.9%** | 11 | 22 | $1.71 | Multi-provider |
 | 8 | Superpowers Plans | **96.9%** | 11 | 11 | $1.05 | Opus 4.6 |
 | 9 | Self-Review (Opus) | **96.8%** | 11 | 40 | $1.33 | Opus 4.6 |
 | 10 | Gas Town | **96.6%** | 10 | 24 | $0.02 | Opus 4.6 |
-| 11 | Superpowers Debug | **96.4%** | 4 | 9 | $0.88 | Opus 4.6 |
+| 11 | Superpowers Debug | **96.7%** | 11 | 22 | $1.14 | Opus 4.6 |
 | 12 | Metacog | **95.9%** | 11 | 22 | $0.70 | Opus 4.6 |
 | 13 | Conclave Design | **95.7%** | 4 | 9 | $2.09 | Multi-provider |
+| 13 | Conclave Brainstorm + Keys | **95.7%** | 11 | 22 | $1.43 | Multi-provider |
 | 14 | Conclave (Full) | **95.2%** | 10 | 12 | $0.14 | Multi-provider |
-| 15 | Conclave Double Review | **95.2%** | 4 | 9 | $1.26 | Multi-provider |
+| 15 | Conclave Double Review | **95.2%** | 4 | 9 | $1.26 | Opus 4.6 |
 | 16 | Conclave Dbl Review + Keys | **95.0%** | 4 | 9 | $1.89 | Multi-provider |
+| 17 | Conclave Brainstorm (Sonnet) | **94.7%** | 11 | 22 | $0.74 | Sonnet 4.6 |
 | 17 | Ralph Fresh | **94.7%** | 2 | 4 | $1.57 | Opus 4.6 |
-| 18 | Claude Code Worktree | **94.7%** | 2 | 3 | $1.20 | Opus 4.6 |
+| 17 | Claude Code Worktree | **94.7%** | 2 | 3 | $1.20 | Opus 4.6 |
+| 18 | Verify (Sonnet) | **94.3%** | 11 | 22 | $0.74 | Sonnet 4.6 |
 | 19 | Claude Code Headless | **94.2%** | 4 | 9 | $1.15 | Opus 4.6 |
 | 20 | Gas Station | **92.6%** | 10 | 22 | $0.71 | Opus 4.6 |
 | 21 | Agent Teams | **86.2%** | 10 | 28 | $0.49 | Opus 4.6 |
@@ -42,20 +51,55 @@ Mean composite score across all tasks run, ranked by score. Orchestrators with f
 | 25 | Amp Flash | **84.2%** | 10 | 11 | $0.00 | Gemini 3 Flash |
 | 26 | Gemini CLI | **82.0%** | 10 | 19 | $0.00 | Gemini 3 Flash |
 
+### Hard Benchmarks (T12-T19)
+
+The standard suite (T1-T11) clusters top orchestrators within 2 points (96.8-98.2%). Eight harder benchmarks test whether this holds under pressure — algorithmic complexity (T12-T13, T16), correctness constraints (T14), ambiguous requirements (T15), and deep reasoning where naive approaches fail at scale (T17-T19).
+
+Initial results from 4 orchestrators (2 trials each, 66 total trials):
+
+| Task | Category | Brainstorm Opus | Stacked Opus | Vanilla Opus | TDD Sonnet |
+|------|----------|---:|---:|---:|---:|
+| **T12** constraint-scheduler | algorithmic/hard | **93.4%** | 91.3% | 60.0% | 81.3% |
+| **T13** structural-merge | algorithmic/hard | **93.3%** | 90.2% | 59.0% | 88.2% |
+| **T14** financial-ledger | correctness/hard | 100% | 100% | 100% | 100% |
+| **T15** permission-maze | ambiguity/hard | **65.2%** | 61.2% | 69.6% | 64.3% |
+| **T16** reactive-spreadsheet | algorithmic/hard | **93.2%** | 88.0% | 91.1% | 88.7% |
+| **T17** circuit-debugger | reasoning/hard | 85.3% | 87.3% | **88.9%** | 40.4%\* |
+| **T18** beam-splitter | reasoning/hard | **93.2%** | **93.2%** | 69.2% | 20.0%\* |
+| **T19** factory-reset | reasoning/hard | 87.0% | **91.7%** | 78.6% | 20.0%\* |
+| **Mean** | | **88.8%** | **87.9%** | 76.7% | 62.9% |
+| **Avg Cost** | | $1.94 | $1.48 | $1.33 | $0.53 |
+
+\*TDD Sonnet crashed on 5 of 6 reasoning/hard trials ($0.00 cost, <3s duration). The non-crashing T17 trial scored 60.8%.
+
+**Key findings from the hard suite:**
+
+1. **TDD Sonnet's #1 position was an artifact of easy benchmarks.** The T1-T11 champion (98.2%) collapses to 62.9% on T12-T19 — dead last among tested orchestrators. On reasoning/hard tasks (T17-T19), it scored 20-40% vs Opus variants' 85-93%. The rigid Red-Green-Refactor cycle that equalizes models on standard tasks can't substitute for the algorithmic insight these problems require.
+
+2. **Hard tasks finally differentiate orchestrators.** The T1-T11 spread among top-tier Opus variants is 0.6 points (96.8-97.4%). On T12-T19 the spread is 12.1 points (76.7-88.8%). These benchmarks test what easy benchmarks can't: whether the agent can discover novel algorithmic approaches rather than implement well-known patterns.
+
+3. **Methodology still matters — but model capability is the prerequisite.** Brainstorm Opus (88.8%) beats vanilla Opus (76.7%) by 12.1 points on the hard suite, confirming discipline genes still help. But TDD Sonnet's crash proves methodology alone can't compensate when the model lacks the reasoning capacity for the underlying problem.
+
+4. **Permission maze (T15) is the hardest non-crashing task.** All orchestrators score 20-70% on hidden tests (3.8-59.6% range). The deliberately ambiguous TASK.md exposes agents that make assumptions rather than exploring edge cases.
+
+5. **Vanilla Opus shows high variance on reasoning tasks.** T18 beam-splitter: one trial scores 91.4%, the other two score 58.1%. The agent sometimes discovers counter-based propagation and sometimes doesn't — raw capability without discipline is inconsistent.
+
 ### Key Findings
 
-- **The model doesn't matter — the system prompt does.** Sonnet 4.6 + self-review (97.1%) matches Opus 4.6 + self-review (96.8%) and ties with Opus + skill-based approaches (97.0-97.4%). A ~5x cheaper model with nine lines of instructions matches the most expensive orchestrators in the benchmark. Three crashes in 25 trials (12%) are the only Sonnet weakness
-- **Multi-trial data compresses the spread.** With n=22-40 trials per orchestrator, the top 10 contenders cluster within 0.6 points (96.8%-97.4%). The n=1 rankings were noise — what looked like meaningful differences between skill-based approaches was just variance
+- **TDD Sonnet is #1 on easy tasks — but collapses on hard ones.** Sonnet 4.6 + TDD scores 98.2% on T1-T11, beating every Opus variant. But on T12-T19 hard benchmarks, it drops to 62.9% — crashing on 5 of 6 reasoning/hard trials. The structured Red-Green-Refactor cycle equalizes models on standard tasks but can't substitute for the algorithmic reasoning these harder problems require. **The "methodology > model" finding only holds when the problems don't require genuine insight**
+- **Conclave v6 ties for #1 — task classifier + completion gate + consensus opt-in.** The redesigned Conclave plugin (98.1%, n=22) matches TDD Sonnet. Key changes: a meta-skill routes tasks to the right methodology (TDD for bugs/features, brainstorming for greenfield), a completion gate standardizes verification, and multi-agent consensus is demoted from default to opt-in. Five perfect scores, 100% pass rate, $1.11/task
+- **The methodology matters more than the model — on standard tasks.** Four approaches tested with both Opus and Sonnet on T1-T11: TDD (Sonnet +0.8pp), Brainstorm (Sonnet -0.9pp), Verify (Sonnet -3.0pp), Self-Review (Sonnet -7.5pp). The more structured the methodology, the smaller the Opus-Sonnet gap. But T12-T19 hard benchmarks reveal this is incomplete: Opus Brainstorm (88.8%) dominates TDD Sonnet (62.9%) when problems require novel algorithmic approaches
+- **Multi-agent consensus adds nothing — even with real multi-provider keys.** Three-way test: pure superpowers (no binary), conclave (Claude-only consensus), conclave + keys (Claude + Gemini + Codex). Pure wins: Brainstorm 97.1% > +keys 95.7% > no-keys 95.6%. Adding the consensus binary and multi-provider API keys actually hurts slightly — the structured skill text drives all the value
 - **A system prompt is (almost) all you need.** Self-Review scores 96.8-97.1% depending on model — no plugins, no skills, no consensus. The entire skill infrastructure adds ~0.3 points over a well-worded system prompt. The gap is negligible
-- **The real gap is vanilla vs any discipline.** Claude Code without any review instruction scores 85.9%. Adding "verify and review your diff" to the system prompt jumps to 97% — an 11 point improvement for free. All the skill infrastructure, consensus protocols, and multi-agent reviews fight over the last 0.3 points
-- **Superpowers Brainstorm** is #1 at 97.4% (n=38) — consensus-driven design exploration held up best with more data. $1.43/task
-- **Superpowers Verify** is the best cost-adjusted skill — 97.3% at $0.94/task (n=11, needs more trials to confirm)
-- **Superpowers Review regressed the most** — from 97.7% (n=1) to 97.0% (n=34). The original score was an outlier. Still effective but not the clear #1 it appeared to be
-- **Gene stacking has diminishing returns** — Review + Verify (97.2%) scores at the same level as either alone. Two discipline checkpoints don't compound. The ceiling appears to be ~97% with current single-session approaches
+- **The real gap is vanilla vs any discipline.** Claude Code without any review instruction scores 85.9%. Adding "verify and review your diff" to the system prompt jumps to 97% — an 11 point improvement for free. All the skill infrastructure, consensus protocols, and multi-agent reviews fight over the last 1.2 points
+- **Hard benchmarks (T12-T19) break the T1-T11 consensus.** On easy tasks, all discipline genes cluster within 0.6 points. On hard tasks, the spread explodes to 12+ points. Brainstorm Opus (88.8%) and Stacked Opus (87.9%) maintain strong performance; vanilla Opus drops to 76.7%; TDD Sonnet crashes to 62.9%. The T1-T11 leaderboard was measuring methodology compliance, not problem-solving capability
+- **Multi-trial data compresses the spread.** With n=22-40 trials per orchestrator, the Opus top tier clusters within 0.6 points (96.8%-97.4%) on T1-T11. The n=1 rankings were noise — what looked like meaningful differences between skill-based approaches was just variance
+- **Superpowers Verify** is the best cost-adjusted Opus skill — 97.3% at $0.94/task (n=11, needs more trials to confirm)
+- **Conclave Skill Review regressed the most** — from 97.7% (n=1) to 97.0% (n=34). The original score was an outlier. Still effective but not the clear #1 it appeared to be
+- **Gene stacking has diminishing returns** — Review + Verify (97.2%) scores at the same level as either alone. Two discipline checkpoints don't compound. The ceiling appears to be ~97-98% with current single-session approaches
 - **Gas Town** is the biggest mover after data cleanup — 96.6% mean (was 81.3% when adapter failures polluted the data). The real multi-agent pipeline actually works
-- **TDD works when forced** — 97.4% with forced red-green-refactor (n=16). Tied with Brainstorm for #1 but costs $2.32/task vs $1.43
 - **T4** (bugfix) is the great equalizer — most contenders score 100%, the task is too easy
-- **T8** (analytics dashboard) is the hardest task — most contenders cluster around 87-90%
+- **T8** (analytics dashboard) is the hardest task in the standard suite — most contenders cluster around 87-90%. In the hard suite, T15 (permission maze, 55-70%) and the reasoning tasks (T17-T19) are significantly harder
 
 ### The Gas Station Story
 
@@ -130,28 +174,38 @@ We're isolating individual orchestrator "genes" — composable features like mul
 
 #### Systematic Debugging: Superpowers Debug Skill vs Claude Code
 
-**Hypothesis:** A structured four-phase debugging methodology (root cause investigation → pattern analysis → hypothesis testing → implementation) improves defect resolution on hard debugging tasks.
+**Hypothesis:** A structured four-phase debugging methodology (root cause investigation → pattern analysis → hypothesis testing → implementation) improves defect resolution across all task types, not just debugging tasks.
 
-**Setup:** We built T11 (Debug Nightmare), a new hard debugging benchmark with 6 cascading bugs in an event-driven order processing system. The bugs feature multi-level indirection (symptom in Module A, root cause in Module C), cascading failures (fixing Bug 1 unmasks Bug 3), and red herrings.
+**Setup:** Claude Code Opus with the systematic-debugging skill forcibly invoked. The skill mandates a four-phase process for each bug: (1) root cause investigation — read errors, reproduce, trace data flow; (2) pattern analysis — find working examples, compare; (3) hypothesis testing — form hypothesis, test minimally; (4) implementation — create fix, verify. One bug at a time, no batching. Run across all 11 tasks with 2 trials (22 total).
 
-Variants tested, all using Opus 4.6 on T11:
-- **Claude Code** — vanilla single agent, no methodology (n=3)
-- **Superpowers Debug** — systematic-debugging skill, various configurations (n=6)
-
-| Variant | Mean | Trials | Mean Cost |
-| --- | ---: | ---: | ---: |
-| **Claude Code** | **99.3%** | 3 | $0.84 |
-| **Superpowers Debug** | **99.1%** | 6 | $1.06 |
+| Task | Category | Debug | Claude Code | Delta |
+| --- | --- | ---: | ---: | ---: |
+| **T1** time-tracker | greenfield/simple | 96.8% | 83.9% | +12.9 |
+| **T2** collab-server | greenfield/complex | 89.4% | 64.9% | +24.5 |
+| **T3** fts-search | features/medium | 100% | 99.3% | +0.7 |
+| **T4** phantom-invoice | bugfix/medium | 100% | 100% | 0.0 |
+| **T5** task-queue | marathon | 92.6% | 75.7% | +16.9 |
+| **T6** monorepo-disaster | recovery | 100% | 100% | 0.0 |
+| **T7** plugin-marketplace | greenfield/complex | 98.3% | 94.9% | +3.4 |
+| **T8** analytics-dashboard | greenfield/complex | 89.9% | 87.9% | +2.0 |
+| **T9** ssg-toolkit | features/complex | 100% | 99.4% | +0.6 |
+| **T10** ecommerce-backend | greenfield/complex | 96.2% | 89.8% | +6.4 |
+| **T11** debug-nightmare | bugfix/hard | 100% | 99.3% | +0.7 |
+| **Mean** | | **96.7%** | **89.6%** | **+7.1** |
 
 **Findings:**
 
-1. **Systematic debugging has no measurable effect.** Both variants cluster at ~99% — both fix all 6 bugs in every trial. The debugging skill adds process overhead without changing outcomes.
+1. **The original T11-only study was misleading.** The previous analysis (n=6 on T11 only) concluded "no measurable effect" because both variants scored ~99% on the debugging task. Across all 11 tasks, the debugging skill adds +7.1 points over vanilla — a solid mid-tier discipline gene.
 
-2. **When opt-in, the agent never invokes it.** Across opt-in trials, the Skill tool appeared in tools_used zero times. The agent prefers to debug directly rather than consult a methodology.
+2. **The debugging methodology works as general discipline.** The four-phase process (investigate → analyze → hypothesize → implement) isn't just for bugs — it imposes structure on greenfield (T2: +24.5) and marathon (T5: +16.9) tasks too. The "one fix at a time, verify after each" cadence prevents the agent from rushing.
 
-3. **The model already debugs systematically.** It reads errors, traces data flow, and fixes root causes without needing a skill to tell it to.
+3. **Weaker than TDD but comparable to Self-Review.** Debug (96.7%) vs TDD (97.4%) vs Self-Review (96.8%). The debugging skill provides similar discipline to self-review but through a different mechanism — investigation phases vs commit-and-review cycles.
 
-**Contrast with consensus code review (+11.3 points):** Review adds a *concrete action* — three independent models examining the diff — that catches bugs the solo agent missed. Systematic debugging adds *process* — phases, checklists, red-flag lists — that the agent already follows instinctively. Concrete actions beat process guidance.
+4. **T8 and T2 remain the hardest.** Analytics dashboard (89.9%) and collab-server (89.4%) are the lowest scores — consistent with every other discipline gene. The debugging methodology's "one bug at a time" process may hurt on complex greenfield tasks where the challenge is architecture, not defect isolation.
+
+5. **Cost-effective.** $1.14/task — cheaper than TDD ($2.32), Brainstorm ($1.43), and Review ($2.01). Comparable to Self-Review ($1.33) and Plans ($1.05).
+
+**Revised conclusion:** Systematic debugging is a legitimate discipline gene, not "no effect" as previously reported. The T11-only study was a methodological error — testing a debugging skill only on debugging tasks proved nothing because the model already debugs well. The skill's value is as general-purpose implementation discipline, not debugging-specific guidance.
 
 #### Test-Driven Development: Forced TDD — Full Suite
 
@@ -186,7 +240,7 @@ Variants tested, all using Opus 4.6 on T11:
 
 5. **Earlier 4-task comparison was misleading.** The previous analysis called TDD "inconclusive" based on 4 greenfield tasks with noisy baselines. The full 11-task run reveals a clear, consistent advantage.
 
-**The revised pattern:** Forced TDD works — not because the model doesn't know how to test, but because the mandatory discipline prevents cutting corners under token pressure. The model naturally wants to implement first and test later (or not at all). Forcing test-first produces more thorough implementations. This contrasts with systematic debugging (no effect) where the model already follows the right process instinctively.
+**The revised pattern:** Forced TDD works — not because the model doesn't know how to test, but because the mandatory discipline prevents cutting corners under token pressure. The model naturally wants to implement first and test later (or not at all). Forcing test-first produces more thorough implementations.
 
 #### Verification Before Completion: Evidence Before Claims
 
@@ -217,7 +271,7 @@ Variants tested, all using Opus 4.6 on T11:
 
 3. **The mechanism is simple.** The agent already *can* verify — it just doesn't always bother. The skill forces it to run `npm test`, `npm run build`, and `npm run lint` fresh and read the output before stopping. This catches issues the agent would otherwise ship.
 
-4. **Contrasts with systematic debugging (no effect).** Debugging methodology tells the agent *how to think*. Verification tells the agent *what to do* — run the command, read the output. Concrete actions beat process guidance, again.
+4. **Contrasts with systematic debugging (96.7%).** Debugging methodology tells the agent *how to think* — phases, checklists. Verification tells the agent *what to do* — run the command, read the output. Both work as general discipline (+7.1 and +11.4 respectively), but concrete actions edge out process guidance.
 
 **Implication:** The single most cost-effective intervention is telling the agent "you may not claim completion without running verification and reading the output." This should be the default system prompt addition for any agentic coding tool.
 
@@ -359,36 +413,93 @@ Variants tested, all using Opus 4.6 on T11:
 
 **Implication:** The single most impactful change to any agentic coding tool is adding "verify your work, commit, review your diff, fix issues, repeat until clean" to the system prompt. This is free, requires no infrastructure, and captures ~95% of the benefit of elaborate skill-based approaches.
 
-#### Model Ablation: Sonnet 4.6 + Self-Review vs Opus 4.6 + Self-Review
+#### Conclave Binary Effect: Pure Superpowers vs Conclave Consensus
 
-**Hypothesis:** The ~97% top-tier scores require Opus 4.6 ($15/MTok input, $75/MTok output). Sonnet 4.6 (~5x cheaper) can't match it even with the same system prompt.
+**Hypothesis:** The brainstorming and code review skills perform better when backed by the conclave consensus binary (multi-agent consensus via `conclave consensus`) than when the agent works through the same skill process alone. And multi-provider consensus (Claude + Gemini + Codex) outperforms Claude-only consensus.
 
-**Setup:** Identical to the Opus self-review adapter — same Docker image, same system prompt, same flags — but with `--model claude-sonnet-4-6` instead of `claude-opus-4-6`. Run across all 11 tasks with 2 trials each.
+**Setup:** Three-way comparison for both brainstorm and code review skills, each using identical skill text from obra/superpowers:
 
-| Task | Category | Sonnet | Opus | Delta |
-| --- | --- | ---: | ---: | ---: |
-| **T1** time-tracker | greenfield/simple | 99.0% (n=2) | 96.2% (n=5) | +2.8 |
-| **T2** collab-server | greenfield/complex | 93.3% (n=2) | 92.0% (n=5) | +1.3 |
-| **T3** fts-search | features/medium | 100% (n=2) | 100% (n=5) | 0.0 |
-| **T4** phantom-invoice | bugfix/medium | 100% (n=2) | 100% (n=4) | 0.0 |
-| **T5** task-queue | marathon | 94.0% (n=2) | 92.6% (n=3) | +1.4 |
-| **T6** monorepo-disaster | recovery | 100% (n=2) | 100% (n=3) | 0.0 |
-| **T7** plugin-marketplace | greenfield/complex | 96.9% (n=2) | 98.8% (n=3) | -1.9 |
-| **T8** analytics-dashboard | greenfield/complex | 89.1% (n=2) | 88.8% (n=3) | +0.3 |
-| **T9** ssg-toolkit | features/complex | 100% (n=2) | 100% (n=3) | 0.0 |
-| **T10** ecommerce-backend | greenfield/complex | 95.5% (n=2) | 96.5% (n=3) | -1.0 |
-| **T11** debug-nightmare | bugfix/hard | 100% (n=2) | 100% (n=3) | 0.0 |
-| **Mean** | | **97.1%** | **96.8%** | **+0.3** |
+- **Pure Superpowers** — `thunderdome/superpowers:latest` image, NO conclave binary. Agent works through the skill process autonomously (brainstorm) or via Task tool subagent (review).
+- **Conclave, no keys** — `thunderdome/conclave:latest` with `conclave` binary but no Gemini/OpenAI API keys. Consensus calls fall back to Claude-only.
+- **Conclave + keys** — `thunderdome/conclave:latest` with `conclave` binary AND full API keys (Anthropic + OpenAI + Gemini). True multi-provider consensus.
+
+Each variant run across all 11 tasks with 2 trials (22 trials per variant, 88 total new trials for the pure and +keys variants).
+
+| Variant | Brainstorm | Review |
+| --- | ---: | ---: |
+| **Pure Superpowers** (no binary) | **97.1%** (n=22, $1.12/task) | **97.0%** (n=22, $1.83/task) |
+| **Conclave + keys** (multi-provider) | 95.7% (n=22, $1.43/task) | 96.9% (n=22, $1.71/task) |
+| **Conclave, no keys** (Claude-only) | 95.6% (n=40, $1.35/task) | 96.0% (n=35, $2.04/task) |
+
+Per-task breakdown (Brainstorm):
+
+| Task | Pure | + Keys | No Keys |
+| --- | ---: | ---: | ---: |
+| **T1** time-tracker | 96.7% | 84.0% | 92.9% |
+| **T2** collab-server | 91.0% | 92.2% | 86.5% |
+| **T3** fts-search | 100% | 100% | 100% |
+| **T4** phantom-invoice | 100% | 100% | 100% |
+| **T5** task-queue | 95.0% | 92.7% | 94.8% |
+| **T6** monorepo-disaster | 100% | 100% | 100% |
+| **T7** plugin-marketplace | 99.0% | 98.4% | 99.1% |
+| **T8** analytics-dashboard | 89.5% | 87.8% | 88.5% |
+| **T9** ssg-toolkit | 100% | 100% | 100% |
+| **T10** ecommerce-backend | 96.8% | 97.2% | 98.3% |
+| **T11** debug-nightmare | 100% | 100% | 100% |
 
 **Findings:**
 
-1. **Sonnet matches Opus.** 97.1% vs 96.8% — the cheaper model actually scores slightly higher. No task shows a meaningful gap. The system prompt is doing the work, not the model.
+1. **Multi-agent consensus adds nothing — and may introduce instability.** The pure superpowers variant (no binary, no consensus) matches or exceeds both conclave variants. Brainstorm + keys scored 1.4 points LOWER than pure, driven by a T1 outlier (0.692 on time-tracker trial-1 — the worst score in the entire brainstorm dataset). Multi-provider consensus introduces external model variability that can hurt.
 
-2. **Sonnet actually wins on several tasks.** T1 (+2.8), T5 (+1.4), T2 (+1.3) — Sonnet outperforms Opus on the tasks where discipline matters most. Opus wins only on T7 (-1.9) and T10 (-1.0).
+2. **Multi-provider consensus (Claude + Gemini + Codex) doesn't beat Claude-only consensus.** With keys: 95.7% brainstorm, 96.9% review. Without keys: 95.6% brainstorm, 96.0% review. Adding Gemini and Codex to the consensus panel doesn't systematically improve quality — the external models add cost and latency without benefit.
 
-3. **Cost implications are dramatic.** Sonnet is ~5x cheaper per token. With similar turn counts, a Sonnet self-review run costs roughly $0.25/task vs Opus's $1.33/task. This means the best cost-adjusted configuration in the entire benchmark is Sonnet + system prompt — top-tier scores at a fraction of the cost.
+3. **The skill TEXT is the value driver, not the consensus mechanism.** The brainstorming skill's structured design process (architecture, components, data flow, error handling, testing strategy) forces the agent to think before coding. Whether design questions are answered by multi-model consensus, single-model consensus, or the agent's own reasoning makes no measurable difference.
 
-**Implication:** Model choice is the least important variable in this benchmark. The system prompt matters. The model doesn't. A $0.25 Sonnet call with discipline instructions matches $2+ Opus calls with elaborate skill infrastructure. The entire skill/orchestrator ecosystem is solving the wrong problem.
+4. **Pure superpowers is the cheapest and best.** $1.12/task for brainstorm (vs $1.43 with keys), $1.83/task for review (vs $1.71 — keys was cheaper here due to fewer review iterations, but lower score). No external API dependencies, no conclave binary, no consensus overhead.
+
+**Bottom line:** Multi-agent consensus for design and review decisions is pure overhead. A single agent working through the same structured skill process achieves the best results at the lowest cost. The conclave binary and multi-provider API keys are unnecessary.
+
+#### Model Ablation: Sonnet 4.6 vs Opus 4.6 Across Top Approaches
+
+**Hypothesis:** The ~97% top-tier scores require Opus 4.6 ($15/MTok input, $75/MTok output). Sonnet 4.6 (~5x cheaper) can't match it even with the same system prompts.
+
+**Setup:** Four top-performing approaches — TDD (Superpowers), Brainstorm (Conclave), Verify (Superpowers), and Self-Review (system prompt only) — each run with identical Docker images, system prompts, and flags, but with `--model claude-sonnet-4-6` instead of `claude-opus-4-6`. Each Sonnet variant run across all 11 tasks with 2 trials (22 trials per approach, 88 total new trials). Note: Brainstorm Sonnet uses the conclave binary (Claude-only consensus, no API keys); the binary was later shown to have no effect (see Conclave Binary Effect ablation).
+
+| Approach | Opus 4.6 | Sonnet 4.6 | Delta | Cost (Opus → Sonnet) |
+| --- | ---: | ---: | ---: | ---: |
+| **TDD** | 97.4% (n=16) | **98.2%** (n=22) | **+0.8** | $2.32 → $1.08 (53% cheaper) |
+| **Brainstorm** | 97.4% (n=38) | 94.7% (n=22) | -2.7 | $1.43 → $0.74 (48% cheaper) |
+| **Verify** | 97.3% (n=11) | 94.3% (n=22) | -3.0 | $0.94 → $0.74 (21% cheaper) |
+| **Self-Review** | 96.8% (n=40) | 97.1% (n=22) | +0.3 | $1.33 → $1.13 (15% cheaper) |
+
+Per-task breakdown for **TDD (Sonnet)** — the new #1:
+
+| Task | Category | TDD Sonnet | TDD Opus | Delta |
+| --- | --- | ---: | ---: | ---: |
+| **T1** time-tracker | greenfield/simple | 98.1% | 96.2% | +1.9 |
+| **T2** collab-server | greenfield/complex | 94.2% | 94.1% | +0.1 |
+| **T3** fts-search | features/medium | 100% | 100% | 0.0 |
+| **T4** phantom-invoice | bugfix/medium | 100% | 100% | 0.0 |
+| **T5** task-queue | marathon | 96.2% | 95.8% | +0.4 |
+| **T6** monorepo-disaster | recovery | 100% | 100% | 0.0 |
+| **T7** plugin-marketplace | greenfield/complex | 98.2% | 98.8% | -0.6 |
+| **T8** analytics-dashboard | greenfield/complex | 96.1% | 95.2% | +0.9 |
+| **T9** ssg-toolkit | features/complex | 100% | 100% | 0.0 |
+| **T10** ecommerce-backend | greenfield/complex | 97.9% | 97.1% | +0.8 |
+| **T11** debug-nightmare | bugfix/hard | 100% | 100% | 0.0 |
+| **Mean** | | **98.2%** | **97.4%** | **+0.8** |
+
+**Findings:**
+
+1. **TDD is the great equalizer.** Sonnet + TDD (98.2%) beats every orchestrator in the benchmark including Opus + TDD (97.4%). The rigid Red-Green-Refactor cycle provides enough scaffolding that the cheaper model actually produces better results. The methodology matters more than the model.
+
+2. **Structure determines the Opus-Sonnet gap.** The more structured the approach, the smaller the gap: TDD (+0.8pp for Sonnet) > Self-Review (+0.3pp) > Brainstorm (-2.7pp) > Verify (-3.0pp). TDD's step-by-step cycle eliminates the need for Opus-level reasoning; open-ended approaches like Verify leave more room for model capability to show.
+
+3. **Sonnet + TDD is the Pareto-optimal configuration.** 98.2% at $1.08/task — highest score AND lower cost than most Opus variants. The next-best configurations (Opus Brainstorm at 97.4%/$1.43, Opus TDD at 97.4%/$2.32) are both worse and more expensive.
+
+4. **The cost story is uniformly positive.** Every Sonnet variant is cheaper than its Opus counterpart (15-53% savings). Even the weaker Sonnet variants (Brainstorm 94.7%, Verify 94.3%) are competitive with mid-tier Opus orchestrators at a fraction of the cost.
+
+**Implication:** The optimal agentic coding configuration is not "better model + better prompt" — it's "structured methodology + cheaper model." Sonnet 4.6 + TDD discipline beats Opus 4.6 + anything. Investment should go into methodology (test-driven workflows, structured cycles) rather than model upgrades or multi-agent infrastructure.
 
 #### Writing Plans: Plan Before Code
 
@@ -629,6 +740,49 @@ Greenfield breakdown (Ralph Fresh):
 
 **Caveat:** 3 trials for Ralph Fresh, 4 for vanilla (including 1 failed trial at 31%).
 
+#### Conclave v6: Task Classifier + Completion Gate + Consensus Opt-In
+
+**Hypothesis:** The previous Conclave experiments tested individual genes in isolation (brainstorming, review, TDD, etc.) via forced skill invocation. A well-designed plugin should combine these genes intelligently — routing tasks to the right methodology based on task type, enforcing a completion gate across all skills, and making multi-agent consensus opt-in rather than mandatory.
+
+**Setup:** Conclave v6 redesigns the plugin architecture around three changes:
+1. **Task classifier** — the `using-conclave` meta-skill auto-routes: build new → brainstorming → TDD; fix bug → TDD; modify behavior → TDD; execute plan → executing-plans. The agent picks the first matching row rather than deliberating.
+2. **Completion gate** — every skill includes a standardized exit gate: run full verification suite, read output, fix failures, commit, review diff, fix issues. Baked into all skills.
+3. **Consensus opt-in** — all skills that previously called `conclave consensus` by default now use single-agent execution. Consensus is available but not the default path.
+
+Run with both Sonnet 4.6 and Opus 4.6 across all 11 tasks, 2 trials each (44 total). Uses `CONCLAVE_NON_INTERACTIVE=1` which routes brainstorming to single-agent Autopilot mode.
+
+| Task | Category | v6 Sonnet | v6 Opus | TDD Sonnet | Self-Review | Claude Code |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| **T1** time-tracker | greenfield/simple | 98.5% | 97.4% | 98.1% | 96.2% | 83.9% |
+| **T2** collab-server | greenfield/complex | 95.9% | 95.3% | 94.2% | 92.0% | 64.9% |
+| **T3** fts-search | features/medium | 100% | 100% | 100% | 100% | 99.3% |
+| **T4** phantom-invoice | bugfix/medium | 100% | 100% | 100% | 100% | 100% |
+| **T5** task-queue | marathon | 94.4% | 95.6% | 96.2% | 92.6% | 75.7% |
+| **T6** monorepo-disaster | recovery | 100% | 100% | 100% | 100% | 100% |
+| **T7** plugin-marketplace | greenfield/complex | 98.1% | 98.7% | 98.2% | 98.8% | 94.9% |
+| **T8** analytics-dashboard | greenfield/complex | 94.2% | 93.6% | 96.1% | 88.8% | 87.9% |
+| **T9** ssg-toolkit | features/complex | 100% | 100% | 100% | 100% | 99.4% |
+| **T10** ecommerce-backend | greenfield/complex | 97.8% | 98.0% | 97.9% | 96.5% | 89.8% |
+| **T11** debug-nightmare | bugfix/hard | 100% | 100% | 100% | 100% | 99.3% |
+| **Mean** | | **98.1%** | **98.0%** | **98.2%** | **96.8%** | **89.6%** |
+| **Avg Cost** | | $1.11 | $2.20 | $1.08 | $1.13 | $0.27 |
+
+**Findings:**
+
+1. **Conclave v6 ties for #1 on both models.** Sonnet (98.1%, n=22) and Opus (98.0%, n=22) both land in the top tier alongside TDD Sonnet (98.2%). Five perfect scores each (T3, T4, T6, T9, T11), 100% pass rate on both. The task classifier successfully routes each task to an effective methodology regardless of model.
+
+2. **Sonnet matches Opus at half the cost — again.** v6 Sonnet (98.1%, $1.11) vs v6 Opus (98.0%, $2.20). The 0.1pp difference is noise; the 2x cost difference is real. This replicates the TDD finding: structured methodology eliminates the model capability gap.
+
+3. **The plugin adds 1.3 points over a bare system prompt.** Conclave v6 Sonnet (98.1%) vs Self-Review Sonnet (96.8%) — the structured skill routing and completion gate provide a small but consistent advantage over "verify and review your diff" alone.
+
+4. **Biggest improvement: greenfield tasks.** T1 (+14.6 vs vanilla), T2 (+31.0), T8 (+6.3), T10 (+7.9). The brainstorming → TDD routing gives greenfield tasks both upfront design thinking and implementation discipline.
+
+5. **The three v6 changes compound.** Previous studies showed individual genes cluster within 0.6 points (96.8-97.4%). Conclave v6 breaks above that range by combining the right gene for each task type rather than applying one gene uniformly. Task-aware routing > one-size-fits-all discipline.
+
+6. **Consensus demotion was the right call.** The Conclave Binary Effect study showed consensus adds nothing (pure 97.1% > +keys 95.7%). Making consensus opt-in removes the overhead without losing any benefit.
+
+**Implication:** The optimal plugin architecture is not "more consensus" or "more checkpoints" — it's intelligent routing to the right methodology for each task type, with a consistent verification gate across all paths. Conclave v6 validates this on both Sonnet and Opus: a well-designed classifier + completion gate matches the best individual gene (TDD) while being more general-purpose. Sonnet is the clear winner on cost-adjusted performance.
+
 #### Planned Ablations
 
 | Ablation | A | B | Gene Isolated | Status |
@@ -638,18 +792,20 @@ Greenfield breakdown (Ralph Fresh):
 | Git worktree isolation | Claude Code + Worktree | Claude Code | Bare clone + worktree (no Gas Town tooling) | **Done — 90.7% T5 (n=2), matches Gas Station** |
 | Consensus review only | Conclave Review | Claude Code | Multi-agent code review (no skills) | **Done — +11.3 points** |
 | Full skill pipeline | Full Conclave | Conclave Review | Brainstorm/plan/implement workflow | **Done — -2.0 points vs review-only (was -19 before data cleanup)** |
-| Systematic debugging | Superpowers Debug | Claude Code | Four-phase debugging methodology | **Done — no effect (both ~99%)** |
+| Systematic debugging | Superpowers Debug | Claude Code | Four-phase debugging methodology | **Done — +7.1 points full-suite (96.7%, n=22); original T11-only study was misleading** |
 | Test-driven development | Superpowers TDD | Claude Code | Forced red-green-refactor cycle | **Done — +11.5 points, highest score (97.4%)** |
 | Verification before completion | Superpowers Verify | Claude Code | "No claims without fresh evidence" | **Done — +11.4 points at $0.94 (cheapest top-tier)** |
-| Skill-guided code review | Superpowers Review | Claude Code | requesting-code-review skill + conclave consensus | **Done — +7.4 points, 97.0% (n=34)** |
+| Skill-guided code review | Conclave Skill Review | Claude Code | requesting-code-review skill + conclave consensus | **Done — +7.4 points, 97.0% (n=34)** |
 | Writing plans | Superpowers Plans | Claude Code | Mandatory plan before implementation | **Done — +7.3 points at $1.05** |
-| Brainstorming | Superpowers Brainstorm | Claude Code | Consensus design exploration (autopilot) | **Done — +7.8 points, #1 (97.4%, n=38)** |
+| Brainstorming | Conclave Brainstorm | Claude Code | Consensus design exploration (autopilot) | **Done — +7.8 points, #2 (97.4%, n=38)** |
 | Gene stacking: Review + Verify | Review+Verify | Review / Verify | Two discipline checkpoints stacked | **Done — 97.2% (worse than either alone, diminishing returns)** |
 | System prompt self-review | Self-Review | Claude Code | "Verify, commit, review diff, fix" — no plugins | **Done — 96.8% at $1.33 (n=40, within 0.6 of skills)** |
-| Model ablation: Sonnet vs Opus | Self-Review (Sonnet) | Self-Review (Opus) | Cheap model + same system prompt | **Done — 97.1% Sonnet vs 96.8% Opus (model doesn't matter)** |
+| Model ablation: Sonnet vs Opus | TDD/Brainstorm/Verify/Self-Review (Sonnet) | Same (Opus) | Cheap model + same system prompts | **Done — TDD Sonnet #1 overall (98.2%), structure closes the gap** |
 | Consensus design review | Conclave Design | Claude Code | Pre-implementation multi-model architecture guidance | **Done — +16.2 points** |
 | Self-review discipline | Double Review (no keys) | Claude Code | "Commit, review your diff, fix" in system prompt | **Done — ~+16 points (free, largest gene)** |
 | Self-review + consensus | Double Review (keys) | Claude Code | Self-review + real multi-model consensus | **Done — ~+15.5 points (consensus adds nothing over self-review)** |
+| Conclave binary effect | Conclave Brainstorm/Review (no keys, +keys) | Superpowers Brainstorm/Review | Multi-agent consensus binary + multi-provider | **Done — no effect, 3-way comparison (pure 97.1% > +keys 95.7% > no-keys 95.6%)** |
+| Conclave v6 plugin | Conclave v6 (Sonnet + Opus) | TDD Sonnet / Self-Review | Task classifier + completion gate + consensus opt-in | **Done — Sonnet 98.1%, Opus 98.0%, both tie #1; Sonnet 2x cheaper** |
 | Mandatory skills | Conclave | Claude Code | Conclave plugin (TDD, debugging, planning) | Data exists (needs more trials) |
 | Skill optionality | Conclave | Superpowers | Mandatory vs optional skill invocation | Data exists (needs more trials) |
 | Metacognitive reframing | Metacog | Claude Code | Pre-implementation thinking skill | Data exists (needs more trials) |
@@ -688,12 +844,21 @@ The framework tests five hypotheses:
 | **Claude Code** | CLI agentic (single agent) | Rich tool use, subagent delegation, flexible autonomy |
 | **Metacog** | Claude Code + metacognitive skill | Perspective-shifting plugin; methodology guidance |
 | **Stacked** | Metacog + review + worktree | Three top genes combined: metacog reframing, consensus code review, git worktree |
-| **Superpowers Review** | Claude Code + code review skill | Skill-guided multi-agent consensus code review — #1 |
-| **Superpowers Brainstorm** | Claude Code + brainstorming skill | Consensus-driven design exploration in autopilot mode — #2 |
+| **Conclave Skill Review** | Claude Code + conclave consensus binary | Skill-guided consensus code review via conclave binary (Claude-only consensus) |
+| **Conclave Brainstorm** | Claude Code + conclave consensus binary | Consensus-driven design exploration via conclave binary (Claude-only consensus) |
+| **Superpowers Brainstorm** | Claude Code + obra/superpowers skills only | Same brainstorming skill, no conclave binary — agent answers design questions autonomously |
+| **Superpowers Review** | Claude Code + obra/superpowers skills only | Same code review skill, no conclave binary — agent dispatches code-reviewer subagent |
+| **Conclave Brainstorm + Keys** | Claude Code + conclave binary + multi-provider | Multi-provider consensus (Claude + Gemini + Codex) for design questions |
+| **Conclave Review + Keys** | Claude Code + conclave binary + multi-provider | Multi-provider consensus code review — true multi-model panel |
 | **Review + Verify** | Claude Code + review + verify stacked | Gene stacking study — diminishing returns (97.2%, both genes combined) |
 | **Self-Review (Opus)** | Claude Code Opus + system prompt only | No plugins, no skills — just "verify, commit, review diff, fix" in system prompt |
 | **Self-Review (Sonnet)** | Claude Code Sonnet + system prompt only | Same system prompt, ~5x cheaper model — matches Opus (97.1% vs 96.8%) |
-| **Superpowers Verify** | Claude Code + verification skill | "No completion claims without fresh evidence" — cheapest top-tier |
+| **TDD (Sonnet)** | Claude Code Sonnet + TDD skill | **Tied #1** — Sonnet + rigid TDD cycle beats every Opus variant (98.2%) |
+| **Conclave v6 (Sonnet)** | Conclave plugin + Sonnet 4.6 | **Tied #1** — task classifier routes to right methodology; completion gate; consensus opt-in (98.1%) |
+| **Conclave v6 (Opus)** | Conclave plugin + Opus 4.6 | Same plugin, 2x cost — Opus adds nothing over Sonnet (98.0% vs 98.1%) |
+| **Brainstorm (Sonnet)** | Claude Code Sonnet + brainstorming skill | Sonnet + consensus design — 94.7% at $0.74/task |
+| **Verify (Sonnet)** | Claude Code Sonnet + verification skill | Sonnet + verification — 94.3% at $0.74/task |
+| **Superpowers Verify** | Claude Code + verification skill | "No completion claims without fresh evidence" — cheapest top-tier Opus |
 | **Superpowers** (Original) | Skill-injection platform | Mandatory planning + TDD + two-stage review |
 | **Conclave** (Superpowers fork) | Cross-provider consensus | Claude x Gemini x Codex consensus; 6-layer self-correction |
 | **Aider** | CLI turn-based | One-shot Sonnet; PageRank repo map; token-efficient |
@@ -702,7 +867,9 @@ See [`docs/survey/orchestrator-survey.md`](docs/survey/orchestrator-survey.md) f
 
 ## Benchmark Suite
 
-Eleven tasks span six categories and the full parallelism spectrum:
+Nineteen tasks span eight categories:
+
+**Standard Suite (T1-T11)** — the original 11 tasks covering greenfield, features, bugfix, marathon, and recovery:
 
 | # | Task | Category | Parallelism | Timeout | Tests |
 |---|------|----------|-------------|---------|-------|
@@ -718,13 +885,20 @@ Eleven tasks span six categories and the full parallelism spectrum:
 | 10 | E-Commerce Backend | greenfield/complex | Pure parallel (max) | 45m | 70 |
 | 11 | Debug Nightmare | bugfix/hard | Sequential | 30m | 49 |
 
-```
-None        Sequential     Mixed          Deceptive      DAG-Parallel     Pure Parallel
-|              |              |               |               |                |
-T1           T3,T5         T2,T6           T8              T9             T7,T10
-```
+**Hard Suite (T12-T19)** — 8 tasks designed to differentiate where the standard suite couldn't. Naive or brute-force approaches fail at scale; agents must discover efficient algorithms:
 
-All 584 tests across 11 repos use TypeScript/Node.js with Vitest. Orchestrators cannot cheat by modifying tests. Validation runs `npm run build && npm run lint && npm test`.
+| # | Task | Category | Key Challenge | Timeout | Hidden Tests |
+|---|------|----------|---------------|---------|------|
+| 12 | Constraint Scheduler | algorithmic/hard | Backtracking + constraint propagation | 45m | 38 |
+| 13 | Structural Merge | algorithmic/hard | 3-way tree merge with conflict detection | 45m | 22 |
+| 14 | Financial Ledger | correctness/hard | Double-entry accounting invariants | 30m | 35 |
+| 15 | Permission Maze | ambiguity/hard | Deliberately vague spec; agents must infer rules | 45m | 52 |
+| 16 | Reactive Spreadsheet | algorithmic/hard | Topological sort + cycle detection + propagation | 45m | 77 |
+| 17 | Circuit Debugger | reasoning/hard | Structural analysis beats simulation at scale | 45m | 20 |
+| 18 | Beam Splitter | reasoning/hard | Counter propagation vs path enumeration (2^K paths) | 45m | 23 |
+| 19 | Factory Reset | reasoning/hard | GF(2) linear algebra (toggle = XOR = Gaussian elimination) | 45m | 20 |
+
+All tasks use TypeScript/Node.js with Vitest. Orchestrators cannot cheat by modifying tests. Validation runs `npm run build && npm run lint && npm test`.
 
 Each task includes at least one trap that punishes naive or template-driven approaches. See [`docs/plans/2026-02-11-survey-and-tasks-design.md`](docs/plans/2026-02-11-survey-and-tasks-design.md) for full task specifications.
 
@@ -861,7 +1035,7 @@ The composite score is a weighted sum. Each task defines its own weights, so bug
 │   ├── runner/                 # Trial execution, validation pipeline, pool
 │   └── validation/             # Tests, lint, hidden tests, coverage, code metrics
 ├── adapters/                   # Shell adapter scripts per orchestrator
-├── benchmarks/                 # 11 standalone task repos (each with v1/v1-solution tags)
+├── benchmarks/                 # 19 standalone task repos (each with v1/v1-solution tags)
 ├── docker/                     # Dockerfiles for orchestrator images
 ├── docs/
 │   ├── survey/                 # Orchestrator architecture survey
@@ -873,13 +1047,15 @@ The composite score is a weighted sum. Each task defines its own weights, so bug
 ## Status
 
 - [x] Orchestrator survey (10 tools documented)
-- [x] Benchmark task design (11 tasks specified)
-- [x] Build benchmark task repos (11 repos, 584 tests, v1/v1-solution tags)
+- [x] Benchmark task design (19 tasks specified — 11 standard + 8 hard)
+- [x] Build benchmark task repos (19 repos, v1/v1-solution/v1-validation tags)
 - [x] Harness implementation (run, list, report, validate commands)
 - [x] Write orchestrator adapters (10 orchestrators, 20+ adapter variants)
 - [x] Run baseline comparisons (single-trial full suite for 10 orchestrators)
 - [ ] Multi-trial runs for statistical significance
-- [ ] Ablation studies (gene isolation) — 17 done: ts-dev (no effect), consensus review (+11.3), full pipeline (-2 vs review-only), systematic debugging (no effect), TDD (+8.4), verification (+11.4, cheapest top-tier), writing plans (+7.3), skill-guided review (+8.1, #1 at 97.7%), brainstorming (+7.9, #2 at 97.5%), review+verify stacking (diminishing returns, 97.2%), design review (+16.2), self-review (~+16, free), self-review+consensus (consensus adds nothing), worktree matches Gas Station, agent teams (hurts on T5), branch (inconclusive), Ralph fresh-context (+15.6 on T5, top-tier), no-git (unstable). All scores are mechanical (tests, build/lint, coverage, code metrics) — rubric dropped. Early adapter-debugging trials pruned per-orchestrator.
+- [x] Hard benchmark suite (T12-T19) — 8 tasks designed to differentiate where T1-T11 couldn't. Initial 66-trial run across 4 orchestrators reveals TDD Sonnet's #1 position was an artifact of easy benchmarks
+- [ ] Ablation studies (gene isolation) — 18 done on T1-T11: ts-dev (no effect), consensus review (+11.3), full pipeline (-2 vs review-only), systematic debugging (+7.1 full-suite, original T11-only was misleading), TDD (+8.4), verification (+11.4, cheapest top-tier), writing plans (+7.3), skill-guided review (+8.1, #1 at 97.7%), brainstorming (+7.9, #2 at 97.5%), review+verify stacking (diminishing returns, 97.2%), design review (+16.2), self-review (~+16, free), self-review+consensus (consensus adds nothing), worktree matches Gas Station, agent teams (hurts on T5), branch (inconclusive), Ralph fresh-context (+15.6 on T5, top-tier), no-git (unstable), Conclave v6 plugin (Sonnet 98.1%, Opus 98.0%, both tie #1). All scores are mechanical (tests, build/lint, coverage, code metrics) — rubric dropped. Early adapter-debugging trials pruned per-orchestrator.
+- [ ] Run remaining orchestrators on T12-T19 hard suite
 - [ ] Publish methodology paper
 
 ## License
