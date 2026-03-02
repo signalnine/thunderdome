@@ -32,6 +32,29 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 
 \*Standard score from 10 of 11 tasks. §n=1 per hard task — treat as provisional.
 
+### Cost Efficiency
+
+All orchestrators with Overall scores, sorted by cost. **Bold** = Pareto-optimal (no other orchestrator scores higher at equal or lower cost). The sweet spot is clear: Sonnet models at ~$1/task match or beat Opus at $1.50-2.75.
+
+| Orchestrator | Overall | Avg Cost | Pareto |
+|---|---:|---:|:---:|
+| Claude Code | 82.0% | $0.69 | **best <$0.70** |
+| Gas Station\*§ | 85.1% | $0.83 | **best <$0.85** |
+| TDD Sonnet | 83.3% | $0.85 | |
+| **Conclave v6 (Sonnet)** | **93.4%** | **$0.98** | **best <$1.00** |
+| **Self-Review (Sonnet)§** | **93.7%** | **$1.02** | **best <$1.60** |
+| Gas Town\* | 92.9% | $1.03 | |
+| Metacog | 90.3% | $1.07 | |
+| GSD§ | 82.1% | $1.16 | |
+| Self-Review (Opus) | 92.9% | $1.36 | |
+| Stacked | 93.3% | $1.43 | |
+| Conclave Brainstorm | 93.8% | $1.58 | |
+| BMAD-METHOD§ | 88.2% | $1.62 | |
+| Conclave v6 (Opus) | 93.7% | $2.02 | |
+| **TDD Opus** | **94.2%** | **$2.76** | **best overall** |
+
+The biggest value jump is from Claude Code ($0.69, 82%) to v6 Sonnet ($0.98, 93.4%) — **+11 points for $0.29 more**. After that, diminishing returns: the next 0.8 points (to TDD Opus 94.2%) costs $1.78 more. Self-Review Sonnet at $1.02 for 93.7% is the standout — it matches v6 Opus ($2.02) at half the price.
+
 ### Gene Ablation Variants
 
 Individual orchestrator "genes" tested in isolation — Claude Code with a single feature forced on. All discipline genes cluster within 0.6 points (96.7-97.4%) on Standard and beat vanilla by 11+ points. Variants tested on T12-T19 are ranked by Overall; standard-only variants listed below. See [Ablation Studies](#ablation-studies) for detailed per-gene analysis.
