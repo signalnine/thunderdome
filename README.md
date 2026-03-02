@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 1078 trials across 38 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
+Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 1081 trials across 38 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
 
 ### Leaderboard
 
@@ -17,20 +17,20 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 | 1 | **Self-Review (Sonnet)§** | 97.1% | 89.1% | **93.7%** | 30 | $1.02 | Sonnet 4.6 |
 | 1 | **Conclave v6 (Opus)** | 98.0% | 87.8% | **93.7%** | 38 | $2.02 | Opus 4.6 |
 | 2 | Conclave v6 (Sonnet) | 98.1% | 87.0% | **93.4%** | 38 | $0.98 | Sonnet 4.6 |
-| 3 | Self-Review (Opus) | 96.8% | 87.5% | **92.9%** | 56 | $1.36 | Opus 4.6 |
-| 3 | Gas Town\* | 96.6% | 88.2% | **92.9%** | 40 | $1.03 | Opus 4.6 |
-| 4 | Metacog | 95.9% | 82.6% | **90.3%** | 38 | $1.07 | Opus 4.6 |
-| 5 | BMAD-METHOD§ | 86.6% | 90.5% | **88.2%** | 19 | $1.62 | Opus 4.6 |
-| 6 | Gas Station\*§ | 92.6% | 75.7% | **85.1%** | 30 | $0.83 | Opus 4.6 |
-| 7 | GSD§ | 81.3% | 83.2% | **82.1%** | 19 | $1.16 | Opus 4.6 |
-| 7 | Claude Code | 85.9% | 76.7% | **82.0%** | 40 | $0.69 | Opus 4.6 |
+| 3 | Gas Town | 96.9% | 88.2% | **93.2%** | 41 | $1.04 | Opus 4.6 |
+| 4 | Self-Review (Opus) | 96.8% | 87.5% | **92.9%** | 56 | $1.36 | Opus 4.6 |
+| 5 | Metacog | 95.9% | 82.6% | **90.3%** | 38 | $1.07 | Opus 4.6 |
+| 6 | BMAD-METHOD§ | 86.6% | 90.5% | **88.2%** | 19 | $1.62 | Opus 4.6 |
+| 7 | Gas Station§ | 93.3% | 75.7% | **85.9%** | 31 | $0.84 | Opus 4.6 |
+| 8 | GSD§ | 81.3% | 83.2% | **82.1%** | 19 | $1.16 | Opus 4.6 |
+| 8 | Claude Code | 85.9% | 76.7% | **82.0%** | 40 | $0.69 | Opus 4.6 |
 | — | Agent Teams\* | 86.2% | — | — | 28 | $0.49 | Opus 4.6 |
 | — | Amplifier + ts-dev\* | 85.5% | — | — | 11 | $0.75 | Opus 4.6 |
 | — | Amplifier\* | 84.6% | — | — | 11 | $0.02 | Opus 4.6 |
 | — | Amp Flash\* | 84.2% | — | — | 11 | $0.00 | Gemini 3 Flash |
-| — | Gemini CLI\* | 82.0% | — | — | 19 | $0.00 | Gemini 3 Flash |
+| — | Gemini CLI | 83.6% | — | — | 20 | $0.00 | Gemini 3 Flash |
 
-\*Standard score from 10 of 11 tasks. §n=1 per hard task — treat as provisional.
+\*Standard score from 10 of 11 tasks (Docker image unavailable for T11). §n=1 per hard task — treat as provisional.
 
 ### Cost Efficiency
 
@@ -39,11 +39,11 @@ All orchestrators with Overall scores, sorted by cost. **Bold** = Pareto-optimal
 | Orchestrator | Overall | Avg Cost | Pareto |
 |---|---:|---:|:---:|
 | Claude Code | 82.0% | $0.69 | **best <$0.70** |
-| Gas Station\*§ | 85.1% | $0.83 | **best <$0.85** |
+| Gas Station§ | 85.9% | $0.84 | **best <$0.85** |
 | TDD Sonnet | 83.3% | $0.85 | |
 | **Conclave v6 (Sonnet)** | **93.4%** | **$0.98** | **best <$1.00** |
-| **Self-Review (Sonnet)§** | **93.7%** | **$1.02** | **best <$1.60** |
-| Gas Town\* | 92.9% | $1.03 | |
+| **Self-Review (Sonnet)§** | **93.7%** | **$1.02** | **best <$2.76** |
+| Gas Town | 93.2% | $1.04 | |
 | Metacog | 90.3% | $1.07 | |
 | GSD§ | 82.1% | $1.16 | |
 | Self-Review (Opus) | 92.9% | $1.36 | |
