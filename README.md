@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 1085 trials across 38 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
+Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 701 scored trials across 38 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
 
 ### Leaderboard
 
@@ -89,20 +89,20 @@ Individual orchestrator "genes" tested in isolation — Claude Code with a singl
 
 Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T13, T16), correctness constraints (T14), ambiguous requirements (T15), and deep reasoning where naive approaches fail at scale (T17-T19). Aggregate rankings are in the [leaderboard](#leaderboard) above.
 
-14 orchestrators (n=1-2 per task, 192 total trials), sorted by hard-suite mean:
+15 orchestrators (n=1-2 per task, 208 total trials), sorted by hard-suite mean:
 
-| Task | Category | BMAD§ | TDD Opus | SR Son.§ | Brstm Opus | Gas Town | Stacked | v6 Opus | SR Opus | v6 Sonnet | GSD§ | Metacog | Vanilla | Gas Stn§ | TDD Sonnet |
-|------|----------|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| **T12** constraint-scheduler | algo/hard | **95.8%** | 91.8% | 90.2% | 93.4% | 90.5% | 91.3% | 76.5%† | 81.0% | 87.8% | 91.9% | 75.9% | 60.0% | 56.4% | 81.3% |
-| **T13** structural-merge | algo/hard | 86.9% | 89.0% | 92.4% | **93.3%** | 85.5% | 90.2% | 93.0% | 90.1% | 89.9% | 90.3% | 75.0% | 59.0% | 58.5% | 88.2% |
-| **T14** financial-ledger | correct/hard | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% |
-| **T15** permission-maze | ambig/hard | **84.9%** | 75.3% | 72.4% | 65.2% | 77.7% | 61.2% | 66.8% | 67.0%‡ | 70.7% | 76.8% | 67.8%‡ | 69.6% | 63.5% | 64.3% |
-| **T16** reactive-spreadsheet | algo/hard | 90.8% | 91.9% | 92.2% | **93.2%** | 92.3% | 88.0% | 91.9% | 90.2% | 91.2% | 89.6% | 88.9% | 91.1% | 87.2% | 88.7% |
-| **T17** circuit-debugger | reason/hard | 84.4% | 86.9% | 80.0% | 85.3% | 84.5% | 87.3% | 90.3% | 86.6% | 73.3% | 70.3% | 84.8% | 88.9% | **94.1%** | 40.4%\* |
-| **T18** beam-splitter | reason/hard | 92.3% | 90.2% | 94.1% | 93.2% | 90.0% | 93.2% | **94.3%** | 93.9% | 94.0% | 58.1% | 75.2% | 69.2% | 58.1% | 20.0%\* |
-| **T19** factory-reset | reason/hard | 89.2% | 92.3% | 91.5% | 87.0% | 85.4% | 91.7% | 89.5% | 91.0% | 88.9% | 89.0% | **92.8%** | 78.6% | 87.6% | 20.0%\* |
-| **Mean** | | **90.5%** | 89.7% | 89.1% | 88.8% | 88.2% | 87.9% | 87.8% | 87.5% | 87.0% | 83.2% | 82.6% | 76.7% | 75.7% | 62.9% |
-| **Avg Cost** | | $2.16 | $3.19 | $0.72 | $1.94 | $2.55 | $1.48 | $1.78 | $1.43 | $0.80 | $1.34 | $1.57 | $1.33 | $1.15 | $0.53 |
+| Task | Category | BMAD§ | TDD Opus | SR Son.§ | Brstm Opus | Gas Town | Stacked | v6 Opus | SR Opus | v6 Sonnet | SP Opus | GSD§ | Metacog | Vanilla | Gas Stn§ | TDD Sonnet |
+|------|----------|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **T12** constraint-scheduler | algo/hard | **95.8%** | 91.8% | 90.2% | 93.4% | 90.5% | 91.3% | 76.5%† | 81.0% | 87.8% | 73.7% | 91.9% | 75.9% | 60.0% | 56.4% | 81.3% |
+| **T13** structural-merge | algo/hard | 86.9% | 89.0% | 92.4% | **93.3%** | 85.5% | 90.2% | 93.0% | 90.1% | 89.9% | 91.2% | 90.3% | 75.0% | 59.0% | 58.5% | 88.2% |
+| **T14** financial-ledger | correct/hard | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% |
+| **T15** permission-maze | ambig/hard | **84.9%** | 75.3% | 72.4% | 65.2% | 77.7% | 61.2% | 66.8% | 67.0%‡ | 70.7% | 76.6% | 76.8% | 67.8%‡ | 69.6% | 63.5% | 64.3% |
+| **T16** reactive-spreadsheet | algo/hard | 90.8% | 91.9% | 92.2% | **93.2%** | 92.3% | 88.0% | 91.9% | 90.2% | 91.2% | 90.9% | 89.6% | 88.9% | 91.1% | 87.2% | 88.7% |
+| **T17** circuit-debugger | reason/hard | 84.4% | 86.9% | 80.0% | 85.3% | 84.5% | 87.3% | 90.3% | 86.6% | 73.3% | 89.7% | 70.3% | 84.8% | 88.9% | **94.1%** | 40.4%\* |
+| **T18** beam-splitter | reason/hard | 92.3% | 90.2% | 94.1% | 93.2% | 90.0% | 93.2% | **94.3%** | 93.9% | 94.0% | 77.0% | 58.1% | 75.2% | 69.2% | 58.1% | 20.0%\* |
+| **T19** factory-reset | reason/hard | 89.2% | 92.3% | 91.5% | 87.0% | 85.4% | 91.7% | 89.5% | 91.0% | 88.9% | 89.2% | 89.0% | **92.8%** | 78.6% | 87.6% | 20.0%\* |
+| **Mean** | | **90.5%** | 89.7% | 89.1% | 88.8% | 88.2% | 87.9% | 87.8% | 87.5% | 87.0% | 86.0% | 83.2% | 82.6% | 76.7% | 75.7% | 62.9% |
+| **Avg Cost** | | $2.16 | $3.19 | $0.72 | $1.94 | $2.55 | $1.48 | $1.78 | $1.43 | $0.80 | $1.49 | $1.34 | $1.57 | $1.33 | $1.15 | $0.53 |
 
 \*TDD Sonnet crashed on 5 of 6 reasoning/hard trials ($0.00 cost, <3s duration). The non-crashing T17 trial scored 60.8%.
 †v6 Opus T12 trial 1 had a validation container hang (hidden_tests=0); trial 2 scored 94.7%.
