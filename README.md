@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 1081 trials across 38 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
+Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 1085 trials across 38 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
 
 ### Leaderboard
 
@@ -24,13 +24,13 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 | 7 | Gas Station§ | 93.3% | 75.7% | **85.9%** | 31 | $0.84 | Opus 4.6 |
 | 8 | GSD§ | 81.3% | 83.2% | **82.1%** | 19 | $1.16 | Opus 4.6 |
 | 8 | Claude Code | 85.9% | 76.7% | **82.0%** | 40 | $0.69 | Opus 4.6 |
-| — | Agent Teams\* | 86.2% | — | — | 28 | $0.49 | Opus 4.6 |
-| — | Amplifier + ts-dev\* | 85.5% | — | — | 11 | $0.75 | Opus 4.6 |
-| — | Amplifier\* | 84.6% | — | — | 11 | $0.02 | Opus 4.6 |
-| — | Amp Flash\* | 84.2% | — | — | 11 | $0.00 | Gemini 3 Flash |
+| — | Amplifier + ts-dev | 86.8% | — | — | 12 | $0.74 | Opus 4.6 |
+| — | Amplifier | 86.0% | — | — | 12 | $0.07 | Opus 4.6 |
+| — | Amp Flash | 85.6% | — | — | 12 | $0.00 | Gemini 3 Flash |
+| — | Agent Teams | 85.2% | — | — | 29 | $0.47 | Opus 4.6 |
 | — | Gemini CLI | 83.6% | — | — | 20 | $0.00 | Gemini 3 Flash |
 
-\*Standard score from 10 of 11 tasks (Docker image unavailable for T11). §n=1 per hard task — treat as provisional.
+§n=1 per hard task — treat as provisional.
 
 ### Cost Efficiency
 
@@ -177,9 +177,10 @@ We're isolating individual orchestrator "genes" — composable features like mul
 | **T8** analytics-dashboard | 91.3% (n=1) | 61.5% (n=2) | -29.8 |
 | **T9** ssg-toolkit | 100.0% (n=1) | 100.0% (n=1) | 0.0 |
 | **T10** ecommerce-backend | 64.6% (n=1) | 64.6% (n=1) | 0.0 |
-| **Mean** | **84.6%** | **85.5%** | **+0.9** |
+| **T11** debug-nightmare | 100.0% (n=1) | 100.0% (n=1) | 0.0 |
+| **Mean** | **86.0%** | **86.8%** | **+0.8** |
 
-**Finding: ts-dev has no meaningful effect (+0.9 points).** With adapter noise removed, the two variants are essentially tied. The huge swings on individual tasks (T7: +77.6, T1: -33.0) with n=1 are just variance, not signal. This ablation needs more trials to draw any conclusion.
+**Finding: ts-dev has no meaningful effect (+0.8 points).** With adapter noise removed, the two variants are essentially tied. The huge swings on individual tasks (T7: +77.6, T1: -33.0) with n=1 are just variance, not signal. This ablation needs more trials to draw any conclusion.
 
 #### Consensus Code Review: Conclave Review vs Claude Code vs Full Conclave
 
