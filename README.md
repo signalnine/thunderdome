@@ -8,63 +8,65 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 1062 trials across 38 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
 
-### Leaderboard (T1-T11 Standard Suite)
+### Leaderboard
 
-Mean composite score across the 11 standard-difficulty tasks, ranked by score. See [Hard Benchmarks](#hard-benchmarks-t12-t19) for the 8 harder tasks that break these rankings. Orchestrators with fewer trials or tasks may be less reliable. Gene ablation variants (testing individual features in isolation) are in a [separate table](#gene-ablation-variants-t1-t11).
+Composite scores ranked by Overall (weighted average of Standard and Hard suite means). Orchestrators tested only on T1-T11 are listed below the ranked entries. Gene ablation variants (testing individual features in isolation) are in a [separate table](#gene-ablation-variants).
 
-| Rank | Orchestrator | Mean | Tasks | Trials | Avg Cost | Model |
-|---:|---|---:|---:|---:|---:|---|
-| 1 | **Conclave v6 (Sonnet)** | **98.1%** | 11 | 22 | $1.11 | Sonnet 4.6 |
-| 1 | **Conclave v6 (Opus)** | **98.0%** | 11 | 22 | $2.20 | Opus 4.6 |
-| 2 | Conclave Brainstorm | **97.4%** | 11 | 38 | $1.43 | Opus 4.6 |
-| 3 | Self-Review (Sonnet) | **97.1%** | 11 | 22 | $1.13 | Sonnet 4.6 |
-| 4 | Self-Review (Opus) | **96.8%** | 11 | 40 | $1.33 | Opus 4.6 |
-| 5 | Gas Town | **96.6%** | 10 | 24 | $0.02 | Opus 4.6 |
-| 6 | Metacog | **95.9%** | 11 | 22 | $0.70 | Opus 4.6 |
-| 7 | Gas Station | **92.6%** | 10 | 22 | $0.71 | Opus 4.6 |
-| 8 | BMAD-METHOD | **86.6%** | 11 | 11 | $1.22 | Opus 4.6 |
-| 9 | Agent Teams | **86.2%** | 10 | 28 | $0.49 | Opus 4.6 |
-| 10 | Claude Code | **85.9%** | 11 | 24 | $0.27 | Opus 4.6 |
-| 11 | Amplifier + ts-dev | **85.5%** | 10 | 11 | $0.75 | Opus 4.6 |
-| 12 | Amplifier | **84.6%** | 10 | 11 | $0.02 | Opus 4.6 |
-| 13 | Amp Flash | **84.2%** | 10 | 11 | $0.00 | Gemini 3 Flash |
-| 14 | Gemini CLI | **82.0%** | 10 | 19 | $0.00 | Gemini 3 Flash |
-| 15 | GSD | **81.3%** | 11 | 11 | $1.03 | Opus 4.6 |
+| Rank | Orchestrator | Standard | Hard | Overall | Trials | Avg Cost | Model |
+|---:|---|---:|---:|---:|---:|---:|---|
+| 1 | **Conclave Brainstorm** | 97.4% | 88.8% | **93.8%** | 54 | $1.58 | Opus 4.6 |
+| 2 | Conclave v6 (Opus) | 98.0% | 87.8% | **93.7%** | 38 | $2.02 | Opus 4.6 |
+| 3 | Conclave v6 (Sonnet) | 98.1% | 87.0% | **93.4%** | 38 | $0.98 | Sonnet 4.6 |
+| 4 | Self-Review (Opus) | 96.8% | 87.5% | **92.9%** | 56 | $1.36 | Opus 4.6 |
+| 4 | Gas Town\* | 96.6% | 88.2% | **92.9%** | 40 | $1.03 | Opus 4.6 |
+| 5 | Metacog | 95.9% | 82.6% | **90.3%** | 38 | $1.07 | Opus 4.6 |
+| 6 | BMAD-METHOD§ | 86.6% | 90.5% | **88.2%** | 19 | $1.62 | Opus 4.6 |
+| 7 | GSD§ | 81.3% | 83.2% | **82.1%** | 19 | $1.16 | Opus 4.6 |
+| 8 | Claude Code | 85.9% | 76.7% | **82.0%** | 40 | $0.69 | Opus 4.6 |
+| — | Self-Review (Sonnet) | 97.1% | — | — | 22 | $1.13 | Sonnet 4.6 |
+| — | Gas Station\* | 92.6% | — | — | 22 | $0.71 | Opus 4.6 |
+| — | Agent Teams\* | 86.2% | — | — | 28 | $0.49 | Opus 4.6 |
+| — | Amplifier + ts-dev\* | 85.5% | — | — | 11 | $0.75 | Opus 4.6 |
+| — | Amplifier\* | 84.6% | — | — | 11 | $0.02 | Opus 4.6 |
+| — | Amp Flash\* | 84.2% | — | — | 11 | $0.00 | Gemini 3 Flash |
+| — | Gemini CLI\* | 82.0% | — | — | 19 | $0.00 | Gemini 3 Flash |
 
-### Gene Ablation Variants (T1-T11)
+\*Standard score from 10 of 11 tasks. §n=1 per hard task — treat as provisional.
 
-Individual orchestrator "genes" tested in isolation — Claude Code with a single feature forced on. All discipline genes cluster within 0.6 points (96.7-97.4%) and beat vanilla by 11+ points. See [Ablation Studies](#ablation-studies) for detailed per-gene analysis.
+### Gene Ablation Variants
 
-| Rank | Variant | Mean | Tasks | Trials | Avg Cost | Model |
-|---:|---|---:|---:|---:|---:|---|
-| 1 | **Superpowers TDD** | **98.2%** | 11 | 22 | $1.08 | Sonnet 4.6 |
-| 2 | Superpowers TDD | **97.4%** | 11 | 16 | $2.32 | Opus 4.6 |
-| 3 | Stacked | **97.3%** | 11 | 11 | $1.36 | Opus 4.6 |
-| 3 | Superpowers Verify | **97.3%** | 11 | 11 | $0.94 | Opus 4.6 |
-| 4 | Conclave Review | **97.2%** | 10 | 11 | $1.82 | Opus 4.6 |
-| 4 | Conclave Review + Verify | **97.2%** | 11 | 11 | $2.28 | Opus 4.6 |
-| 5 | Superpowers Brainstorm | **97.1%** | 11 | 22 | $1.12 | Opus 4.6 |
-| 6 | Conclave Skill Review | **97.0%** | 11 | 34 | $2.01 | Opus 4.6 |
-| 6 | Superpowers Review | **97.0%** | 11 | 22 | $1.83 | Opus 4.6 |
-| 7 | Conclave Review + Keys | **96.9%** | 11 | 22 | $1.71 | Multi-provider |
-| 7 | Superpowers Plans | **96.9%** | 11 | 11 | $1.05 | Opus 4.6 |
-| 8 | Superpowers Debug | **96.7%** | 11 | 22 | $1.14 | Opus 4.6 |
-| 9 | Conclave Design | **95.7%** | 4 | 9 | $2.09 | Multi-provider |
-| 9 | Conclave Brainstorm + Keys | **95.7%** | 11 | 22 | $1.43 | Multi-provider |
-| 10 | Conclave (Full) | **95.2%** | 10 | 12 | $0.14 | Multi-provider |
-| 10 | Conclave Double Review | **95.2%** | 4 | 9 | $1.26 | Opus 4.6 |
-| 11 | Conclave Dbl Review + Keys | **95.0%** | 4 | 9 | $1.89 | Multi-provider |
-| 12 | Conclave Brainstorm (Sonnet) | **94.7%** | 11 | 22 | $0.74 | Sonnet 4.6 |
-| 12 | Ralph Fresh | **94.7%** | 2 | 4 | $1.57 | Opus 4.6 |
-| 12 | Claude Code Worktree | **94.7%** | 2 | 3 | $1.20 | Opus 4.6 |
-| 13 | Verify (Sonnet) | **94.3%** | 11 | 22 | $0.74 | Sonnet 4.6 |
-| 14 | Claude Code Headless | **94.2%** | 4 | 9 | $1.15 | Opus 4.6 |
+Individual orchestrator "genes" tested in isolation — Claude Code with a single feature forced on. All discipline genes cluster within 0.6 points (96.7-97.4%) on Standard and beat vanilla by 11+ points. Variants tested on T12-T19 are ranked by Overall; standard-only variants listed below. See [Ablation Studies](#ablation-studies) for detailed per-gene analysis.
+
+| Rank | Variant | Standard | Hard | Overall | Trials | Avg Cost | Model |
+|---:|---|---:|---:|---:|---:|---:|---|
+| 1 | **Superpowers TDD** | 97.4% | 89.7% | **94.2%** | 32 | $2.76 | Opus 4.6 |
+| 2 | Stacked | 97.3% | 87.9% | **93.3%** | 27 | $1.43 | Opus 4.6 |
+| 3 | Superpowers TDD | 98.2% | 62.9% | **83.3%** | 38 | $0.85 | Sonnet 4.6 |
+| — | Superpowers Verify | 97.3% | — | — | 11 | $0.94 | Opus 4.6 |
+| — | Conclave Review + Verify | 97.2% | — | — | 11 | $2.28 | Opus 4.6 |
+| — | Conclave Review | 97.2% | — | — | 11 | $1.82 | Opus 4.6 |
+| — | Superpowers Brainstorm | 97.1% | — | — | 22 | $1.12 | Opus 4.6 |
+| — | Conclave Skill Review | 97.0% | — | — | 34 | $2.01 | Opus 4.6 |
+| — | Superpowers Review | 97.0% | — | — | 22 | $1.83 | Opus 4.6 |
+| — | Conclave Review + Keys | 96.9% | — | — | 22 | $1.71 | Multi-provider |
+| — | Superpowers Plans | 96.9% | — | — | 11 | $1.05 | Opus 4.6 |
+| — | Superpowers Debug | 96.7% | — | — | 22 | $1.14 | Opus 4.6 |
+| — | Conclave Design | 95.7% | — | — | 9 | $2.09 | Multi-provider |
+| — | Conclave Brainstorm + Keys | 95.7% | — | — | 22 | $1.43 | Multi-provider |
+| — | Conclave (Full) | 95.2% | — | — | 12 | $0.14 | Multi-provider |
+| — | Conclave Double Review | 95.2% | — | — | 9 | $1.26 | Opus 4.6 |
+| — | Conclave Dbl Review + Keys | 95.0% | — | — | 9 | $1.89 | Multi-provider |
+| — | Conclave Brainstorm (Sonnet) | 94.7% | — | — | 22 | $0.74 | Sonnet 4.6 |
+| — | Ralph Fresh | 94.7% | — | — | 4 | $1.57 | Opus 4.6 |
+| — | Claude Code Worktree | 94.7% | — | — | 3 | $1.20 | Opus 4.6 |
+| — | Verify (Sonnet) | 94.3% | — | — | 22 | $0.74 | Sonnet 4.6 |
+| — | Claude Code Headless | 94.2% | — | — | 9 | $1.15 | Opus 4.6 |
 
 ### Hard Benchmarks (T12-T19)
 
-The standard suite (T1-T11) clusters top orchestrators within 2 points (96.8-98.2%). Eight harder benchmarks test whether this holds under pressure — algorithmic complexity (T12-T13, T16), correctness constraints (T14), ambiguous requirements (T15), and deep reasoning where naive approaches fail at scale (T17-T19).
+Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T13, T16), correctness constraints (T14), ambiguous requirements (T15), and deep reasoning where naive approaches fail at scale (T17-T19). Aggregate rankings are in the [leaderboard](#leaderboard) above.
 
-Results from 12 orchestrators (n=1-2 per task, 176 total trials), ranked by mean score:
+12 orchestrators (n=1-2 per task, 176 total trials), sorted by hard-suite mean:
 
 | Task | Category | BMAD§ | TDD Opus | Brstm Opus | Gas Town | Stacked | v6 Opus | Self-Rev | v6 Sonnet | GSD§ | Metacog | Vanilla | TDD Sonnet |
 |------|----------|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
