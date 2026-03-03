@@ -889,18 +889,18 @@ The framework tests five hypotheses:
 
 | Orchestrator | Architecture | Key Differentiator |
 |---|---|---|
-| **Conclave v6 (Opus)** | Conclave plugin + Opus 4.6 | Task classifier routes to right methodology; completion gate; consensus opt-in |
-| **Conclave v6 (Sonnet)** | Conclave plugin + Sonnet 4.6 | Same plugin, half the cost — Sonnet matches Opus (98.1% vs 98.0%) |
+| **[Conclave](https://github.com/signalnine/conclave) v6 (Opus)** | Conclave plugin + Opus 4.6 | Task classifier routes to right methodology; completion gate; consensus opt-in |
+| **[Conclave](https://github.com/signalnine/conclave) v6 (Sonnet)** | Conclave plugin + Sonnet 4.6 | Same plugin, half the cost — Sonnet matches Opus (98.1% vs 98.0%) |
 | **Self-Review (Opus)** | Claude Code Opus + system prompt only | No plugins, no skills — just "verify, commit, review diff, fix" in system prompt |
-| **Metacog** | Claude Code + metacognitive skill | Perspective-shifting plugin; methodology guidance |
+| **[Metacog](https://github.com/signalnine/metacog)** | Claude Code + metacognitive skill | Perspective-shifting plugin; methodology guidance |
 | **Self-Review (Sonnet)** | Claude Code Sonnet + system prompt only | Same system prompt, ~5x cheaper model — matches Opus on hard tasks |
 | **[BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD)** | Third-party structured workflow | Adversarial self-review with role-based phases |
-| **Superpowers** | Skill-injection platform | Mandatory planning + TDD + two-stage review; no conclave binary |
+| **[Superpowers](https://github.com/obra/superpowers)** | Skill-injection platform | Mandatory planning + TDD + two-stage review; no conclave binary |
 | **[GSD](https://github.com/gsd-build/get-shit-done)** | Third-party wave-based execution | Parallel wave execution with dependency tracking |
 | **Gemini CLI** | Google's agentic CLI | Gemini 3 models via Google One OAuth; headless `-p` mode |
 | **Gas Station** | Single-agent + context injection | Gas Town's prompt engineering without multi-agent overhead |
 | **Claude Code** | CLI agentic (single agent) | Rich tool use, subagent delegation, flexible autonomy |
-| **Gas Town** | Multi-agent pipeline | Mayor (planner) -> parallel Polecats (workers) -> Refinery (merge) |
+| **[Gas Town](https://github.com/steveyegge/gastown)** | Multi-agent pipeline | Mayor (planner) -> parallel Polecats (workers) -> Refinery (merge) |
 | **Amplifier (Opus)** | Micro-kernel platform | Swappable providers; minimal overhead; Opus 4.6 |
 | **Amplifier (Gemini)** | Amplifier + Gemini Flash | Amplifier orchestration with Gemini 3 Flash via API |
 | **Agent Teams** | Claude Code interactive + teams | Experimental agent teams feature; tmux harness for idle detection |
