@@ -10,25 +10,25 @@ Composite scores across 19 tasks — the original 11-task standard suite (T1-T11
 
 ### Leaderboard
 
-Composite scores ranked by Overall (weighted average of Standard and Hard suite means). Orchestrators tested only on T1-T11 are listed below the ranked entries. Gene ablation variants (testing individual features in isolation) are in a [separate table](#gene-ablation-variants).
+Composite scores ranked by Overall (weighted average of Standard and Hard suite means). Orchestrators tested only on T1-T11 are listed below the ranked entries. Gene ablation variants (testing individual features in isolation) are in a [separate table](#gene-ablation-variants). See [Contenders](#contenders) for architecture descriptions.
 
 | Rank | Orchestrator | Standard | Hard | Overall | Trials | Avg Cost | Model |
 |---:|---|---:|---:|---:|---:|---:|---|
-| 1 | **Conclave v6 (Opus)** | 98.0% | 87.8% | **93.7%** | 38 | $2.02 | Opus 4.6 |
-| 2 | Conclave v6 (Sonnet) | 98.1% | 87.0% | **93.4%** | 38 | $0.98 | Sonnet 4.6 |
-| 3 | Self-Review (Opus) | 96.8% | 88.1% | **93.1%** | 39 | $1.31 | Opus 4.6 |
-| 4 | Metacog | 95.3% | 82.5% | **89.9%** | 28 | $1.45 | Opus 4.6 |
-| 5 | Self-Review (Sonnet) | 89.3% | 89.9% | **89.6%** | 38 | $0.80 | Sonnet 4.6 |
-| 6 | BMAD-METHOD | 86.0% | 87.8% | **86.7%** | 28 | $1.65 | Opus 4.6 |
-| 7 | Superpowers | 86.4% | 86.0% | **86.2%** | 29 | $1.31 | Opus 4.6 |
-| 8 | GSD | 82.5% | 83.7% | **83.0%** | 28 | $1.04 | Opus 4.6 |
-| 9 | Gemini CLI | 83.6% | 80.3% | **82.2%** | 32 | $0.10 | Gemini 3 Flash |
-| 10 | Gas Station | 86.6% | 74.9% | **81.7%** | 30 | $1.00 | Opus 4.6 |
-| 11 | Claude Code | 84.8% | 76.7% | **81.4%** | 51 | $0.77 | Opus 4.6 |
-| 12 | Gas Town | 69.2% | 88.2% | **77.2%** | 63 | $1.99 | Opus 4.6 |
-| — | Amplifier (Opus) | 86.0% | — | — | 12 | $0.07 | Opus 4.6 |
-| — | Amplifier (Gemini) | 85.6% | 39.6% | — | 20 | $0.03 | Gemini 3 Flash |
-| — | Agent Teams | 85.2% | — | — | 29 | $0.47 | Opus 4.6 |
+| 1 | [**Conclave v6 (Opus)**](#contenders) | 98.0% | 87.8% | **93.7%** | 38 | $2.02 | Opus 4.6 |
+| 2 | [Conclave v6 (Sonnet)](#contenders) | 98.1% | 87.0% | **93.4%** | 38 | $0.98 | Sonnet 4.6 |
+| 3 | [Self-Review (Opus)](#contenders) | 96.8% | 88.1% | **93.1%** | 39 | $1.31 | Opus 4.6 |
+| 4 | [Metacog](#contenders) | 95.3% | 82.5% | **89.9%** | 28 | $1.45 | Opus 4.6 |
+| 5 | [Self-Review (Sonnet)](#contenders) | 89.3% | 89.9% | **89.6%** | 38 | $0.80 | Sonnet 4.6 |
+| 6 | [BMAD-METHOD](#contenders) | 86.0% | 87.8% | **86.7%** | 28 | $1.65 | Opus 4.6 |
+| 7 | [Superpowers](#contenders) | 86.4% | 86.0% | **86.2%** | 29 | $1.31 | Opus 4.6 |
+| 8 | [GSD](#contenders) | 82.5% | 83.7% | **83.0%** | 28 | $1.04 | Opus 4.6 |
+| 9 | [Gemini CLI](#contenders) | 83.6% | 80.3% | **82.2%** | 32 | $0.10 | Gemini 3 Flash |
+| 10 | [Gas Station](#contenders) | 86.6% | 74.9% | **81.7%** | 30 | $1.00 | Opus 4.6 |
+| 11 | [Claude Code](#contenders) | 84.8% | 76.7% | **81.4%** | 51 | $0.77 | Opus 4.6 |
+| 12 | [Gas Town](#contenders) | 69.2% | 88.2% | **77.2%** | 63 | $1.99 | Opus 4.6 |
+| — | [Amplifier (Opus)](#contenders) | 86.0% | — | — | 12 | $0.07 | Opus 4.6 |
+| — | [Amplifier (Gemini)](#contenders) | 85.6% | 39.6% | — | 20 | $0.03 | Gemini 3 Flash |
+| — | [Agent Teams](#contenders) | 85.2% | — | — | 29 | $0.47 | Opus 4.6 |
 
 ### Cost Efficiency
 
@@ -889,36 +889,44 @@ The framework tests five hypotheses:
 
 | Orchestrator | Architecture | Key Differentiator |
 |---|---|---|
-| **Agent Teams** | Claude Code interactive + teams | Experimental agent teams feature; tmux harness for idle detection |
-| **Amplifier (Opus)** | Micro-kernel platform | Swappable providers; minimal overhead; Opus 4.6 |
-| **Amplifier + ts-dev** | Amplifier + TypeScript bundle | LSP code intelligence, TS expert agent (ablation study) |
-| **Conclave Review** | Claude Code + consensus review | Code review only — no skills, no planning (ablation study) |
-| **Conclave Design** | Claude Code + consensus design | Pre-implementation architecture review (ablation study) |
-| **Gas Town** | Multi-agent pipeline | Mayor (planner) -> parallel Polecats (workers) -> Refinery (merge) |
-| **Gas Station** | Single-agent + context injection | Gas Town's prompt engineering without multi-agent overhead |
-| **Gemini CLI** | Google's agentic CLI | Gemini 3 models; free via Google One OAuth; headless `-p` mode |
-| **Amplifier (Gemini)** | Amplifier + Gemini Flash | Amplifier orchestration with Gemini 3 Flash via API |
-| **Claude Code** | CLI agentic (single agent) | Rich tool use, subagent delegation, flexible autonomy |
-| **Metacog** | Claude Code + metacognitive skill | Perspective-shifting plugin; methodology guidance |
-| **Stacked** | Metacog + review + worktree | Three top genes combined: metacog reframing, consensus code review, git worktree |
-| **Conclave Skill Review** | Claude Code + conclave consensus binary | Skill-guided consensus code review via conclave binary (Claude-only consensus) |
-| **Conclave Brainstorm** | Claude Code + conclave consensus binary | Consensus-driven design exploration via conclave binary (Claude-only consensus) |
-| **Superpowers Brainstorm** | Claude Code + obra/superpowers skills only | Same brainstorming skill, no conclave binary — agent answers design questions autonomously |
-| **Superpowers Review** | Claude Code + obra/superpowers skills only | Same code review skill, no conclave binary — agent dispatches code-reviewer subagent |
-| **Conclave Brainstorm + Keys** | Claude Code + conclave binary + multi-provider | Multi-provider consensus (Claude + Gemini + Codex) for design questions |
-| **Conclave Review + Keys** | Claude Code + conclave binary + multi-provider | Multi-provider consensus code review — true multi-model panel |
-| **Review + Verify** | Claude Code + review + verify stacked | Gene stacking study — diminishing returns (97.2%, both genes combined) |
+| **Conclave v6 (Opus)** | Conclave plugin + Opus 4.6 | Task classifier routes to right methodology; completion gate; consensus opt-in |
+| **Conclave v6 (Sonnet)** | Conclave plugin + Sonnet 4.6 | Same plugin, half the cost — Sonnet matches Opus (98.1% vs 98.0%) |
 | **Self-Review (Opus)** | Claude Code Opus + system prompt only | No plugins, no skills — just "verify, commit, review diff, fix" in system prompt |
-| **Self-Review (Sonnet)** | Claude Code Sonnet + system prompt only | Same system prompt, ~5x cheaper model — matches Opus (97.1% vs 96.8%) |
-| **TDD (Sonnet)** | Claude Code Sonnet + TDD skill | **Tied #1** — Sonnet + rigid TDD cycle beats every Opus variant (98.2%) |
-| **Conclave v6 (Sonnet)** | Conclave plugin + Sonnet 4.6 | **Tied #1** — task classifier routes to right methodology; completion gate; consensus opt-in (98.1%) |
-| **Conclave v6 (Opus)** | Conclave plugin + Opus 4.6 | Same plugin, 2x cost — Opus adds nothing over Sonnet (98.0% vs 98.1%) |
-| **Brainstorm (Sonnet)** | Claude Code Sonnet + brainstorming skill | Sonnet + consensus design — 94.7% at $0.74/task |
-| **Verify (Sonnet)** | Claude Code Sonnet + verification skill | Sonnet + verification — 94.3% at $0.74/task |
+| **Metacog** | Claude Code + metacognitive skill | Perspective-shifting plugin; methodology guidance |
+| **Self-Review (Sonnet)** | Claude Code Sonnet + system prompt only | Same system prompt, ~5x cheaper model — matches Opus on hard tasks |
+| **[BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD)** | Third-party structured workflow | Adversarial self-review with role-based phases |
+| **Superpowers** | Skill-injection platform | Mandatory planning + TDD + two-stage review; no conclave binary |
+| **[GSD](https://github.com/gsd-build/get-shit-done)** | Third-party wave-based execution | Parallel wave execution with dependency tracking |
+| **Gemini CLI** | Google's agentic CLI | Gemini 3 models via Google One OAuth; headless `-p` mode |
+| **Gas Station** | Single-agent + context injection | Gas Town's prompt engineering without multi-agent overhead |
+| **Claude Code** | CLI agentic (single agent) | Rich tool use, subagent delegation, flexible autonomy |
+| **Gas Town** | Multi-agent pipeline | Mayor (planner) -> parallel Polecats (workers) -> Refinery (merge) |
+| **Amplifier (Opus)** | Micro-kernel platform | Swappable providers; minimal overhead; Opus 4.6 |
+| **Amplifier (Gemini)** | Amplifier + Gemini Flash | Amplifier orchestration with Gemini 3 Flash via API |
+| **Agent Teams** | Claude Code interactive + teams | Experimental agent teams feature; tmux harness for idle detection |
+| **Superpowers TDD** | Claude Code + TDD skill | Rigid red-green-refactor cycle; Opus #1 overall, Sonnet crashes on hard tasks |
+| **Conclave Brainstorm** | Claude Code + conclave consensus binary | Consensus-driven design exploration via conclave binary (Claude-only consensus) |
+| **Stacked** | Metacog + review + worktree | Three top genes combined: metacog reframing, consensus code review, git worktree |
 | **Superpowers Verify** | Claude Code + verification skill | "No completion claims without fresh evidence" — cheapest top-tier Opus |
-| **Superpowers** (Original) | Skill-injection platform | Mandatory planning + TDD + two-stage review |
-| **Conclave** (Superpowers fork) | Cross-provider consensus | Claude x Gemini x Codex consensus; 6-layer self-correction |
-| **Aider** | CLI turn-based | One-shot Sonnet; PageRank repo map; token-efficient |
+| **Conclave Review + Verify** | Claude Code + review + verify stacked | Gene stacking study — diminishing returns (97.2%, both genes combined) |
+| **Conclave Review** | Claude Code + consensus review | Code review only — no skills, no planning |
+| **Superpowers Brainstorm** | Claude Code + obra/superpowers skills only | Same brainstorming skill, no conclave binary — agent answers design questions autonomously |
+| **Conclave Skill Review** | Claude Code + conclave consensus binary | Skill-guided consensus code review via conclave binary (Claude-only consensus) |
+| **Superpowers Review** | Claude Code + obra/superpowers skills only | Same code review skill, no conclave binary — agent dispatches code-reviewer subagent |
+| **Conclave Review + Keys** | Claude Code + conclave binary + multi-provider | Multi-provider consensus code review — true multi-model panel |
+| **Superpowers Plans** | Claude Code + writing-plans skill | "Think before coding" — structured plan document before implementation |
+| **Superpowers Debug** | Claude Code + systematic-debugging skill | Four-phase debugging methodology applied as general discipline |
+| **Conclave Design** | Claude Code + consensus design | Pre-implementation architecture review |
+| **Conclave Brainstorm + Keys** | Claude Code + conclave binary + multi-provider | Multi-provider consensus (Claude + Gemini + Codex) for design questions |
+| **Conclave (Full)** | Cross-provider consensus | Claude x Gemini x Codex consensus; mandatory skill pipeline |
+| **Conclave Double Review** | Claude Code + two review rounds | Double consensus code review — no improvement over single |
+| **Conclave Dbl Review + Keys** | Conclave Double Review + multi-provider | Double review with multi-provider keys |
+| **Conclave Brainstorm (Sonnet)** | Claude Code Sonnet + brainstorming skill | Sonnet + consensus design — 94.7% at $0.74/task |
+| **Ralph Fresh** | Claude Code + fresh-context Ralph loop | Multi-iteration fresh context on same workspace |
+| **Claude Code Worktree** | Claude Code + git worktree | Matches Gas Station — worktree adds isolation, not quality |
+| **Verify (Sonnet)** | Claude Code Sonnet + verification skill | Sonnet + verification — 94.3% at $0.74/task |
+| **Claude Code Headless** | Claude Code `-p` mode without skills | Headless baseline — no interactive user, no plugins |
+| **Amplifier + ts-dev** | Amplifier + TypeScript bundle | LSP code intelligence, TS expert agent |
 
 See [`docs/survey/orchestrator-survey.md`](docs/survey/orchestrator-survey.md) for the full gene matrix and per-tool analysis.
 
