@@ -22,7 +22,7 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 | 6 | BMAD-METHOD | 86.0% | 87.8% | **86.7%** | 28 | $1.65 | Opus 4.6 |
 | 7 | Superpowers | 86.4% | 86.0% | **86.2%** | 29 | $1.31 | Opus 4.6 |
 | 8 | GSD | 82.5% | 83.7% | **83.0%** | 28 | $1.04 | Opus 4.6 |
-| 9 | Gemini CLI | 83.6% | 80.3% | **82.2%** | 32 | $0.01 | Gemini 3 Flash |
+| 9 | Gemini CLI | 83.6% | 80.3% | **82.2%** | 32 | $0.10 | Gemini 3 Flash |
 | 10 | Gas Station | 86.6% | 74.9% | **81.7%** | 30 | $1.00 | Opus 4.6 |
 | 11 | Claude Code | 84.8% | 76.7% | **81.4%** | 51 | $0.77 | Opus 4.6 |
 | 12 | Gas Town | 69.2% | 88.2% | **77.2%** | 63 | $1.99 | Opus 4.6 |
@@ -37,7 +37,7 @@ All orchestrators with Overall scores, sorted by cost. **Bold** = Pareto-optimal
 
 | Orchestrator | Overall | Avg Cost | Pareto |
 |---|---:|---:|:---:|
-| **Gemini CLI** | **82.2%** | **$0.01** | **best <$0.77** |
+| **Gemini CLI** | **82.2%** | **$0.10** | **best <$0.77** |
 | **Claude Code** | **81.4%** | **$0.77** | |
 | **Self-Review (Sonnet)** | **89.6%** | **$0.80** | **best <$0.98** |
 | TDD Sonnet | 83.3% | $0.85 | |
@@ -54,7 +54,7 @@ All orchestrators with Overall scores, sorted by cost. **Bold** = Pareto-optimal
 | Conclave v6 (Opus) | 93.7% | $2.02 | |
 | **TDD Opus** | **94.2%** | **$2.76** | **best overall** |
 
-The biggest value jump is from Gemini CLI ($0.01, 82.2%) to SR Sonnet ($0.80, 89.6%) — **+7.4 points for $0.79 more**. From there to v6 Sonnet ($0.98, 93.4%) adds +3.8 points for $0.18 more. After that, diminishing returns: the next 0.8 points (to TDD Opus 94.2%) costs $1.78 more. Gemini CLI at $0.01 is essentially free and now scores 82.2% — beating vanilla Claude Code ($0.77) at a fraction of the cost. Claude Code loses its Pareto-optimal status: Gemini CLI scores higher at lower cost.
+The biggest value jump is from Gemini CLI ($0.10, 82.2%) to SR Sonnet ($0.80, 89.6%) — **+7.4 points for $0.70 more**. From there to v6 Sonnet ($0.98, 93.4%) adds +3.8 points for $0.18 more. After that, diminishing returns: the next 0.8 points (to TDD Opus 94.2%) costs $1.78 more. Gemini CLI at $0.10 is the cheapest orchestrator and scores 82.2% — beating vanilla Claude Code ($0.77) at a fraction of the cost. Claude Code loses its Pareto-optimal status: Gemini CLI scores higher at lower cost.
 
 ### Gene Ablation Variants
 
@@ -103,7 +103,7 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 | **T18** beam-splitter | reason/hard | 95.1% | 90.2% | 93.2% | 90.0% | 93.9% | 93.2% | 91.9% | 94.3% | 94.0% | 77.0% | 75.3% | 75.2% | **96.5%**§ | 69.2% | 59.0% | 20.0%\* |
 | **T19** factory-reset | reason/hard | 93.1% | 92.3% | 87.0% | 85.4% | 91.0% | 91.7% | 88.2% | 89.5% | 88.9% | 89.2% | 73.7% | **92.8%** | 58.5%§ | 78.6% | 68.2% | 20.0%\* |
 | **Mean** | | **89.9%** | 89.7% | 88.8% | 88.2% | 88.1% | 87.9% | 87.8% | 87.8% | 87.0% | 86.0% | 83.7% | 82.5% | 80.3% | 77.0% | 74.9% | 62.9% |
-| **Avg Cost** | | $0.77 | $3.19 | $1.94 | $2.55 | $1.43 | $1.48 | $2.01 | $1.78 | $0.80 | $1.49 | $1.09 | $1.57 | $0.02 | $1.33 | $1.06 | $0.53 |
+| **Avg Cost** | | $0.77 | $3.19 | $1.94 | $2.55 | $1.43 | $1.48 | $2.01 | $1.78 | $0.80 | $1.49 | $1.09 | $1.57 | $0.09 | $1.33 | $1.06 | $0.53 |
 
 \*TDD Sonnet crashed on 5 of 6 reasoning/hard trials ($0.00 cost, <3s duration). The non-crashing T17 trial scored 60.8%.
 †v6 Opus T12 trial 1 had a validation container hang (hidden_tests=0); trial 2 scored 94.7%.
@@ -120,7 +120,7 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 
 4. **The top 9 cluster within 3 points — below that, it falls off fast.** SR Sonnet (89.9%) through v6 Sonnet (87.0%) span 2.9 points. Then Superpowers (86.0%), GSD (83.7%), Metacog (82.5%), and Gemini CLI (80.3%) form a mid-tier, vanilla drops to 77.0%, Gas Station to 74.9%, TDD Sonnet to 62.9%.
 
-5. **Gemini CLI climbs to 80.3% with n=2 data — T13 was the biggest correction.** T13 structural-merge swung from 20.0% to 89.2% between trials — the largest single-trial swing in the hard suite. With n=2 averaging, Gemini's hard mean jumps from 76.1% to 80.3%, pushing it past Claude Code and Gas Station to #9 overall (82.2%). It still holds the highest scores on T17 circuit-debugger (93.6%) and T18 beam-splitter (96.5%), but rate-limit crashes prevented T16-T19 trial 2 (n=1 only). At $0.02/trial, it beats Claude Code ($0.77) at a fraction of the cost.
+5. **Gemini CLI climbs to 80.3% with n=2 data — T13 was the biggest correction.** T13 structural-merge swung from 20.0% to 89.2% between trials — the largest single-trial swing in the hard suite. With n=2 averaging, Gemini's hard mean jumps from 76.1% to 80.3%, pushing it past Claude Code and Gas Station to #9 overall (82.2%). It still holds the highest scores on T17 circuit-debugger (93.6%) and T18 beam-splitter (96.5%), but rate-limit crashes prevented T16-T19 trial 2 (n=1 only). At $0.09/hard trial, it beats Claude Code ($0.77) at a fraction of the cost.
 
 6. **Metacog (82.5%) has the highest variance.** T18 beam-splitter: one trial 58%, the other 92%. T19 factory-reset: 95% and 90%. The metacognitive reframing occasionally produces breakthrough insights but inconsistently. Metacog does hold the highest T19 score (92.8%) among Claude-based orchestrators.
 
@@ -144,7 +144,7 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 - **Conclave Skill Review regressed the most** — from 97.7% (n=1) to 97.0% (n=34). The original score was an outlier. Still effective but not the clear #1 it appeared to be
 - **Gene stacking has diminishing returns** — Review + Verify (97.2%) scores at the same level as either alone. Two discipline checkpoints don't compound. The ceiling appears to be ~97-98% with current single-session approaches
 - **Gas Town collapsed on standard tasks (69.2%, n=2).** The Mayor→Polecats→Refinery pipeline scores 30% on T3 and T4 in both trials — the single-polecat strategy completes with minimal work. T5 showed high variance (32.7%→63.0%), but the n=2 mean barely changed (68.2%→69.2%). Gas Town is strong on hard tasks (88.2%, #4) but its standard-task weakness drops it to last place overall (77.2%)
-- **Gemini CLI climbs to #9 (82.2% overall).** n=2 hard data corrected T13 from 20.0% to 54.6% (biggest single-trial swing), pushing the hard mean from 76.1% to 80.3%. Gemini CLI now beats Claude Code and Gas Station. At $0.01/task it's the cheapest orchestrator by 77x, with best-in-class scores on T17 (93.6%) and T18 (96.5%). Rate-limit crashes prevented T16-T19 trial 2
+- **Gemini CLI climbs to #9 (82.2% overall).** n=2 hard data corrected T13 from 20.0% to 54.6% (biggest single-trial swing), pushing the hard mean from 76.1% to 80.3%. Gemini CLI now beats Claude Code and Gas Station. At $0.10/task it's the cheapest orchestrator by 8x, with best-in-class scores on T17 (93.6%) and T18 (96.5%). Rate-limit crashes prevented T16-T19 trial 2
 - **T4** (bugfix) is the great equalizer — most contenders score 100%, the task is too easy
 - **T8** (analytics dashboard) is the hardest task in the standard suite — most contenders cluster around 87-90%. In the hard suite, T15 (permission maze, 61-85%) and the reasoning tasks (T17-T19) are significantly harder
 - **Third-party tools show promise on hard tasks.** [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) (87.8% hard, 86.0% standard) and [GSD](https://github.com/gsd-build/get-shit-done) (83.7% hard, 82.5% standard) both perform better on hard tasks relative to their standard-suite ranking. Both show significant inter-trial variance: BMAD T12 swung 95.8%→71.8%, GSD T18 swung 92.6%→58.1%. Gas Station (74.9% hard) had the dataset's biggest single-task swing: T12 at 92.4% vs 56.4%

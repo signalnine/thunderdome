@@ -24,6 +24,16 @@ gemini -p "$TASK_PROMPT" \
 EXIT_CODE=$?
 set -e
 
+# Check for quota exhaustion — exit 2 (gave_up) since the agent never ran
+if [[ $EXIT_CODE -ne 0 ]] && grep -qi 'quota' /workspace/.thunderdome-stderr.log 2>/dev/null; then
+  echo "ERROR: Gemini API quota exhausted" >&2
+  cat /workspace/.thunderdome-stderr.log >&2
+  # Write empty metrics so harness records this trial
+  echo '{"input_tokens":0,"output_tokens":0,"cache_read_tokens":0,"cache_creation_tokens":0,"total_cost_usd":0,"note":"quota-exhausted"}' \
+    > /workspace/.thunderdome-metrics.json
+  exit 2
+fi
+
 # Parse token usage from Gemini CLI JSON output and write metrics file.
 python3 -c "
 import json, sys
@@ -33,6 +43,17 @@ try:
         data = json.load(f)
 except Exception as e:
     print(f'Failed to parse gemini output: {e}', file=sys.stderr)
+    # Write empty metrics so harness doesn't report 0 tokens for a real run
+    metrics = {
+        'input_tokens': 0,
+        'output_tokens': 0,
+        'cache_read_tokens': 0,
+        'cache_creation_tokens': 0,
+        'total_cost_usd': 0,
+        'note': 'gemini-output-parse-failed',
+    }
+    with open('/workspace/.thunderdome-metrics.json', 'w') as f:
+        json.dump(metrics, f, indent=2)
     sys.exit(0)
 
 stats = data.get('stats', {})
@@ -54,9 +75,10 @@ for model_name, model_data in models.items():
 
 # Gemini CLI with Google One OAuth — no per-token billing,
 # but estimate equivalent API cost for comparison.
-# Gemini 3 Flash (primary model): \$0.10/1M input, \$0.40/1M output, \$0.025/1M cached
+# Gemini 3 Flash: \$0.50/1M input, \$3.00/1M output, \$0.05/1M cached
+# Thinking tokens are billed at the output rate per Google's pricing.
 # 'input' is already non-cached; don't subtract cached again
-cost = (total_input * 0.10 + total_output * 0.40 + total_cached * 0.025) / 1e6
+cost = (total_input * 0.50 + (total_output + total_thoughts) * 3.00 + total_cached * 0.05) / 1e6
 
 turns = tools.get('totalCalls', 0)
 
