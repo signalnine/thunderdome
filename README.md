@@ -901,8 +901,8 @@ The framework tests five hypotheses:
 | **Gas Station** | Single-agent + context injection | Gas Town's prompt engineering without multi-agent overhead |
 | **Claude Code** | CLI agentic (single agent) | Rich tool use, subagent delegation, flexible autonomy |
 | **[Gas Town](https://github.com/steveyegge/gastown)** | Multi-agent pipeline | Mayor (planner) -> parallel Polecats (workers) -> Refinery (merge) |
-| **Amplifier (Opus)** | Micro-kernel platform | Swappable providers; minimal overhead; Opus 4.6 |
-| **Amplifier (Gemini)** | Amplifier + Gemini Flash | Amplifier orchestration with Gemini 3 Flash via API |
+| **[Amplifier](https://github.com/microsoft/amplifier) (Opus)** | Micro-kernel platform | Swappable providers; minimal overhead; Opus 4.6 |
+| **[Amplifier](https://github.com/microsoft/amplifier) (Gemini)** | Amplifier + Gemini Flash | Amplifier orchestration with Gemini 3 Flash via API |
 | **Agent Teams** | Claude Code interactive + teams | Experimental agent teams feature; tmux harness for idle detection |
 | **Superpowers TDD** | Claude Code + TDD skill | Rigid red-green-refactor cycle; Opus #1 overall, Sonnet crashes on hard tasks |
 | **Conclave Brainstorm** | Claude Code + conclave consensus binary | Consensus-driven design exploration via conclave binary (Claude-only consensus) |
