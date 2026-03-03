@@ -5,21 +5,20 @@ set -e
 
 cd "$TASK_DIR"
 
-export HOME=/tmp
+# ============================================================================
+# Setup: Container runs as uid 1000 ('claude' user, renamed from 'node').
+# The harness passes --user 1000:1000, so we're already the claude user.
+# Claude Code >=2.1.x blocks --dangerously-skip-permissions as root,
+# so running as non-root is required.
+# ============================================================================
+
+export HOME=/home/claude
 
 # Set up OAuth credentials
 if [ -f /tmp/.claude-credentials.json ]; then
   mkdir -p "$HOME/.claude"
   cp /tmp/.claude-credentials.json "$HOME/.claude/.credentials.json"
 fi
-
-# Route API calls through proxy gateway if configured
-if [ -n "$PROXY_URL" ]; then
-  export ANTHROPIC_BASE_URL="$PROXY_URL"
-fi
-
-# Enable experimental agent teams
-export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 
 # Pre-configure settings to skip the theme picker and enable agent teams.
 mkdir -p "$HOME/.claude"
@@ -39,20 +38,21 @@ TASK_PROMPT=$(cat "$TASK_DESCRIPTION")
 
 # Write task prompt to file (avoids quoting issues)
 printf '%s' "$TASK_PROMPT" > /tmp/task-prompt.txt
+chmod 644 /tmp/task-prompt.txt
 
 # ============================================================================
 # Strategy: run Claude in tmux, monitor with capture-pane
 # ============================================================================
 
 # Build the claude command. Use -- to pass the prompt as a positional arg.
-# Single-quote the prompt in a file and use cat to avoid shell escaping issues.
 cat > /tmp/run-claude.sh <<CLAUDE_SCRIPT
 #!/bin/bash
-export HOME=/tmp
+export HOME=/home/claude
 export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS=128000
 export TERM=xterm-256color
 $([ -n "$PROXY_URL" ] && echo "export ANTHROPIC_BASE_URL=\"$PROXY_URL\"")
+cd "$TASK_DIR"
 CLAUDE_SCRIPT
 
 # Append the rest with single-quoted heredoc (no variable expansion)
@@ -74,7 +74,7 @@ echo "CLAUDE_SESSION_COMPLETE" > /tmp/claude-done
 CLAUDE_SCRIPT
 chmod +x /tmp/run-claude.sh
 
-# Start tmux with Claude
+# Start tmux (already running as claude user)
 tmux new-session -d -s bench -x 200 -y 50 /tmp/run-claude.sh
 
 # Give Claude a moment to start
@@ -90,6 +90,14 @@ handle_dialogs() {
 
     # Theme picker — send Enter to accept default
     if echo "$SCREEN" | grep -q "Choose.*text.*style"; then
+      sleep 1
+      tmux send-keys -t bench Enter
+      sleep 2
+      continue
+    fi
+
+    # Workspace trust dialog — option 1 "Yes, I trust this folder" is pre-selected
+    if echo "$SCREEN" | grep -q "trust this folder"; then
       sleep 1
       tmux send-keys -t bench Enter
       sleep 2
@@ -224,9 +232,6 @@ tmux kill-session -t bench 2>/dev/null || true
 # Metrics extraction
 # ============================================================================
 
-# Capture final pane content for metrics
-# (tmux may be gone, so this might fail)
-
 cat > /tmp/extract-metrics.js <<'METRICS_JS'
 const fs = require("fs");
 const path = require("path");
@@ -238,8 +243,8 @@ try {
     total_cost_usd: 0, note: "interactive-mode-session-jsonl"
   };
 
-  // Find Claude Code session JSONL files (HOME=/tmp in container)
-  const projectsDir = "/tmp/.claude/projects";
+  // Find Claude Code session JSONL files (HOME=/home/claude in container)
+  const projectsDir = "/home/claude/.claude/projects";
   const jsonlFiles = [];
   const findJsonl = (dir) => {
     try {
