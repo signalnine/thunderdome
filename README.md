@@ -21,7 +21,7 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 | 5 | Metacog | 95.3% | 82.5% | **89.9%** | 28 | $1.45 | Opus 4.6 |
 | 6 | Self-Review (Sonnet) | 89.3% | 89.9% | **89.6%** | 38 | $0.80 | Sonnet 4.6 |
 | 7 | BMAD-METHOD | 86.0% | 87.8% | **86.7%** | 28 | $1.65 | Opus 4.6 |
-| 8 | SP Opus | 86.4% | 86.0% | **86.2%** | 29 | $1.31 | Opus 4.6 |
+| 8 | Superpowers | 86.4% | 86.0% | **86.2%** | 29 | $1.31 | Opus 4.6 |
 | 9 | Gas Station† | 93.3% | 74.9% | **85.6%** | 19 | $1.05 | Opus 4.6 |
 | 10 | GSD | 82.5% | 83.7% | **83.0%** | 28 | $1.04 | Opus 4.6 |
 | 11 | Claude Code† | 85.9% | 76.7% | **82.0%** | 40 | $0.69 | Opus 4.6 |
@@ -46,7 +46,7 @@ All orchestrators with Overall scores, sorted by cost. **Bold** = Pareto-optimal
 | Gas Town | 93.2% | $1.04 | |
 | GSD | 83.0% | $1.04 | |
 | Gas Station | 85.6% | $1.05 | |
-| SP Opus | 86.2% | $1.31 | |
+| Superpowers | 86.2% | $1.31 | |
 | Self-Review (Opus) | 93.1% | $1.31 | |
 | Stacked | 93.3% | $1.43 | |
 | Metacog | 89.9% | $1.45 | |
@@ -93,7 +93,7 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 
 15 orchestrators (n=2 per task unless noted, 223 total trials), sorted by hard-suite mean:
 
-| Task | Category | SR Sonnet | TDD Opus | Brstm Opus | Gas Town | SR Opus | Stacked | BMAD | v6 Opus | v6 Sonnet | SP Opus | GSD | Metacog | Vanilla | Gas Stn | TDD Sonnet |
+| Task | Category | SR Sonnet | TDD Opus | Brstm Opus | Gas Town | SR Opus | Stacked | BMAD | v6 Opus | v6 Sonnet | Superpowers | GSD | Metacog | Vanilla | Gas Stn | TDD Sonnet |
 |------|----------|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | **T12** constraint-scheduler | algo/hard | 90.4% | 91.8% | **93.4%** | 90.5% | 81.0% | 91.3% | 83.8% | 76.5%† | 87.8% | 73.7% | 92.6% | 75.9% | 60.0% | 74.4% | 81.3% |
 | **T13** structural-merge | algo/hard | 91.0% | 89.0% | **93.3%** | 85.5% | 90.1% | 90.2% | 90.0% | 93.0% | 89.9% | 91.2% | 91.6% | 75.0% | 59.0% | 58.5% | 88.2% |
@@ -118,13 +118,13 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 
 3. **Hard tasks finally differentiate orchestrators.** The T1-T11 spread among top-tier Opus variants is 0.6 points (96.8-97.4%). On T12-T19 the spread is 27 points (62.9-89.9%). These benchmarks test what easy benchmarks can't: whether the agent can discover novel algorithmic approaches rather than implement well-known patterns.
 
-4. **The top 9 cluster within 3 points — below that, it falls off fast.** SR Sonnet (89.9%) through v6 Sonnet (87.0%) span 2.9 points. Then SP Opus (86.0%), GSD (83.7%) and Metacog (82.5%) form a mid-tier, vanilla drops to 77.0%, Gas Station to 74.9%, TDD Sonnet to 62.9%.
+4. **The top 9 cluster within 3 points — below that, it falls off fast.** SR Sonnet (89.9%) through v6 Sonnet (87.0%) span 2.9 points. Then Superpowers (86.0%), GSD (83.7%) and Metacog (82.5%) form a mid-tier, vanilla drops to 77.0%, Gas Station to 74.9%, TDD Sonnet to 62.9%.
 
 5. **Gas Town (88.2%) validates multi-agent pipelines on hard tasks.** The Mayor→Polecats→Refinery architecture holds up under pressure. But it's expensive at $2.55/trial.
 
 6. **Metacog (82.5%) has the highest variance.** T18 beam-splitter: one trial 58%, the other 92%. T19 factory-reset: 95% and 90%. The metacognitive reframing occasionally produces breakthrough insights but inconsistently. Metacog does hold the highest T19 score (92.8%) among all orchestrators.
 
-7. **Permission maze (T15) is the hardest non-crashing task.** Scores range 61-78% across 15 orchestrators — the deliberately ambiguous TASK.md exposes agents that make assumptions rather than exploring edge cases. Gas Town takes the lead (77.7%), followed by GSD (76.7%) and SP Opus (76.6%).
+7. **Permission maze (T15) is the hardest non-crashing task.** Scores range 61-78% across 15 orchestrators — the deliberately ambiguous TASK.md exposes agents that make assumptions rather than exploring edge cases. Gas Town takes the lead (77.7%), followed by GSD (76.7%) and Superpowers (76.6%).
 
 8. **Third-party tools: BMAD outperforms GSD on hard tasks.** BMAD (87.8%) and GSD (83.7%) represent different approaches — BMAD's structured adversarial workflow vs GSD's wave-based parallel execution. GSD is strong on algorithmic tasks (T12: 92.6%, T13: 91.6%) but shows high variance on reasoning tasks (T18: 92.6%/58.1%, T19: 89.0%/58.5% between trials). n=2 data confirmed GSD's mid-tier placement.
 
