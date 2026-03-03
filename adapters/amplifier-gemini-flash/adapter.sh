@@ -51,9 +51,9 @@ with open('/workspace/.amplifier-stdout.log', 'r', errors='replace') as f:
 cache_read = int(last_input * last_cache_pct / 100)
 non_cached_input = last_input - cache_read
 
-# gemini-3-flash-preview pricing per million tokens
-# Input: \$0.10/1M, Output: \$0.40/1M, Cached: \$0.025/1M
-cost = (non_cached_input * 0.10 + last_output * 0.40 + cache_read * 0.025) / 1e6
+# Gemini 3 Flash pricing per million tokens
+# Input: \$0.50/1M, Output: \$3.00/1M, Cached: \$0.05/1M
+cost = (non_cached_input * 0.50 + last_output * 3.00 + cache_read * 0.05) / 1e6
 
 metrics = {
     'input_tokens': non_cached_input,

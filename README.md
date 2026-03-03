@@ -26,9 +26,8 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 | 10 | Gas Station | 86.6% | 74.9% | **81.7%** | 30 | $1.00 | Opus 4.6 |
 | 11 | Claude Code | 84.8% | 76.7% | **81.4%** | 51 | $0.77 | Opus 4.6 |
 | 12 | Gas Town | 69.2% | 88.2% | **77.2%** | 63 | $1.99 | Opus 4.6 |
-| — | Amplifier + ts-dev | 86.8% | — | — | 12 | $0.74 | Opus 4.6 |
 | — | Amplifier | 86.0% | — | — | 12 | $0.07 | Opus 4.6 |
-| — | Amp Flash | 85.6% | 39.6% | — | 20 | $0.00 | Gemini 3 Flash |
+| — | Amp Flash | 85.6% | 39.6% | — | 20 | $0.03 | Gemini 3 Flash |
 | — | Agent Teams | 85.2% | — | — | 29 | $0.47 | Opus 4.6 |
 
 ### Cost Efficiency
@@ -85,6 +84,7 @@ Individual orchestrator "genes" tested in isolation — Claude Code with a singl
 | — | Claude Code Worktree | 94.7% | — | — | 3 | $1.20 | Opus 4.6 |
 | — | Verify (Sonnet) | 94.3% | — | — | 22 | $0.74 | Sonnet 4.6 |
 | — | Claude Code Headless | 94.2% | — | — | 9 | $1.15 | Opus 4.6 |
+| — | Amplifier + ts-dev | 86.8% | — | — | 12 | $0.74 | Opus 4.6 |
 
 ### Hard Benchmarks (T12-T19)
 
