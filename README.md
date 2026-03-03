@@ -26,8 +26,8 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 | 10 | Gas Station | 86.6% | 74.9% | **81.7%** | 30 | $1.00 | Opus 4.6 |
 | 11 | Claude Code | 84.8% | 76.7% | **81.4%** | 51 | $0.77 | Opus 4.6 |
 | 12 | Gas Town | 69.2% | 88.2% | **77.2%** | 63 | $1.99 | Opus 4.6 |
-| — | Amplifier | 86.0% | — | — | 12 | $0.07 | Opus 4.6 |
-| — | Amp Flash | 85.6% | 39.6% | — | 20 | $0.03 | Gemini 3 Flash |
+| — | Amplifier (Opus) | 86.0% | — | — | 12 | $0.07 | Opus 4.6 |
+| — | Amplifier (Gemini) | 85.6% | 39.6% | — | 20 | $0.03 | Gemini 3 Flash |
 | — | Agent Teams | 85.2% | — | — | 29 | $0.47 | Opus 4.6 |
 
 ### Cost Efficiency
@@ -169,7 +169,7 @@ We're isolating individual orchestrator "genes" — composable features like mul
 
 **Setup:** Amplifier with Opus 4.6, comparing bare foundation bundle vs foundation + [ts-dev](https://github.com/microsoft/amplifier-bundle-ts-dev) app bundle. Same model, same provider, same tasks. After pruning adapter-debugging trials, both variants have n=1 per task (n=2 for T1 bare, T8 ts-dev).
 
-| Task | Amplifier (bare) | Amplifier + ts-dev | Delta |
+| Task | Amplifier (Opus) | Amplifier + ts-dev | Delta |
 | --- | ---: | ---: | ---: |
 | **T1** time-tracker | 97.6% (n=2) | 64.6% (n=1) | -33.0 |
 | **T2** collab-server | 63.1% (n=1) | 93.7% (n=1) | +30.6 |
@@ -870,8 +870,8 @@ v6 was run on all 8 hard benchmarks with 2 trials each (32 additional trials). R
 | Branch from detached HEAD | Claude Code + Branch | Claude Code | `git checkout -b main` before agent | **Done — inconclusive (82.2%, high variance)** |
 | Fresh-context Ralph loop | Ralph Fresh | Claude Code | Multi-iteration fresh context on same workspace | **Done — +15.6 on T5, now top-tier (91.3%)** |
 | No-git workspace | Claude Code + No Git | Claude Code | Remove .git directory entirely | **Done — unstable (50% failure rate, n=4)** |
-| Structured recipes | Amplifier + recipes | Amplifier | Multi-step orchestration behaviors | Not started |
-| Agent delegation | Amplifier + delegate | Amplifier | Sub-session spawning | Not started |
+| Structured recipes | Amplifier + recipes | Amplifier (Opus) | Multi-step orchestration behaviors | Not started |
+| Agent delegation | Amplifier + delegate | Amplifier (Opus) | Sub-session spawning | Not started |
 
 ## Why This Exists
 
@@ -890,14 +890,14 @@ The framework tests five hypotheses:
 | Orchestrator | Architecture | Key Differentiator |
 |---|---|---|
 | **Agent Teams** | Claude Code interactive + teams | Experimental agent teams feature; tmux harness for idle detection |
-| **Amplifier** | Micro-kernel platform | Swappable providers; minimal overhead; Sonnet 4.5 |
+| **Amplifier (Opus)** | Micro-kernel platform | Swappable providers; minimal overhead; Opus 4.6 |
 | **Amplifier + ts-dev** | Amplifier + TypeScript bundle | LSP code intelligence, TS expert agent (ablation study) |
 | **Conclave Review** | Claude Code + consensus review | Code review only — no skills, no planning (ablation study) |
 | **Conclave Design** | Claude Code + consensus design | Pre-implementation architecture review (ablation study) |
 | **Gas Town** | Multi-agent pipeline | Mayor (planner) -> parallel Polecats (workers) -> Refinery (merge) |
 | **Gas Station** | Single-agent + context injection | Gas Town's prompt engineering without multi-agent overhead |
 | **Gemini CLI** | Google's agentic CLI | Gemini 3 models; free via Google One OAuth; headless `-p` mode |
-| **Amp Flash** | Amplifier + Gemini Flash | Amplifier orchestration with Gemini 3 Flash via API |
+| **Amplifier (Gemini)** | Amplifier + Gemini Flash | Amplifier orchestration with Gemini 3 Flash via API |
 | **Claude Code** | CLI agentic (single agent) | Rich tool use, subagent delegation, flexible autonomy |
 | **Metacog** | Claude Code + metacognitive skill | Perspective-shifting plugin; methodology guidance |
 | **Stacked** | Metacog + review + worktree | Three top genes combined: metacog reframing, consensus code review, git worktree |
