@@ -36,8 +36,8 @@ All orchestrators with Overall scores, sorted by cost. **Bold** = Pareto-optimal
 
 | Orchestrator | Overall | Avg Cost | Pareto |
 |---|---:|---:|:---:|
-| **Gemini CLI** | **82.2%** | **$0.10** | **best <$0.77** |
-| **Claude Code** | **81.4%** | **$0.77** | |
+| **Gemini CLI** | **82.2%** | **$0.10** | **best <$0.80** |
+| Claude Code | 81.4% | $0.77 | |
 | **Self-Review (Sonnet)** | **89.6%** | **$0.80** | **best <$0.98** |
 | TDD Sonnet | 83.3% | $0.85 | |
 | **Conclave v6 (Sonnet)** | **93.4%** | **$0.98** | **best <$1.58** |
@@ -140,7 +140,7 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 - **Multi-agent consensus adds nothing — even with real multi-provider keys.** Three-way test: pure superpowers (no binary), conclave (Claude-only consensus), conclave + keys (Claude + Gemini + Codex). Pure wins: Brainstorm 97.1% > +keys 95.7% > no-keys 95.6%. Adding the consensus binary and multi-provider API keys actually hurts slightly — the structured skill text drives all the value
 - **A system prompt is (almost) all you need — on hard tasks.** Self-Review Sonnet leads the hard suite (89.9%) with no plugins, skills, or consensus — just "verify, commit, review your diff, fix." But its standard-suite score (89.3%) is significantly weaker, dragging its Overall to 89.6% (#6). Structured methodologies still matter for standard tasks
 - **The real gap is vanilla vs any discipline.** Claude Code without any review instruction scores 84.8% standard. Adding "verify and review your diff" to the system prompt jumps to 97% — a 12 point improvement for free. All the skill infrastructure, consensus protocols, and multi-agent reviews fight over the last 1.2 points
-- **Hard benchmarks (T12-T19) break the T1-T11 consensus.** On easy tasks, all discipline genes cluster within 0.6 points. On hard tasks, the spread explodes to 27 points across 17 orchestrators. The top 10 (SR Sonnet 89.9% through v6 Sonnet 87.0%) cluster within 2.9 points; then GSD (83.7%), Metacog (82.5%), vanilla (77.0%), Gemini CLI (76.1%), Gas Station (74.9%), and TDD Sonnet (62.9%) fall off. The T1-T11 leaderboard was measuring methodology compliance, not problem-solving capability
+- **Hard benchmarks (T12-T19) break the T1-T11 consensus.** On easy tasks, all discipline genes cluster within 0.6 points. On hard tasks, the spread explodes to 27 points across 17 orchestrators. The top 10 (SR Sonnet 89.9% through v6 Sonnet 87.0%) cluster within 2.9 points; then GSD (83.7%), Metacog (82.5%), Gemini CLI (80.3%), vanilla (77.0%), Gas Station (74.9%), and TDD Sonnet (62.9%) fall off. The T1-T11 leaderboard was measuring methodology compliance, not problem-solving capability
 - **Multi-trial data compresses the spread.** With n=22-40 trials per orchestrator, the Opus top tier clusters within 0.6 points (96.8%-97.4%) on T1-T11. The n=1 rankings were noise — what looked like meaningful differences between skill-based approaches was just variance
 - **Superpowers Verify** is the best cost-adjusted Opus skill — 97.3% at $0.94/task (n=11, needs more trials to confirm)
 - **Conclave Skill Review regressed the most** — from 97.7% (n=1) to 97.0% (n=34). The original score was an outlier. Still effective but not the clear #1 it appeared to be
@@ -160,6 +160,30 @@ What it delivered was a fraud — a single `claude -p` call with `gt prime` cont
 I named the impostor "Gas Station" and kept it as a control while we built the real multi-agent pipeline ourselves.
 
 Then the benchmarks came back. Gas Station scored 86.6% standard (n=11). The single agent in a trench coat was respectably consistent. And the real multi-agent pipeline? Gas Town scores 88.2% on hard tasks (#4 overall) but cratered to 69.2% on standard tasks (n=22) — the Mayor dispatches simple tasks to a single polecat that sometimes completes with minimal work (30% on T3 and T4, both trials). The fraud outperforms the real thing on standard tasks by 17 points. On hard tasks, the multi-agent decomposition finally justifies itself. Gas Station earned its place: a permanent reminder that complexity must earn its keep on every task type, not just the hard ones.
+
+### From Gene Ablation to Conclave v6
+
+The ablation studies below aren't just academic — they directly shaped [Conclave's](https://github.com/signalnine/conclave) v6 architecture. Here's the story of how 796 trials rewrote a multi-agent framework.
+
+**Phase 1: Measure every gene in isolation.** We tested 8 composable features ("genes") one at a time against vanilla Claude Code (85.9%). The results were surprising: every discipline gene — TDD, brainstorming, verification, code review, planning, self-review — landed within 1.4 points of each other (96.8-98.2%). The gap between *any* structure and *no* structure was massive (+10.5 to +12.3pp), but the differences between genes were noise. TDD edged ahead at 98.2% with Sonnet 4.6.
+
+**Phase 2: Three findings that broke assumptions.**
+
+1. **Multi-agent consensus adds nothing.** Conclave's signature feature — synthesizing perspectives from Claude, Gemini, and Codex — was tested in a 3-way comparison. Pure single-agent skills scored 97.1%. Adding the consensus binary dropped it to 95.7%. More models meant more noise, not more signal.
+
+2. **Gene stacking has diminishing returns.** Review + Verify stacked scored 97.2% — worse than Verify alone (97.3%). Two quality checkpoints don't catch more than one.
+
+3. **A 15-line system prompt captures 95% of the benefit.** "Implement, verify, commit, review your diff, fix issues" — no plugins, no skills, no binary — scored 96.8%. The entire skill infrastructure was fighting over the last 0.6 points.
+
+**Phase 3: Redesign around the data.** These findings drove three architectural changes in Conclave v6:
+
+- **Task classifier replaces skill browsing.** Instead of 16 skills for the agent to evaluate, the entry point auto-routes: new feature → brainstorm then TDD, bug fix → TDD, everything else → verify. One skill per task, no decision paralysis. Top performers in the benchmark all used exactly one skill.
+
+- **Completion gate embedded everywhere.** The self-review prompt worked because it baked verification into the workflow exit. v6 adds a mandatory gate to every skill: run tests, read output, commit, review diff, fix issues. No skill completes without fresh evidence.
+
+- **Consensus demoted to opt-in.** Every `conclave consensus` call was moved from the default flow to an "Optional: Multi-Agent Consensus" section. Single-agent execution is the default. The binary still works — it just stops hurting scores by default.
+
+**The result:** Conclave v6 on Sonnet 4.6 scores 98.2% standard, 87.0% hard — matching TDD Sonnet while adding brainstorming for greenfield tasks. The framework went from complex multi-agent orchestration to structured single-agent methodology, guided entirely by benchmark evidence.
 
 ### Ablation Studies
 
