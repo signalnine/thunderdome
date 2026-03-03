@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 710 scored trials across 38 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
+Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 751 scored trials across 38 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
 
 ### Leaderboard
 
@@ -16,22 +16,20 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 |---:|---|---:|---:|---:|---:|---:|---|
 | 1 | **Conclave v6 (Opus)** | 98.0% | 87.8% | **93.7%** | 38 | $2.02 | Opus 4.6 |
 | 2 | Conclave v6 (Sonnet) | 98.1% | 87.0% | **93.4%** | 38 | $0.98 | Sonnet 4.6 |
-| 3 | Gas Town† | 96.9% | 88.2% | **93.2%** | 41 | $1.04 | Opus 4.6 |
-| 4 | Self-Review (Opus) | 96.8% | 88.1% | **93.1%** | 39 | $1.31 | Opus 4.6 |
-| 5 | Metacog | 95.3% | 82.5% | **89.9%** | 28 | $1.45 | Opus 4.6 |
-| 6 | Self-Review (Sonnet) | 89.3% | 89.9% | **89.6%** | 38 | $0.80 | Sonnet 4.6 |
-| 7 | BMAD-METHOD | 86.0% | 87.8% | **86.7%** | 28 | $1.65 | Opus 4.6 |
-| 8 | Superpowers | 86.4% | 86.0% | **86.2%** | 29 | $1.31 | Opus 4.6 |
-| 9 | Gas Station† | 93.3% | 74.9% | **85.6%** | 19 | $1.05 | Opus 4.6 |
-| 10 | GSD | 82.5% | 83.7% | **83.0%** | 28 | $1.04 | Opus 4.6 |
-| 11 | Claude Code† | 85.9% | 76.7% | **82.0%** | 40 | $0.69 | Opus 4.6 |
+| 3 | Self-Review (Opus) | 96.8% | 88.1% | **93.1%** | 39 | $1.31 | Opus 4.6 |
+| 4 | Metacog | 95.3% | 82.5% | **89.9%** | 28 | $1.45 | Opus 4.6 |
+| 5 | Self-Review (Sonnet) | 89.3% | 89.9% | **89.6%** | 38 | $0.80 | Sonnet 4.6 |
+| 6 | BMAD-METHOD | 86.0% | 87.8% | **86.7%** | 28 | $1.65 | Opus 4.6 |
+| 7 | Superpowers | 86.4% | 86.0% | **86.2%** | 29 | $1.31 | Opus 4.6 |
+| 8 | GSD | 82.5% | 83.7% | **83.0%** | 28 | $1.04 | Opus 4.6 |
+| 9 | Gas Station | 86.6% | 74.9% | **81.7%** | 30 | $1.00 | Opus 4.6 |
+| 10 | Claude Code | 84.8% | 76.7% | **81.4%** | 51 | $0.77 | Opus 4.6 |
+| 11 | Gemini CLI | 83.6% | 76.1% | **80.4%** | 28 | $0.01 | Gemini 3 Flash |
+| 12 | Gas Town | 68.2% | 88.2% | **76.6%** | 52 | $1.67 | Opus 4.6 |
 | — | Amplifier + ts-dev | 86.8% | — | — | 12 | $0.74 | Opus 4.6 |
 | — | Amplifier | 86.0% | — | — | 12 | $0.07 | Opus 4.6 |
 | — | Amp Flash | 85.6% | — | — | 12 | $0.00 | Gemini 3 Flash |
 | — | Agent Teams | 85.2% | — | — | 29 | $0.47 | Opus 4.6 |
-| — | Gemini CLI | 83.6% | — | — | 20 | $0.00 | Gemini 3 Flash |
-
-†Standard score from incomplete meta.json (fewer than 11 tasks scored); value carried from earlier analysis.
 
 ### Cost Efficiency
 
@@ -39,23 +37,24 @@ All orchestrators with Overall scores, sorted by cost. **Bold** = Pareto-optimal
 
 | Orchestrator | Overall | Avg Cost | Pareto |
 |---|---:|---:|:---:|
-| **Claude Code** | **82.0%** | **$0.69** | **best <$0.80** |
+| **Gemini CLI** | **80.4%** | **$0.01** | **best <$0.77** |
+| **Claude Code** | **81.4%** | **$0.77** | **best <$0.80** |
 | **Self-Review (Sonnet)** | **89.6%** | **$0.80** | **best <$0.98** |
 | TDD Sonnet | 83.3% | $0.85 | |
 | **Conclave v6 (Sonnet)** | **93.4%** | **$0.98** | **best <$1.58** |
-| Gas Town | 93.2% | $1.04 | |
+| Gas Station | 81.7% | $1.00 | |
 | GSD | 83.0% | $1.04 | |
-| Gas Station | 85.6% | $1.05 | |
 | Superpowers | 86.2% | $1.31 | |
 | Self-Review (Opus) | 93.1% | $1.31 | |
 | Stacked | 93.3% | $1.43 | |
 | Metacog | 89.9% | $1.45 | |
 | **Conclave Brainstorm** | **93.8%** | **$1.58** | **best <$2.76** |
 | BMAD-METHOD | 86.7% | $1.65 | |
+| Gas Town | 76.6% | $1.67 | |
 | Conclave v6 (Opus) | 93.7% | $2.02 | |
 | **TDD Opus** | **94.2%** | **$2.76** | **best overall** |
 
-The biggest value jump is from Claude Code ($0.69, 82%) to v6 Sonnet ($0.98, 93.4%) — **+11 points for $0.29 more**. After that, diminishing returns: the next 0.8 points (to TDD Opus 94.2%) costs $1.78 more. Self-Review Sonnet's n=2 hard data revealed its standard-suite score (89.3%) was much lower than initially reported — it drops from #1 tie to #6, still the cheapest overall-ranked orchestrator at $0.80.
+The biggest value jump is from Claude Code ($0.77, 81.4%) to SR Sonnet ($0.80, 89.6%) — **+8.2 points for $0.03 more**. From there to v6 Sonnet ($0.98, 93.4%) adds +3.8 points for $0.18 more. After that, diminishing returns: the next 0.8 points (to TDD Opus 94.2%) costs $1.78 more. Gemini CLI at $0.01 is essentially free and scores 80.4% — competitive with vanilla Claude Code at a fraction of the cost.
 
 ### Gene Ablation Variants
 
@@ -91,24 +90,25 @@ Individual orchestrator "genes" tested in isolation — Claude Code with a singl
 
 Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T13, T16), correctness constraints (T14), ambiguous requirements (T15), and deep reasoning where naive approaches fail at scale (T17-T19). Aggregate rankings are in the [leaderboard](#leaderboard) above.
 
-15 orchestrators (n=2 per task unless noted, 223 total trials), sorted by hard-suite mean:
+16 orchestrators (n=2 per task unless noted, 231 total trials), sorted by hard-suite mean:
 
-| Task | Category | SR Sonnet | TDD Opus | Brstm Opus | Gas Town | SR Opus | Stacked | BMAD | v6 Opus | v6 Sonnet | Superpowers | GSD | Metacog | Vanilla | Gas Stn | TDD Sonnet |
-|------|----------|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| **T12** constraint-scheduler | algo/hard | 90.4% | 91.8% | **93.4%** | 90.5% | 81.0% | 91.3% | 83.8% | 76.5%† | 87.8% | 73.7% | 92.6% | 75.9% | 60.0% | 74.4% | 81.3% |
-| **T13** structural-merge | algo/hard | 91.0% | 89.0% | **93.3%** | 85.5% | 90.1% | 90.2% | 90.0% | 93.0% | 89.9% | 91.2% | 91.6% | 75.0% | 59.0% | 58.5% | 88.2% |
-| **T14** financial-ledger | correct/hard | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% |
-| **T15** permission-maze | ambig/hard | 70.8% | 75.3% | 65.2% | **77.7%** | 67.0%‡ | 61.2% | 73.6% | 66.8% | 70.7% | 76.6% | 76.7% | 67.8%‡ | 69.6% | 62.9% | 64.3% |
-| **T16** reactive-spreadsheet | algo/hard | 93.0% | 91.9% | **93.2%** | 92.3% | 90.2% | 88.0% | 91.2% | 91.9% | 91.2% | 90.9% | 89.5% | 88.9% | 91.1% | 87.8% | 88.7% |
-| **T17** circuit-debugger | reason/hard | 86.0% | 86.9% | 85.3% | 84.5% | 86.6% | 87.3% | 83.7% | **90.3%** | 73.3% | 89.7% | 70.3% | 84.8% | 88.9% | 88.1% | 40.4%\* |
-| **T18** beam-splitter | reason/hard | **95.1%** | 90.2% | 93.2% | 90.0% | 93.9% | 93.2% | 91.9% | 94.3% | 94.0% | 77.0% | 75.3% | 75.2% | 69.2% | 59.0% | 20.0%\* |
-| **T19** factory-reset | reason/hard | 93.1% | 92.3% | 87.0% | 85.4% | 91.0% | 91.7% | 88.2% | 89.5% | 88.9% | 89.2% | 73.7% | **92.8%** | 78.6% | 68.2% | 20.0%\* |
-| **Mean** | | **89.9%** | 89.7% | 88.8% | 88.2% | 88.1% | 87.9% | 87.8% | 87.8% | 87.0% | 86.0% | 83.7% | 82.5% | 77.0% | 74.9% | 62.9% |
-| **Avg Cost** | | $0.77 | $3.19 | $1.94 | $2.55 | $1.43 | $1.48 | $2.01 | $1.78 | $0.80 | $1.49 | $1.09 | $1.57 | $1.33 | $1.06 | $0.53 |
+| Task | Category | SR Sonnet | TDD Opus | Brstm Opus | Gas Town | SR Opus | Stacked | BMAD | v6 Opus | v6 Sonnet | Superpowers | GSD | Metacog | Vanilla | Gemini | Gas Stn | TDD Sonnet |
+|------|----------|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **T12** constraint-scheduler | algo/hard | 90.4% | 91.8% | **93.4%** | 90.5% | 81.0% | 91.3% | 83.8% | 76.5%† | 87.8% | 73.7% | 92.6% | 75.9% | 60.0% | 90.8%§ | 74.4% | 81.3% |
+| **T13** structural-merge | algo/hard | 91.0% | 89.0% | **93.3%** | 85.5% | 90.1% | 90.2% | 90.0% | 93.0% | 89.9% | 91.2% | 91.6% | 75.0% | 59.0% | 20.0%§ | 58.5% | 88.2% |
+| **T14** financial-ledger | correct/hard | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100%§ | 100% | 100% |
+| **T15** permission-maze | ambig/hard | 70.8% | 75.3% | 65.2% | **77.7%** | 67.0%‡ | 61.2% | 73.6% | 66.8% | 70.7% | 76.6% | 76.7% | 67.8%‡ | 69.6% | 61.0%§ | 62.9% | 64.3% |
+| **T16** reactive-spreadsheet | algo/hard | 93.0% | 91.9% | **93.2%** | 92.3% | 90.2% | 88.0% | 91.2% | 91.9% | 91.2% | 90.9% | 89.5% | 88.9% | 91.1% | 88.7%§ | 87.8% | 88.7% |
+| **T17** circuit-debugger | reason/hard | 86.0% | 86.9% | 85.3% | 84.5% | 86.6% | 87.3% | 83.7% | 90.3% | 73.3% | 89.7% | 70.3% | 84.8% | 88.9% | **93.6%**§ | 88.1% | 40.4%\* |
+| **T18** beam-splitter | reason/hard | 95.1% | 90.2% | 93.2% | 90.0% | 93.9% | 93.2% | 91.9% | 94.3% | 94.0% | 77.0% | 75.3% | 75.2% | 69.2% | **96.5%**§ | 59.0% | 20.0%\* |
+| **T19** factory-reset | reason/hard | 93.1% | 92.3% | 87.0% | 85.4% | 91.0% | 91.7% | 88.2% | 89.5% | 88.9% | 89.2% | 73.7% | **92.8%** | 78.6% | 58.5%§ | 68.2% | 20.0%\* |
+| **Mean** | | **89.9%** | 89.7% | 88.8% | 88.2% | 88.1% | 87.9% | 87.8% | 87.8% | 87.0% | 86.0% | 83.7% | 82.5% | 77.0% | 76.1% | 74.9% | 62.9% |
+| **Avg Cost** | | $0.77 | $3.19 | $1.94 | $2.55 | $1.43 | $1.48 | $2.01 | $1.78 | $0.80 | $1.49 | $1.09 | $1.57 | $1.33 | $0.02 | $1.06 | $0.53 |
 
 \*TDD Sonnet crashed on 5 of 6 reasoning/hard trials ($0.00 cost, <3s duration). The non-crashing T17 trial scored 60.8%.
 †v6 Opus T12 trial 1 had a validation container hang (hidden_tests=0); trial 2 scored 94.7%.
 ‡Self-Review and Metacog T15 trial 2 affected by OAuth expiry during the run.
+§Gemini CLI hard scores are n=1 per task.
 
 **Key findings from the hard suite:**
 
@@ -118,13 +118,13 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 
 3. **Hard tasks finally differentiate orchestrators.** The T1-T11 spread among top-tier Opus variants is 0.6 points (96.8-97.4%). On T12-T19 the spread is 27 points (62.9-89.9%). These benchmarks test what easy benchmarks can't: whether the agent can discover novel algorithmic approaches rather than implement well-known patterns.
 
-4. **The top 9 cluster within 3 points — below that, it falls off fast.** SR Sonnet (89.9%) through v6 Sonnet (87.0%) span 2.9 points. Then Superpowers (86.0%), GSD (83.7%) and Metacog (82.5%) form a mid-tier, vanilla drops to 77.0%, Gas Station to 74.9%, TDD Sonnet to 62.9%.
+4. **The top 9 cluster within 3 points — below that, it falls off fast.** SR Sonnet (89.9%) through v6 Sonnet (87.0%) span 2.9 points. Then Superpowers (86.0%), GSD (83.7%) and Metacog (82.5%) form a mid-tier, vanilla drops to 77.0%, Gemini CLI to 76.1%, Gas Station to 74.9%, TDD Sonnet to 62.9%.
 
-5. **Gas Town (88.2%) validates multi-agent pipelines on hard tasks.** The Mayor→Polecats→Refinery architecture holds up under pressure. But it's expensive at $2.55/trial.
+5. **Gemini CLI (76.1%) aces reasoning but fails structural merge.** The free Gemini 3 Flash model produces the highest scores on T17 circuit-debugger (93.6%) and T18 beam-splitter (96.5%) — beating every Claude-based orchestrator on both. But it completely fails T13 structural-merge (20.0%) and scores poorly on T19 factory-reset (58.5%). At $0.02/trial, it's an extraordinary value for tasks that match its strengths.
 
-6. **Metacog (82.5%) has the highest variance.** T18 beam-splitter: one trial 58%, the other 92%. T19 factory-reset: 95% and 90%. The metacognitive reframing occasionally produces breakthrough insights but inconsistently. Metacog does hold the highest T19 score (92.8%) among all orchestrators.
+6. **Metacog (82.5%) has the highest variance.** T18 beam-splitter: one trial 58%, the other 92%. T19 factory-reset: 95% and 90%. The metacognitive reframing occasionally produces breakthrough insights but inconsistently. Metacog does hold the highest T19 score (92.8%) among Claude-based orchestrators.
 
-7. **Permission maze (T15) is the hardest non-crashing task.** Scores range 61-78% across 15 orchestrators — the deliberately ambiguous TASK.md exposes agents that make assumptions rather than exploring edge cases. Gas Town takes the lead (77.7%), followed by GSD (76.7%) and Superpowers (76.6%).
+7. **Permission maze (T15) is the hardest non-crashing task.** Scores range 61-78% across 16 orchestrators — the deliberately ambiguous TASK.md exposes agents that make assumptions rather than exploring edge cases. Gas Town takes the lead (77.7%), followed by GSD (76.7%) and Superpowers (76.6%).
 
 8. **Third-party tools: BMAD outperforms GSD on hard tasks.** BMAD (87.8%) and GSD (83.7%) represent different approaches — BMAD's structured adversarial workflow vs GSD's wave-based parallel execution. GSD is strong on algorithmic tasks (T12: 92.6%, T13: 91.6%) but shows high variance on reasoning tasks (T18: 92.6%/58.1%, T19: 89.0%/58.5% between trials). n=2 data confirmed GSD's mid-tier placement.
 
@@ -137,13 +137,14 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 - **The methodology matters more than the model — on standard tasks.** Four approaches tested with both Opus and Sonnet on T1-T11: TDD (Sonnet +0.8pp), Brainstorm (Sonnet -0.9pp), Verify (Sonnet -3.0pp), Self-Review (Sonnet -7.5pp). The more structured the methodology, the smaller the Opus-Sonnet gap. But T12-T19 hard benchmarks reveal this is incomplete: TDD Opus (89.7%) dominates TDD Sonnet (62.9%) when problems require novel algorithmic approaches
 - **Multi-agent consensus adds nothing — even with real multi-provider keys.** Three-way test: pure superpowers (no binary), conclave (Claude-only consensus), conclave + keys (Claude + Gemini + Codex). Pure wins: Brainstorm 97.1% > +keys 95.7% > no-keys 95.6%. Adding the consensus binary and multi-provider API keys actually hurts slightly — the structured skill text drives all the value
 - **A system prompt is (almost) all you need — on hard tasks.** Self-Review Sonnet leads the hard suite (89.9%) with no plugins, skills, or consensus — just "verify, commit, review your diff, fix." But its standard-suite score (89.3%) is significantly weaker, dragging its Overall to 89.6% (#6). Structured methodologies still matter for standard tasks
-- **The real gap is vanilla vs any discipline.** Claude Code without any review instruction scores 85.9% standard. Adding "verify and review your diff" to the system prompt jumps to 97% — an 11 point improvement for free. All the skill infrastructure, consensus protocols, and multi-agent reviews fight over the last 1.2 points
-- **Hard benchmarks (T12-T19) break the T1-T11 consensus.** On easy tasks, all discipline genes cluster within 0.6 points. On hard tasks, the spread explodes to 27 points across 15 orchestrators. The top 9 (SR Sonnet 89.9% through v6 Sonnet 87.0%) cluster within 2.9 points; then GSD (83.7%), Metacog (82.5%), vanilla (77.0%), Gas Station (74.9%), and TDD Sonnet (62.9%) fall off. The T1-T11 leaderboard was measuring methodology compliance, not problem-solving capability
+- **The real gap is vanilla vs any discipline.** Claude Code without any review instruction scores 84.8% standard. Adding "verify and review your diff" to the system prompt jumps to 97% — a 12 point improvement for free. All the skill infrastructure, consensus protocols, and multi-agent reviews fight over the last 1.2 points
+- **Hard benchmarks (T12-T19) break the T1-T11 consensus.** On easy tasks, all discipline genes cluster within 0.6 points. On hard tasks, the spread explodes to 27 points across 16 orchestrators. The top 9 (SR Sonnet 89.9% through v6 Sonnet 87.0%) cluster within 2.9 points; then GSD (83.7%), Metacog (82.5%), vanilla (77.0%), Gemini CLI (76.1%), Gas Station (74.9%), and TDD Sonnet (62.9%) fall off. The T1-T11 leaderboard was measuring methodology compliance, not problem-solving capability
 - **Multi-trial data compresses the spread.** With n=22-40 trials per orchestrator, the Opus top tier clusters within 0.6 points (96.8%-97.4%) on T1-T11. The n=1 rankings were noise — what looked like meaningful differences between skill-based approaches was just variance
 - **Superpowers Verify** is the best cost-adjusted Opus skill — 97.3% at $0.94/task (n=11, needs more trials to confirm)
 - **Conclave Skill Review regressed the most** — from 97.7% (n=1) to 97.0% (n=34). The original score was an outlier. Still effective but not the clear #1 it appeared to be
 - **Gene stacking has diminishing returns** — Review + Verify (97.2%) scores at the same level as either alone. Two discipline checkpoints don't compound. The ceiling appears to be ~97-98% with current single-session approaches
-- **Gas Town** is the biggest mover after data cleanup — 96.6% mean (was 81.3% when adapter failures polluted the data). The real multi-agent pipeline actually works
+- **Gas Town collapsed on standard tasks (68.2%).** Fresh n=1 standard-suite data revealed the Mayor→Polecats→Refinery pipeline scores 30% on T3 and T4 — the single-polecat strategy completes with minimal work. Gas Town is strong on hard tasks (88.2%, #4) but its standard-task weakness drops it to last place overall (76.6%). The multi-agent decomposition that helps on hard problems actively hurts on simple ones
+- **Gemini CLI earns a spot on the leaderboard (80.4% overall).** Hard-task data (76.1%) lifts Gemini CLI from the unranked tier. At $0.01/task it's the cheapest orchestrator by 77x, with best-in-class scores on T17 (93.6%) and T18 (96.5%)
 - **T4** (bugfix) is the great equalizer — most contenders score 100%, the task is too easy
 - **T8** (analytics dashboard) is the hardest task in the standard suite — most contenders cluster around 87-90%. In the hard suite, T15 (permission maze, 61-85%) and the reasoning tasks (T17-T19) are significantly harder
 - **Third-party tools show promise on hard tasks.** [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) (87.8% hard, 86.0% standard) and [GSD](https://github.com/gsd-build/get-shit-done) (83.7% hard, 82.5% standard) both perform better on hard tasks relative to their standard-suite ranking. Both show significant inter-trial variance: BMAD T12 swung 95.8%→71.8%, GSD T18 swung 92.6%→58.1%. Gas Station (74.9% hard) had the dataset's biggest single-task swing: T12 at 92.4% vs 56.4%
@@ -156,7 +157,7 @@ What it delivered was a fraud — a single `claude -p` call with `gt prime` cont
 
 I named the impostor "Gas Station" and kept it as a control while we built the real multi-agent pipeline ourselves.
 
-Then the benchmarks came back. Gas Station scored 92.6% (n=22 trials). The single agent in a trench coat was the most consistent performer in the benchmark — until we cleaned up Gas Town's adapter failures and discovered the real multi-agent pipeline scores 96.6% (n=24). The complexity justified itself after all, but Gas Station earned its place: a permanent reminder to validate your baselines before drawing conclusions.
+Then the benchmarks came back. Gas Station scored 86.6% standard (n=11). The single agent in a trench coat was respectably consistent. And the real multi-agent pipeline? Gas Town scores 88.2% on hard tasks (#4 overall) but cratered to 68.2% on standard tasks — the Mayor dispatches simple tasks to a single polecat that sometimes completes with minimal work (30% on T3 and T4). The fraud outperforms the real thing on standard tasks by 18 points. On hard tasks, the multi-agent decomposition finally justifies itself. Gas Station earned its place: a permanent reminder that complexity must earn its keep on every task type, not just the hard ones.
 
 ### Ablation Studies
 
