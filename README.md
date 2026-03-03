@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 699 scored trials across 38 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
+Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 710 scored trials across 38 primary orchestrator variants. All scoring is deterministic — no LLM judges, no rubric. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
 
 ### Leaderboard
 
@@ -21,9 +21,10 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 | 5 | Metacog | 95.3% | 82.5% | **89.9%** | 28 | $1.45 | Opus 4.6 |
 | 6 | Self-Review (Sonnet) | 89.3% | 89.9% | **89.6%** | 38 | $0.80 | Sonnet 4.6 |
 | 7 | BMAD-METHOD | 86.0% | 87.8% | **86.7%** | 28 | $1.65 | Opus 4.6 |
-| 8 | Gas Station† | 93.3% | 74.9% | **85.6%** | 19 | $1.05 | Opus 4.6 |
-| 9 | GSD | 82.5% | 83.7% | **83.0%** | 28 | $1.04 | Opus 4.6 |
-| 10 | Claude Code† | 85.9% | 76.7% | **82.0%** | 40 | $0.69 | Opus 4.6 |
+| 8 | SP Opus | 86.4% | 86.0% | **86.2%** | 29 | $1.31 | Opus 4.6 |
+| 9 | Gas Station† | 93.3% | 74.9% | **85.6%** | 19 | $1.05 | Opus 4.6 |
+| 10 | GSD | 82.5% | 83.7% | **83.0%** | 28 | $1.04 | Opus 4.6 |
+| 11 | Claude Code† | 85.9% | 76.7% | **82.0%** | 40 | $0.69 | Opus 4.6 |
 | — | Amplifier + ts-dev | 86.8% | — | — | 12 | $0.74 | Opus 4.6 |
 | — | Amplifier | 86.0% | — | — | 12 | $0.07 | Opus 4.6 |
 | — | Amp Flash | 85.6% | — | — | 12 | $0.00 | Gemini 3 Flash |
@@ -45,6 +46,7 @@ All orchestrators with Overall scores, sorted by cost. **Bold** = Pareto-optimal
 | Gas Town | 93.2% | $1.04 | |
 | GSD | 83.0% | $1.04 | |
 | Gas Station | 85.6% | $1.05 | |
+| SP Opus | 86.2% | $1.31 | |
 | Self-Review (Opus) | 93.1% | $1.31 | |
 | Stacked | 93.3% | $1.43 | |
 | Metacog | 89.9% | $1.45 | |
