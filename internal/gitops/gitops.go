@@ -92,6 +92,35 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	return err
 }
 
+// stripNonRepoHunks removes diff hunks for files that are runtime artifacts
+// (e.g. .thunderdome-output.jsonl, core dumps) and would cause git apply to fail.
+func stripNonRepoHunks(diff []byte) []byte {
+	lines := strings.Split(string(diff), "\n")
+	var out []string
+	skip := false
+	for _, line := range lines {
+		if strings.HasPrefix(line, "diff --git ") {
+			skip = false
+			// Skip hunks for known runtime artifacts and binary files
+			for _, pattern := range []string{
+				".thunderdome-output.jsonl",
+				".thunderdome-metrics.json",
+				".amplifier-stdout.log",
+				"core.",
+			} {
+				if strings.Contains(line, pattern) {
+					skip = true
+					break
+				}
+			}
+		}
+		if !skip {
+			out = append(out, line)
+		}
+	}
+	return []byte(strings.Join(out, "\n"))
+}
+
 // ReconstructFromDiff clones a repo at a tag into a temp directory and applies a diff patch.
 // Returns the temp directory path and a cleanup function. Caller must call cleanup when done.
 func ReconstructFromDiff(repo, tag string, diff []byte) (string, func(), error) {
@@ -99,15 +128,20 @@ func ReconstructFromDiff(repo, tag string, diff []byte) (string, func(), error) 
 	if err != nil {
 		return "", nil, err
 	}
-	cleanup := func() { os.RemoveAll(tmpDir) }
+	cleanup := func() {
+		// Docker containers create root-owned files; os.RemoveAll can't delete them.
+		exec.Command("sudo", "rm", "-rf", tmpDir).Run()
+	}
 
 	if len(diff) == 0 {
 		return tmpDir, cleanup, nil
 	}
 
+	cleaned := stripNonRepoHunks(diff)
+
 	cmd := exec.Command("git", "apply", "--allow-empty", "-")
 	cmd.Dir = tmpDir
-	cmd.Stdin = strings.NewReader(string(diff))
+	cmd.Stdin = strings.NewReader(string(cleaned))
 	if out, err := cmd.CombinedOutput(); err != nil {
 		cleanup()
 		return "", nil, fmt.Errorf("git apply: %s: %w", out, err)
@@ -115,18 +149,43 @@ func ReconstructFromDiff(repo, tag string, diff []byte) (string, func(), error) 
 	return tmpDir, cleanup, nil
 }
 
-// CaptureChanges stages all changes (including untracked files) and returns the diff.
+// CaptureChanges captures all changes from the original tag to current state,
+// including committed changes, staged changes, and untracked files.
 func CaptureChanges(repoDir string) ([]byte, error) {
+	// Stage everything (untracked files, modifications, deletions)
 	add := exec.Command("git", "add", "-A")
 	add.Dir = repoDir
 	if out, err := add.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("git add -A: %s: %w", out, err)
 	}
-	diff := exec.Command("git", "diff", "--cached")
+
+	// Create a temporary commit so all changes are reachable
+	commit := exec.Command("git", "commit", "--allow-empty", "-m", "thunderdome-capture")
+	commit.Dir = repoDir
+	commit.CombinedOutput() // ignore error (nothing to commit is fine)
+
+	// Find the initial commit (the v1 tag clone point)
+	revList := exec.Command("git", "rev-list", "--max-parents=0", "HEAD")
+	revList.Dir = repoDir
+	rootOut, err := revList.Output()
+	if err != nil {
+		// Fallback to cached diff if we can't find root
+		diff := exec.Command("git", "diff", "--cached")
+		diff.Dir = repoDir
+		out, err := diff.Output()
+		if err != nil {
+			return nil, fmt.Errorf("git diff --cached: %w", err)
+		}
+		return out, nil
+	}
+	root := strings.TrimSpace(string(rootOut))
+
+	// Diff from root commit to HEAD — captures everything including agent commits
+	diff := exec.Command("git", "diff", root+"..HEAD")
 	diff.Dir = repoDir
 	out, err := diff.Output()
 	if err != nil {
-		return nil, fmt.Errorf("git diff --cached: %w", err)
+		return nil, fmt.Errorf("git diff %s..HEAD: %w", root[:8], err)
 	}
 	return out, nil
 }
