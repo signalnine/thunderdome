@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 )
 
@@ -49,19 +50,49 @@ func RunTests(ctx context.Context, workDir, validationImage, installCmd, testCmd
 
 // ParseTestResults interprets test output and exit code into a score.
 func ParseTestResults(output string, exitCode int) *TestResult {
-	if exitCode == 0 {
-		return &TestResult{Score: 1.0, Output: output, ExitCode: exitCode}
-	}
 	score := parsePassRate(output)
+	if exitCode == 0 && score < 0 {
+		// exitCode 0 but no parseable test output — assume all passed
+		score = 1.0
+	}
+	if score < 0 {
+		score = 0.0
+	}
 	return &TestResult{Score: score, Output: output, ExitCode: exitCode}
 }
 
+// vitestSummaryRe matches vitest summary lines like:
+//
+//	"Tests  9 failed | 31 passed (40)"
+//	"Tests  40 passed (40)"
+//	"Tests  5 failed (5)"
+var vitestSummaryRe = regexp.MustCompile(`Tests\s+(?:(\d+)\s+failed\s*\|?\s*)?(?:(\d+)\s+passed)?\s*\((\d+)\)`)
+
+// parsePassRate extracts pass/fail counts from test output.
+// Returns -1 if no test results could be parsed (distinguishes "no output" from "0 passed").
 func parsePassRate(output string) float64 {
 	if strings.Contains(output, "<testsuite") {
 		return parseJUnitXML(output)
 	}
 
 	lines := strings.Split(output, "\n")
+
+	// Strategy 1: Look for vitest summary format "Tests  N failed | N passed (total)"
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if m := vitestSummaryRe.FindStringSubmatch(line); m != nil {
+			var failed, passed, total int
+			fmt.Sscanf(m[1], "%d", &failed)
+			fmt.Sscanf(m[2], "%d", &passed)
+			fmt.Sscanf(m[3], "%d", &total)
+			if total > 0 {
+				return float64(passed) / float64(total)
+			}
+			return 0.0
+		}
+	}
+
+	// Strategy 2: Original format "N passed" or "N passed, N failed"
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		var passed, failed int
@@ -73,7 +104,7 @@ func parsePassRate(output string) float64 {
 			}
 		}
 	}
-	return 0.0
+	return -1 // no test results found
 }
 
 func parseJUnitXML(output string) float64 {
