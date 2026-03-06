@@ -19,7 +19,7 @@ TASK_PROMPT=$(cat "$TASK_DESCRIPTION")
 
 set +e
 cerebras-cli run \
-  -m opencode/big-pickle \
+  -m cerebras/gpt-oss-120b \
   --format json \
   "$TASK_PROMPT" \
   2>/workspace/.thunderdome-stderr.log \

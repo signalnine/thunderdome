@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 1,500+ scored trials across 39 primary orchestrator variants (1,700+ total including adapter-debugging and crash trials). All scoring is deterministic — no LLM judges, no rubric. Crash trials ($0 cost, <10s duration) are excluded from averages. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
+Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 1,500+ scored trials across 40 primary orchestrator variants (1,700+ total including adapter-debugging and crash trials). All scoring is deterministic — no LLM judges, no rubric. Crash trials ($0 cost, <10s duration) are excluded from averages. Early adapter-debugging trials have been pruned — each orchestrator's data starts from its first stable full-suite run.
 
 Orchestrators marked with \* have limited standard-task trial data (n=1 per task) due to early infrastructure issues. Hard-task scores are unaffected.
 
@@ -31,8 +31,9 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 | 13 | [Gemini CLI](#contenders) | 80.7% | 77.5% | **79.4%** | 41 | $0.13 | Gemini 3 Flash |
 | 14 | [Gas Town](#contenders) | 66.7% | 88.6% | **76.0%** | 50 | $3.09 | Opus 4.6 |
 | 15 | [Agent Teams](#contenders) | 82.0% | 64.4% | **74.6%** | 65 | $2.34 | Opus 4.6 |
-| 16 | [Amplifier (Gemini)](#contenders) | 68.1% | 48.2% | **59.7%** | 39 | $0.01 | Gemini 3 Flash |
-| 17 | [Aider (Cerebras)](#contenders) | 67.7% | 44.2% | **57.8%** | 30 | $0.00 | gpt-oss-120b |
+| 16 | [Cerebras CLI](#contenders) | 66.7% | 59.3% | **63.6%** | 19 | $0.00 | gpt-oss-120b |
+| 17 | [Amplifier (Gemini)](#contenders) | 68.1% | 48.2% | **59.7%** | 39 | $0.01 | Gemini 3 Flash |
+| 18 | [Aider (Cerebras)](#contenders) | 67.7% | 44.2% | **57.8%** | 30 | $0.00 | gpt-oss-120b |
 
 ### Cost Efficiency
 
@@ -41,6 +42,7 @@ All orchestrators with Overall scores, sorted by cost. **Bold** = Pareto-optimal
 | Orchestrator | Overall | Avg Cost | Pareto |
 |---|---:|---:|:---:|
 | Aider (Cerebras) | 57.8% | $0.00 | |
+| Cerebras CLI | 63.6% | $0.00 | |
 | Amplifier (Gemini) | 59.7% | $0.01 | |
 | **Gemini CLI** | **79.4%** | **$0.13** | **best <$0.85** |
 | **Gas Station** | **82.2%** | **$0.85** | **best <$1.01** |
@@ -88,20 +90,20 @@ Individual orchestrator "genes" tested in isolation — Claude Code with a singl
 
 Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T13, T16), correctness constraints (T14), ambiguous requirements (T15), and deep reasoning where naive approaches fail at scale (T17-T19). Aggregate rankings are in the [leaderboard](#leaderboard) above.
 
-20 orchestrators (n=2+ per task unless noted, 307 total trials), sorted by hard-suite mean:
+21 orchestrators (n=2+ per task unless noted, 326 total trials), sorted by hard-suite mean:
 
-| Task | Category | SR Sonnet | TDD Opus | Brstm Opus | Gas Town | Agent Tm | SR Opus | Stacked | BMAD | v6 Opus | v6 Sonnet | Superpowers | GSD | Metacog | Gemini | Vanilla | Gas Stn | Amp Opus | TDD Sonnet | Aider Cerebras |
-|------|----------|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| **T12** constraint-scheduler | algo/hard | 90.4% | 91.8% | **93.4%** | 90.5% | 88.4%¶ | 81.0% | 91.3% | 83.8% | 76.5%† | 87.8% | 73.7% | 92.6% | 75.9% | 90.1% | 60.0% | 74.4% | 76.6%‖ | 81.3% | 52.0% |
-| **T13** structural-merge | algo/hard | 91.0% | 89.0% | **93.3%** | 85.5% | 89.4% | 90.1% | 90.2% | 90.0% | 93.0% | 89.9% | 91.2% | 91.6% | 75.0% | 66.6% | 59.0% | 58.5% | 56.4%‖ | 88.2% | 32.2% |
-| **T14** financial-ledger | correct/hard | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% |
-| **T15** permission-maze | ambig/hard | 70.8% | 75.3% | 65.2% | 77.7% | **78.6%** | 67.0%‡ | 61.2% | 73.6% | 66.8% | 70.7% | 76.6% | 76.7% | 67.8%‡ | 63.9% | 69.6% | 62.9% | 78.3% | 64.3% | 44.5% |
-| **T16** reactive-spreadsheet | algo/hard | 93.0% | 91.9% | **93.2%** | 92.3% | 89.8% | 90.2% | 88.0% | 91.2% | 91.9% | 91.2% | 90.9% | 89.5% | 88.9% | 89.9% | 91.1% | 87.8% | 91.8% | 88.7% | 28.8% |
-| **T17** circuit-debugger | reason/hard | 86.0% | 86.9% | 85.3% | 84.5% | 92.2% | 86.6% | 87.3% | 83.7% | 90.3% | 73.3% | 89.7% | 70.3% | 84.8% | **93.6%** | 88.9% | 88.1% | 92.2% | 40.4%\* | 25.6% |
-| **T18** beam-splitter | reason/hard | **95.3%** | 90.2% | 93.2% | 90.0% | 80.1% | 93.9% | 93.2% | 91.9% | 94.3% | 94.0% | 77.0% | 75.3% | 75.2% | 95.3% | 69.2% | 59.0% | 40.0%‖ | 20.0%\* | 39.0% |
-| **T19** factory-reset | reason/hard | 93.1% | 92.3% | 87.0% | 85.4% | 86.0% | 91.0% | 91.7% | 88.2% | 89.5% | 88.9% | 89.2% | 73.7% | **92.8%** | 78.8% | 78.6% | 68.2% | 20.0%‖ | 20.0%\* | 39.2% |
-| **Mean** | | **89.9%** | 89.7% | 88.8% | 88.2% | 88.1% | 88.1% | 87.9% | 87.8% | 87.8% | 87.0% | 86.0% | 84.8% | 83.7% | 82.5% | 77.0% | 74.9% | 69.4% | 62.9% | 45.2% |
-| **Avg Cost** | | $0.77 | $3.19 | $1.94 | $2.55 | $3.93 | $1.43 | $1.48 | $2.01 | $1.78 | $0.80 | $1.49 | $0.12 | $1.09 | $1.57 | $1.33 | $1.06 | $0.46 | $0.53 | $0.00 |
+| Task | Category | SR Sonnet | TDD Opus | Brstm Opus | Gas Town | Agent Tm | SR Opus | Stacked | BMAD | v6 Opus | v6 Sonnet | Superpowers | GSD | Metacog | Gemini | Vanilla | Gas Stn | Amp Opus | TDD Sonnet | Cerebras CLI | Aider Cerebras |
+|------|----------|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **T12** constraint-scheduler | algo/hard | 90.4% | 91.8% | **93.4%** | 90.5% | 88.4%¶ | 81.0% | 91.3% | 83.8% | 76.5%† | 87.8% | 73.7% | 92.6% | 75.9% | 90.1% | 60.0% | 74.4% | 76.6%‖ | 81.3% | 58.5% | 52.0% |
+| **T13** structural-merge | algo/hard | 91.0% | 89.0% | **93.3%** | 85.5% | 89.4% | 90.1% | 90.2% | 90.0% | 93.0% | 89.9% | 91.2% | 91.6% | 75.0% | 66.6% | 59.0% | 58.5% | 56.4%‖ | 88.2% | 24.6% | 32.2% |
+| **T14** financial-ledger | correct/hard | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% |
+| **T15** permission-maze | ambig/hard | 70.8% | 75.3% | 65.2% | 77.7% | **78.6%** | 67.0%‡ | 61.2% | 73.6% | 66.8% | 70.7% | 76.6% | 76.7% | 67.8%‡ | 63.9% | 69.6% | 62.9% | 78.3% | 64.3% | 66.2% | 44.5% |
+| **T16** reactive-spreadsheet | algo/hard | 93.0% | 91.9% | **93.2%** | 92.3% | 89.8% | 90.2% | 88.0% | 91.2% | 91.9% | 91.2% | 90.9% | 89.5% | 88.9% | 89.9% | 91.1% | 87.8% | 91.8% | 88.7% | 89.4% | 28.8% |
+| **T17** circuit-debugger | reason/hard | 86.0% | 86.9% | 85.3% | 84.5% | 92.2% | 86.6% | 87.3% | 83.7% | 90.3% | 73.3% | 89.7% | 70.3% | 84.8% | **93.6%** | 88.9% | 88.1% | 92.2% | 40.4%\* | 31.2% | 25.6% |
+| **T18** beam-splitter | reason/hard | **95.3%** | 90.2% | 93.2% | 90.0% | 80.1% | 93.9% | 93.2% | 91.9% | 94.3% | 94.0% | 77.0% | 75.3% | 75.2% | 95.3% | 69.2% | 59.0% | 40.0%‖ | 20.0%\* | 20.0% | 39.0% |
+| **T19** factory-reset | reason/hard | 93.1% | 92.3% | 87.0% | 85.4% | 86.0% | 91.0% | 91.7% | 88.2% | 89.5% | 88.9% | 89.2% | 73.7% | **92.8%** | 78.8% | 78.6% | 68.2% | 20.0%‖ | 20.0%\* | 84.9% | 39.2% |
+| **Mean** | | **89.9%** | 89.7% | 88.8% | 88.2% | 88.1% | 88.1% | 87.9% | 87.8% | 87.8% | 87.0% | 86.0% | 84.8% | 83.7% | 82.5% | 77.0% | 74.9% | 69.4% | 62.9% | 59.3% | 45.2% |
+| **Avg Cost** | | $0.77 | $3.19 | $1.94 | $2.55 | $3.93 | $1.43 | $1.48 | $2.01 | $1.78 | $0.80 | $1.49 | $0.12 | $1.09 | $1.57 | $1.33 | $1.06 | $0.46 | $0.53 | $0.00 | $0.00 |
 
 \*TDD Sonnet crashed on 5 of 6 reasoning/hard trials ($0.00 cost, <3s duration). The non-crashing T17 trial scored 60.8%.
 †v6 Opus T12 trial 1 had a validation container hang (hidden_tests=0); trial 2 scored 94.7%.
@@ -958,6 +960,7 @@ The framework tests five hypotheses:
 | **Verify (Sonnet)** | Claude Code Sonnet + verification skill | Sonnet + verification — 81.5% standard at $0.72/task |
 | **Claude Code Headless** | Claude Code `-p` mode without skills | Headless baseline — no interactive user, no plugins |
 | **Amplifier + ts-dev** | Amplifier + TypeScript bundle | LSP code intelligence, TS expert agent |
+| **Cerebras CLI** | cerebras-cli (OpenCode fork) + gpt-oss-120b | Full agentic tool use (read/write/bash/glob) via Cerebras inference; direct API routing bypasses OpenCode proxy |
 | **Aider (Cerebras)** | Aider + Cerebras gpt-oss-120b | Open-weight 120B MoE via Cerebras inference (~3K tok/s); single-pass diff edits |
 
 See [`docs/survey/orchestrator-survey.md`](docs/survey/orchestrator-survey.md) for the full gene matrix and per-tool analysis.
