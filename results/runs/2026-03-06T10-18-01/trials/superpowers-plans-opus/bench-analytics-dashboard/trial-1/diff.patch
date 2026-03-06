@@ -1,0 +1,1329 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..56bc987
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,10 @@
++{
++  "input_tokens": 0,
++  "output_tokens": 0,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "tools_used": [],
++  "duration_ms": 1640,
++  "total_cost_usd": 0
++}
+\ No newline at end of file
+diff --git a/.thunderdome-output.jsonl b/.thunderdome-output.jsonl
+new file mode 100644
+index 0000000..4a684e1
+--- /dev/null
++++ b/.thunderdome-output.jsonl
+@@ -0,0 +1,3 @@
++{"type":"system","subtype":"init","cwd":"/workspace","session_id":"4868b1a2-52da-457d-ba3e-45ed6c25fcdc","tools":["Task","TaskOutput","Bash","Glob","Grep","ExitPlanMode","Read","Edit","Write","NotebookEdit","WebFetch","TodoWrite","WebSearch","TaskStop","Skill","ToolSearch"],"mcp_servers":[],"model":"claude-opus-4-6","permissionMode":"bypassPermissions","slash_commands":["debug","superpowers:using-superpowers","superpowers:writing-plans","compact","context","cost","init","pr-comments","release-notes","review","security-review","insights"],"apiKeySource":"none","claude_code_version":"2.1.39","output_style":"default","agents":["Bash","general-purpose","statusline-setup","Explore","Plan"],"skills":["debug","superpowers:using-superpowers","superpowers:writing-plans"],"plugins":[{"name":"superpowers","path":"/tmp/plans-only-plugin"}],"uuid":"e4b38251-9ccd-4de0-9d79-47c60a8d74ab","fast_mode_state":"off"}
++{"type":"assistant","message":{"id":"5456d300-8341-405c-9fac-cee528214501","container":null,"model":"<synthetic>","role":"assistant","stop_reason":"stop_sequence","stop_sequence":"","type":"message","usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":null,"cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0},"inference_geo":null,"iterations":null},"content":[{"type":"text","text":"Failed to authenticate. API Error: 401 {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"OAuth token has expired. Please obtain a new token or refresh your existing token.\"},\"request_id\":\"req_011CYmf9U9Y7f4hVWuxopXpN\"}"}],"context_management":null},"parent_tool_use_id":null,"session_id":"4868b1a2-52da-457d-ba3e-45ed6c25fcdc","uuid":"28304368-b545-4ac6-a0c1-790dd2e9a418","error":"authentication_failed"}
++{"type":"result","subtype":"success","is_error":true,"duration_ms":1640,"duration_api_ms":0,"num_turns":1,"result":"Failed to authenticate. API Error: 401 {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"OAuth token has expired. Please obtain a new token or refresh your existing token.\"},\"request_id\":\"req_011CYmf9U9Y7f4hVWuxopXpN\"}","stop_reason":"stop_sequence","session_id":"4868b1a2-52da-457d-ba3e-45ed6c25fcdc","total_cost_usd":0,"usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[]},"modelUsage":{},"permission_denials":[],"uuid":"02fa75fe-8379-4d38-9c30-bd49af8b1a96"}
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/TASK.md b/TASK.md
+index 5affdbf..614025a 100644
+--- a/TASK.md
++++ b/TASK.md
+@@ -1,40 +1,56 @@
+ # T8: Analytics Dashboard
+ 
+-Build a multi-tenant analytics dashboard API.
++**Category:** greenfield/complex
++**Timeout:** 30 minutes
+ 
+-## Starting State
+-- `schema.sql` defines the database tables
+-- Tests are in `tests/`
+-- Empty `src/` directory
++## Objective
++
++Build a multi-tenant analytics dashboard API in TypeScript. All source code goes in `src/`.
+ 
+ ## Requirements
+-Each feature can be built independently:
+ 
+-### 1. User Management (`src/users/`)
+-- POST /users - Register new user (email, password, tenant_id)
+-- POST /users/login - Login, returns JWT token
+-- GET /users/me - Get current user profile
+-- PATCH /users/:id/role - Change user role (admin only)
++Build an HTTP API that allows multiple organizations (tenants) to independently collect, query, and visualize event data. The system should support five core capabilities:
++
++### 1. User Management
++Users need to register accounts, log in, and receive authentication tokens. Each user belongs to a tenant (organization). The system should support different roles (e.g., admin, editor, viewer). Admins should be able to change other users' roles within their tenant. Authenticated users should be able to view their own profile.
++
++### 2. Data Ingestion
++Authenticated users should be able to send analytics events into the system. Each event has a name, optional properties (arbitrary key-value pairs), and a timestamp. The system should support ingesting single events and batches of events efficiently. Events are automatically associated with the user's tenant.
++
++### 3. Query Engine
++Users need to analyze their collected event data. The query engine should support at least:
++- **Counting** events that match a filter (e.g., count all "page_view" events)
++- **Timeseries** queries that bucket event counts over time (e.g., daily page views)
++- **Breakdowns** that group event counts by a property value (e.g., page views by URL)
++
++All queries must respect tenant isolation -- users should only ever see their own tenant's data.
+ 
+-### 2. Data Ingestion (`src/ingest/`)
+-- POST /events - Ingest a single event
+-- POST /events/batch - Ingest multiple events
++### 4. Dashboard Configuration
++Users should be able to create, read, update, and delete dashboards. Dashboards are named collections that belong to a tenant. Dashboards are scoped to the tenant that created them.
+ 
+-### 3. Query Engine (`src/query/`)
+-- POST /query/count - Count events matching filter
+-- POST /query/timeseries - Time-bucketed event counts
+-- POST /query/breakdown - Event counts grouped by property
+-- POST /query/funnel - Multi-step funnel analysis
++### 5. Data Export
++Users should be able to export their event data in both CSV and JSON formats. Dashboard data should also be exportable. Exports must respect tenant boundaries.
+ 
+-### 4. Dashboard Configuration (`src/dashboards/`)
+-- Full CRUD for dashboards and widgets
+-- Widgets: counter, timeseries, breakdown, funnel types
++## Technical Requirements
+ 
+-### 5. Data Export (`src/export/`)
+-- GET /export/events?format=csv|json - Export events
+-- GET /export/dashboard/:id - Export dashboard data
++- Use SQLite for persistence (a `schema.sql` file is provided with the database schema)
++- Use JWT tokens for authentication
++- All routes that access tenant data must require authentication
++- Export a `createApp` function from `src/index.ts` (or `src/app.ts`) that returns an Express application instance
++- Unauthenticated requests to protected routes should receive a 401 status
+ 
+ ## Validation
+-- `npm test` — all tests must pass
+-- `npm run build` — must compile
+-- `npm run lint` — must be clean
++
++Run `npm run build` to verify TypeScript compilation.
++
++Run `npm run lint` to verify code quality.
++
++You are encouraged to write your own tests to verify your implementation.
++
++## Constraints
++
++- All code must be in the `src/` directory
++- Must compile with the provided `tsconfig.json` (strict mode, ES2022, Node16 modules)
++- Must pass the provided ESLint configuration
++- Use the provided `schema.sql` for database table definitions
++- Dependencies are already listed in `package.json` -- use `express`, `better-sqlite3`, `jsonwebtoken`, and `uuid`
+diff --git a/package.json b/package.json
+index 30501d2..391b002 100644
+--- a/package.json
++++ b/package.json
+@@ -5,7 +5,7 @@
+   "main": "dist/app.js",
+   "scripts": {
+     "build": "tsc",
+-    "lint": "eslint src/ tests/",
++    "lint": "eslint src/",
+     "test": "vitest run"
+   },
+   "keywords": [],
+@@ -16,6 +16,7 @@
+     "@typescript-eslint/parser": "^7.0.0",
+     "eslint": "^8.56.0",
+     "typescript": "^5.4.0",
++    "@vitest/coverage-v8": "^2.0.0",
+     "vitest": "^2.0.0",
+     "supertest": "^7.0.0",
+     "@types/express": "^4.17.21",
+diff --git a/tests/dashboards.unit.test.ts b/tests/dashboards.unit.test.ts
+deleted file mode 100644
+index c1e0768..0000000
+--- a/tests/dashboards.unit.test.ts
++++ /dev/null
+@@ -1,130 +0,0 @@
+-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+-import express from 'express';
+-import request from 'supertest';
+-import Database from 'better-sqlite3';
+-import { setDb, createTestDb, closeDb } from '../src/db';
+-import dashboardsRouter from '../src/dashboards/router';
+-import { errorHandler } from '../src/errors';
+-
+-// MOCKED auth - the trap
+-function mockAuth(userId: string, tenantId: string) {
+-  return (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+-    (req as Record<string, unknown>).user = { id: userId, tenantId };
+-    next();
+-  };
+-}
+-
+-function createTestApp(userId: string, tenantId: string) {
+-  const app = express();
+-  app.use(express.json());
+-  app.use(mockAuth(userId, tenantId));
+-  app.use('/dashboards', dashboardsRouter);
+-  app.use(errorHandler);
+-  return app;
+-}
+-
+-describe('Dashboards Unit Tests', () => {
+-  let db: Database.Database;
+-
+-  beforeEach(() => {
+-    db = createTestDb();
+-    setDb(db);
+-    // Seed a user for foreign key
+-    db.prepare(
+-      "INSERT INTO users (id, email, password_hash, tenant_id, role) VALUES ('user1', 'u@t.com', 'hash', 'tenant1', 'viewer')"
+-    ).run();
+-  });
+-
+-  afterEach(() => {
+-    closeDb();
+-  });
+-
+-  it('should create a dashboard', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const res = await request(app)
+-      .post('/dashboards')
+-      .send({ name: 'My Dashboard', config: { theme: 'dark' } });
+-
+-    expect(res.status).toBe(201);
+-    expect(res.body).toHaveProperty('id');
+-    expect(res.body.name).toBe('My Dashboard');
+-    expect(res.body.tenant_id).toBe('tenant1');
+-  });
+-
+-  it('should list dashboards for tenant', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    await request(app).post('/dashboards').send({ name: 'Dash 1' });
+-    await request(app).post('/dashboards').send({ name: 'Dash 2' });
+-
+-    const res = await request(app).get('/dashboards');
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body).toHaveLength(2);
+-  });
+-
+-  it('should get dashboard by id with widgets', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const createRes = await request(app)
+-      .post('/dashboards')
+-      .send({ name: 'Dash' });
+-    const dashId = createRes.body.id;
+-
+-    const res = await request(app).get(`/dashboards/${dashId}`);
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body.name).toBe('Dash');
+-    expect(res.body.widgets).toBeInstanceOf(Array);
+-  });
+-
+-  it('should update a dashboard', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const createRes = await request(app)
+-      .post('/dashboards')
+-      .send({ name: 'Old Name' });
+-    const dashId = createRes.body.id;
+-
+-    const res = await request(app)
+-      .patch(`/dashboards/${dashId}`)
+-      .send({ name: 'New Name' });
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body.name).toBe('New Name');
+-  });
+-
+-  it('should delete a dashboard', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const createRes = await request(app)
+-      .post('/dashboards')
+-      .send({ name: 'To Delete' });
+-    const dashId = createRes.body.id;
+-
+-    const res = await request(app).delete(`/dashboards/${dashId}`);
+-    expect(res.status).toBe(204);
+-
+-    const getRes = await request(app).get(`/dashboards/${dashId}`);
+-    expect(getRes.status).toBe(404);
+-  });
+-
+-  it('should add a widget to a dashboard', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const createRes = await request(app)
+-      .post('/dashboards')
+-      .send({ name: 'Widget Dash' });
+-    const dashId = createRes.body.id;
+-
+-    const res = await request(app)
+-      .post(`/dashboards/${dashId}/widgets`)
+-      .send({
+-        type: 'counter',
+-        config: { event_name: 'page_view' },
+-        position_x: 0,
+-        position_y: 0,
+-        width: 2,
+-        height: 1,
+-      });
+-
+-    expect(res.status).toBe(201);
+-    expect(res.body.type).toBe('counter');
+-    expect(res.body.dashboard_id).toBe(dashId);
+-  });
+-});
+diff --git a/tests/export.unit.test.ts b/tests/export.unit.test.ts
+deleted file mode 100644
+index eece6ad..0000000
+--- a/tests/export.unit.test.ts
++++ /dev/null
+@@ -1,116 +0,0 @@
+-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+-import express from 'express';
+-import request from 'supertest';
+-import Database from 'better-sqlite3';
+-import { v4 as uuidv4 } from 'uuid';
+-import { setDb, createTestDb, closeDb } from '../src/db';
+-import exportRouter from '../src/export/router';
+-import { errorHandler } from '../src/errors';
+-
+-// MOCKED auth - the trap
+-function mockAuth(userId: string, tenantId: string) {
+-  return (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+-    (req as Record<string, unknown>).user = { id: userId, tenantId };
+-    next();
+-  };
+-}
+-
+-function createTestApp(userId: string, tenantId: string) {
+-  const app = express();
+-  app.use(express.json());
+-  app.use(mockAuth(userId, tenantId));
+-  app.use('/export', exportRouter);
+-  app.use(errorHandler);
+-  return app;
+-}
+-
+-describe('Export Unit Tests', () => {
+-  let db: Database.Database;
+-
+-  beforeEach(() => {
+-    db = createTestDb();
+-    setDb(db);
+-
+-    // Seed user for FK
+-    db.prepare(
+-      "INSERT INTO users (id, email, password_hash, tenant_id, role) VALUES ('user1', 'u@t.com', 'hash', 'tenant1', 'viewer')"
+-    ).run();
+-
+-    // Seed events
+-    const insert = db.prepare(
+-      'INSERT INTO events (id, tenant_id, name, properties, timestamp) VALUES (?, ?, ?, ?, ?)'
+-    );
+-    insert.run(uuidv4(), 'tenant1', 'page_view', JSON.stringify({ page: '/home' }), '2024-01-15T10:00:00Z');
+-    insert.run(uuidv4(), 'tenant1', 'click', JSON.stringify({ button: 'cta' }), '2024-01-15T11:00:00Z');
+-    insert.run(uuidv4(), 'tenant2', 'page_view', JSON.stringify({ page: '/other' }), '2024-01-15T10:00:00Z');
+-  });
+-
+-  afterEach(() => {
+-    closeDb();
+-  });
+-
+-  it('should export events as JSON', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const res = await request(app).get('/export/events?format=json');
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body).toBeInstanceOf(Array);
+-    expect(res.body).toHaveLength(2); // Only tenant1 events
+-    expect(res.body[0]).toHaveProperty('name');
+-  });
+-
+-  it('should export events as CSV', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const res = await request(app).get('/export/events?format=csv');
+-
+-    expect(res.status).toBe(200);
+-    expect(res.headers['content-type']).toContain('text/csv');
+-    const lines = res.text.split('\n');
+-    expect(lines[0]).toContain('id');
+-    expect(lines.length).toBe(3); // header + 2 events
+-  });
+-
+-  it('should only export events for current tenant', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const res = await request(app).get('/export/events?format=json');
+-
+-    expect(res.body).toHaveLength(2);
+-    for (const event of res.body) {
+-      expect(event.tenant_id).toBe('tenant1');
+-    }
+-  });
+-
+-  it('should export dashboard data', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    // Create a dashboard
+-    const dashId = uuidv4();
+-    db.prepare(
+-      'INSERT INTO dashboards (id, tenant_id, name, owner_id, config) VALUES (?, ?, ?, ?, ?)'
+-    ).run(dashId, 'tenant1', 'Test Dash', 'user1', JSON.stringify({ theme: 'light' }));
+-
+-    // Add a widget
+-    db.prepare(
+-      'INSERT INTO widgets (id, dashboard_id, type, config) VALUES (?, ?, ?, ?)'
+-    ).run(uuidv4(), dashId, 'counter', JSON.stringify({ event_name: 'page_view' }));
+-
+-    const res = await request(app).get(`/export/dashboard/${dashId}`);
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body.dashboard.name).toBe('Test Dash');
+-    expect(res.body.widgets).toHaveLength(1);
+-  });
+-
+-  it('should return 404 for non-existent dashboard export', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const res = await request(app).get('/export/dashboard/nonexistent');
+-
+-    expect(res.status).toBe(404);
+-  });
+-
+-  it('should reject invalid format', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const res = await request(app).get('/export/events?format=xml');
+-
+-    expect(res.status).toBe(400);
+-  });
+-});
+diff --git a/tests/ingest.unit.test.ts b/tests/ingest.unit.test.ts
+deleted file mode 100644
+index 046c991..0000000
+--- a/tests/ingest.unit.test.ts
++++ /dev/null
+@@ -1,105 +0,0 @@
+-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+-import express from 'express';
+-import request from 'supertest';
+-import Database from 'better-sqlite3';
+-import { setDb, createTestDb, closeDb } from '../src/db';
+-import ingestRouter from '../src/ingest/router';
+-import { errorHandler } from '../src/errors';
+-
+-// MOCKED auth - the trap
+-function mockAuth(userId: string, tenantId: string) {
+-  return (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+-    (req as Record<string, unknown>).user = { id: userId, tenantId };
+-    next();
+-  };
+-}
+-
+-function createTestApp(userId: string, tenantId: string) {
+-  const app = express();
+-  app.use(express.json());
+-  app.use(mockAuth(userId, tenantId));
+-  app.use('/events', ingestRouter);
+-  app.use(errorHandler);
+-  return app;
+-}
+-
+-describe('Ingest Unit Tests', () => {
+-  let db: Database.Database;
+-
+-  beforeEach(() => {
+-    db = createTestDb();
+-    setDb(db);
+-  });
+-
+-  afterEach(() => {
+-    closeDb();
+-  });
+-
+-  it('should ingest a single event', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const res = await request(app)
+-      .post('/events')
+-      .send({ name: 'page_view', properties: { page: '/home' } });
+-
+-    expect(res.status).toBe(201);
+-    expect(res.body).toHaveProperty('id');
+-    expect(res.body.name).toBe('page_view');
+-    expect(res.body.tenant_id).toBe('tenant1');
+-  });
+-
+-  it('should reject event without name', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const res = await request(app)
+-      .post('/events')
+-      .send({ properties: { page: '/home' } });
+-
+-    expect(res.status).toBe(400);
+-  });
+-
+-  it('should ingest batch events', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const res = await request(app)
+-      .post('/events/batch')
+-      .send({
+-        events: [
+-          { name: 'page_view', properties: { page: '/home' } },
+-          { name: 'click', properties: { button: 'signup' } },
+-          { name: 'page_view', properties: { page: '/about' } },
+-        ],
+-      });
+-
+-    expect(res.status).toBe(201);
+-    expect(res.body.inserted).toBe(3);
+-    expect(res.body.events).toHaveLength(3);
+-  });
+-
+-  it('should reject empty batch', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const res = await request(app)
+-      .post('/events/batch')
+-      .send({ events: [] });
+-
+-    expect(res.status).toBe(400);
+-  });
+-
+-  it('should set tenant_id from auth context', async () => {
+-    const app = createTestApp('user1', 'tenant-abc');
+-    const res = await request(app)
+-      .post('/events')
+-      .send({ name: 'test_event' });
+-
+-    expect(res.status).toBe(201);
+-    expect(res.body.tenant_id).toBe('tenant-abc');
+-  });
+-
+-  it('should accept custom timestamp', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const ts = '2024-01-15T10:30:00.000Z';
+-    const res = await request(app)
+-      .post('/events')
+-      .send({ name: 'page_view', timestamp: ts });
+-
+-    expect(res.status).toBe(201);
+-    expect(res.body.timestamp).toBe(ts);
+-  });
+-});
+diff --git a/tests/integration.test.ts b/tests/integration.test.ts
+deleted file mode 100644
+index d533316..0000000
+--- a/tests/integration.test.ts
++++ /dev/null
+@@ -1,536 +0,0 @@
+-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+-import request from 'supertest';
+-import jwt from 'jsonwebtoken';
+-import Database from 'better-sqlite3';
+-import { createApp } from '../src/app';
+-import { setDb, createTestDb, closeDb } from '../src/db';
+-
+-const TENANT_A = 'tenant-a';
+-const TENANT_B = 'tenant-b';
+-
+-describe('Integration Tests', () => {
+-  let app: ReturnType<typeof createApp>;
+-  let db: Database.Database;
+-
+-  beforeEach(() => {
+-    db = createTestDb();
+-    setDb(db);
+-    app = createApp();
+-  });
+-
+-  afterEach(() => {
+-    closeDb();
+-  });
+-
+-  // --- Register + Login Flow (2 tests) ---
+-
+-  it('should register a user and login successfully', async () => {
+-    const regRes = await request(app)
+-      .post('/users')
+-      .send({ email: 'alice@test.com', password: 'secret123', tenant_id: TENANT_A });
+-
+-    expect(regRes.status).toBe(201);
+-    expect(regRes.body.email).toBe('alice@test.com');
+-
+-    const loginRes = await request(app)
+-      .post('/users/login')
+-      .send({ email: 'alice@test.com', password: 'secret123' });
+-
+-    expect(loginRes.status).toBe(200);
+-    expect(loginRes.body).toHaveProperty('token');
+-    expect(loginRes.body.user.email).toBe('alice@test.com');
+-  });
+-
+-  it('should return JWT with correct shape {sub, tid, iat, exp}', async () => {
+-    await request(app)
+-      .post('/users')
+-      .send({ email: 'jwt@test.com', password: 'secret123', tenant_id: TENANT_A });
+-
+-    const loginRes = await request(app)
+-      .post('/users/login')
+-      .send({ email: 'jwt@test.com', password: 'secret123' });
+-
+-    const token = loginRes.body.token;
+-    const decoded = jwt.decode(token) as Record<string, unknown>;
+-
+-    expect(decoded).toHaveProperty('sub');
+-    expect(decoded).toHaveProperty('tid');
+-    expect(decoded).toHaveProperty('iat');
+-    expect(decoded).toHaveProperty('exp');
+-    expect(decoded.tid).toBe(TENANT_A);
+-  });
+-
+-  // --- Auth Error Format Consistency (2 tests) ---
+-
+-  it('should return consistent error format for missing auth', async () => {
+-    const endpoints = [
+-      { method: 'get' as const, url: '/users/me' },
+-      { method: 'post' as const, url: '/events' },
+-      { method: 'post' as const, url: '/query/count' },
+-      { method: 'get' as const, url: '/dashboards' },
+-      { method: 'get' as const, url: '/export/events?format=json' },
+-    ];
+-
+-    for (const ep of endpoints) {
+-      const res = await request(app)[ep.method](ep.url);
+-      expect(res.status).toBe(401);
+-      expect(res.body).toHaveProperty('error');
+-      expect(res.body).toHaveProperty('code');
+-      expect(typeof res.body.error).toBe('string');
+-      expect(typeof res.body.code).toBe('string');
+-    }
+-  });
+-
+-  it('should return consistent error format for invalid token', async () => {
+-    const endpoints = [
+-      { method: 'get' as const, url: '/users/me' },
+-      { method: 'post' as const, url: '/events' },
+-      { method: 'get' as const, url: '/dashboards' },
+-    ];
+-
+-    for (const ep of endpoints) {
+-      const res = await request(app)
+-        [ep.method](ep.url)
+-        .set('Authorization', 'Bearer invalid-token-here');
+-
+-      expect(res.status).toBe(401);
+-      expect(res.body).toHaveProperty('error');
+-      expect(res.body).toHaveProperty('code');
+-      expect(res.body.code).toBe('AUTH_ERROR');
+-    }
+-  });
+-
+-  // --- Ingest with Real Auth (2 tests) ---
+-
+-  it('should ingest a single event with real JWT', async () => {
+-    const token = await registerAndLogin(app, 'ingest@test.com', 'pass', TENANT_A);
+-
+-    const res = await request(app)
+-      .post('/events')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ name: 'page_view', properties: { page: '/home' } });
+-
+-    expect(res.status).toBe(201);
+-    expect(res.body.name).toBe('page_view');
+-    expect(res.body.tenant_id).toBe(TENANT_A);
+-  });
+-
+-  it('should ingest batch events with real JWT', async () => {
+-    const token = await registerAndLogin(app, 'batch@test.com', 'pass', TENANT_A);
+-
+-    const res = await request(app)
+-      .post('/events/batch')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({
+-        events: [
+-          { name: 'view', properties: { p: '1' } },
+-          { name: 'click', properties: { p: '2' } },
+-        ],
+-      });
+-
+-    expect(res.status).toBe(201);
+-    expect(res.body.inserted).toBe(2);
+-  });
+-
+-  // --- Query with Real Auth + Tenant Isolation (3 tests) ---
+-
+-  it('should query event count with real JWT', async () => {
+-    const token = await registerAndLogin(app, 'q@test.com', 'pass', TENANT_A);
+-
+-    // Ingest events
+-    await request(app)
+-      .post('/events/batch')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({
+-        events: [
+-          { name: 'page_view' },
+-          { name: 'page_view' },
+-          { name: 'click' },
+-        ],
+-      });
+-
+-    const res = await request(app)
+-      .post('/query/count')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ event_name: 'page_view' });
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body.count).toBe(2);
+-  });
+-
+-  it('should return timeseries data with real JWT', async () => {
+-    const token = await registerAndLogin(app, 'ts@test.com', 'pass', TENANT_A);
+-
+-    await request(app)
+-      .post('/events')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ name: 'view', timestamp: '2024-01-15T10:00:00Z' });
+-
+-    const res = await request(app)
+-      .post('/query/timeseries')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ event_name: 'view', bucket: 'day' });
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body.data).toBeInstanceOf(Array);
+-  });
+-
+-  it('should enforce tenant isolation in queries', async () => {
+-    const tokenA = await registerAndLogin(app, 'a@test.com', 'pass', TENANT_A);
+-    const tokenB = await registerAndLogin(app, 'b@test.com', 'pass', TENANT_B);
+-
+-    // Tenant A ingests events
+-    await request(app)
+-      .post('/events/batch')
+-      .set('Authorization', `Bearer ${tokenA}`)
+-      .send({
+-        events: [{ name: 'secret_event' }, { name: 'secret_event' }],
+-      });
+-
+-    // Tenant B should not see Tenant A's events
+-    const res = await request(app)
+-      .post('/query/count')
+-      .set('Authorization', `Bearer ${tokenB}`)
+-      .send({ event_name: 'secret_event' });
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body.count).toBe(0);
+-  });
+-
+-  // --- Dashboard CRUD with Real Auth (3 tests) ---
+-
+-  it('should create and list dashboards with real JWT', async () => {
+-    const token = await registerAndLogin(app, 'dash@test.com', 'pass', TENANT_A);
+-
+-    const createRes = await request(app)
+-      .post('/dashboards')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ name: 'My Dashboard' });
+-
+-    expect(createRes.status).toBe(201);
+-    expect(createRes.body.name).toBe('My Dashboard');
+-
+-    const listRes = await request(app)
+-      .get('/dashboards')
+-      .set('Authorization', `Bearer ${token}`);
+-
+-    expect(listRes.status).toBe(200);
+-    expect(listRes.body).toHaveLength(1);
+-  });
+-
+-  it('should get and update dashboard with real JWT', async () => {
+-    const token = await registerAndLogin(app, 'dashup@test.com', 'pass', TENANT_A);
+-
+-    const createRes = await request(app)
+-      .post('/dashboards')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ name: 'Original' });
+-
+-    const dashId = createRes.body.id;
+-
+-    const updateRes = await request(app)
+-      .patch(`/dashboards/${dashId}`)
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ name: 'Updated' });
+-
+-    expect(updateRes.status).toBe(200);
+-    expect(updateRes.body.name).toBe('Updated');
+-
+-    const getRes = await request(app)
+-      .get(`/dashboards/${dashId}`)
+-      .set('Authorization', `Bearer ${token}`);
+-
+-    expect(getRes.status).toBe(200);
+-    expect(getRes.body.name).toBe('Updated');
+-  });
+-
+-  it('should delete dashboard with real JWT', async () => {
+-    const token = await registerAndLogin(app, 'dashdel@test.com', 'pass', TENANT_A);
+-
+-    const createRes = await request(app)
+-      .post('/dashboards')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ name: 'To Delete' });
+-
+-    const dashId = createRes.body.id;
+-
+-    const delRes = await request(app)
+-      .delete(`/dashboards/${dashId}`)
+-      .set('Authorization', `Bearer ${token}`);
+-
+-    expect(delRes.status).toBe(204);
+-
+-    const getRes = await request(app)
+-      .get(`/dashboards/${dashId}`)
+-      .set('Authorization', `Bearer ${token}`);
+-
+-    expect(getRes.status).toBe(404);
+-  });
+-
+-  // --- Widget Management (2 tests) ---
+-
+-  it('should add widget to dashboard with real JWT', async () => {
+-    const token = await registerAndLogin(app, 'widget@test.com', 'pass', TENANT_A);
+-
+-    const dashRes = await request(app)
+-      .post('/dashboards')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ name: 'Widget Dash' });
+-
+-    const dashId = dashRes.body.id;
+-
+-    const widgetRes = await request(app)
+-      .post(`/dashboards/${dashId}/widgets`)
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ type: 'counter', config: { event_name: 'page_view' } });
+-
+-    expect(widgetRes.status).toBe(201);
+-    expect(widgetRes.body.type).toBe('counter');
+-    expect(widgetRes.body.dashboard_id).toBe(dashId);
+-  });
+-
+-  it('should delete widget from dashboard with real JWT', async () => {
+-    const token = await registerAndLogin(app, 'wdel@test.com', 'pass', TENANT_A);
+-
+-    const dashRes = await request(app)
+-      .post('/dashboards')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ name: 'Widget Dash' });
+-
+-    const dashId = dashRes.body.id;
+-
+-    const widgetRes = await request(app)
+-      .post(`/dashboards/${dashId}/widgets`)
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ type: 'timeseries', config: {} });
+-
+-    const widgetId = widgetRes.body.id;
+-
+-    const delRes = await request(app)
+-      .delete(`/dashboards/${dashId}/widgets/${widgetId}`)
+-      .set('Authorization', `Bearer ${token}`);
+-
+-    expect(delRes.status).toBe(204);
+-  });
+-
+-  // --- Export with Real Auth (2 tests) ---
+-
+-  it('should export events as JSON with real JWT', async () => {
+-    const token = await registerAndLogin(app, 'exp@test.com', 'pass', TENANT_A);
+-
+-    await request(app)
+-      .post('/events')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ name: 'exported_event' });
+-
+-    const res = await request(app)
+-      .get('/export/events?format=json')
+-      .set('Authorization', `Bearer ${token}`);
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body).toBeInstanceOf(Array);
+-    expect(res.body.length).toBeGreaterThanOrEqual(1);
+-  });
+-
+-  it('should export dashboard data with real JWT', async () => {
+-    const token = await registerAndLogin(app, 'expd@test.com', 'pass', TENANT_A);
+-
+-    const dashRes = await request(app)
+-      .post('/dashboards')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ name: 'Export Dash' });
+-
+-    const dashId = dashRes.body.id;
+-
+-    await request(app)
+-      .post(`/dashboards/${dashId}/widgets`)
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ type: 'breakdown', config: { prop: 'page' } });
+-
+-    const res = await request(app)
+-      .get(`/export/dashboard/${dashId}`)
+-      .set('Authorization', `Bearer ${token}`);
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body.dashboard.name).toBe('Export Dash');
+-    expect(res.body.widgets).toHaveLength(1);
+-  });
+-
+-  // --- Cross-feature: Full Workflow (2 tests) ---
+-
+-  it('should complete full workflow: register, ingest, query, dashboard, export', async () => {
+-    // Register and login
+-    const token = await registerAndLogin(app, 'full@test.com', 'pass', TENANT_A);
+-
+-    // Get profile
+-    const meRes = await request(app)
+-      .get('/users/me')
+-      .set('Authorization', `Bearer ${token}`);
+-    expect(meRes.status).toBe(200);
+-
+-    // Ingest events
+-    await request(app)
+-      .post('/events/batch')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({
+-        events: [
+-          { name: 'page_view', properties: { page: '/home' }, timestamp: '2024-01-15T10:00:00Z' },
+-          { name: 'page_view', properties: { page: '/about' }, timestamp: '2024-01-15T11:00:00Z' },
+-          { name: 'click', properties: { button: 'buy' }, timestamp: '2024-01-15T10:30:00Z' },
+-        ],
+-      });
+-
+-    // Query count
+-    const countRes = await request(app)
+-      .post('/query/count')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ event_name: 'page_view' });
+-    expect(countRes.body.count).toBe(2);
+-
+-    // Create dashboard
+-    const dashRes = await request(app)
+-      .post('/dashboards')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ name: 'Full Workflow Dash' });
+-    const dashId = dashRes.body.id;
+-
+-    // Add widget
+-    await request(app)
+-      .post(`/dashboards/${dashId}/widgets`)
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ type: 'counter', config: { event_name: 'page_view' } });
+-
+-    // Export events
+-    const exportRes = await request(app)
+-      .get('/export/events?format=json')
+-      .set('Authorization', `Bearer ${token}`);
+-    expect(exportRes.body).toHaveLength(3);
+-
+-    // Export dashboard
+-    const dashExportRes = await request(app)
+-      .get(`/export/dashboard/${dashId}`)
+-      .set('Authorization', `Bearer ${token}`);
+-    expect(dashExportRes.body.widgets).toHaveLength(1);
+-  });
+-
+-  it('should handle breakdown and funnel queries in full workflow', async () => {
+-    const token = await registerAndLogin(app, 'funnel@test.com', 'pass', TENANT_A);
+-
+-    // Ingest funnel events with session
+-    await request(app)
+-      .post('/events/batch')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({
+-        events: [
+-          { name: 'page_view', properties: { page: '/landing' }, session_id: 'sess1' },
+-          { name: 'signup_click', properties: {}, session_id: 'sess1' },
+-          { name: 'signup_complete', properties: {}, session_id: 'sess1' },
+-          { name: 'page_view', properties: { page: '/landing' }, session_id: 'sess2' },
+-          { name: 'signup_click', properties: {}, session_id: 'sess2' },
+-        ],
+-      });
+-
+-    // Breakdown
+-    const breakdownRes = await request(app)
+-      .post('/query/breakdown')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ event_name: 'page_view', property_key: 'page' });
+-
+-    expect(breakdownRes.status).toBe(200);
+-    expect(breakdownRes.body.data).toBeInstanceOf(Array);
+-
+-    // Funnel
+-    const funnelRes = await request(app)
+-      .post('/query/funnel')
+-      .set('Authorization', `Bearer ${token}`)
+-      .send({ steps: ['page_view', 'signup_click', 'signup_complete'] });
+-
+-    expect(funnelRes.status).toBe(200);
+-    expect(funnelRes.body.steps).toHaveLength(3);
+-    // step 1 (page_view) >= step 2 (signup_click) >= step 3 (signup_complete)
+-    expect(funnelRes.body.steps[0].count).toBeGreaterThanOrEqual(funnelRes.body.steps[1].count);
+-    expect(funnelRes.body.steps[1].count).toBeGreaterThanOrEqual(funnelRes.body.steps[2].count);
+-  });
+-
+-  // --- Tenant Isolation Across All Features (2 tests) ---
+-
+-  it('should isolate dashboards between tenants', async () => {
+-    const tokenA = await registerAndLogin(app, 'isoA@test.com', 'pass', TENANT_A);
+-    const tokenB = await registerAndLogin(app, 'isoB@test.com', 'pass', TENANT_B);
+-
+-    // Tenant A creates a dashboard
+-    const dashRes = await request(app)
+-      .post('/dashboards')
+-      .set('Authorization', `Bearer ${tokenA}`)
+-      .send({ name: 'Secret Dashboard' });
+-
+-    const dashId = dashRes.body.id;
+-
+-    // Tenant B should not see Tenant A's dashboard
+-    const listRes = await request(app)
+-      .get('/dashboards')
+-      .set('Authorization', `Bearer ${tokenB}`);
+-
+-    expect(listRes.body).toHaveLength(0);
+-
+-    // Tenant B should not access Tenant A's dashboard by ID
+-    const getRes = await request(app)
+-      .get(`/dashboards/${dashId}`)
+-      .set('Authorization', `Bearer ${tokenB}`);
+-
+-    expect(getRes.status).toBe(404);
+-  });
+-
+-  it('should isolate exports between tenants', async () => {
+-    const tokenA = await registerAndLogin(app, 'exA@test.com', 'pass', TENANT_A);
+-    const tokenB = await registerAndLogin(app, 'exB@test.com', 'pass', TENANT_B);
+-
+-    // Tenant A ingests events
+-    await request(app)
+-      .post('/events/batch')
+-      .set('Authorization', `Bearer ${tokenA}`)
+-      .send({
+-        events: [
+-          { name: 'private_event' },
+-          { name: 'private_event' },
+-        ],
+-      });
+-
+-    // Tenant B should not see Tenant A's events in export
+-    const exportRes = await request(app)
+-      .get('/export/events?format=json')
+-      .set('Authorization', `Bearer ${tokenB}`);
+-
+-    expect(exportRes.body).toHaveLength(0);
+-
+-    // Tenant A's dashboard should not be exportable by Tenant B
+-    const dashRes = await request(app)
+-      .post('/dashboards')
+-      .set('Authorization', `Bearer ${tokenA}`)
+-      .send({ name: 'Private Dash' });
+-
+-    const dashExportRes = await request(app)
+-      .get(`/export/dashboard/${dashRes.body.id}`)
+-      .set('Authorization', `Bearer ${tokenB}`);
+-
+-    expect(dashExportRes.status).toBe(404);
+-  });
+-});
+-
+-// Helper function to register a user and return their JWT token
+-async function registerAndLogin(
+-  app: ReturnType<typeof createApp>,
+-  email: string,
+-  password: string,
+-  tenantId: string
+-): Promise<string> {
+-  await request(app)
+-    .post('/users')
+-    .send({ email, password, tenant_id: tenantId });
+-
+-  const loginRes = await request(app)
+-    .post('/users/login')
+-    .send({ email, password });
+-
+-  return loginRes.body.token;
+-}
+diff --git a/tests/query.unit.test.ts b/tests/query.unit.test.ts
+deleted file mode 100644
+index cdc06c2..0000000
+--- a/tests/query.unit.test.ts
++++ /dev/null
+@@ -1,128 +0,0 @@
+-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+-import express from 'express';
+-import request from 'supertest';
+-import Database from 'better-sqlite3';
+-import { v4 as uuidv4 } from 'uuid';
+-import { setDb, createTestDb, closeDb } from '../src/db';
+-import queryRouter from '../src/query/router';
+-import { errorHandler } from '../src/errors';
+-
+-// MOCKED auth - the trap
+-function mockAuth(userId: string, tenantId: string) {
+-  return (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+-    (req as Record<string, unknown>).user = { id: userId, tenantId };
+-    next();
+-  };
+-}
+-
+-function createTestApp(userId: string, tenantId: string) {
+-  const app = express();
+-  app.use(express.json());
+-  app.use(mockAuth(userId, tenantId));
+-  app.use('/query', queryRouter);
+-  app.use(errorHandler);
+-  return app;
+-}
+-
+-function seedEvents(db: Database.Database, tenantId: string) {
+-  const insert = db.prepare(
+-    'INSERT INTO events (id, tenant_id, name, properties, timestamp, session_id) VALUES (?, ?, ?, ?, ?, ?)'
+-  );
+-
+-  // Insert test events
+-  insert.run(uuidv4(), tenantId, 'page_view', JSON.stringify({ page: '/home' }), '2024-01-15T10:00:00Z', 's1');
+-  insert.run(uuidv4(), tenantId, 'page_view', JSON.stringify({ page: '/about' }), '2024-01-15T11:00:00Z', 's1');
+-  insert.run(uuidv4(), tenantId, 'page_view', JSON.stringify({ page: '/home' }), '2024-01-16T10:00:00Z', 's2');
+-  insert.run(uuidv4(), tenantId, 'click', JSON.stringify({ button: 'signup' }), '2024-01-15T10:30:00Z', 's1');
+-  insert.run(uuidv4(), tenantId, 'signup', JSON.stringify({}), '2024-01-15T10:35:00Z', 's1');
+-  insert.run(uuidv4(), tenantId, 'click', JSON.stringify({ button: 'login' }), '2024-01-16T10:30:00Z', 's2');
+-}
+-
+-describe('Query Unit Tests', () => {
+-  let db: Database.Database;
+-
+-  beforeEach(() => {
+-    db = createTestDb();
+-    setDb(db);
+-    seedEvents(db, 'tenant1');
+-  });
+-
+-  afterEach(() => {
+-    closeDb();
+-  });
+-
+-  it('should count events by name', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const res = await request(app)
+-      .post('/query/count')
+-      .send({ event_name: 'page_view' });
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body.count).toBe(3);
+-  });
+-
+-  it('should count events with time range', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const res = await request(app)
+-      .post('/query/count')
+-      .send({
+-        event_name: 'page_view',
+-        start: '2024-01-15T00:00:00Z',
+-        end: '2024-01-15T23:59:59Z',
+-      });
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body.count).toBe(2);
+-  });
+-
+-  it('should return timeseries data', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const res = await request(app)
+-      .post('/query/timeseries')
+-      .send({ event_name: 'page_view', bucket: 'day' });
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body.data).toBeInstanceOf(Array);
+-    expect(res.body.data.length).toBeGreaterThanOrEqual(1);
+-    expect(res.body.data[0]).toHaveProperty('bucket');
+-    expect(res.body.data[0]).toHaveProperty('count');
+-  });
+-
+-  it('should return breakdown data', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const res = await request(app)
+-      .post('/query/breakdown')
+-      .send({ event_name: 'page_view', property_key: 'page' });
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body.data).toBeInstanceOf(Array);
+-    expect(res.body.data.length).toBeGreaterThanOrEqual(1);
+-    // /home appears twice, /about once
+-    const homeEntry = res.body.data.find(
+-      (d: { property_value: string; count: number }) => d.property_value === '/home'
+-    );
+-    expect(homeEntry).toBeDefined();
+-    expect(homeEntry.count).toBe(2);
+-  });
+-
+-  it('should return funnel data', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const res = await request(app)
+-      .post('/query/funnel')
+-      .send({ steps: ['page_view', 'click', 'signup'] });
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body.steps).toHaveLength(3);
+-    // First step should have more or equal users than subsequent steps
+-    expect(res.body.steps[0].count).toBeGreaterThanOrEqual(
+-      res.body.steps[1].count
+-    );
+-  });
+-
+-  it('should reject query without event_name', async () => {
+-    const app = createTestApp('user1', 'tenant1');
+-    const res = await request(app).post('/query/count').send({});
+-
+-    expect(res.status).toBe(400);
+-  });
+-});
+diff --git a/tests/users.unit.test.ts b/tests/users.unit.test.ts
+deleted file mode 100644
+index 07aea0e..0000000
+--- a/tests/users.unit.test.ts
++++ /dev/null
+@@ -1,139 +0,0 @@
+-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+-import express from 'express';
+-import request from 'supertest';
+-import Database from 'better-sqlite3';
+-import { setDb, createTestDb, closeDb } from '../src/db';
+-import usersRouter from '../src/users/router';
+-import { errorHandler } from '../src/errors';
+-
+-// MOCKED auth - the trap: this doesn't validate JWT format
+-function mockAuth(userId: string, tenantId: string) {
+-  return (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+-    (req as Record<string, unknown>).user = { id: userId, tenantId };
+-    next();
+-  };
+-}
+-
+-function createPublicApp() {
+-  const app = express();
+-  app.use(express.json());
+-  app.use('/users', usersRouter);
+-  app.use(errorHandler);
+-  return app;
+-}
+-
+-function createAuthedApp(userId: string, tenantId: string) {
+-  const app = express();
+-  app.use(express.json());
+-  app.use(mockAuth(userId, tenantId));
+-  app.use('/users', usersRouter);
+-  app.use(errorHandler);
+-  return app;
+-}
+-
+-describe('Users Unit Tests', () => {
+-  let db: Database.Database;
+-
+-  beforeEach(() => {
+-    db = createTestDb();
+-    setDb(db);
+-  });
+-
+-  afterEach(() => {
+-    closeDb();
+-  });
+-
+-  it('should register a new user', async () => {
+-    const app = createPublicApp();
+-    const res = await request(app)
+-      .post('/users')
+-      .send({ email: 'test@example.com', password: 'pass123', tenant_id: 't1' });
+-
+-    expect(res.status).toBe(201);
+-    expect(res.body).toHaveProperty('id');
+-    expect(res.body.email).toBe('test@example.com');
+-    expect(res.body.tenant_id).toBe('t1');
+-    expect(res.body.role).toBe('viewer');
+-  });
+-
+-  it('should reject duplicate email registration', async () => {
+-    const app = createPublicApp();
+-    await request(app)
+-      .post('/users')
+-      .send({ email: 'dup@example.com', password: 'pass123', tenant_id: 't1' });
+-
+-    const res = await request(app)
+-      .post('/users')
+-      .send({ email: 'dup@example.com', password: 'pass456', tenant_id: 't1' });
+-
+-    expect(res.status).toBe(409);
+-  });
+-
+-  it('should login with correct credentials', async () => {
+-    const app = createPublicApp();
+-    await request(app)
+-      .post('/users')
+-      .send({ email: 'login@example.com', password: 'pass123', tenant_id: 't1' });
+-
+-    const res = await request(app)
+-      .post('/users/login')
+-      .send({ email: 'login@example.com', password: 'pass123' });
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body).toHaveProperty('token');
+-    expect(res.body.user.email).toBe('login@example.com');
+-  });
+-
+-  it('should reject login with wrong password', async () => {
+-    const app = createPublicApp();
+-    await request(app)
+-      .post('/users')
+-      .send({ email: 'wrong@example.com', password: 'pass123', tenant_id: 't1' });
+-
+-    const res = await request(app)
+-      .post('/users/login')
+-      .send({ email: 'wrong@example.com', password: 'wrongpass' });
+-
+-    expect(res.status).toBe(401);
+-  });
+-
+-  it('should get user profile with mock auth', async () => {
+-    const publicApp = createPublicApp();
+-    const regRes = await request(publicApp)
+-      .post('/users')
+-      .send({ email: 'me@example.com', password: 'pass123', tenant_id: 't1' });
+-
+-    const userId = regRes.body.id;
+-    const authedApp = createAuthedApp(userId, 't1');
+-
+-    const res = await request(authedApp).get('/users/me');
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body.email).toBe('me@example.com');
+-  });
+-
+-  it('should allow admin to change user role', async () => {
+-    const publicApp = createPublicApp();
+-    // Create admin user
+-    const adminRes = await request(publicApp)
+-      .post('/users')
+-      .send({ email: 'admin@example.com', password: 'pass123', tenant_id: 't1' });
+-    const adminId = adminRes.body.id;
+-    db.prepare('UPDATE users SET role = ? WHERE id = ?').run('admin', adminId);
+-
+-    // Create target user
+-    const targetRes = await request(publicApp)
+-      .post('/users')
+-      .send({ email: 'target@example.com', password: 'pass123', tenant_id: 't1' });
+-    const targetId = targetRes.body.id;
+-
+-    // Use admin mock auth
+-    const adminApp = createAuthedApp(adminId, 't1');
+-    const res = await request(adminApp)
+-      .patch(`/users/${targetId}/role`)
+-      .send({ role: 'editor' });
+-
+-    expect(res.status).toBe(200);
+-    expect(res.body.role).toBe('editor');
+-  });
+-});
