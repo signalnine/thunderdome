@@ -1,0 +1,326 @@
+diff --git a/.runtime/agent.lock b/.runtime/agent.lock
+new file mode 100644
+index 0000000..cb167ac
+--- /dev/null
++++ b/.runtime/agent.lock
+@@ -0,0 +1,6 @@
++{
++  "pid": 877,
++  "acquired_at": "2026-03-06T05:29:12.948094095Z",
++  "session_id": "bench/rust",
++  "hostname": "5095b1964c89"
++}
+\ No newline at end of file
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..65918ac
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,17 @@
++{
++  "input_tokens": 23,
++  "output_tokens": 8120,
++  "cache_read_tokens": 525038,
++  "cache_creation_tokens": 13254,
++  "turns": 24,
++  "tools_used": [
++    "Task",
++    "Bash",
++    "Read",
++    "Glob",
++    "TodoWrite",
++    "Write"
++  ],
++  "duration_ms": 194479,
++  "total_cost_usd": 0.5920759000000001
++}
+\ No newline at end of file
+diff --git a/package-lock.json b/package-lock.json
+index 02b0dae..222cd7d 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.test.ts b/src/index.test.ts
+new file mode 100644
+index 0000000..20ccf0e
+--- /dev/null
++++ b/src/index.test.ts
+@@ -0,0 +1,96 @@
++import { describe, it, expect } from 'vitest';
++import { countBeamCells, countBeamPaths } from './index.js';
++
++describe('countBeamCells', () => {
++  it('example 1: single splitter', () => {
++    const grid = [
++      ['.', 'S', '.', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++      ['.', '^', '.', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++    ];
++    expect(countBeamCells(grid)).toBe(5);
++  });
++
++  it('example 2: two splitters in cascade', () => {
++    const grid = [
++      ['.', 'S', '.', '.', '.'],
++      ['.', '^', '.', '.', '.'],
++      ['^', '.', '^', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++    ];
++    expect(countBeamCells(grid)).toBe(6);
++  });
++
++  it('no splitters: straight beam', () => {
++    const grid = [
++      ['S'],
++      ['.'],
++      ['.'],
++    ];
++    expect(countBeamCells(grid)).toBe(3);
++  });
++
++  it('beam exits left boundary', () => {
++    const grid = [
++      ['S', '.'],
++      ['^', '.'],
++      ['.', '.'],
++    ];
++    // Beam at (0,0) down to (1,0) hits splitter.
++    // left: (2,-1) OOB, right: (2,1) in bounds.
++    // Visited: (0,0), (1,0), (2,1) = 3
++    expect(countBeamCells(grid)).toBe(3);
++  });
++
++  it('source only grid', () => {
++    const grid = [['S']];
++    expect(countBeamCells(grid)).toBe(1);
++  });
++});
++
++describe('countBeamPaths', () => {
++  it('example 1: single splitter', () => {
++    const grid = [
++      ['.', 'S', '.', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++      ['.', '^', '.', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++    ];
++    expect(countBeamPaths(grid)).toBe(2n);
++  });
++
++  it('example 2: two splitters in cascade', () => {
++    const grid = [
++      ['.', 'S', '.', '.', '.'],
++      ['.', '^', '.', '.', '.'],
++      ['^', '.', '^', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++    ];
++    expect(countBeamPaths(grid)).toBe(4n);
++  });
++
++  it('no splitters: straight beam', () => {
++    const grid = [
++      ['S'],
++      ['.'],
++      ['.'],
++    ];
++    expect(countBeamPaths(grid)).toBe(1n);
++  });
++
++  it('source only grid', () => {
++    const grid = [['S']];
++    expect(countBeamPaths(grid)).toBe(1n);
++  });
++
++  it('beam exits left boundary', () => {
++    const grid = [
++      ['S', '.'],
++      ['^', '.'],
++      ['.', '.'],
++    ];
++    // Splitter at (1,0): left goes OOB (1 path), right (2,1) exits bottom (1 path)
++    expect(countBeamPaths(grid)).toBe(2n);
++  });
++});
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..09e1cf9
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,129 @@
++type Direction = 0 | 1 | 2; // 0=down, 1=down-left, 2=down-right
++
++function findSource(grid: string[][]): number {
++  for (let col = 0; col < grid[0].length; col++) {
++    if (grid[0][col] === 'S') return col;
++  }
++  return -1;
++}
++
++function nextCol(col: number, dir: Direction): number {
++  if (dir === 0) return col;
++  if (dir === 1) return col - 1;
++  return col + 1;
++}
++
++export function countBeamCells(grid: string[][]): number {
++  if (grid.length === 0 || grid[0].length === 0) return 0;
++
++  const rows = grid.length;
++  const cols = grid[0].length;
++  const sourceCol = findSource(grid);
++  if (sourceCol < 0) return 0;
++
++  const visited = new Set<number>(); // row * cols + col
++
++  // Track active beams as a map of (col, dir) -> present
++  // Use a key: col * 3 + dir
++  let current = new Map<number, boolean>();
++  current.set(sourceCol * 3 + 0, true); // start going down
++  visited.add(0 * cols + sourceCol); // source cell visited
++
++  for (let row = 0; row < rows; row++) {
++    const next = new Map<number, boolean>();
++
++    for (const [key] of current) {
++      const col = (key / 3) | 0;
++      const dir = (key % 3) as Direction;
++
++      if (grid[row][col] === '^') {
++        // Split into down-left and down-right
++        const nlc = col - 1;
++        const nrc = col + 1;
++        const nr = row + 1;
++
++        if (nr < rows && nlc >= 0 && nlc < cols) {
++          visited.add(nr * cols + nlc);
++          next.set(nlc * 3 + 1, true);
++        }
++        if (nr < rows && nrc >= 0 && nrc < cols) {
++          visited.add(nr * cols + nrc);
++          next.set(nrc * 3 + 2, true);
++        }
++      } else {
++        // Continue in current direction
++        const nc = nextCol(col, dir);
++        const nr = row + 1;
++        if (nr < rows && nc >= 0 && nc < cols) {
++          visited.add(nr * cols + nc);
++          next.set(nc * 3 + dir, true);
++        }
++      }
++    }
++
++    current = next;
++  }
++
++  return visited.size;
++}
++
++export function countBeamPaths(grid: string[][]): bigint {
++  if (grid.length === 0 || grid[0].length === 0) return 0n;
++
++  const rows = grid.length;
++  const cols = grid[0].length;
++  const sourceCol = findSource(grid);
++  if (sourceCol < 0) return 0n;
++
++  let totalPaths = 0n;
++
++  // Track active beams as a map of (col, dir) -> path count
++  let current = new Map<number, bigint>();
++  current.set(sourceCol * 3 + 0, 1n);
++
++  for (let row = 0; row < rows; row++) {
++    const next = new Map<number, bigint>();
++
++    for (const [key, paths] of current) {
++      const col = (key / 3) | 0;
++      const dir = (key % 3) as Direction;
++
++      if (grid[row][col] === '^') {
++        const nlc = col - 1;
++        const nrc = col + 1;
++        const nr = row + 1;
++
++        if (nr < rows && nlc >= 0 && nlc < cols) {
++          const nk = nlc * 3 + 1;
++          next.set(nk, (next.get(nk) ?? 0n) + paths);
++        } else {
++          totalPaths += paths;
++        }
++        if (nr < rows && nrc >= 0 && nrc < cols) {
++          const nk = nrc * 3 + 2;
++          next.set(nk, (next.get(nk) ?? 0n) + paths);
++        } else {
++          totalPaths += paths;
++        }
++      } else {
++        const nc = nextCol(col, dir);
++        const nr = row + 1;
++        if (nr < rows && nc >= 0 && nc < cols) {
++          const nk = nc * 3 + dir;
++          next.set(nk, (next.get(nk) ?? 0n) + paths);
++        } else {
++          totalPaths += paths;
++        }
++      }
++    }
++
++    current = next;
++  }
++
++  // Any beams still active after the last row exit the grid
++  for (const [, paths] of current) {
++    totalPaths += paths;
++  }
++
++  return totalPaths;
++}

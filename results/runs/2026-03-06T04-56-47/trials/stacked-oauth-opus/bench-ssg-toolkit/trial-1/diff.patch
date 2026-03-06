@@ -1,0 +1,477 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..956992d
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,18 @@
++{
++  "input_tokens": 24,
++  "output_tokens": 9388,
++  "cache_read_tokens": 783636,
++  "cache_creation_tokens": 35807,
++  "turns": 36,
++  "tools_used": [
++    "Skill",
++    "Task",
++    "Bash",
++    "Read",
++    "TodoWrite",
++    "Write",
++    "Glob"
++  ],
++  "duration_ms": 379942,
++  "total_cost_usd": 1.5568022499999994
++}
+\ No newline at end of file
+diff --git a/package-lock.json b/package-lock.json
+index 1ad5780..9aa4811 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1098,7 +1098,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1391,7 +1390,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1917,7 +1915,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3765,7 +3762,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3814,7 +3810,6 @@
+       "integrity": "sha512-o5a9xKjbtuhY6Bi5S3+HvbRERmouabWbyUcpXXUA1u+GNUKoROi9byOJ8M0nHbHYHkYICiMlqxkg1KkYmm25Sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "esbuild": "^0.21.3",
+         "postcss": "^8.4.43",
+diff --git a/src/plugins/asset-pipeline.ts b/src/plugins/asset-pipeline.ts
+new file mode 100644
+index 0000000..9a8473c
+--- /dev/null
++++ b/src/plugins/asset-pipeline.ts
+@@ -0,0 +1,43 @@
++import type { Plugin, ContentFile, BuildContext } from '../core/types.js';
++
++export function createAssetPipelinePlugin(): Plugin {
++  return {
++    name: 'asset-pipeline',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      transformContent(file: ContentFile, ctx: BuildContext): ContentFile {
++        const assets: string[] = [];
++
++        // Rewrite relative src="./..." in img tags
++        let content = file.content.replace(
++          /src="\.\/([^"]+)"/g,
++          (_match, filename: string) => {
++            assets.push(filename);
++            return `src="/assets/${filename}"`;
++          }
++        );
++
++        // Rewrite relative href="./..." in a tags
++        content = content.replace(
++          /href="\.\/([^"]+)"/g,
++          (_match, filename: string) => {
++            assets.push(filename);
++            return `href="/assets/${filename}"`;
++          }
++        );
++
++        // Update or create asset manifest in ctx.data
++        const existing = ctx.data.get('asset-manifest') as { assets: string[] } | undefined;
++        if (existing) {
++          const allAssets = new Set([...existing.assets, ...assets]);
++          ctx.data.set('asset-manifest', { assets: Array.from(allAssets) });
++        } else if (assets.length > 0) {
++          ctx.data.set('asset-manifest', { assets: [...new Set(assets)] });
++        }
++
++        return { ...file, content };
++      },
++    },
++  };
++}
+diff --git a/src/plugins/dev-server.ts b/src/plugins/dev-server.ts
+new file mode 100644
+index 0000000..cdcde4a
+--- /dev/null
++++ b/src/plugins/dev-server.ts
+@@ -0,0 +1,47 @@
++import type { Plugin, BuildContext } from '../core/types.js';
++
++interface Route {
++  path: string;
++  handler: string;
++}
++
++export function createDevServerPlugin(): Plugin {
++  return {
++    name: 'dev-server',
++    version: '1.0.0',
++    dependencies: ['asset-pipeline', 'search-index'],
++    hooks: {
++      afterBuild(ctx: BuildContext): void {
++        const routes: Route[] = [];
++
++        // Add static content routes for HTML files
++        for (const path of ctx.output.keys()) {
++          if (path.endsWith('.html')) {
++            routes.push({ path: `/${path}`, handler: 'static' });
++          }
++        }
++
++        // Add asset routes from asset-pipeline manifest
++        const manifest = ctx.data.get('asset-manifest') as { assets: string[] } | undefined;
++        const assetPaths: string[] = manifest ? [...manifest.assets] : [];
++
++        for (const asset of assetPaths) {
++          routes.push({ path: `/assets/${asset}`, handler: 'asset' });
++        }
++
++        // Add search index route if present
++        const searchIndexPath = '/search-index.json';
++        if (ctx.output.has('search-index.json')) {
++          routes.push({ path: searchIndexPath, handler: 'json' });
++        }
++
++        ctx.data.set('dev-server-config', {
++          port: 3000,
++          routes,
++          assetPaths,
++          searchIndexPath,
++        });
++      },
++    },
++  };
++}
+diff --git a/src/plugins/markdown-ext.ts b/src/plugins/markdown-ext.ts
+new file mode 100644
+index 0000000..7f26c2e
+--- /dev/null
++++ b/src/plugins/markdown-ext.ts
+@@ -0,0 +1,83 @@
++import type { Plugin, ContentFile, BuildContext } from '../core/types.js';
++
++export function createMarkdownExtPlugin(): Plugin {
++  return {
++    name: 'markdown-ext',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      transformContent(file: ContentFile, _ctx: BuildContext): ContentFile {
++        let content = file.content;
++
++        // Process admonition containers before markdown conversion
++        // :::type\ncontent\n:::
++        content = content.replace(
++          /^:::(note|warning|tip)\n([\s\S]*?)^:::/gm,
++          (_match, type: string, body: string) => {
++            return `<div class="admonition admonition-${type}">\n${body.trim()}\n</div>`;
++          }
++        );
++
++        // Extract footnote definitions [^N]: text
++        const footnoteDefRegex = /^\[\^(\d+)\]:\s*(.+)$/gm;
++        const footnotes: Map<string, string> = new Map();
++        let match: RegExpExecArray | null;
++        while ((match = footnoteDefRegex.exec(content)) !== null) {
++          footnotes.set(match[1], match[2]);
++        }
++        // Remove footnote definitions from content
++        content = content.replace(/^\[\^(\d+)\]:\s*(.+)$/gm, '');
++
++        // Replace footnote references [^N] with sup links
++        content = content.replace(/\[\^(\d+)\]/g, (_m, id: string) => {
++          return `<sup><a href="#fn-${id}">${id}</a></sup>`;
++        });
++
++        // Convert basic markdown to HTML
++        // Headers: # H1, ## H2, etc.
++        content = content.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>');
++        content = content.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>');
++        content = content.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>');
++        content = content.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
++        content = content.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
++        content = content.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
++
++        // Bold: **text**
++        content = content.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
++
++        // Italic: *text*
++        content = content.replace(/\*(.+?)\*/g, '<em>$1</em>');
++
++        // Paragraphs: wrap non-empty, non-HTML lines in <p> tags
++        const lines = content.split('\n');
++        const processedLines: string[] = [];
++        for (const line of lines) {
++          const trimmed = line.trim();
++          if (
++            trimmed === '' ||
++            trimmed.startsWith('<') ||
++            trimmed.startsWith('#')
++          ) {
++            processedLines.push(line);
++          } else {
++            processedLines.push(`<p>${trimmed}</p>`);
++          }
++        }
++        content = processedLines.join('\n');
++
++        // Clean up empty lines
++        content = content.replace(/\n{3,}/g, '\n\n').trim();
++
++        // Append footnotes section if any
++        if (footnotes.size > 0) {
++          const items = Array.from(footnotes.entries())
++            .map(([id, text]) => `<li id="fn-${id}">${text}</li>`)
++            .join('\n');
++          content += `\n<section class="footnotes">\n<ol>\n${items}\n</ol>\n</section>`;
++        }
++
++        return { ...file, content };
++      },
++    },
++  };
++}
+diff --git a/src/plugins/rss-feed.ts b/src/plugins/rss-feed.ts
+new file mode 100644
+index 0000000..b7f8dbc
+--- /dev/null
++++ b/src/plugins/rss-feed.ts
+@@ -0,0 +1,53 @@
++import type { Plugin, BuildContext } from '../core/types.js';
++
++export function createRssFeedPlugin(): Plugin {
++  return {
++    name: 'rss-feed',
++    version: '1.0.0',
++    dependencies: ['markdown-ext', 'taxonomy'],
++    hooks: {
++      afterBuild(ctx: BuildContext): void {
++        const { config, files } = ctx;
++
++        // Sort files by date, newest first; files without dates go last
++        const sorted = [...files].sort((a, b) => {
++          if (!a.date && !b.date) return 0;
++          if (!a.date) return 1;
++          if (!b.date) return -1;
++          return new Date(b.date).getTime() - new Date(a.date).getTime();
++        });
++
++        const items = sorted.map(file => {
++          const link = `${config.baseUrl}/${file.slug}.html`;
++          const description = `<description><![CDATA[${file.content}]]></description>`;
++          const pubDate = file.date ? `<pubDate>${new Date(file.date).toUTCString()}</pubDate>` : '';
++
++          // Include category tags if present
++          const categories = (file.tags || [])
++            .map(tag => `<category>${tag}</category>`)
++            .join('\n      ');
++
++          return `    <item>
++      <title>${file.title}</title>
++      <link>${link}</link>
++      ${description}
++      ${pubDate}
++      ${categories}
++    </item>`;
++        }).join('\n');
++
++        const feed = `<?xml version="1.0" encoding="UTF-8"?>
++<rss version="2.0">
++  <channel>
++    <title>${config.title}</title>
++    <link>${config.baseUrl}</link>
++    <description>${config.title} RSS Feed</description>
++${items}
++  </channel>
++</rss>`;
++
++        ctx.output.set('feed.xml', feed);
++      },
++    },
++  };
++}
+diff --git a/src/plugins/search-index.ts b/src/plugins/search-index.ts
+new file mode 100644
+index 0000000..1e11b49
+--- /dev/null
++++ b/src/plugins/search-index.ts
+@@ -0,0 +1,32 @@
++import type { Plugin, BuildContext } from '../core/types.js';
++
++function stripHtml(html: string): string {
++  return html.replace(/<[^>]*>/g, '').trim();
++}
++
++export function createSearchIndexPlugin(): Plugin {
++  return {
++    name: 'search-index',
++    version: '1.0.0',
++    dependencies: ['markdown-ext', 'syntax-highlight'],
++    hooks: {
++      afterBuild(ctx: BuildContext): void {
++        const index = ctx.files.map(file => {
++          const entry: Record<string, unknown> = {
++            slug: file.slug,
++            title: file.title,
++            content: stripHtml(file.content),
++          };
++
++          if (file.tags && file.tags.length > 0) {
++            entry.tags = file.tags;
++          }
++
++          return entry;
++        });
++
++        ctx.output.set('search-index.json', JSON.stringify(index));
++      },
++    },
++  };
++}
+diff --git a/src/plugins/sitemap.ts b/src/plugins/sitemap.ts
+new file mode 100644
+index 0000000..95a62c0
+--- /dev/null
++++ b/src/plugins/sitemap.ts
+@@ -0,0 +1,32 @@
++import type { Plugin, BuildContext } from '../core/types.js';
++
++export function createSitemapPlugin(): Plugin {
++  return {
++    name: 'sitemap',
++    version: '1.0.0',
++    dependencies: ['taxonomy', 'rss-feed'],
++    hooks: {
++      afterBuild(ctx: BuildContext): void {
++        const { config, output } = ctx;
++        const urls: string[] = [];
++
++        // Include all existing output pages (except sitemap itself)
++        for (const path of output.keys()) {
++          if (path === 'sitemap.xml') continue;
++          urls.push(`${config.baseUrl}/${path}`);
++        }
++
++        const urlEntries = urls
++          .map(url => `  <url>\n    <loc>${url}</loc>\n  </url>`)
++          .join('\n');
++
++        const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
++<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
++${urlEntries}
++</urlset>`;
++
++        ctx.output.set('sitemap.xml', sitemap);
++      },
++    },
++  };
++}
+diff --git a/src/plugins/syntax-highlight.ts b/src/plugins/syntax-highlight.ts
+new file mode 100644
+index 0000000..63d1830
+--- /dev/null
++++ b/src/plugins/syntax-highlight.ts
+@@ -0,0 +1,22 @@
++import type { Plugin, ContentFile, BuildContext } from '../core/types.js';
++
++export function createSyntaxHighlightPlugin(): Plugin {
++  return {
++    name: 'syntax-highlight',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      transformContent(file: ContentFile, _ctx: BuildContext): ContentFile {
++        // Match <pre><code class="language-XXX">...</code></pre> blocks
++        const content = file.content.replace(
++          /<pre><code class="language-(\w+)">([\s\S]*?)<\/code><\/pre>/g,
++          (_match, lang: string, code: string) => {
++            return `<pre data-language="${lang}"><code class="language-${lang} highlighted">${code}</code></pre>`;
++          }
++        );
++
++        return { ...file, content };
++      },
++    },
++  };
++}
+diff --git a/src/plugins/taxonomy.ts b/src/plugins/taxonomy.ts
+new file mode 100644
+index 0000000..4350c72
+--- /dev/null
++++ b/src/plugins/taxonomy.ts
+@@ -0,0 +1,48 @@
++import type { Plugin, ContentFile, BuildContext } from '../core/types.js';
++
++export function createTaxonomyPlugin(): Plugin {
++  return {
++    name: 'taxonomy',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      beforeBuild(ctx: BuildContext): void {
++        const tagMap = new Map<string, ContentFile[]>();
++
++        for (const file of ctx.files) {
++          if (!file.tags || file.tags.length === 0) continue;
++          for (const tag of file.tags) {
++            const normalizedTag = tag.toLowerCase();
++            const existing = tagMap.get(normalizedTag) || [];
++            existing.push(file);
++            tagMap.set(normalizedTag, existing);
++          }
++        }
++
++        ctx.data.set('taxonomy-tags', tagMap);
++      },
++
++      afterBuild(ctx: BuildContext): void {
++        const tagMap = ctx.data.get('taxonomy-tags') as Map<string, ContentFile[]> | undefined;
++        if (!tagMap) return;
++
++        for (const [tag, files] of tagMap.entries()) {
++          const fileList = files
++            .map(f => `<li><a href="/${f.slug}.html">${f.title}</a></li>`)
++            .join('\n');
++          const html = `<!DOCTYPE html>
++<html>
++<head><title>Tag: ${tag}</title></head>
++<body>
++<h1>Tag: ${tag}</h1>
++<ul>
++${fileList}
++</ul>
++</body>
++</html>`;
++          ctx.output.set(`tags/${tag}.html`, html);
++        }
++      },
++    },
++  };
++}

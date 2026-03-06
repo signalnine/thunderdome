@@ -1,0 +1,763 @@
+diff --git a/.runtime/agent.lock b/.runtime/agent.lock
+new file mode 100644
+index 0000000..95b94de
+--- /dev/null
++++ b/.runtime/agent.lock
+@@ -0,0 +1,6 @@
++{
++  "pid": 854,
++  "acquired_at": "2026-03-06T05:33:22.405290526Z",
++  "session_id": "bench/rust",
++  "hostname": "f3a0940803b0"
++}
+\ No newline at end of file
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..0e7b4c1
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,18 @@
++{
++  "input_tokens": 28,
++  "output_tokens": 27489,
++  "cache_read_tokens": 1103298,
++  "cache_creation_tokens": 59217,
++  "turns": 34,
++  "tools_used": [
++    "Task",
++    "Bash",
++    "Read",
++    "Glob",
++    "TodoWrite",
++    "Write",
++    "Edit"
++  ],
++  "duration_ms": 478075,
++  "total_cost_usd": 1.6580704000000004
++}
+\ No newline at end of file
+diff --git a/package-lock.json b/package-lock.json
+index 07657bf..1a9db02 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.test.ts b/src/index.test.ts
+new file mode 100644
+index 0000000..cb2201d
+--- /dev/null
++++ b/src/index.test.ts
+@@ -0,0 +1,228 @@
++import { describe, it, expect } from 'vitest';
++import { solveToggle, solveCounter, Machine } from './index.js';
++
++// Helper to verify a toggle solution
++function verifyToggle(machine: Machine, solution: number[] | null): boolean {
++  if (solution === null) return true; // we just check non-null solutions
++  const lights = new Array(machine.target.length).fill(false);
++  for (const btn of solution) {
++    for (const light of machine.buttons[btn]) {
++      lights[light] = !lights[light];
++    }
++  }
++  return machine.target.every((t, i) => t === lights[i]);
++}
++
++// Helper to verify a counter solution
++function verifyCounter(lights: number[], buttons: number[][], modulus: number, solution: number[] | null): boolean {
++  if (solution === null) return true;
++  const counters = new Array(lights.length).fill(0);
++  for (let btn = 0; btn < buttons.length; btn++) {
++    for (const counter of buttons[btn]) {
++      counters[counter] = (counters[counter] + solution[btn]) % modulus;
++    }
++  }
++  return lights.every((t, i) => t === counters[i]);
++}
++
++describe('solveToggle', () => {
++  it('returns empty array when target is all off', () => {
++    const machine: Machine = {
++      target: [false, false, false],
++      buttons: [[0, 1], [1, 2]],
++    };
++    const result = solveToggle(machine);
++    expect(result).toEqual([]);
++  });
++
++  it('returns null when no solution exists', () => {
++    const machine: Machine = {
++      target: [true, true, false, true],
++      buttons: [[0, 1], [1, 2, 3], [0, 3]],
++    };
++    expect(solveToggle(machine)).toBeNull();
++  });
++
++  it('solves a simple single-button case', () => {
++    const machine: Machine = {
++      target: [true, true],
++      buttons: [[0, 1]],
++    };
++    expect(solveToggle(machine)).toEqual([0]);
++  });
++
++  it('solves a two-button case', () => {
++    const machine: Machine = {
++      target: [true, false],
++      buttons: [[0, 1], [1]],
++    };
++    expect(solveToggle(machine)).toEqual([0, 1]);
++  });
++
++  it('returns minimum press count', () => {
++    const machine: Machine = {
++      target: [true, true],
++      buttons: [[0], [1], [0, 1]],
++    };
++    expect(solveToggle(machine)).toEqual([2]);
++  });
++
++  it('returns lexicographically smallest for tied press count', () => {
++    const machine: Machine = {
++      target: [true],
++      buttons: [[0], [0]],
++    };
++    expect(solveToggle(machine)).toEqual([0]);
++  });
++
++  it('handles no buttons with non-zero target', () => {
++    const machine: Machine = {
++      target: [true],
++      buttons: [],
++    };
++    expect(solveToggle(machine)).toBeNull();
++  });
++
++  it('handles no buttons with zero target', () => {
++    const machine: Machine = {
++      target: [false, false],
++      buttons: [],
++    };
++    expect(solveToggle(machine)).toEqual([]);
++  });
++
++  it('handles larger puzzle', () => {
++    const machine: Machine = {
++      target: [true, false, true, false, true],
++      buttons: [[0], [1], [2], [3], [4]],
++    };
++    expect(solveToggle(machine)).toEqual([0, 2, 4]);
++  });
++
++  it('handles overlapping buttons', () => {
++    const machine: Machine = {
++      target: [true, true, true],
++      buttons: [[0, 1, 2], [0], [1], [2]],
++    };
++    expect(solveToggle(machine)).toEqual([0]);
++  });
++
++  it('handles 20 lights and 20 buttons (performance)', () => {
++    // Create an identity-like system with some overlap
++    const n = 20;
++    const buttons: number[][] = [];
++    for (let i = 0; i < n; i++) {
++      buttons.push([i, (i + 1) % n]);
++    }
++    const target = new Array(n).fill(true);
++    const machine: Machine = { target, buttons };
++    const result = solveToggle(machine);
++    if (result !== null) {
++      expect(verifyToggle(machine, result)).toBe(true);
++    }
++  });
++
++  it('handles redundant buttons preferring fewer presses', () => {
++    // 2 lights, 4 buttons, many solutions
++    // Buttons: [0], [1], [0,1], [0]
++    // Target: [T, T]
++    // Solutions: {0,1} (2), {2} (1), {0,3,1} (3)
++    // Best: {2} (1 press)
++    const machine: Machine = {
++      target: [true, true],
++      buttons: [[0], [1], [0, 1], [0]],
++    };
++    expect(solveToggle(machine)).toEqual([2]);
++  });
++
++  it('returns sorted indices', () => {
++    const machine: Machine = {
++      target: [true, true, true],
++      buttons: [[0], [1], [2]],
++    };
++    const result = solveToggle(machine);
++    expect(result).toEqual([0, 1, 2]);
++    // Verify sorted
++    if (result) {
++      for (let i = 1; i < result.length; i++) {
++        expect(result[i]).toBeGreaterThan(result[i - 1]);
++      }
++    }
++  });
++});
++
++describe('solveCounter', () => {
++  it('returns all zeros when target is all zeros', () => {
++    expect(solveCounter([0, 0, 0], [[0, 1], [1, 2]], 5)).toEqual([0, 0]);
++  });
++
++  it('solves a simple single-button case', () => {
++    expect(solveCounter([3, 3], [[0, 1]], 5)).toEqual([3]);
++  });
++
++  it('returns null when no solution exists', () => {
++    expect(solveCounter([1, 1], [[0]], 3)).toBeNull();
++  });
++
++  it('solves with multiple buttons', () => {
++    expect(solveCounter([2, 3], [[0], [1]], 5)).toEqual([2, 3]);
++  });
++
++  it('returns minimum total presses', () => {
++    expect(solveCounter([4], [[0]], 5)).toEqual([4]);
++  });
++
++  it('handles modular arithmetic with lex tie-breaking', () => {
++    // 1 counter, mod 3, target = 1
++    // Button 0: [0], Button 1: [0]
++    // In GF(3): b0 + b1 ≡ 1 (mod 3)
++    // Solutions: (0,1)sum=1, (1,0)sum=1, (2,2)sum=4
++    // Min sum = 1, lex smallest = [0,1]
++    expect(solveCounter([1], [[0], [0]], 3)).toEqual([0, 1]);
++  });
++
++  it('handles no buttons with non-zero target', () => {
++    expect(solveCounter([1], [], 3)).toBeNull();
++  });
++
++  it('handles no buttons with zero target', () => {
++    expect(solveCounter([0, 0], [], 3)).toEqual([]);
++  });
++
++  it('prefers minimum sum', () => {
++    expect(solveCounter([1], [[0]], 7)).toEqual([1]);
++  });
++
++  it('solves counter puzzle with wrapping', () => {
++    expect(solveCounter([0, 1], [[0, 1], [0]], 3)).toEqual([1, 2]);
++  });
++
++  it('handles larger modulus', () => {
++    // mod 97, simple case
++    expect(solveCounter([50], [[0]], 97)).toEqual([50]);
++  });
++
++  it('verifies solution correctness for multi-button case', () => {
++    const lights = [1, 2, 3];
++    const buttons = [[0, 1], [1, 2], [0, 2]];
++    const modulus = 5;
++    const result = solveCounter(lights, buttons, modulus);
++    if (result !== null) {
++      expect(verifyCounter(lights, buttons, modulus, result)).toBe(true);
++    }
++  });
++
++  it('handles 10 counters, 10 buttons, mod 7 (performance)', () => {
++    const n = 10;
++    const buttons: number[][] = [];
++    for (let i = 0; i < n; i++) {
++      buttons.push([i, (i + 1) % n]);
++    }
++    const lights = new Array(n).fill(0).map((_, i) => (i + 1) % 7);
++    const result = solveCounter(lights, buttons, 7);
++    if (result !== null) {
++      expect(verifyCounter(lights, buttons, 7, result)).toBe(true);
++      expect(result.every(v => v >= 0 && v < 7)).toBe(true);
++    }
++  });
++});
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..68a62c2
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,433 @@
++export interface Machine {
++  target: boolean[];
++  buttons: number[][];
++}
++
++/**
++ * Solve a toggle puzzle over GF(2) using Gaussian elimination.
++ * Find minimum set of buttons, then lexicographically smallest among ties.
++ */
++export function solveToggle(machine: Machine): number[] | null {
++  const { target, buttons } = machine;
++  const numLights = target.length;
++  const numButtons = buttons.length;
++
++  // Build augmented matrix over GF(2) using bigint bitmasks for efficient XOR.
++  // Bit layout: bits 0..numButtons-1 are button columns, bit numButtons is the target.
++  const rows: bigint[] = [];
++  for (let light = 0; light < numLights; light++) {
++    let row = 0n;
++    for (let btn = 0; btn < numButtons; btn++) {
++      if (buttons[btn].includes(light)) {
++        row |= 1n << BigInt(btn);
++      }
++    }
++    if (target[light]) {
++      row |= 1n << BigInt(numButtons);
++    }
++    rows.push(row);
++  }
++
++  // Gaussian elimination over GF(2) — full reduced row echelon form
++  const pivotCol: number[] = new Array(numLights).fill(-1);
++  let currentRow = 0;
++
++  for (let col = 0; col < numButtons && currentRow < numLights; col++) {
++    let pivotRow = -1;
++    for (let r = currentRow; r < numLights; r++) {
++      if ((rows[r] >> BigInt(col)) & 1n) {
++        pivotRow = r;
++        break;
++      }
++    }
++    if (pivotRow === -1) continue;
++
++    [rows[currentRow], rows[pivotRow]] = [rows[pivotRow], rows[currentRow]];
++    pivotCol[currentRow] = col;
++
++    for (let r = 0; r < numLights; r++) {
++      if (r !== currentRow && (rows[r] >> BigInt(col)) & 1n) {
++        rows[r] ^= rows[currentRow];
++      }
++    }
++    currentRow++;
++  }
++
++  const rank = currentRow;
++
++  // Check for inconsistency
++  for (let r = rank; r < numLights; r++) {
++    if ((rows[r] >> BigInt(numButtons)) & 1n) {
++      return null;
++    }
++  }
++
++  // Identify free variables
++  const pivotVars = new Set<number>();
++  for (let r = 0; r < rank; r++) {
++    pivotVars.add(pivotCol[r]);
++  }
++
++  const freeVars: number[] = [];
++  for (let col = 0; col < numButtons; col++) {
++    if (!pivotVars.has(col)) {
++      freeVars.push(col);
++    }
++  }
++
++  const numFree = freeVars.length;
++
++  // Compute base solution (all free vars = 0) as a bitmask
++  let baseSol = 0n;
++  for (let r = 0; r < rank; r++) {
++    if ((rows[r] >> BigInt(numButtons)) & 1n) {
++      baseSol |= 1n << BigInt(pivotCol[r]);
++    }
++  }
++
++  // Compute flip mask for each free variable:
++  // toggling free var i flips bit freeVars[i] and all pivot vars it affects
++  const flipMasks: bigint[] = [];
++  for (let fi = 0; fi < numFree; fi++) {
++    const fv = freeVars[fi];
++    let mask = 1n << BigInt(fv);
++    for (let r = 0; r < rank; r++) {
++      if ((rows[r] >> BigInt(fv)) & 1n) {
++        mask |= 1n << BigInt(pivotCol[r]);
++      }
++    }
++    flipMasks.push(mask);
++  }
++
++  if (numFree <= 20) {
++    // Enumerate all 2^numFree combinations using Gray code-like XOR approach
++    const totalCombinations = 1 << numFree;
++    let bestSolution: number[] | null = null;
++    let bestCount = numButtons + 1;
++
++    // Use incremental XOR: sol starts as baseSol
++    // For each mask, compute sol = baseSol XOR (selected flipMasks)
++    // We enumerate masks 0..2^numFree-1 and compute solutions
++    let currentSol = baseSol;
++    let prevMask = 0;
++
++    for (let mask = 0; mask < totalCombinations; mask++) {
++      // Gray code optimization: XOR only the changed bits
++      const diff = mask ^ prevMask;
++      for (let i = 0; i < numFree; i++) {
++        if ((diff >> i) & 1) {
++          currentSol ^= flipMasks[i];
++        }
++      }
++      prevMask = mask;
++
++      const count = popcount64(currentSol);
++      if (count < bestCount) {
++        bestCount = count;
++        bestSolution = bitmaskToArray(currentSol, numButtons);
++      } else if (count === bestCount) {
++        const pressed = bitmaskToArray(currentSol, numButtons);
++        if (lexSmaller(pressed, bestSolution!)) {
++          bestSolution = pressed;
++        }
++      }
++    }
++
++    return bestSolution;
++  }
++
++  // For numFree > 20: coordinate descent over GF(2)
++  // For each free variable, check if toggling it reduces the total weight
++  const freeSettings = new Array(numFree).fill(0);
++  let sol = baseSol;
++  let improved = true;
++
++  while (improved) {
++    improved = false;
++    for (let fi = 0; fi < numFree; fi++) {
++      const toggled = sol ^ flipMasks[fi];
++      const currentCount = popcount64(sol);
++      const toggledCount = popcount64(toggled);
++      if (toggledCount < currentCount) {
++        sol = toggled;
++        freeSettings[fi] ^= 1;
++        improved = true;
++      } else if (toggledCount === currentCount) {
++        // Check lex order
++        const currentArr = bitmaskToArray(sol, numButtons);
++        const toggledArr = bitmaskToArray(toggled, numButtons);
++        if (lexSmaller(toggledArr, currentArr)) {
++          sol = toggled;
++          freeSettings[fi] ^= 1;
++          improved = true;
++        }
++      }
++    }
++  }
++
++  return bitmaskToArray(sol, numButtons);
++}
++
++function bitmaskToArray(mask: bigint, numBits: number): number[] {
++  const result: number[] = [];
++  for (let i = 0; i < numBits; i++) {
++    if ((mask >> BigInt(i)) & 1n) {
++      result.push(i);
++    }
++  }
++  return result;
++}
++
++function lexSmaller(a: number[], b: number[]): boolean {
++  const len = Math.min(a.length, b.length);
++  for (let i = 0; i < len; i++) {
++    if (a[i] < b[i]) return true;
++    if (a[i] > b[i]) return false;
++  }
++  return a.length < b.length;
++}
++
++function popcount64(n: bigint): number {
++  let count = 0;
++  while (n > 0n) {
++    n &= n - 1n;
++    count++;
++  }
++  return count;
++}
++
++// ---- Modular arithmetic helpers ----
++
++function mod(a: number, m: number): number {
++  return ((a % m) + m) % m;
++}
++
++function modPow(base: number, exp: number, m: number): number {
++  let result = 1;
++  base = mod(base, m);
++  while (exp > 0) {
++    if (exp & 1) {
++      result = (result * base) % m;
++    }
++    exp >>= 1;
++    base = (base * base) % m;
++  }
++  return result;
++}
++
++/**
++ * Solve a counter puzzle over GF(p) using Gaussian elimination.
++ */
++export function solveCounter(
++  lights: number[],
++  buttons: number[][],
++  modulus: number
++): number[] | null {
++  const numCounters = lights.length;
++  const numButtons = buttons.length;
++
++  if (numButtons === 0) {
++    for (let i = 0; i < numCounters; i++) {
++      if (mod(lights[i], modulus) !== 0) return null;
++    }
++    return [];
++  }
++
++  // Build augmented matrix over GF(modulus)
++  const matrix: number[][] = [];
++  for (let counter = 0; counter < numCounters; counter++) {
++    const row = new Array(numButtons + 1).fill(0);
++    for (let btn = 0; btn < numButtons; btn++) {
++      if (buttons[btn].includes(counter)) {
++        row[btn] = 1;
++      }
++    }
++    row[numButtons] = mod(lights[counter], modulus);
++    matrix.push(row);
++  }
++
++  // Precompute modular inverses using Fermat's little theorem (p is prime)
++  const inv = new Array(modulus).fill(0);
++  for (let i = 1; i < modulus; i++) {
++    inv[i] = modPow(i, modulus - 2, modulus);
++  }
++
++  // Gaussian elimination over GF(modulus) — full RREF
++  const pivotCol: number[] = new Array(numCounters).fill(-1);
++  let currentRow = 0;
++
++  for (let col = 0; col < numButtons && currentRow < numCounters; col++) {
++    let pivotRow = -1;
++    for (let r = currentRow; r < numCounters; r++) {
++      if (matrix[r][col] !== 0) {
++        pivotRow = r;
++        break;
++      }
++    }
++    if (pivotRow === -1) continue;
++
++    [matrix[currentRow], matrix[pivotRow]] = [matrix[pivotRow], matrix[currentRow]];
++    pivotCol[currentRow] = col;
++
++    // Normalize pivot row
++    const pivotInv = inv[matrix[currentRow][col]];
++    for (let c = col; c <= numButtons; c++) {
++      matrix[currentRow][c] = (matrix[currentRow][c] * pivotInv) % modulus;
++    }
++
++    // Eliminate this column from all other rows
++    for (let r = 0; r < numCounters; r++) {
++      if (r !== currentRow && matrix[r][col] !== 0) {
++        const factor = matrix[r][col];
++        for (let c = col; c <= numButtons; c++) {
++          matrix[r][c] = mod(matrix[r][c] - factor * matrix[currentRow][c], modulus);
++        }
++      }
++    }
++    currentRow++;
++  }
++
++  const rank = currentRow;
++
++  // Check for inconsistency
++  for (let r = rank; r < numCounters; r++) {
++    if (matrix[r][numButtons] !== 0) {
++      return null;
++    }
++  }
++
++  // Identify free variables
++  const pivotVars = new Set<number>();
++  for (let r = 0; r < rank; r++) {
++    pivotVars.add(pivotCol[r]);
++  }
++
++  const freeVars: number[] = [];
++  for (let col = 0; col < numButtons; col++) {
++    if (!pivotVars.has(col)) {
++      freeVars.push(col);
++    }
++  }
++
++  const numFree = freeVars.length;
++
++  if (numFree === 0) {
++    const solution = new Array(numButtons).fill(0);
++    for (let r = 0; r < rank; r++) {
++      solution[pivotCol[r]] = matrix[r][numButtons];
++    }
++    return solution;
++  }
++
++  // Precompute coefficients for back-substitution
++  const pivotCoeffs: number[][] = [];
++  const pivotConstants: number[] = [];
++  for (let r = 0; r < rank; r++) {
++    const coeffs: number[] = [];
++    for (let fi = 0; fi < numFree; fi++) {
++      coeffs.push(matrix[r][freeVars[fi]]);
++    }
++    pivotCoeffs.push(coeffs);
++    pivotConstants.push(matrix[r][numButtons]);
++  }
++
++  // Compute solution from free variable values
++  const computeSolution = (freeValues: number[]): number[] => {
++    const solution = new Array(numButtons).fill(0);
++    for (let i = 0; i < numFree; i++) {
++      solution[freeVars[i]] = freeValues[i];
++    }
++    for (let r = 0; r < rank; r++) {
++      let val = pivotConstants[r];
++      for (let fi = 0; fi < numFree; fi++) {
++        val -= pivotCoeffs[r][fi] * freeValues[fi];
++      }
++      solution[pivotCol[r]] = mod(val, modulus);
++    }
++    return solution;
++  };
++
++  const computeSum = (solution: number[]): number => {
++    let s = 0;
++    for (let i = 0; i < numButtons; i++) s += solution[i];
++    return s;
++  };
++
++  // Check feasibility of full enumeration
++  // For modulus p and numFree free vars, total = p^numFree
++  // Feasible when total <= ~10M
++  let totalCombinations = 1;
++  let feasible = true;
++  for (let i = 0; i < numFree; i++) {
++    totalCombinations *= modulus;
++    if (totalCombinations > 10_000_000) {
++      feasible = false;
++      break;
++    }
++  }
++
++  if (feasible) {
++    // Direct enumeration
++    let bestSolution: number[] | null = null;
++    let bestSum = Infinity;
++    const freeValues = new Array(numFree).fill(0);
++
++    for (let iter = 0; iter < totalCombinations; iter++) {
++      const solution = computeSolution(freeValues);
++      const sum = computeSum(solution);
++
++      if (sum < bestSum || (sum === bestSum && lexSmallerArray(solution, bestSolution!))) {
++        bestSum = sum;
++        bestSolution = solution;
++      }
++
++      // Increment mixed-radix counter
++      for (let i = 0; i < numFree; i++) {
++        freeValues[i]++;
++        if (freeValues[i] < modulus) break;
++        freeValues[i] = 0;
++      }
++    }
++
++    return bestSolution;
++  }
++
++  // Coordinate descent for large search spaces
++  const freeValues = new Array(numFree).fill(0);
++  let bestSolution = computeSolution(freeValues);
++  let bestSum = computeSum(bestSolution);
++
++  let improved = true;
++  while (improved) {
++    improved = false;
++    for (let fi = 0; fi < numFree; fi++) {
++      const origVal = freeValues[fi];
++      let bestVal = origVal;
++
++      for (let v = 0; v < modulus; v++) {
++        if (v === origVal) continue;
++        freeValues[fi] = v;
++        const solution = computeSolution(freeValues);
++        const sum = computeSum(solution);
++        if (sum < bestSum || (sum === bestSum && lexSmallerArray(solution, bestSolution))) {
++          bestSum = sum;
++          bestVal = v;
++          bestSolution = solution;
++          improved = true;
++        }
++      }
++
++      freeValues[fi] = bestVal;
++    }
++  }
++
++  return bestSolution;
++}
++
++function lexSmallerArray(a: number[], b: number[]): boolean {
++  for (let i = 0; i < a.length; i++) {
++    if (a[i] < b[i]) return true;
++    if (a[i] > b[i]) return false;
++  }
++  return false;
++}
