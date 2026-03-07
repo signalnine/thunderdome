@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 852 scored trials across 52 orchestrator variants (909 total including crash trials). All scoring is deterministic — no LLM judges, no rubric. Crash trials ($0 cost, <10s duration) are excluded from averages.
+Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 871 scored trials across 52 orchestrator variants (928 total including crash trials). All scoring is deterministic — no LLM judges, no rubric. Crash trials ($0 cost, <10s duration) are excluded from averages.
 
 Most orchestrators have n=1 per task due to data loss during infrastructure migration. Scores reflect current corrected scoring pipeline (test parser fix + diff-capture fix).
 
@@ -23,8 +23,8 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 | 5 | [GSD](#contenders) | 85.7% | 88.1% | **86.7%** | 19 | $1.06 | Opus 4.6 |
 | 6 | [BMAD-METHOD](#contenders) | 85.3% | 88.1% | **86.5%** | 19 | $1.93 | Opus 4.6 |
 | 7 | [Agent Teams](#contenders) | 85.7% | 87.0% | **86.3%** | 36 | $0.95 | Opus 4.6 |
-| 8 | [Gas Station](#contenders) | 87.6% | 83.3% | **85.8%** | 30 | $0.80 | Opus 4.6 |
-| 9 | [Metacog](#contenders) | 88.3% | 81.1% | **85.3%** | 49 | $0.92 | Opus 4.6 |
+| 8 | [Metacog](#contenders) | 88.3% | 81.1% | **85.3%** | 49 | $0.92 | Opus 4.6 |
+| 9 | [Gas Station](#contenders) | 87.8% | 81.3% | **85.0%** | 49 | $0.85 | Opus 4.6 |
 | 10 | [Conclave v6 (Opus)](#contenders) | 85.8% | 83.4% | **84.8%** | 57 | $1.98 | Opus 4.6 |
 | 11 | [TDD (Opus)](#contenders) | 92.0% | 70.4% | **82.9%** | 24 | $2.35 | Opus 4.6 |
 | 12 | [Self-Review (Opus)](#contenders) | 86.1% | 77.8% | **82.6%** | 19 | $1.23 | Opus 4.6 |
@@ -59,8 +59,8 @@ All orchestrators with Overall scores, sorted by cost. **Bold** = Pareto-optimal
 | Gemini CLI Flash Lite | 60.5% | $0.31 | |
 | **Claude Code** | **82.1%** | **$0.61** | **best <$0.63** |
 | Superpowers | 75.9% | $0.63 | |
-| **Gas Station** | **85.8%** | **$0.80** | **best <$1.06** |
-| Metacog | 85.3% | $0.92 | |
+| **Gas Station** | **85.0%** | **$0.85** | **best <$0.92** |
+| **Metacog** | **85.3%** | **$0.92** | **best <$1.06** |
 | Verify (Opus) | 81.7% | $0.94 | |
 | Agent Teams | 86.3% | $0.95 | |
 | Conclave (full) | 78.2% | $1.00 | |
@@ -78,7 +78,7 @@ All orchestrators with Overall scores, sorted by cost. **Bold** = Pareto-optimal
 | Conclave v6 (Opus) | 84.8% | $1.98 | |
 | TDD (Opus) | 82.9% | $2.35 | |
 
-The Pareto frontier: Gemini CLI ($0.05, 79.9%) → Claude Code ($0.61, 82.1%) → Gas Station ($0.80, 85.8%) → v6 Sonnet ($1.06, 88.0%) → Plans ($1.29, 88.5%) → Conclave Review ($1.58, 88.7%). v6 Sonnet is the sweet spot: 88.0% at $1.06/task — Opus-tier quality at Sonnet pricing. Metacog ($0.92, 85.3%) fell off the Pareto frontier with more data — Gas Station now beats it on both score and cost.
+The Pareto frontier: Gemini CLI ($0.05, 79.9%) → Claude Code ($0.61, 82.1%) → Gas Station ($0.85, 85.0%) → Metacog ($0.92, 85.3%) → v6 Sonnet ($1.06, 88.0%) → Plans ($1.29, 88.5%) → Conclave Review ($1.58, 88.7%). v6 Sonnet remains the sweet spot: 88.0% at $1.06/task — Opus-tier quality at Sonnet pricing.
 
 ### Gene Ablation Variants
 
@@ -121,7 +121,7 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 | Agent Teams | **87.0%** | 90.0% | 96.2% | 100% | 78.3% | 92.0% | 79.6% | 91.5% | 68.7% | 8 |
 | Conclave Review | **84.5%** | 96.2% | 92.7% | 93.0% | 67.7% | 88.7% | 85.4% | 58.4% | 94.1% | 10 |
 | Conclave v6 (Opus) | **83.4%** | 62.2% | 94.5% | 96.5% | 72.9% | 68.6% | 88.0% | 93.3% | 91.1% | 24 |
-| Gas Station | **83.3%** | 92.2% | 56.7% | 100% | 63.3% | 86.1% | 84.2% | 91.7% | 92.4% | 8 |
+| Gas Station | **81.3%** | 89.7% | 56.7% | 100% | 69.7% | 86.7% | 80.9% | 75.8% | 90.9% | 16 |
 | Metacog | **81.1%** | 90.0% | 58.5% | 100% | 61.1% | 91.4% | 83.2% | 76.9% | 87.8% | 16 |
 | Gemini CLI | **80.2%** | 89.2% | 54.6% | 100% | 60.8% | 88.7% | 93.6% | 96.5% | 58.5% | 12 |
 | Self-Review (Opus) | **77.8%** | 73.8% | 91.5% | 100% | 60.5% | 60.1% | 58.1% | 95.2% | 82.8% | 8 |
@@ -181,7 +181,7 @@ What it delivered was a fraud — a single `claude -p` call with `gt prime` cont
 
 I named the impostor "Gas Station" and kept it as a control while we built the real multi-agent pipeline ourselves.
 
-Then the benchmarks came back. Gas Station scored 85.4% standard (n=30). The single agent in a trench coat was respectably consistent. And the real multi-agent pipeline? Gas Town scores 88.6% on hard tasks (#4 overall) but cratered to 66.7% on standard tasks (n=34) — the Mayor dispatches simple tasks to a single polecat that sometimes completes with minimal work (30% on T3 and T4, every trial). The fraud outperforms the real thing on standard tasks by 19 points. On hard tasks, the multi-agent decomposition finally justifies itself. Gas Station earned its place: a permanent reminder that complexity must earn its keep on every task type, not just the hard ones.
+Then the benchmarks came back. Gas Station scored 87.8% standard (n=33). The single agent in a trench coat was respectably consistent. And the real multi-agent pipeline? Gas Town scores 88.6% on hard tasks (#4 overall) but cratered to 66.7% on standard tasks (n=34) — the Mayor dispatches simple tasks to a single polecat that sometimes completes with minimal work (30% on T3 and T4, every trial). The fraud outperforms the real thing on standard tasks by 21 points. On hard tasks, the multi-agent decomposition finally justifies itself. Gas Station earned its place: a permanent reminder that complexity must earn its keep on every task type, not just the hard ones.
 
 ### From Gene Ablation to Conclave v6
 
