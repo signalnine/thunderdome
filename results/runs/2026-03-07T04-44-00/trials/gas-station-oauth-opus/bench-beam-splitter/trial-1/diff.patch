@@ -1,0 +1,254 @@
+diff --git a/.runtime/agent.lock b/.runtime/agent.lock
+new file mode 100644
+index 0000000..dbfcf71
+--- /dev/null
++++ b/.runtime/agent.lock
+@@ -0,0 +1,6 @@
++{
++  "pid": 907,
++  "acquired_at": "2026-03-07T05:02:35.219061989Z",
++  "session_id": "bench/rust",
++  "hostname": "20ae5d3da436"
++}
+\ No newline at end of file
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..5dc456f
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,17 @@
++{
++  "input_tokens": 17,
++  "output_tokens": 4807,
++  "cache_read_tokens": 316695,
++  "cache_creation_tokens": 11506,
++  "turns": 16,
++  "tools_used": [
++    "Task",
++    "Bash",
++    "Read",
++    "Glob",
++    "TodoWrite",
++    "Write"
++  ],
++  "duration_ms": 118019,
++  "total_cost_usd": 0.40035384999999996
++}
+\ No newline at end of file
+diff --git a/package-lock.json b/package-lock.json
+index 02b0dae..222cd7d 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..0ea2837
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,159 @@
++type Direction = 'down' | 'down-left' | 'down-right';
++
++interface Beam {
++  row: number;
++  col: number;
++  dir: Direction;
++}
++
++function findSource(grid: string[][]): [number, number] | null {
++  for (let c = 0; c < grid[0].length; c++) {
++    if (grid[0][c] === 'S') return [0, c];
++  }
++  return null;
++}
++
++function advance(row: number, col: number, dir: Direction): [number, number] {
++  switch (dir) {
++    case 'down': return [row + 1, col];
++    case 'down-left': return [row + 1, col - 1];
++    case 'down-right': return [row + 1, col + 1];
++  }
++}
++
++function inBounds(row: number, col: number, rows: number, cols: number): boolean {
++  return row >= 0 && row < rows && col >= 0 && col < cols;
++}
++
++export function countBeamCells(grid: string[][]): number {
++  const rows = grid.length;
++  if (rows === 0) return 0;
++  const cols = grid[0].length;
++
++  const source = findSource(grid);
++  if (!source) return 0;
++
++  const visited = new Set<string>();
++  const seen = new Set<string>();
++
++  const beams: Beam[] = [{ row: source[0], col: source[1], dir: 'down' }];
++  visited.add(`${source[0]},${source[1]}`);
++  seen.add(`${source[0]},${source[1]},down`);
++
++  while (beams.length > 0) {
++    const beam = beams.pop()!;
++    const cell = grid[beam.row][beam.col];
++
++    if (cell === '^') {
++      // Splitter: produce two beams going down-left and down-right
++      const dirs: Direction[] = ['down-left', 'down-right'];
++      for (const d of dirs) {
++        const [nr, nc] = advance(beam.row, beam.col, d);
++        if (inBounds(nr, nc, rows, cols)) {
++          const key = `${nr},${nc},${d}`;
++          if (!seen.has(key)) {
++            seen.add(key);
++            visited.add(`${nr},${nc}`);
++            beams.push({ row: nr, col: nc, dir: d });
++          }
++        }
++      }
++    } else {
++      // Continue in current direction
++      const [nr, nc] = advance(beam.row, beam.col, beam.dir);
++      if (inBounds(nr, nc, rows, cols)) {
++        const key = `${nr},${nc},${beam.dir}`;
++        if (!seen.has(key)) {
++          seen.add(key);
++          visited.add(`${nr},${nc}`);
++          beams.push({ row: nr, col: nc, dir: beam.dir });
++        }
++      }
++    }
++  }
++
++  return visited.size;
++}
++
++export function countBeamPaths(grid: string[][]): bigint {
++  const rows = grid.length;
++  if (rows === 0) return 0n;
++  const cols = grid[0].length;
++
++  const source = findSource(grid);
++  if (!source) return 0n;
++
++  // We need to count the number of distinct source-to-exit paths.
++  // Each splitter doubles the paths. We use a dynamic approach:
++  // Track each unique (row, col, direction) state and how many paths reach it.
++  // When a beam exits the grid, add its path count to the total.
++
++  // Use BFS-like processing, but we process row by row (top to bottom)
++  // since all movement goes downward. This ensures we process states in order.
++
++  // Map from "row,col,dir" -> number of paths reaching that state
++  type State = string;
++  let current = new Map<State, bigint>();
++  const startKey = `${source[0]},${source[1]},down`;
++  current.set(startKey, 1n);
++
++  let totalPaths = 0n;
++
++  // Process row by row
++  for (let r = 0; r < rows; r++) {
++    const next = new Map<State, bigint>();
++
++    for (const [key, pathCount] of current) {
++      const parts = key.split(',');
++      const row = parseInt(parts[0]);
++      const col = parseInt(parts[1]);
++      const dir = parts[2] as Direction;
++
++      if (row !== r) {
++        // Not on this row, carry forward
++        const prev = next.get(key) ?? 0n;
++        next.set(key, prev + pathCount);
++        continue;
++      }
++
++      const cell = grid[row][col];
++
++      if (cell === '^') {
++        // Splitter: produce two beams
++        const dirs: Direction[] = ['down-left', 'down-right'];
++        for (const d of dirs) {
++          const [nr, nc] = advance(row, col, d);
++          if (inBounds(nr, nc, rows, cols)) {
++            const nkey = `${nr},${nc},${d}`;
++            const prev = next.get(nkey) ?? 0n;
++            next.set(nkey, prev + pathCount);
++          } else {
++            // Beam exits grid
++            totalPaths += pathCount;
++          }
++        }
++      } else {
++        // Continue in current direction
++        const [nr, nc] = advance(row, col, dir);
++        if (inBounds(nr, nc, rows, cols)) {
++          const nkey = `${nr},${nc},${dir}`;
++          const prev = next.get(nkey) ?? 0n;
++          next.set(nkey, prev + pathCount);
++        } else {
++          // Beam exits grid
++          totalPaths += pathCount;
++        }
++      }
++    }
++
++    current = next;
++  }
++
++  // Any remaining beams that are still in current (shouldn't happen if we processed all rows)
++  // but just in case, they would exit after the last row
++  for (const [, pathCount] of current) {
++    totalPaths += pathCount;
++  }
++
++  return totalPaths;
++}
