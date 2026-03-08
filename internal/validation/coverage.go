@@ -69,10 +69,33 @@ type coverageSummary struct {
 }
 
 type coverageDetail struct {
-	Total   int     `json:"total"`
-	Covered int     `json:"covered"`
-	Skipped int     `json:"skipped"`
-	Pct     float64 `json:"pct"`
+	Total   int        `json:"total"`
+	Covered int        `json:"covered"`
+	Skipped int        `json:"skipped"`
+	Pct     flexFloat  `json:"pct"`
+}
+
+// flexFloat can unmarshal a JSON number or string into a float64.
+type flexFloat float64
+
+func (f *flexFloat) UnmarshalJSON(data []byte) error {
+	// Try as number first
+	var fl float64
+	if err := json.Unmarshal(data, &fl); err == nil {
+		*f = flexFloat(fl)
+		return nil
+	}
+	// Try as string
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	var val float64
+	if _, err := fmt.Sscanf(s, "%f", &val); err != nil {
+		return err
+	}
+	*f = flexFloat(val)
+	return nil
 }
 
 func parseCoverageSummary(path, output string) (*CoverageResult, error) {
@@ -86,10 +109,10 @@ func parseCoverageSummary(path, output string) (*CoverageResult, error) {
 		return &CoverageResult{Score: 0, Output: output}, fmt.Errorf("parsing coverage summary: %w", err)
 	}
 
-	lines := summary.Total.Lines.Pct
-	branches := summary.Total.Branches.Pct
-	functions := summary.Total.Functions.Pct
-	statements := summary.Total.Statements.Pct
+	lines := float64(summary.Total.Lines.Pct)
+	branches := float64(summary.Total.Branches.Pct)
+	functions := float64(summary.Total.Functions.Pct)
+	statements := float64(summary.Total.Statements.Pct)
 
 	// Score is average of line and branch coverage, normalized to 0-1
 	score := (lines + branches) / 200.0
