@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 871 scored trials across 52 orchestrator variants (928 total including crash trials). All scoring is deterministic — no LLM judges, no rubric. Crash trials ($0 cost, <10s duration) are excluded from averages.
+Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 890 scored trials across 53 orchestrator variants (947 total including crash trials). All scoring is deterministic — no LLM judges, no rubric. Crash trials ($0 cost, <10s duration) are excluded from averages.
 
 Most orchestrators have n=1 per task due to data loss during infrastructure migration. Scores reflect current corrected scoring pipeline (test parser fix + diff-capture fix).
 
@@ -27,22 +27,23 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 | 9 | [Gas Station](#contenders) | 87.8% | 81.3% | **85.0%** | 49 | $0.85 | Opus 4.6 |
 | 10 | [Conclave v6 (Opus)](#contenders) | 85.8% | 83.4% | **84.8%** | 57 | $1.98 | Opus 4.6 |
 | 11 | [TDD (Opus)](#contenders) | 92.0% | 70.4% | **82.9%** | 24 | $2.35 | Opus 4.6 |
-| 12 | [Self-Review (Opus)](#contenders) | 86.1% | 77.8% | **82.6%** | 19 | $1.23 | Opus 4.6 |
-| 13 | [Brainstorm (Opus)](#contenders) | 87.9% | 75.0% | **82.5%** | 19 | $1.72 | Opus 4.6 |
-| 14 | [Claude Code](#contenders) | 85.8% | 76.9% | **82.1%** | 32 | $0.61 | Opus 4.6 |
-| 15 | [Verify (Opus)](#contenders) | 86.0% | 75.7% | **81.7%** | 19 | $0.94 | Opus 4.6 |
-| 16 | [Gemini CLI](#contenders) | 79.7% | 80.2% | **79.9%** | 32 | $0.05 | Gemini 2.5 Flash |
-| 17 | [Debug (Opus)](#contenders) | 84.6% | 70.0% | **78.4%** | 28 | $1.16 | Opus 4.6 |
-| 18 | [Review + Verify](#contenders) | 83.5% | 71.2% | **78.3%** | 20 | $1.81 | Opus 4.6 |
-| 19 | [Conclave (full)](#contenders) | 68.3% | 91.8% | **78.2%** | 20 | $1.00 | Opus 4.6 |
-| 20 | [Superpowers](#contenders) | 66.4% | 88.8% | **75.9%** | 19 | $0.63 | Opus 4.6 |
-| 21 | [Review (pure)](#contenders) | 78.7% | 69.2% | **74.7%** | 21 | $1.75 | Opus 4.6 |
-| 22 | [Cerebras CLI](#contenders) | 79.2% | 66.0% | **73.7%** | 15 | $0.00 | gpt-oss-120b |
-| 23 | [Cerebras CLI Ralph](#contenders) | 69.9% | 74.9% | **72.0%** | 25 | $0.00 | gpt-oss-120b |
-| 24 | [Amplifier (Gemini 2.5 Flash)](#contenders) | 78.7% | 52.7% | **67.8%** | 26 | $0.01 | Gemini 2.5 Flash |
-| 25 | [Gemini CLI Flash Lite Ralph](#contenders) | 56.6% | 71.2% | **62.7%** | 19 | $0.11 | Gemini 2.0 FL |
-| 26 | [Gemini CLI Flash Lite](#contenders) | 64.9% | 54.5% | **60.5%** | 20 | $0.31 | Gemini 2.0 FL |
-| 27 | [Amplifier (Gemini Flash)](#contenders) | 71.0% | 39.6% | **57.8%** | 20 | $0.01 | Gemini 2.0 Flash |
+| 12 | [Crush GLM-5](#contenders) | 86.5% | 78.0% | **82.9%** | 19 | $0.00 | GLM-5 |
+| 13 | [Self-Review (Opus)](#contenders) | 86.1% | 77.8% | **82.6%** | 19 | $1.23 | Opus 4.6 |
+| 14 | [Brainstorm (Opus)](#contenders) | 87.9% | 75.0% | **82.5%** | 19 | $1.72 | Opus 4.6 |
+| 15 | [Claude Code](#contenders) | 85.8% | 76.9% | **82.1%** | 32 | $0.61 | Opus 4.6 |
+| 16 | [Verify (Opus)](#contenders) | 86.0% | 75.7% | **81.7%** | 19 | $0.94 | Opus 4.6 |
+| 17 | [Gemini CLI](#contenders) | 79.7% | 80.2% | **79.9%** | 32 | $0.05 | Gemini 2.5 Flash |
+| 18 | [Debug (Opus)](#contenders) | 84.6% | 70.0% | **78.4%** | 28 | $1.16 | Opus 4.6 |
+| 19 | [Review + Verify](#contenders) | 83.5% | 71.2% | **78.3%** | 20 | $1.81 | Opus 4.6 |
+| 20 | [Conclave (full)](#contenders) | 68.3% | 91.8% | **78.2%** | 20 | $1.00 | Opus 4.6 |
+| 21 | [Superpowers](#contenders) | 66.4% | 88.8% | **75.9%** | 19 | $0.63 | Opus 4.6 |
+| 22 | [Review (pure)](#contenders) | 78.7% | 69.2% | **74.7%** | 21 | $1.75 | Opus 4.6 |
+| 23 | [Cerebras CLI](#contenders) | 79.2% | 66.0% | **73.7%** | 15 | $0.00 | gpt-oss-120b |
+| 24 | [Cerebras CLI Ralph](#contenders) | 69.9% | 74.9% | **72.0%** | 25 | $0.00 | gpt-oss-120b |
+| 25 | [Amplifier (Gemini 2.5 Flash)](#contenders) | 78.7% | 52.7% | **67.8%** | 26 | $0.01 | Gemini 2.5 Flash |
+| 26 | [Gemini CLI Flash Lite Ralph](#contenders) | 56.6% | 71.2% | **62.7%** | 19 | $0.11 | Gemini 2.0 FL |
+| 27 | [Gemini CLI Flash Lite](#contenders) | 64.9% | 54.5% | **60.5%** | 20 | $0.31 | Gemini 2.0 FL |
+| 28 | [Amplifier (Gemini Flash)](#contenders) | 71.0% | 39.6% | **57.8%** | 20 | $0.01 | Gemini 2.0 Flash |
 
 ### Cost Efficiency
 
@@ -50,6 +51,7 @@ All orchestrators with Overall scores, sorted by cost. **Bold** = Pareto-optimal
 
 | Orchestrator | Overall | Avg Cost | Pareto |
 |---|---:|---:|:---:|
+| **Crush GLM-5** | **82.9%** | **$0.00** | **best free** |
 | Cerebras CLI | 73.7% | $0.00 | |
 | Cerebras CLI Ralph | 72.0% | $0.00 | |
 | Amplifier (Gemini 2.5 Flash) | 67.8% | $0.01 | |
@@ -78,7 +80,7 @@ All orchestrators with Overall scores, sorted by cost. **Bold** = Pareto-optimal
 | Conclave v6 (Opus) | 84.8% | $1.98 | |
 | TDD (Opus) | 82.9% | $2.35 | |
 
-The Pareto frontier: Gemini CLI ($0.05, 79.9%) → Claude Code ($0.61, 82.1%) → Gas Station ($0.85, 85.0%) → Metacog ($0.92, 85.3%) → v6 Sonnet ($1.06, 88.0%) → Plans ($1.29, 88.5%) → Conclave Review ($1.58, 88.7%). v6 Sonnet remains the sweet spot: 88.0% at $1.06/task — Opus-tier quality at Sonnet pricing.
+The Pareto frontier: Crush GLM-5 ($0.00, 82.9%) → Gemini CLI ($0.05, 79.9%) → Claude Code ($0.61, 82.1%) → Gas Station ($0.85, 85.0%) → Metacog ($0.92, 85.3%) → v6 Sonnet ($1.06, 88.0%) → Plans ($1.29, 88.5%) → Conclave Review ($1.58, 88.7%). Crush GLM-5 is the new free champion at 82.9%, beating all paid options under $0.85. v6 Sonnet remains the paid sweet spot: 88.0% at $1.06/task — Opus-tier quality at Sonnet pricing.
 
 ### Gene Ablation Variants
 
@@ -125,6 +127,7 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 | Metacog | **81.1%** | 90.0% | 58.5% | 100% | 61.1% | 91.4% | 83.2% | 76.9% | 87.8% | 16 |
 | Gemini CLI | **80.2%** | 89.2% | 54.6% | 100% | 60.8% | 88.7% | 93.6% | 96.5% | 58.5% | 12 |
 | Self-Review (Opus) | **77.8%** | 73.8% | 91.5% | 100% | 60.5% | 60.1% | 58.1% | 95.2% | 82.8% | 8 |
+| Crush GLM-5 | **78.0%** | 58.5% | 88.3% | 100% | 69.9% | 90.3% | 62.9% | 60.0% | 94.4% | 8 |
 | Claude Code | **76.9%** | 62.1% | 58.5% | 100% | 61.2% | 90.8% | 93.7% | 60.0% | 88.7% | 8 |
 | Verify (Opus) | **75.7%** | 58.5% | 56.7% | 100% | 60.1% | 91.8% | 83.0% | 97.1% | 58.5% | 8 |
 | Brainstorm (Opus) | **75.0%** | 58.0% | 95.3% | 100% | 58.5% | 93.6% | 81.4% | 20.0% | 93.0% | 8 |
@@ -991,6 +994,7 @@ The framework tests five hypotheses:
 | **Claude Code Headless** | Claude Code `-p` mode without skills | Headless baseline — no interactive user, no plugins |
 | **Amplifier + ts-dev** | Amplifier + TypeScript bundle | LSP code intelligence, TS expert agent |
 | **Cerebras CLI** | cerebras-cli (OpenCode fork) + gpt-oss-120b | Full agentic tool use (read/write/bash/glob) via Cerebras inference; direct API routing bypasses OpenCode proxy |
+| **[Crush](https://github.com/charm-bracelet/crush) GLM-5** | Crush CLI + Zhipu GLM-5 | Open-source CLI with Zhipu's GLM-5 model; 82.9% overall at $0.00 — best free option |
 | **Aider (Cerebras)** | Aider + Cerebras gpt-oss-120b | Open-weight 120B MoE via Cerebras inference (~3K tok/s); single-pass diff edits |
 
 See [`docs/survey/orchestrator-survey.md`](docs/survey/orchestrator-survey.md) for the full gene matrix and per-tool analysis.
