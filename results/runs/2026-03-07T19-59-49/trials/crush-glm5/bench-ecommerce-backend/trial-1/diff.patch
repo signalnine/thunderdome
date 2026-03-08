@@ -1,0 +1,667 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..b2ece47
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,9 @@
++{
++  "input_tokens": 0,
++  "output_tokens": 0,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0,
++  "note": "crush-glm5-no-structured-metrics"
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..ad7b73f
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,12 @@
++Now I have a complete understanding. Let me implement all services:Done. Implemented 8 event-driven services:
++
++- **catalog** - Product CRUD, emits `product:created`
++- **inventory** - Stock tracking with low-stock alerts, emits `inventory:updated`, `inventory:low_stock`
++- **cart** - Shopping cart, emits `cart:updated`
++- **pricing** - 10% tax, discount codes, listens for `product:created`
++- **orders** - Order state machine, emits `order:created`, `order:status_changed`
++- **payment** - Async payment with success/failure/timeout modes, emits `payment:processed`
++- **notifications** - User subscriptions for order/payment events, emits `notification:sent`
++- **analytics** - Event counts, revenue tracking, conversion rate, top products
++
++All 70 tests pass ✓ | TypeScript compiles ✓ | Lint clean ✓
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index 783de11..c6f5f70 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1042,7 +1042,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1141,7 +1140,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1434,7 +1432,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2111,7 +2108,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -4254,7 +4250,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/analytics/index.ts b/src/analytics/index.ts
+new file mode 100644
+index 0000000..8fb9df1
+--- /dev/null
++++ b/src/analytics/index.ts
+@@ -0,0 +1,124 @@
++import { EventBus } from '../bus.js';
++import {
++  AnalyticsService,
++  Events,
++  CartUpdatedEvent,
++  OrderCreatedEvent,
++  PaymentProcessedEvent,
++  PaymentStatus,
++  AnalyticsEvent,
++} from '../types.js';
++
++export function createAnalyticsService(bus: EventBus): AnalyticsService {
++  const eventCounts = new Map<string, number>();
++  const orderTotals = new Map<string, number>();
++  const cartIds = new Set<string>();
++  const orderIds = new Set<string>();
++  const productCounts = new Map<string, number>();
++  const cartItems = new Map<string, Array<{ productId: string; quantity: number }>>();
++  const successfulPayments = new Set<string>();
++
++  const trackEvent = (event: string) => {
++    const count = eventCounts.get(event) || 0;
++    eventCounts.set(event, count + 1);
++  };
++
++  bus.on(Events.PRODUCT_CREATED, (payload: unknown) => {
++    trackEvent(Events.PRODUCT_CREATED);
++    bus.emit(Events.ANALYTICS_EVENT, {
++      event: Events.PRODUCT_CREATED,
++      data: payload as Record<string, unknown>,
++      timestamp: Date.now(),
++    } as AnalyticsEvent);
++  });
++
++  bus.on(Events.INVENTORY_UPDATED, (_payload: unknown) => {
++    trackEvent(Events.INVENTORY_UPDATED);
++  });
++
++  bus.on(Events.LOW_STOCK_ALERT, (_payload: unknown) => {
++    trackEvent(Events.LOW_STOCK_ALERT);
++  });
++
++  bus.on(Events.CART_UPDATED, (payload: unknown) => {
++    trackEvent(Events.CART_UPDATED);
++    const event = payload as CartUpdatedEvent;
++    cartIds.add(event.cartId);
++    cartItems.set(event.cartId, event.items);
++  });
++
++  bus.on(Events.PRICE_CALCULATED, (_payload: unknown) => {
++    trackEvent(Events.PRICE_CALCULATED);
++  });
++
++  bus.on(Events.ORDER_CREATED, (payload: unknown) => {
++    trackEvent(Events.ORDER_CREATED);
++    const event = payload as OrderCreatedEvent;
++    orderIds.add(event.orderId);
++    orderTotals.set(event.orderId, event.total);
++
++    const items = cartItems.get(event.cartId);
++    if (items) {
++      for (const item of items) {
++        const count = productCounts.get(item.productId) || 0;
++        productCounts.set(item.productId, count + item.quantity);
++      }
++    }
++
++    bus.emit(Events.ANALYTICS_EVENT, {
++      event: Events.ORDER_CREATED,
++      data: payload as Record<string, unknown>,
++      timestamp: Date.now(),
++    } as AnalyticsEvent);
++  });
++
++  bus.on(Events.ORDER_STATUS_CHANGED, (_payload: unknown) => {
++    trackEvent(Events.ORDER_STATUS_CHANGED);
++  });
++
++  bus.on(Events.PAYMENT_PROCESSED, (payload: unknown) => {
++    trackEvent(Events.PAYMENT_PROCESSED);
++    const event = payload as PaymentProcessedEvent;
++    if (event.status === PaymentStatus.SUCCESS) {
++      successfulPayments.add(event.orderId);
++      bus.emit(Events.ANALYTICS_EVENT, {
++        event: Events.PAYMENT_PROCESSED,
++        data: payload as Record<string, unknown>,
++        timestamp: Date.now(),
++      } as AnalyticsEvent);
++    }
++  });
++
++  bus.on(Events.NOTIFICATION_SENT, (_payload: unknown) => {
++    trackEvent(Events.NOTIFICATION_SENT);
++  });
++
++  return {
++    getEventCount(eventType: string): number {
++      return eventCounts.get(eventType) || 0;
++    },
++
++    getRevenue(): number {
++      let revenue = 0;
++      for (const orderId of successfulPayments) {
++        const total = orderTotals.get(orderId);
++        if (total !== undefined) {
++          revenue += total;
++        }
++      }
++      return revenue;
++    },
++
++    getConversionRate(): number {
++      if (cartIds.size === 0) return 0;
++      return orderIds.size / cartIds.size;
++    },
++
++    getTopProducts(limit: number): Array<{ productId: string; count: number }> {
++      const sorted = Array.from(productCounts.entries())
++        .map(([productId, count]) => ({ productId, count }))
++        .sort((a, b) => b.count - a.count);
++      return sorted.slice(0, limit);
++    },
++  };
++}
+diff --git a/src/cart/index.ts b/src/cart/index.ts
+new file mode 100644
+index 0000000..2669a5b
+--- /dev/null
++++ b/src/cart/index.ts
+@@ -0,0 +1,75 @@
++import { EventBus } from '../bus.js';
++import { CartService, Events, CartUpdatedEvent } from '../types.js';
++
++export function createCartService(bus: EventBus): CartService {
++  const carts = new Map<string, { id: string; userId: string; items: Map<string, number> }>();
++
++  const emitUpdate = (cartId: string) => {
++    const cart = carts.get(cartId);
++    if (cart) {
++      const items = Array.from(cart.items.entries()).map(([productId, quantity]) => ({
++        productId,
++        quantity,
++      }));
++      bus.emit(Events.CART_UPDATED, {
++        cartId,
++        userId: cart.userId,
++        items,
++      } as CartUpdatedEvent);
++    }
++  };
++
++  return {
++    createCart(userId: string): string {
++      const id = `cart_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
++      carts.set(id, { id, userId, items: new Map() });
++      return id;
++    },
++
++    addItem(cartId: string, productId: string, quantity: number): void {
++      const cart = carts.get(cartId);
++      if (cart) {
++        const current = cart.items.get(productId) || 0;
++        cart.items.set(productId, current + quantity);
++        emitUpdate(cartId);
++      }
++    },
++
++    removeItem(cartId: string, productId: string): void {
++      const cart = carts.get(cartId);
++      if (cart) {
++        cart.items.delete(productId);
++        emitUpdate(cartId);
++      }
++    },
++
++    getCart(cartId: string) {
++      const cart = carts.get(cartId);
++      if (!cart) return null;
++      return {
++        id: cart.id,
++        userId: cart.userId,
++        items: Array.from(cart.items.entries()).map(([productId, quantity]) => ({
++          productId,
++          quantity,
++        })),
++      };
++    },
++
++    clearCart(cartId: string): void {
++      const cart = carts.get(cartId);
++      if (cart) {
++        cart.items.clear();
++        emitUpdate(cartId);
++      }
++    },
++
++    updateQuantity(cartId: string, productId: string, quantity: number): void {
++      const cart = carts.get(cartId);
++      if (cart) {
++        cart.items.set(productId, quantity);
++        emitUpdate(cartId);
++      }
++    },
++  };
++}
+diff --git a/src/catalog/index.ts b/src/catalog/index.ts
+new file mode 100644
+index 0000000..9d4e4e9
+--- /dev/null
++++ b/src/catalog/index.ts
+@@ -0,0 +1,45 @@
++import { EventBus } from '../bus.js';
++import { CatalogService, Events, ProductCreatedEvent } from '../types.js';
++
++export function createCatalogService(bus: EventBus): CatalogService {
++  const products = new Map<string, { id: string; name: string; price: number; category: string }>();
++
++  return {
++    createProduct(name: string, price: number, category: string): string {
++      const id = `prod_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
++      products.set(id, { id, name, price, category });
++      bus.emit(Events.PRODUCT_CREATED, { productId: id, name, price, category } as ProductCreatedEvent);
++      return id;
++    },
++
++    getProduct(productId: string) {
++      return products.get(productId) || null;
++    },
++
++    listProducts(category?: string) {
++      const all = Array.from(products.values());
++      if (category) {
++        return all.filter(p => p.category === category);
++      }
++      return all;
++    },
++
++    searchProducts(query: string) {
++      const lowerQuery = query.toLowerCase();
++      return Array.from(products.values()).filter(
++        p => p.name.toLowerCase().includes(lowerQuery) || p.category.toLowerCase().includes(lowerQuery)
++      );
++    },
++
++    updateProduct(productId: string, updates: Partial<{ name: string; price: number; category: string }>): void {
++      const product = products.get(productId);
++      if (product) {
++        products.set(productId, { ...product, ...updates });
++      }
++    },
++
++    removeProduct(productId: string): boolean {
++      return products.delete(productId);
++    },
++  };
++}
+diff --git a/src/inventory/index.ts b/src/inventory/index.ts
+new file mode 100644
+index 0000000..604302a
+--- /dev/null
++++ b/src/inventory/index.ts
+@@ -0,0 +1,53 @@
++import { EventBus } from '../bus.js';
++import { InventoryService, Events, InventoryUpdatedEvent, LowStockAlertEvent } from '../types.js';
++
++export function createInventoryService(bus: EventBus): InventoryService {
++  const stock = new Map<string, number>();
++  const thresholds = new Map<string, number>();
++
++  const checkLowStock = (productId: string, quantity: number) => {
++    const threshold = thresholds.get(productId);
++    if (threshold !== undefined && quantity <= threshold) {
++      bus.emit(Events.LOW_STOCK_ALERT, {
++        productId,
++        currentQuantity: quantity,
++        threshold,
++      } as LowStockAlertEvent);
++    }
++  };
++
++  return {
++    setStock(productId: string, quantity: number): void {
++      stock.set(productId, quantity);
++      bus.emit(Events.INVENTORY_UPDATED, { productId, quantity } as InventoryUpdatedEvent);
++      checkLowStock(productId, quantity);
++    },
++
++    getStock(productId: string): number {
++      return stock.get(productId) || 0;
++    },
++
++    reserve(productId: string, quantity: number): boolean {
++      const current = stock.get(productId) || 0;
++      if (current < quantity) {
++        return false;
++      }
++      const newQuantity = current - quantity;
++      stock.set(productId, newQuantity);
++      bus.emit(Events.INVENTORY_UPDATED, { productId, quantity: newQuantity } as InventoryUpdatedEvent);
++      checkLowStock(productId, newQuantity);
++      return true;
++    },
++
++    release(productId: string, quantity: number): void {
++      const current = stock.get(productId) || 0;
++      const newQuantity = current + quantity;
++      stock.set(productId, newQuantity);
++      bus.emit(Events.INVENTORY_UPDATED, { productId, quantity: newQuantity } as InventoryUpdatedEvent);
++    },
++
++    setLowStockThreshold(productId: string, threshold: number): void {
++      thresholds.set(productId, threshold);
++    },
++  };
++}
+diff --git a/src/notifications/index.ts b/src/notifications/index.ts
+new file mode 100644
+index 0000000..1e2da80
+--- /dev/null
++++ b/src/notifications/index.ts
+@@ -0,0 +1,72 @@
++import { EventBus } from '../bus.js';
++import {
++  NotificationService,
++  Events,
++  OrderCreatedEvent,
++  OrderStatusChangedEvent,
++  PaymentProcessedEvent,
++  NotificationSentEvent,
++} from '../types.js';
++
++export function createNotificationService(bus: EventBus): NotificationService {
++  const subscribers = new Set<string>();
++  const notifications = new Map<string, Array<{ type: string; message: string; timestamp: number }>>();
++  const orderToUser = new Map<string, string>();
++
++  bus.on(Events.ORDER_CREATED, (payload: unknown) => {
++    const event = payload as OrderCreatedEvent;
++    orderToUser.set(event.orderId, event.userId);
++  });
++
++  bus.on(Events.ORDER_STATUS_CHANGED, (payload: unknown) => {
++    const event = payload as OrderStatusChangedEvent;
++    const userId = orderToUser.get(event.orderId);
++    if (userId && subscribers.has(userId)) {
++      const notification = {
++        type: 'order_status',
++        message: `Order ${event.orderId} status changed from ${event.previousStatus} to ${event.status}`,
++        timestamp: Date.now(),
++      };
++      if (!notifications.has(userId)) {
++        notifications.set(userId, []);
++      }
++      notifications.get(userId)!.push(notification);
++      bus.emit(Events.NOTIFICATION_SENT, {
++        userId,
++        type: notification.type,
++        message: notification.message,
++      } as NotificationSentEvent);
++    }
++  });
++
++  bus.on(Events.PAYMENT_PROCESSED, (payload: unknown) => {
++    const event = payload as PaymentProcessedEvent;
++    const userId = orderToUser.get(event.orderId);
++    if (userId && subscribers.has(userId)) {
++      const notification = {
++        type: 'payment',
++        message: `Payment for order ${event.orderId} ${event.status}`,
++        timestamp: Date.now(),
++      };
++      if (!notifications.has(userId)) {
++        notifications.set(userId, []);
++      }
++      notifications.get(userId)!.push(notification);
++      bus.emit(Events.NOTIFICATION_SENT, {
++        userId,
++        type: notification.type,
++        message: notification.message,
++      } as NotificationSentEvent);
++    }
++  });
++
++  return {
++    subscribe(userId: string): void {
++      subscribers.add(userId);
++    },
++
++    getNotifications(userId: string): Array<{ type: string; message: string; timestamp: number }> {
++      return notifications.get(userId) || [];
++    },
++  };
++}
+diff --git a/src/orders/index.ts b/src/orders/index.ts
+new file mode 100644
+index 0000000..93d7d7d
+--- /dev/null
++++ b/src/orders/index.ts
+@@ -0,0 +1,61 @@
++import { EventBus } from '../bus.js';
++import { OrderService, OrderStatus, Events, OrderCreatedEvent, OrderStatusChangedEvent } from '../types.js';
++
++export function createOrderService(bus: EventBus): OrderService {
++  const orders = new Map<string, { id: string; userId: string; cartId: string; status: OrderStatus; total: number }>();
++  const userOrders = new Map<string, Set<string>>();
++
++  return {
++    createOrder(userId: string, cartId: string, total: number): string {
++      const id = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
++      orders.set(id, { id, userId, cartId, status: OrderStatus.PENDING, total });
++
++      if (!userOrders.has(userId)) {
++        userOrders.set(userId, new Set());
++      }
++      userOrders.get(userId)!.add(id);
++
++      bus.emit(Events.ORDER_CREATED, {
++        orderId: id,
++        userId,
++        cartId,
++        total,
++      } as OrderCreatedEvent);
++
++      return id;
++    },
++
++    getOrder(orderId: string) {
++      const order = orders.get(orderId);
++      if (!order) return null;
++      return {
++        id: order.id,
++        userId: order.userId,
++        status: order.status,
++        total: order.total,
++      };
++    },
++
++    updateStatus(orderId: string, status: OrderStatus): void {
++      const order = orders.get(orderId);
++      if (order) {
++        const previousStatus = order.status;
++        order.status = status;
++        bus.emit(Events.ORDER_STATUS_CHANGED, {
++          orderId,
++          status,
++          previousStatus,
++        } as OrderStatusChangedEvent);
++      }
++    },
++
++    listOrders(userId: string) {
++      const orderIds = userOrders.get(userId);
++      if (!orderIds) return [];
++      return Array.from(orderIds)
++        .map(id => orders.get(id))
++        .filter((o): o is NonNullable<typeof o> => o !== undefined)
++        .map(o => ({ id: o.id, status: o.status, total: o.total }));
++    },
++  };
++}
+diff --git a/src/payment/index.ts b/src/payment/index.ts
+new file mode 100644
+index 0000000..77ba20a
+--- /dev/null
++++ b/src/payment/index.ts
+@@ -0,0 +1,60 @@
++import { EventBus } from '../bus.js';
++import { PaymentService, PaymentStatus, Events, PaymentProcessedEvent } from '../types.js';
++
++export interface PaymentServiceOptions {
++  simulateFailure?: boolean;
++  simulateTimeout?: boolean;
++}
++
++export function createPaymentService(bus: EventBus, options?: PaymentServiceOptions): PaymentService {
++  const transactions = new Map<string, { orderId: string; amount: number; status: PaymentStatus; refunded: boolean }>();
++
++  return {
++    async processPayment(
++      orderId: string,
++      amount: number
++    ): Promise<{ status: PaymentStatus; transactionId?: string; error?: string }> {
++      if (options?.simulateTimeout) {
++        const txId = `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
++        transactions.set(txId, { orderId, amount, status: PaymentStatus.TIMEOUT, refunded: false });
++        await bus.emit(Events.PAYMENT_PROCESSED, {
++          orderId,
++          status: PaymentStatus.TIMEOUT,
++          transactionId: txId,
++          error: 'Payment timeout',
++        } as PaymentProcessedEvent);
++        return { status: PaymentStatus.TIMEOUT, transactionId: txId, error: 'Payment timeout' };
++      }
++
++      if (options?.simulateFailure) {
++        const txId = `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
++        transactions.set(txId, { orderId, amount, status: PaymentStatus.FAILED, refunded: false });
++        await bus.emit(Events.PAYMENT_PROCESSED, {
++          orderId,
++          status: PaymentStatus.FAILED,
++          transactionId: txId,
++          error: 'Payment declined',
++        } as PaymentProcessedEvent);
++        return { status: PaymentStatus.FAILED, transactionId: txId, error: 'Payment declined' };
++      }
++
++      const txId = `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
++      transactions.set(txId, { orderId, amount, status: PaymentStatus.SUCCESS, refunded: false });
++      await bus.emit(Events.PAYMENT_PROCESSED, {
++        orderId,
++        status: PaymentStatus.SUCCESS,
++        transactionId: txId,
++      } as PaymentProcessedEvent);
++      return { status: PaymentStatus.SUCCESS, transactionId: txId };
++    },
++
++    async refund(transactionId: string): Promise<boolean> {
++      const tx = transactions.get(transactionId);
++      if (!tx || tx.status !== PaymentStatus.SUCCESS || tx.refunded) {
++        return false;
++      }
++      tx.refunded = true;
++      return true;
++    },
++  };
++}
+diff --git a/src/pricing/index.ts b/src/pricing/index.ts
+new file mode 100644
+index 0000000..0c8f1aa
+--- /dev/null
++++ b/src/pricing/index.ts
+@@ -0,0 +1,49 @@
++import { EventBus } from '../bus.js';
++import { PricingService, Events, ProductCreatedEvent } from '../types.js';
++
++export function createPricingService(bus: EventBus): PricingService {
++  const TAX_RATE = 0.1;
++  const productPrices = new Map<string, number>();
++  const discountCodes = new Map<string, number>();
++
++  bus.on(Events.PRODUCT_CREATED, (payload: unknown) => {
++    const event = payload as ProductCreatedEvent;
++    productPrices.set(event.productId, event.price);
++  });
++
++  return {
++    calculateTotal(
++      items: Array<{ productId: string; quantity: number; price: number }>,
++      discountCode?: string
++    ): { subtotal: number; discount: number; tax: number; total: number } {
++      const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
++
++      let discount = 0;
++      if (discountCode) {
++        const discountPercent = discountCodes.get(discountCode);
++        if (discountPercent !== undefined) {
++          discount = subtotal * (discountPercent / 100);
++        }
++      }
++
++      const afterDiscount = subtotal - discount;
++      const tax = afterDiscount * TAX_RATE;
++      const total = afterDiscount + tax;
++
++      return {
++        subtotal,
++        discount,
++        tax,
++        total,
++      };
++    },
++
++    addDiscountCode(code: string, percentage: number): void {
++      discountCodes.set(code, percentage);
++    },
++
++    getPrice(productId: string): number {
++      return productPrices.get(productId) || 0;
++    },
++  };
++}

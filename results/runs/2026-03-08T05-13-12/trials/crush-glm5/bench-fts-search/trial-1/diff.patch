@@ -1,0 +1,260 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..5613dd3
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 650318,
++  "output_tokens": 6282,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.6704203999999999
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..b22bb68
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,10 @@
++The issue is with the external content table approach. Let me switch to a contentless FTS5 table and handle sync manually in CRUD operations:Done. All 35 tests pass.
++
++**Changes made:**
++
++1. **`src/db.ts`**: Added FTS5 virtual table (`notes_fts`) and updated `seedDatabase` to sync FTS index with note IDs using rowid
++
++2. **`src/routes.ts`**: Added two new endpoints and manual FTS sync in CRUD operations:
++   - `GET /notes/search?q=<query>` - Full-text search with BM25 ranking, `<mark>` highlighting, and pagination
++   - `GET /notes/search/suggest?q=<prefix>` - Autocomplete returning up to 5 matching titles
++   - Sync FTS on create/update/delete operations
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index a3ad476..a7ecd82 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1131,7 +1131,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1247,7 +1246,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1540,7 +1538,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2301,7 +2298,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -4604,7 +4600,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/db.ts b/src/db.ts
+index 810e0fd..80e5220 100644
+--- a/src/db.ts
++++ b/src/db.ts
+@@ -18,6 +18,15 @@ export function createDatabase(path?: string): Database.Database {
+     )
+   `);
+ 
++  // Create FTS5 virtual table for full-text search
++  // We use rowid to store the note id for easy association
++  db.exec(`
++    CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
++      title,
++      body
++    )
++  `);
++
+   return db;
+ }
+ 
+@@ -26,11 +35,17 @@ export function seedDatabase(db: Database.Database): void {
+     INSERT INTO notes (title, body, tags) VALUES (?, ?, ?)
+   `);
+ 
++  const insertFts = db.prepare(`
++    INSERT INTO notes_fts (rowid, title, body) VALUES (?, ?, ?)
++  `);
++
+   const notes = getSeedNotes();
+ 
+   const insertMany = db.transaction((items: { title: string; body: string; tags: string }[]) => {
+     for (const item of items) {
+-      insert.run(item.title, item.body, item.tags);
++      const result = insert.run(item.title, item.body, item.tags);
++      const noteId = result.lastInsertRowid as number;
++      insertFts.run(noteId, item.title, item.body);
+     }
+   });
+ 
+diff --git a/src/routes.ts b/src/routes.ts
+index 013b2dc..d806d65 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -1,11 +1,102 @@
+ import { Router, Request, Response, NextFunction } from 'express';
+ import Database from 'better-sqlite3';
+-import { Note, NoteInput } from './models.js';
++import { Note, NoteInput, SearchResult, SuggestResult } from './models.js';
+ import { NotFoundError, ValidationError } from './errors.js';
+ 
+ export function createRoutes(db: Database.Database): Router {
+   const router = Router();
+ 
++  // GET /notes/search - Full-text search
++  router.get('/notes/search', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const q = req.query.q as string | undefined;
++      const page = parseInt(req.query.page as string) || 1;
++
++      if (!q || q.trim() === '') {
++        throw new ValidationError('Query parameter "q" is required');
++      }
++
++      const perPage = 20;
++      const offset = (page - 1) * perPage;
++
++      // Sanitize query for FTS5 - escape special characters and handle quotes
++      let ftsQuery = q.trim();
++
++      // If the query contains quoted phrases, preserve them for exact matching
++      // Otherwise, escape special FTS5 characters
++      const hasQuotes = /^".*"$/.test(ftsQuery);
++
++      if (!hasQuotes) {
++        // Remove or escape special FTS5 characters that could cause issues
++        // Replace problematic characters with spaces
++        ftsQuery = ftsQuery.replace(/[^\w\s]/g, ' ').trim();
++        // If nothing left after sanitization, return empty results
++        if (!ftsQuery) {
++          res.json({ results: [], total: 0, page, perPage });
++          return;
++        }
++      }
++
++      // Get total count
++      const countStmt = db.prepare(`
++        SELECT COUNT(*) as total FROM notes_fts WHERE notes_fts MATCH ?
++      `);
++      const countResult = countStmt.get(ftsQuery) as { total: number };
++      const total = countResult.total;
++
++      // Get search results with BM25 ranking and snippets
++      // Use rowid as id (rowid matches the note id)
++      const searchStmt = db.prepare(`
++        SELECT 
++          rowid as id,
++          title,
++          snippet(notes_fts, 1, '<mark>', '</mark>', '...', 30) as snippet,
++          bm25(notes_fts) as rank
++        FROM notes_fts
++        WHERE notes_fts MATCH ?
++        ORDER BY rank
++        LIMIT ? OFFSET ?
++      `);
++      const results = searchStmt.all(ftsQuery, perPage, offset) as SearchResult[];
++
++      res.json({ results, total, page, perPage });
++    } catch (err) {
++      next(err);
++    }
++  });
++
++  // GET /notes/search/suggest - Autocomplete suggestions
++  router.get('/notes/search/suggest', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const q = req.query.q as string | undefined;
++
++      if (!q || q.trim() === '') {
++        throw new ValidationError('Query parameter "q" is required');
++      }
++
++      const prefix = q.trim();
++
++      // Use FTS5 prefix matching to find titles that start with or contain the prefix
++      // Also search in body to match content, but only return title and id
++      // Use rowid as id (rowid matches the note id)
++      const suggestStmt = db.prepare(`
++        SELECT DISTINCT rowid as id, title
++        FROM notes_fts
++        WHERE notes_fts MATCH ?
++        ORDER BY bm25(notes_fts)
++        LIMIT 5
++      `);
++
++      // Create a prefix query for FTS5
++      const prefixQuery = `${prefix}*`;
++      const results = suggestStmt.all(prefixQuery) as SuggestResult[];
++
++      res.json({ results });
++    } catch (err) {
++      next(err);
++    }
++  });
++
+   // GET /notes - List all notes (with optional tag filter)
+   router.get('/notes', (req: Request, res: Response, next: NextFunction) => {
+     try {
+@@ -65,8 +156,12 @@ export function createRoutes(db: Database.Database): Router {
+         INSERT INTO notes (title, body, tags) VALUES (?, ?, ?)
+       `);
+       const result = stmt.run(input.title, input.body, tags);
++      const noteId = result.lastInsertRowid as number;
++
++      // Sync to FTS index
++      db.prepare('INSERT INTO notes_fts (rowid, title, body) VALUES (?, ?, ?)').run(noteId, input.title, input.body);
+ 
+-      const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(result.lastInsertRowid) as Note;
++      const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(noteId) as Note;
+       res.status(201).json({ note });
+     } catch (err) {
+       next(err);
+@@ -94,6 +189,10 @@ export function createRoutes(db: Database.Database): Router {
+       `);
+       stmt.run(title, body, tags, id);
+ 
++      // Sync to FTS index - delete old and insert new
++      db.prepare('DELETE FROM notes_fts WHERE rowid = ?').run(id);
++      db.prepare('INSERT INTO notes_fts (rowid, title, body) VALUES (?, ?, ?)').run(id, title, body);
++
+       const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(id) as Note;
+       res.json({ note });
+     } catch (err) {
+@@ -112,6 +211,10 @@ export function createRoutes(db: Database.Database): Router {
+       }
+ 
+       db.prepare('DELETE FROM notes WHERE id = ?').run(id);
++      
++      // Sync to FTS index
++      db.prepare('DELETE FROM notes_fts WHERE rowid = ?').run(id);
++      
+       res.status(204).send();
+     } catch (err) {
+       next(err);

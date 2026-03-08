@@ -1,0 +1,1329 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..af76f50
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 1918750,
++  "output_tokens": 15379,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 1.9679628
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..b106001
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,9 @@
++Done. Built a multi-tenant analytics dashboard API with:
++
++- **Users** (`src/users/router.ts`): Register, login (JWT), profile, role management
++- **Ingest** (`src/ingest/router.ts`): Single and batch event ingestion
++- **Query** (`src/query/router.ts`): Count, timeseries, breakdown, funnel analysis
++- **Dashboards** (`src/dashboards/router.ts`): Full CRUD for dashboards and widgets
++- **Export** (`src/export/router.ts`): JSON/CSV event export, dashboard export
++
++All 50 tests pass, build and lint clean.
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index 16cc798..4380b89 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1102,7 +1102,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1225,7 +1224,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1518,7 +1516,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2291,7 +2288,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -4636,7 +4632,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/app.ts b/src/app.ts
+new file mode 100644
+index 0000000..1c56ccc
+--- /dev/null
++++ b/src/app.ts
+@@ -0,0 +1,25 @@
++import express from 'express';
++import usersRouter from './users/router.js';
++import ingestRouter from './ingest/router.js';
++import queryRouter from './query/router.js';
++import dashboardsRouter from './dashboards/router.js';
++import exportRouter from './export/router.js';
++import { errorHandler } from './errors.js';
++
++export function createApp() {
++  const app = express();
++
++  app.use(express.json());
++
++  // Routes
++  app.use('/users', usersRouter);
++  app.use('/events', ingestRouter);
++  app.use('/query', queryRouter);
++  app.use('/dashboards', dashboardsRouter);
++  app.use('/export', exportRouter);
++
++  // Error handler
++  app.use(errorHandler);
++
++  return app;
++}
+diff --git a/src/auth.ts b/src/auth.ts
+new file mode 100644
+index 0000000..65fd037
+--- /dev/null
++++ b/src/auth.ts
+@@ -0,0 +1,93 @@
++import { Request, Response, NextFunction } from 'express';
++import jwt from 'jsonwebtoken';
++import { UnauthorizedError } from './errors';
++
++const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-key';
++
++export interface JwtPayload {
++  sub: string;
++  tid: string;
++  iat: number;
++  exp: number;
++}
++
++export interface AuthUser {
++  id: string;
++  tenantId: string;
++  role: string;
++}
++
++// eslint-disable-next-line @typescript-eslint/no-namespace
++declare global {
++  // eslint-disable-next-line @typescript-eslint/no-namespace
++  namespace Express {
++    interface Request {
++      user?: AuthUser;
++    }
++  }
++}
++
++export function authMiddleware(req: Request, _res: Response, next: NextFunction): void {
++  if (req.user) {
++    next();
++    return;
++  }
++
++  const authHeader = req.headers.authorization;
++
++  if (!authHeader || !authHeader.startsWith('Bearer ')) {
++    next(new UnauthorizedError('Missing authorization header'));
++    return;
++  }
++
++  const token = authHeader.substring(7);
++
++  try {
++    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
++    req.user = {
++      id: decoded.sub,
++      tenantId: decoded.tid,
++      role: 'viewer',
++    };
++    next();
++  } catch {
++    next(new UnauthorizedError('Invalid token'));
++  }
++}
++
++export function optionalAuthMiddleware(req: Request, _res: Response, next: NextFunction): void {
++  const authHeader = req.headers.authorization;
++
++  if (!authHeader || !authHeader.startsWith('Bearer ')) {
++    next();
++    return;
++  }
++
++  const token = authHeader.substring(7);
++
++  try {
++    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
++    req.user = {
++      id: decoded.sub,
++      tenantId: decoded.tid,
++      role: 'viewer',
++    };
++  } catch {
++    // Token is invalid, but we continue without auth
++  }
++  next();
++}
++
++export function requireAdmin(req: Request, _res: Response, next: NextFunction): void {
++  if (!req.user) {
++    next(new UnauthorizedError('Authentication required'));
++    return;
++  }
++
++  if (req.user.role !== 'admin') {
++    next(new UnauthorizedError('Admin access required'));
++    return;
++  }
++
++  next();
++}
+diff --git a/src/dashboards/router.ts b/src/dashboards/router.ts
+new file mode 100644
+index 0000000..3d6befd
+--- /dev/null
++++ b/src/dashboards/router.ts
+@@ -0,0 +1,314 @@
++import { Router, Request, Response, NextFunction } from 'express';
++import { v4 as uuidv4 } from 'uuid';
++import { getDb } from '../db';
++import { authMiddleware } from '../auth';
++import { ValidationError, UnauthorizedError, NotFoundError } from '../errors';
++
++const router = Router();
++
++interface CreateDashboardBody {
++  name: string;
++  config?: Record<string, unknown>;
++}
++
++interface UpdateDashboardBody {
++  name?: string;
++  config?: Record<string, unknown>;
++}
++
++interface CreateWidgetBody {
++  type: 'counter' | 'timeseries' | 'breakdown' | 'funnel';
++  config?: Record<string, unknown>;
++  position_x?: number;
++  position_y?: number;
++  width?: number;
++  height?: number;
++}
++
++router.post('/', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
++  try {
++    if (!req.user) {
++      throw new UnauthorizedError('Authentication required');
++    }
++
++    const { name, config } = req.body as CreateDashboardBody;
++
++    if (!name) {
++      throw new ValidationError('Dashboard name is required');
++    }
++
++    const db = getDb();
++    const id = uuidv4();
++    const tenantId = req.user.tenantId;
++    const ownerId = req.user.id;
++    const configJson = JSON.stringify(config || {});
++
++    db.prepare(
++      'INSERT INTO dashboards (id, tenant_id, name, owner_id, config) VALUES (?, ?, ?, ?, ?)'
++    ).run(id, tenantId, name, ownerId, configJson);
++
++    res.status(201).json({
++      id,
++      tenant_id: tenantId,
++      name,
++      owner_id: ownerId,
++      config: config || {},
++    });
++  } catch (err) {
++    next(err);
++  }
++});
++
++router.get('/', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
++  try {
++    if (!req.user) {
++      throw new UnauthorizedError('Authentication required');
++    }
++
++    const db = getDb();
++    const tenantId = req.user.tenantId;
++
++    const dashboards = db.prepare(
++      'SELECT id, tenant_id, name, owner_id, config, created_at, updated_at FROM dashboards WHERE tenant_id = ?'
++    ).all(tenantId) as Array<{
++      id: string;
++      tenant_id: string;
++      name: string;
++      owner_id: string;
++      config: string;
++      created_at: string;
++      updated_at: string;
++    }>;
++
++    res.json(dashboards.map((d) => ({
++      ...d,
++      config: JSON.parse(d.config),
++    })));
++  } catch (err) {
++    next(err);
++  }
++});
++
++router.get('/:id', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
++  try {
++    if (!req.user) {
++      throw new UnauthorizedError('Authentication required');
++    }
++
++    const db = getDb();
++    const tenantId = req.user.tenantId;
++    const dashboardId = req.params.id;
++
++    const dashboard = db.prepare(
++      'SELECT id, tenant_id, name, owner_id, config, created_at, updated_at FROM dashboards WHERE id = ? AND tenant_id = ?'
++    ).get(dashboardId, tenantId) as {
++      id: string;
++      tenant_id: string;
++      name: string;
++      owner_id: string;
++      config: string;
++      created_at: string;
++      updated_at: string;
++    } | undefined;
++
++    if (!dashboard) {
++      throw new NotFoundError('Dashboard not found');
++    }
++
++    const widgets = db.prepare(
++      'SELECT id, dashboard_id, type, config, position_x, position_y, width, height FROM widgets WHERE dashboard_id = ?'
++    ).all(dashboardId) as Array<{
++      id: string;
++      dashboard_id: string;
++      type: string;
++      config: string;
++      position_x: number;
++      position_y: number;
++      width: number;
++      height: number;
++    }>;
++
++    res.json({
++      ...dashboard,
++      config: JSON.parse(dashboard.config),
++      widgets: widgets.map((w) => ({
++        ...w,
++        config: JSON.parse(w.config),
++      })),
++    });
++  } catch (err) {
++    next(err);
++  }
++});
++
++router.patch('/:id', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
++  try {
++    if (!req.user) {
++      throw new UnauthorizedError('Authentication required');
++    }
++
++    const db = getDb();
++    const tenantId = req.user.tenantId;
++    const dashboardId = req.params.id;
++    const { name, config } = req.body as UpdateDashboardBody;
++
++    const existing = db.prepare(
++      'SELECT id FROM dashboards WHERE id = ? AND tenant_id = ?'
++    ).get(dashboardId, tenantId);
++
++    if (!existing) {
++      throw new NotFoundError('Dashboard not found');
++    }
++
++    const updates: string[] = [];
++    const params: (string | number)[] = [];
++
++    if (name !== undefined) {
++      updates.push('name = ?');
++      params.push(name);
++    }
++
++    if (config !== undefined) {
++      updates.push('config = ?');
++      params.push(JSON.stringify(config));
++    }
++
++    if (updates.length > 0) {
++      updates.push("updated_at = datetime('now')");
++      params.push(dashboardId);
++      params.push(tenantId);
++
++      db.prepare(
++        `UPDATE dashboards SET ${updates.join(', ')} WHERE id = ? AND tenant_id = ?`
++      ).run(...params);
++    }
++
++    const updated = db.prepare(
++      'SELECT id, tenant_id, name, owner_id, config, created_at, updated_at FROM dashboards WHERE id = ? AND tenant_id = ?'
++    ).get(dashboardId, tenantId) as {
++      id: string;
++      tenant_id: string;
++      name: string;
++      owner_id: string;
++      config: string;
++      created_at: string;
++      updated_at: string;
++    };
++
++    res.json({
++      ...updated,
++      config: JSON.parse(updated.config),
++    });
++  } catch (err) {
++    next(err);
++  }
++});
++
++router.delete('/:id', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
++  try {
++    if (!req.user) {
++      throw new UnauthorizedError('Authentication required');
++    }
++
++    const db = getDb();
++    const tenantId = req.user.tenantId;
++    const dashboardId = req.params.id;
++
++    const existing = db.prepare(
++      'SELECT id FROM dashboards WHERE id = ? AND tenant_id = ?'
++    ).get(dashboardId, tenantId);
++
++    if (!existing) {
++      throw new NotFoundError('Dashboard not found');
++    }
++
++    db.prepare('DELETE FROM dashboards WHERE id = ?').run(dashboardId);
++
++    res.status(204).send();
++  } catch (err) {
++    next(err);
++  }
++});
++
++router.post('/:id/widgets', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
++  try {
++    if (!req.user) {
++      throw new UnauthorizedError('Authentication required');
++    }
++
++    const db = getDb();
++    const tenantId = req.user.tenantId;
++    const dashboardId = req.params.id;
++    const { type, config, position_x, position_y, width, height } = req.body as CreateWidgetBody;
++
++    if (!type || !['counter', 'timeseries', 'breakdown', 'funnel'].includes(type)) {
++      throw new ValidationError('Valid widget type is required (counter, timeseries, breakdown, funnel)');
++    }
++
++    const dashboard = db.prepare(
++      'SELECT id FROM dashboards WHERE id = ? AND tenant_id = ?'
++    ).get(dashboardId, tenantId);
++
++    if (!dashboard) {
++      throw new NotFoundError('Dashboard not found');
++    }
++
++    const id = uuidv4();
++    const widgetConfig = JSON.stringify(config || {});
++
++    db.prepare(
++      'INSERT INTO widgets (id, dashboard_id, type, config, position_x, position_y, width, height) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
++    ).run(
++      id,
++      dashboardId,
++      type,
++      widgetConfig,
++      position_x ?? 0,
++      position_y ?? 0,
++      width ?? 1,
++      height ?? 1
++    );
++
++    res.status(201).json({
++      id,
++      dashboard_id: dashboardId,
++      type,
++      config: config || {},
++      position_x: position_x ?? 0,
++      position_y: position_y ?? 0,
++      width: width ?? 1,
++      height: height ?? 1,
++    });
++  } catch (err) {
++    next(err);
++  }
++});
++
++router.delete('/:id/widgets/:widgetId', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
++  try {
++    if (!req.user) {
++      throw new UnauthorizedError('Authentication required');
++    }
++
++    const db = getDb();
++    const tenantId = req.user.tenantId;
++    const dashboardId = req.params.id;
++    const widgetId = req.params.widgetId;
++
++    const dashboard = db.prepare(
++      'SELECT id FROM dashboards WHERE id = ? AND tenant_id = ?'
++    ).get(dashboardId, tenantId);
++
++    if (!dashboard) {
++      throw new NotFoundError('Dashboard not found');
++    }
++
++    db.prepare('DELETE FROM widgets WHERE id = ? AND dashboard_id = ?').run(widgetId, dashboardId);
++
++    res.status(204).send();
++  } catch (err) {
++    next(err);
++  }
++});
++
++export default router;
+diff --git a/src/db.ts b/src/db.ts
+new file mode 100644
+index 0000000..eefeade
+--- /dev/null
++++ b/src/db.ts
+@@ -0,0 +1,31 @@
++import Database from 'better-sqlite3';
++import { readFileSync } from 'fs';
++import { join } from 'path';
++
++let db: Database.Database | null = null;
++
++export function createTestDb(): Database.Database {
++  const database = new Database(':memory:');
++  const schema = readFileSync(join(process.cwd(), 'schema.sql'), 'utf-8');
++  database.exec(schema);
++  db = database;
++  return database;
++}
++
++export function getDb(): Database.Database {
++  if (!db) {
++    throw new Error('Database not initialized');
++  }
++  return db;
++}
++
++export function setDb(database: Database.Database): void {
++  db = database;
++}
++
++export function closeDb(): void {
++  if (db) {
++    db.close();
++    db = null;
++  }
++}
+diff --git a/src/errors.ts b/src/errors.ts
+new file mode 100644
+index 0000000..115c09a
+--- /dev/null
++++ b/src/errors.ts
+@@ -0,0 +1,62 @@
++import { Request, Response, NextFunction } from 'express';
++
++export class AppError extends Error {
++  public statusCode: number;
++  public code: string;
++
++  constructor(message: string, statusCode: number, code: string) {
++    super(message);
++    this.statusCode = statusCode;
++    this.code = code;
++  }
++}
++
++export class ValidationError extends AppError {
++  constructor(message: string) {
++    super(message, 400, 'VALIDATION_ERROR');
++  }
++}
++
++export class UnauthorizedError extends AppError {
++  constructor(message: string = 'Unauthorized') {
++    super(message, 401, 'AUTH_ERROR');
++  }
++}
++
++export class ForbiddenError extends AppError {
++  constructor(message: string = 'Forbidden') {
++    super(message, 403, 'FORBIDDEN');
++  }
++}
++
++export class NotFoundError extends AppError {
++  constructor(message: string = 'Not found') {
++    super(message, 404, 'NOT_FOUND');
++  }
++}
++
++export class ConflictError extends AppError {
++  constructor(message: string) {
++    super(message, 409, 'CONFLICT');
++  }
++}
++
++export function errorHandler(
++  err: Error | AppError,
++  _req: Request,
++  res: Response,
++  _next: NextFunction
++): void {
++  if (err instanceof AppError) {
++    res.status(err.statusCode).json({
++      error: err.message,
++      code: err.code,
++    });
++    return;
++  }
++
++  res.status(500).json({
++    error: 'Internal server error',
++    code: 'INTERNAL_ERROR',
++  });
++}
+diff --git a/src/export/router.ts b/src/export/router.ts
+new file mode 100644
+index 0000000..6603d5b
+--- /dev/null
++++ b/src/export/router.ts
+@@ -0,0 +1,123 @@
++import { Router, Request, Response, NextFunction } from 'express';
++import { getDb } from '../db';
++import { authMiddleware } from '../auth';
++import { ValidationError, UnauthorizedError, NotFoundError } from '../errors';
++
++const router = Router();
++
++router.get('/events', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
++  try {
++    if (!req.user) {
++      throw new UnauthorizedError('Authentication required');
++    }
++
++    const format = req.query.format as string;
++
++    if (!format || !['json', 'csv'].includes(format)) {
++      throw new ValidationError('format must be either "json" or "csv"');
++    }
++
++    const db = getDb();
++    const tenantId = req.user.tenantId;
++
++    const events = db.prepare(
++      'SELECT id, tenant_id, name, properties, timestamp, user_id, session_id FROM events WHERE tenant_id = ? ORDER BY timestamp DESC'
++    ).all(tenantId) as Array<{
++      id: string;
++      tenant_id: string;
++      name: string;
++      properties: string;
++      timestamp: string;
++      user_id: string | null;
++      session_id: string | null;
++    }>;
++
++    const parsedEvents = events.map((e) => ({
++      ...e,
++      properties: JSON.parse(e.properties),
++    }));
++
++    if (format === 'json') {
++      res.json(parsedEvents);
++      return;
++    }
++
++    // CSV format
++    const headers = ['id', 'tenant_id', 'name', 'properties', 'timestamp', 'user_id', 'session_id'];
++    const csvRows = [headers.join(',')];
++
++    for (const event of parsedEvents) {
++      const row = [
++        event.id,
++        event.tenant_id,
++        event.name,
++        `"${JSON.stringify(event.properties).replace(/"/g, '""')}"`,
++        event.timestamp,
++        event.user_id || '',
++        event.session_id || '',
++      ];
++      csvRows.push(row.join(','));
++    }
++
++    res.setHeader('Content-Type', 'text/csv');
++    res.send(csvRows.join('\n'));
++  } catch (err) {
++    next(err);
++  }
++});
++
++router.get('/dashboard/:id', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
++  try {
++    if (!req.user) {
++      throw new UnauthorizedError('Authentication required');
++    }
++
++    const db = getDb();
++    const tenantId = req.user.tenantId;
++    const dashboardId = req.params.id;
++
++    const dashboard = db.prepare(
++      'SELECT id, tenant_id, name, owner_id, config, created_at, updated_at FROM dashboards WHERE id = ? AND tenant_id = ?'
++    ).get(dashboardId, tenantId) as {
++      id: string;
++      tenant_id: string;
++      name: string;
++      owner_id: string;
++      config: string;
++      created_at: string;
++      updated_at: string;
++    } | undefined;
++
++    if (!dashboard) {
++      throw new NotFoundError('Dashboard not found');
++    }
++
++    const widgets = db.prepare(
++      'SELECT id, dashboard_id, type, config, position_x, position_y, width, height FROM widgets WHERE dashboard_id = ?'
++    ).all(dashboardId) as Array<{
++      id: string;
++      dashboard_id: string;
++      type: string;
++      config: string;
++      position_x: number;
++      position_y: number;
++      width: number;
++      height: number;
++    }>;
++
++    res.json({
++      dashboard: {
++        ...dashboard,
++        config: JSON.parse(dashboard.config),
++      },
++      widgets: widgets.map((w) => ({
++        ...w,
++        config: JSON.parse(w.config),
++      })),
++    });
++  } catch (err) {
++    next(err);
++  }
++});
++
++export default router;
+diff --git a/src/ingest/router.ts b/src/ingest/router.ts
+new file mode 100644
+index 0000000..eb43733
+--- /dev/null
++++ b/src/ingest/router.ts
+@@ -0,0 +1,120 @@
++import { Router, Request, Response, NextFunction } from 'express';
++import { v4 as uuidv4 } from 'uuid';
++import { getDb } from '../db';
++import { authMiddleware } from '../auth';
++import { ValidationError, UnauthorizedError } from '../errors';
++
++const router = Router();
++
++interface EventInput {
++  name: string;
++  properties?: Record<string, unknown>;
++  timestamp?: string;
++  user_id?: string;
++  session_id?: string;
++}
++
++interface BatchBody {
++  events: EventInput[];
++}
++
++router.post('/', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
++  try {
++    if (!req.user) {
++      throw new UnauthorizedError('Authentication required');
++    }
++
++    const { name, properties, timestamp, user_id, session_id } = req.body as EventInput;
++
++    if (!name) {
++      throw new ValidationError('Event name is required');
++    }
++
++    const db = getDb();
++    const id = uuidv4();
++    const tenantId = req.user.tenantId;
++    const eventTimestamp = timestamp || new Date().toISOString();
++    const eventProperties = JSON.stringify(properties || {});
++
++    db.prepare(
++      'INSERT INTO events (id, tenant_id, name, properties, timestamp, user_id, session_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
++    ).run(id, tenantId, name, eventProperties, eventTimestamp, user_id || null, session_id || null);
++
++    res.status(201).json({
++      id,
++      tenant_id: tenantId,
++      name,
++      properties: properties || {},
++      timestamp: eventTimestamp,
++      user_id: user_id || null,
++      session_id: session_id || null,
++    });
++  } catch (err) {
++    next(err);
++  }
++});
++
++router.post('/batch', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
++  try {
++    if (!req.user) {
++      throw new UnauthorizedError('Authentication required');
++    }
++
++    const { events } = req.body as BatchBody;
++
++    if (!events || !Array.isArray(events) || events.length === 0) {
++      throw new ValidationError('Events array is required and must not be empty');
++    }
++
++    const db = getDb();
++    const tenantId = req.user.tenantId;
++    const insertedEvents: Array<Record<string, unknown>> = [];
++
++    const insert = db.prepare(
++      'INSERT INTO events (id, tenant_id, name, properties, timestamp, user_id, session_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
++    );
++
++    const insertMany = db.transaction((eventList: EventInput[]) => {
++      for (const event of eventList) {
++        if (!event.name) {
++          throw new ValidationError('Event name is required');
++        }
++
++        const id = uuidv4();
++        const eventTimestamp = event.timestamp || new Date().toISOString();
++        const eventProperties = JSON.stringify(event.properties || {});
++
++        insert.run(
++          id,
++          tenantId,
++          event.name,
++          eventProperties,
++          eventTimestamp,
++          event.user_id || null,
++          event.session_id || null
++        );
++
++        insertedEvents.push({
++          id,
++          tenant_id: tenantId,
++          name: event.name,
++          properties: event.properties || {},
++          timestamp: eventTimestamp,
++          user_id: event.user_id || null,
++          session_id: event.session_id || null,
++        });
++      }
++    });
++
++    insertMany(events);
++
++    res.status(201).json({
++      inserted: insertedEvents.length,
++      events: insertedEvents,
++    });
++  } catch (err) {
++    next(err);
++  }
++});
++
++export default router;
+diff --git a/src/query/router.ts b/src/query/router.ts
+new file mode 100644
+index 0000000..1b415ba
+--- /dev/null
++++ b/src/query/router.ts
+@@ -0,0 +1,257 @@
++import { Router, Request, Response, NextFunction } from 'express';
++import { getDb } from '../db';
++import { authMiddleware } from '../auth';
++import { ValidationError, UnauthorizedError } from '../errors';
++
++const router = Router();
++
++interface CountQuery {
++  event_name: string;
++  start?: string;
++  end?: string;
++}
++
++interface TimeseriesQuery {
++  event_name: string;
++  bucket: 'hour' | 'day' | 'week' | 'month';
++  start?: string;
++  end?: string;
++}
++
++interface BreakdownQuery {
++  event_name: string;
++  property_key: string;
++  start?: string;
++  end?: string;
++}
++
++interface FunnelQuery {
++  steps: string[];
++  start?: string;
++  end?: string;
++}
++
++router.post('/count', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
++  try {
++    if (!req.user) {
++      throw new UnauthorizedError('Authentication required');
++    }
++
++    const { event_name, start, end } = req.body as CountQuery;
++
++    if (!event_name) {
++      throw new ValidationError('event_name is required');
++    }
++
++    const db = getDb();
++    const tenantId = req.user.tenantId;
++
++    let sql = 'SELECT COUNT(*) as count FROM events WHERE tenant_id = ? AND name = ?';
++    const params: string[] = [tenantId, event_name];
++
++    if (start) {
++      sql += ' AND timestamp >= ?';
++      params.push(start);
++    }
++
++    if (end) {
++      sql += ' AND timestamp <= ?';
++      params.push(end);
++    }
++
++    const result = db.prepare(sql).get(...params) as { count: number };
++
++    res.json({ count: result.count });
++  } catch (err) {
++    next(err);
++  }
++});
++
++router.post('/timeseries', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
++  try {
++    if (!req.user) {
++      throw new UnauthorizedError('Authentication required');
++    }
++
++    const { event_name, bucket, start, end } = req.body as TimeseriesQuery;
++
++    if (!event_name) {
++      throw new ValidationError('event_name is required');
++    }
++
++    if (!bucket) {
++      throw new ValidationError('bucket is required');
++    }
++
++    const db = getDb();
++    const tenantId = req.user.tenantId;
++
++    let dateFormat: string;
++    switch (bucket) {
++      case 'hour':
++        dateFormat = '%Y-%m-%d %H:00:00';
++        break;
++      case 'day':
++        dateFormat = '%Y-%m-%d';
++        break;
++      case 'week':
++        dateFormat = '%Y-W%W';
++        break;
++      case 'month':
++        dateFormat = '%Y-%m';
++        break;
++      default:
++        dateFormat = '%Y-%m-%d';
++    }
++
++    let sql = `SELECT strftime('${dateFormat}', timestamp) as bucket, COUNT(*) as count FROM events WHERE tenant_id = ? AND name = ?`;
++    const params: string[] = [tenantId, event_name];
++
++    if (start) {
++      sql += ' AND timestamp >= ?';
++      params.push(start);
++    }
++
++    if (end) {
++      sql += ' AND timestamp <= ?';
++      params.push(end);
++    }
++
++    sql += ' GROUP BY bucket ORDER BY bucket';
++
++    const results = db.prepare(sql).all(...params) as Array<{ bucket: string; count: number }>;
++
++    res.json({ data: results });
++  } catch (err) {
++    next(err);
++  }
++});
++
++router.post('/breakdown', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
++  try {
++    if (!req.user) {
++      throw new UnauthorizedError('Authentication required');
++    }
++
++    const { event_name, property_key, start, end } = req.body as BreakdownQuery;
++
++    if (!event_name) {
++      throw new ValidationError('event_name is required');
++    }
++
++    if (!property_key) {
++      throw new ValidationError('property_key is required');
++    }
++
++    const db = getDb();
++    const tenantId = req.user.tenantId;
++
++    let sql = 'SELECT properties, COUNT(*) as count FROM events WHERE tenant_id = ? AND name = ?';
++    const params: string[] = [tenantId, event_name];
++
++    if (start) {
++      sql += ' AND timestamp >= ?';
++      params.push(start);
++    }
++
++    if (end) {
++      sql += ' AND timestamp <= ?';
++      params.push(end);
++    }
++
++    sql += ' GROUP BY properties';
++
++    const results = db.prepare(sql).all(...params) as Array<{ properties: string; count: number }>;
++
++    const breakdown: Array<{ property_value: string; count: number }> = [];
++    const valueCounts = new Map<string, number>();
++
++    for (const row of results) {
++      try {
++        const props = JSON.parse(row.properties) as Record<string, unknown>;
++        const value = props[property_key];
++        const valueStr = value !== undefined ? String(value) : '(none)';
++
++        const current = valueCounts.get(valueStr) || 0;
++        valueCounts.set(valueStr, current + row.count);
++      } catch {
++        // Skip invalid JSON
++      }
++    }
++
++    for (const [property_value, count] of valueCounts) {
++      breakdown.push({ property_value, count });
++    }
++
++    breakdown.sort((a, b) => b.count - a.count);
++
++    res.json({ data: breakdown });
++  } catch (err) {
++    next(err);
++  }
++});
++
++router.post('/funnel', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
++  try {
++    if (!req.user) {
++      throw new UnauthorizedError('Authentication required');
++    }
++
++    const { steps, start, end } = req.body as FunnelQuery;
++
++    if (!steps || !Array.isArray(steps) || steps.length === 0) {
++      throw new ValidationError('steps array is required');
++    }
++
++    const db = getDb();
++    const tenantId = req.user.tenantId;
++
++    const funnelSteps: Array<{ step: string; count: number }> = [];
++
++    for (let i = 0; i < steps.length; i++) {
++      const stepName = steps[i];
++
++      let sql = `
++        SELECT COUNT(DISTINCT session_id) as count
++        FROM events
++        WHERE tenant_id = ? AND name = ? AND session_id IS NOT NULL
++      `;
++      const params: (string | null)[] = [tenantId, stepName];
++
++      if (i > 0) {
++        const prevSteps = steps.slice(0, i);
++        const placeholders = prevSteps.map(() => '?').join(', ');
++
++        sql = `
++          SELECT COUNT(DISTINCT e1.session_id) as count
++          FROM events e1
++          WHERE e1.tenant_id = ? AND e1.name = ? AND e1.session_id IS NOT NULL
++          AND e1.session_id IN (
++            SELECT DISTINCT session_id FROM events
++            WHERE tenant_id = ? AND name IN (${placeholders}) AND session_id IS NOT NULL
++          )
++        `;
++        params.push(tenantId, ...prevSteps);
++      }
++
++      if (start) {
++        sql += ' AND timestamp >= ?';
++        params.push(start);
++      }
++
++      if (end) {
++        sql += ' AND timestamp <= ?';
++        params.push(end);
++      }
++
++      const result = db.prepare(sql).get(...params) as { count: number };
++      funnelSteps.push({ step: stepName, count: result.count });
++    }
++
++    res.json({ steps: funnelSteps });
++  } catch (err) {
++    next(err);
++  }
++});
++
++export default router;
+diff --git a/src/users/router.ts b/src/users/router.ts
+new file mode 100644
+index 0000000..68912a2
+--- /dev/null
++++ b/src/users/router.ts
+@@ -0,0 +1,174 @@
++import { Router, Request, Response, NextFunction } from 'express';
++import { v4 as uuidv4 } from 'uuid';
++import jwt from 'jsonwebtoken';
++import crypto from 'crypto';
++import { getDb } from '../db';
++import { authMiddleware } from '../auth';
++import { ValidationError, UnauthorizedError, ConflictError } from '../errors';
++
++const router = Router();
++const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-key';
++
++function hashPassword(password: string): string {
++  return crypto.createHash('sha256').update(password).digest('hex');
++}
++
++interface RegisterBody {
++  email: string;
++  password: string;
++  tenant_id: string;
++}
++
++interface LoginBody {
++  email: string;
++  password: string;
++}
++
++interface RoleBody {
++  role: string;
++}
++
++router.post('/', (req: Request, res: Response, next: NextFunction) => {
++  try {
++    const { email, password, tenant_id } = req.body as RegisterBody;
++
++    if (!email || !password || !tenant_id) {
++      throw new ValidationError('Email, password, and tenant_id are required');
++    }
++
++    const db = getDb();
++
++    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
++    if (existing) {
++      throw new ConflictError('Email already registered');
++    }
++
++    const id = uuidv4();
++    const passwordHash = hashPassword(password);
++
++    db.prepare(
++      'INSERT INTO users (id, email, password_hash, tenant_id, role) VALUES (?, ?, ?, ?, ?)'
++    ).run(id, email, passwordHash, tenant_id, 'viewer');
++
++    res.status(201).json({
++      id,
++      email,
++      tenant_id,
++      role: 'viewer',
++    });
++  } catch (err) {
++    next(err);
++  }
++});
++
++router.post('/login', (req: Request, res: Response, next: NextFunction) => {
++  try {
++    const { email, password } = req.body as LoginBody;
++
++    if (!email || !password) {
++      throw new ValidationError('Email and password are required');
++    }
++
++    const db = getDb();
++    const user = db.prepare(
++      'SELECT id, email, password_hash, tenant_id, role FROM users WHERE email = ?'
++    ).get(email) as { id: string; email: string; password_hash: string; tenant_id: string; role: string } | undefined;
++
++    if (!user) {
++      throw new UnauthorizedError('Invalid credentials');
++    }
++
++    const passwordHash = hashPassword(password);
++    if (passwordHash !== user.password_hash) {
++      throw new UnauthorizedError('Invalid credentials');
++    }
++
++    const token = jwt.sign(
++      { sub: user.id, tid: user.tenant_id },
++      JWT_SECRET,
++      { expiresIn: '24h' }
++    );
++
++    res.json({
++      token,
++      user: {
++        id: user.id,
++        email: user.email,
++        tenant_id: user.tenant_id,
++        role: user.role,
++      },
++    });
++  } catch (err) {
++    next(err);
++  }
++});
++
++router.get('/me', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
++  try {
++    if (!req.user) {
++      throw new UnauthorizedError('Authentication required');
++    }
++
++    const db = getDb();
++    const user = db.prepare(
++      'SELECT id, email, tenant_id, role, created_at FROM users WHERE id = ?'
++    ).get(req.user.id) as { id: string; email: string; tenant_id: string; role: string; created_at: string } | undefined;
++
++    if (!user) {
++      throw new UnauthorizedError('User not found');
++    }
++
++    res.json(user);
++  } catch (err) {
++    next(err);
++  }
++});
++
++router.patch('/:id/role', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
++  try {
++    if (!req.user) {
++      throw new UnauthorizedError('Authentication required');
++    }
++
++    const db = getDb();
++
++    const adminUser = db.prepare(
++      'SELECT role, tenant_id FROM users WHERE id = ?'
++    ).get(req.user.id) as { role: string; tenant_id: string } | undefined;
++
++    if (!adminUser || adminUser.role !== 'admin') {
++      throw new UnauthorizedError('Admin access required');
++    }
++
++    const targetId = req.params.id;
++    const { role } = req.body as RoleBody;
++
++    if (!role || !['admin', 'viewer', 'editor'].includes(role)) {
++      throw new ValidationError('Valid role is required (admin, viewer, editor)');
++    }
++
++    const targetUser = db.prepare(
++      'SELECT id, tenant_id FROM users WHERE id = ?'
++    ).get(targetId) as { id: string; tenant_id: string } | undefined;
++
++    if (!targetUser) {
++      throw new ValidationError('User not found');
++    }
++
++    if (targetUser.tenant_id !== adminUser.tenant_id) {
++      throw new UnauthorizedError('Cannot modify users from other tenants');
++    }
++
++    db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, targetId);
++
++    const updated = db.prepare(
++      'SELECT id, email, tenant_id, role FROM users WHERE id = ?'
++    ).get(targetId) as { id: string; email: string; tenant_id: string; role: string };
++
++    res.json(updated);
++  } catch (err) {
++    next(err);
++  }
++});
++
++export default router;

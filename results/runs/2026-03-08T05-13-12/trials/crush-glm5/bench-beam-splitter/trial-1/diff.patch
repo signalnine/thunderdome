@@ -1,0 +1,318 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..2e85bdb
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 324047,
++  "output_tokens": 8211,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.3503222
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..938044b
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,4 @@
++All tests pass, lint is clean, and build succeeds. Implementation complete in `src/index.ts`:
++
++- **`countBeamCells`**: Uses BFS to track visited cells with a Set, handling splitters by creating two diagonal beams
++- **`countBeamPaths`**: Uses memoized recursion with bigint to count paths efficiently without enumeration - handles 2^50 paths in milliseconds
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index 02b0dae..222cd7d 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.test.ts b/src/index.test.ts
+new file mode 100644
+index 0000000..c4236d2
+--- /dev/null
++++ b/src/index.test.ts
+@@ -0,0 +1,120 @@
++import { describe, it, expect } from 'vitest';
++import { countBeamCells, countBeamPaths } from './index.js';
++
++describe('Beam Splitter', () => {
++  describe('countBeamCells', () => {
++    it('handles simple grid with one splitter', () => {
++      const grid = [
++        ['.', 'S', '.', '.', '.'],
++        ['.', '.', '.', '.', '.'],
++        ['.', '^', '.', '.', '.'],
++        ['.', '.', '.', '.', '.'],
++      ];
++      expect(countBeamCells(grid)).toBe(5);
++    });
++
++    it('handles grid with two splitters', () => {
++      const grid = [
++        ['.', 'S', '.', '.', '.'],
++        ['.', '^', '.', '.', '.'],
++        ['^', '.', '^', '.', '.'],
++        ['.', '.', '.', '.', '.'],
++      ];
++      expect(countBeamCells(grid)).toBe(6);
++    });
++
++    it('handles grid with no splitters', () => {
++      const grid = [
++        ['.', 'S', '.'],
++        ['.', '.', '.'],
++        ['.', '.', '.'],
++      ];
++      expect(countBeamCells(grid)).toBe(3);
++    });
++
++    it('handles empty grid', () => {
++      expect(countBeamCells([])).toBe(0);
++    });
++
++    it('handles grid with no source', () => {
++      const grid = [
++        ['.', '.', '.'],
++        ['.', '.', '.'],
++      ];
++      expect(countBeamCells(grid)).toBe(0);
++    });
++  });
++
++  describe('countBeamPaths', () => {
++    it('handles simple grid with one splitter', () => {
++      const grid = [
++        ['.', 'S', '.', '.', '.'],
++        ['.', '.', '.', '.', '.'],
++        ['.', '^', '.', '.', '.'],
++        ['.', '.', '.', '.', '.'],
++      ];
++      expect(countBeamPaths(grid)).toBe(2n);
++    });
++
++    it('handles grid with two splitters', () => {
++      const grid = [
++        ['.', 'S', '.', '.', '.'],
++        ['.', '^', '.', '.', '.'],
++        ['^', '.', '^', '.', '.'],
++        ['.', '.', '.', '.', '.'],
++      ];
++      expect(countBeamPaths(grid)).toBe(4n);
++    });
++
++    it('handles grid with no splitters', () => {
++      const grid = [
++        ['.', 'S', '.'],
++        ['.', '.', '.'],
++        ['.', '.', '.'],
++      ];
++      expect(countBeamPaths(grid)).toBe(1n);
++    });
++
++    it('handles empty grid', () => {
++      expect(countBeamPaths([])).toBe(0n);
++    });
++
++    it('handles large number of paths efficiently', () => {
++      // Create a grid with cascading splitters in a binary tree pattern
++      // Each level has one more splitter than the previous
++      // All beams from splitters hit splitters at the next level
++      const depth = 50;
++      const rows = depth + 2;
++      const cols = depth * 2 + 5;
++      const grid: string[][] = [];
++      for (let r = 0; r < rows; r++) {
++        const row: string[] = [];
++        for (let c = 0; c < cols; c++) {
++          row.push('.');
++        }
++        grid.push(row);
++      }
++
++      const center = Math.floor(cols / 2);
++      grid[0][center] = 'S';
++
++      // Place splitters in a binary tree pattern
++      // Level n (1-indexed) has n splitters at positions:
++      // center - (n-1), center - (n-3), ..., center + (n-3), center + (n-1)
++      for (let level = 1; level <= depth; level++) {
++        const row = level;
++        for (let i = 0; i < level; i++) {
++          const col = center - (level - 1) + 2 * i;
++          grid[row][col] = '^';
++        }
++      }
++
++      const start = Date.now();
++      const result = countBeamPaths(grid);
++      const elapsed = Date.now() - start;
++
++      expect(result).toBe(2n ** BigInt(depth));
++      expect(elapsed).toBeLessThan(5000);
++    });
++  });
++});
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..936b645
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,107 @@
++type Direction = 'down' | 'down-left' | 'down-right';
++
++interface Position {
++  row: number;
++  col: number;
++}
++
++function findSource(grid: string[][]): Position | null {
++  for (let col = 0; col < grid[0].length; col++) {
++    if (grid[0][col] === 'S') {
++      return { row: 0, col };
++    }
++  }
++  return null;
++}
++
++function isInBounds(grid: string[][], row: number, col: number): boolean {
++  return row >= 0 && row < grid.length && col >= 0 && col < grid[0].length;
++}
++
++function getNextPosition(row: number, col: number, direction: Direction): Position {
++  switch (direction) {
++    case 'down':
++      return { row: row + 1, col };
++    case 'down-left':
++      return { row: row + 1, col: col - 1 };
++    case 'down-right':
++      return { row: row + 1, col: col + 1 };
++  }
++}
++
++export function countBeamCells(grid: string[][]): number {
++  if (grid.length === 0 || grid[0].length === 0) return 0;
++
++  const source = findSource(grid);
++  if (!source) return 0;
++
++  const visited = new Set<string>();
++  const key = (r: number, c: number) => `${r},${c}`;
++
++  const queue: Array<{ row: number; col: number; direction: Direction }> = [
++    { row: source.row, col: source.col, direction: 'down' },
++  ];
++
++  while (queue.length > 0) {
++    const { row, col, direction } = queue.shift()!;
++
++    if (!isInBounds(grid, row, col)) continue;
++
++    const cellKey = key(row, col);
++    if (visited.has(cellKey)) continue;
++    visited.add(cellKey);
++
++    const cell = grid[row][col];
++
++    if (cell === '^') {
++      const leftNext = getNextPosition(row, col, 'down-left');
++      const rightNext = getNextPosition(row, col, 'down-right');
++      queue.push({ ...leftNext, direction: 'down-left' });
++      queue.push({ ...rightNext, direction: 'down-right' });
++    } else {
++      const next = getNextPosition(row, col, direction);
++      queue.push({ ...next, direction });
++    }
++  }
++
++  return visited.size;
++}
++
++export function countBeamPaths(grid: string[][]): bigint {
++  if (grid.length === 0 || grid[0].length === 0) return 0n;
++
++  const source = findSource(grid);
++  if (!source) return 0n;
++
++  const memo = new Map<string, bigint>();
++  const key = (r: number, c: number, d: Direction) => `${r},${c},${d}`;
++
++  function countPaths(row: number, col: number, direction: Direction): bigint {
++    if (!isInBounds(grid, row, col)) {
++      return 1n;
++    }
++
++    const memoKey = key(row, col, direction);
++    if (memo.has(memoKey)) {
++      return memo.get(memoKey)!;
++    }
++
++    const cell = grid[row][col];
++    let result: bigint;
++
++    if (cell === '^') {
++      const leftNext = getNextPosition(row, col, 'down-left');
++      const rightNext = getNextPosition(row, col, 'down-right');
++      result = countPaths(leftNext.row, leftNext.col, 'down-left') +
++               countPaths(rightNext.row, rightNext.col, 'down-right');
++    } else {
++      const next = getNextPosition(row, col, direction);
++      result = countPaths(next.row, next.col, direction);
++    }
++
++    memo.set(memoKey, result);
++    return result;
++  }
++
++  return countPaths(source.row, source.col, 'down');
++}

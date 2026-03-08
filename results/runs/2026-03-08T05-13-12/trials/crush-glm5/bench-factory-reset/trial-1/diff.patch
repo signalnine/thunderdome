@@ -1,0 +1,665 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..187e286
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 629882,
++  "output_tokens": 11508,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.6667076000000001
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..87529af
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,7 @@
++Implementation complete. The solution uses Gaussian elimination:
++
++**`solveToggle`** (src/index.ts:16-138): Solves the binary toggle puzzle over GF(2). For underdetermined systems with free variables, uses either direct enumeration (≤20 free vars) or meet-in-the-middle (>20 free vars) to find the minimum button presses.
++
++**`solveCounter`** (src/index.ts:225-280): Solves the counter puzzle over GF(p) where p is prime. Uses modular arithmetic and modular inverse for elimination. Handles free variables similarly with enumeration or meet-in-the-middle.
++
++Both algorithms run in O(n³) for the elimination phase, with optimization for finding optimal solutions when multiple exist.
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index 07657bf..1a9db02 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..52985ec
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,577 @@
++export interface Machine {
++  target: boolean[];
++  buttons: number[][];
++}
++
++/**
++ * Solve the toggle puzzle using Gaussian elimination over GF(2).
++ * Each button can be pressed at most once, toggling specific lights.
++ */
++export function solveToggle(machine: Machine): number[] | null {
++  const { target, buttons } = machine;
++  const numLights = target.length;
++  const numButtons = buttons.length;
++
++  if (numButtons === 0) {
++    return target.every(t => !t) ? [] : null;
++  }
++
++  // Build the augmented matrix over GF(2)
++  // Each row represents a light equation
++  // Each column (0 to numButtons-1) represents a button variable
++  // The last column is the target value
++  const matrix: number[][] = [];
++  for (let i = 0; i < numLights; i++) {
++    const row: number[] = new Array(numButtons + 1).fill(0);
++    for (let j = 0; j < numButtons; j++) {
++      if (buttons[j].includes(i)) {
++        row[j] = 1;
++      }
++    }
++    row[numButtons] = target[i] ? 1 : 0;
++    matrix.push(row);
++  }
++
++  // Gaussian elimination over GF(2)
++  const pivotCol: number[] = new Array(numLights).fill(-1);
++  let pivotRow = 0;
++
++  for (let col = 0; col < numButtons && pivotRow < numLights; col++) {
++    // Find a row with 1 in this column
++    let found = -1;
++    for (let row = pivotRow; row < numLights; row++) {
++      if (matrix[row][col] === 1) {
++        found = row;
++        break;
++      }
++    }
++
++    if (found === -1) {
++      continue;
++    }
++
++    // Swap rows
++    [matrix[pivotRow], matrix[found]] = [matrix[found], matrix[pivotRow]];
++    pivotCol[pivotRow] = col;
++
++    // Eliminate other rows
++    for (let row = 0; row < numLights; row++) {
++      if (row !== pivotRow && matrix[row][col] === 1) {
++        for (let c = 0; c <= numButtons; c++) {
++          matrix[row][c] ^= matrix[pivotRow][c];
++        }
++      }
++    }
++
++    pivotRow++;
++  }
++
++  // Check for inconsistency (row with all zeros except augmented part)
++  for (let row = pivotRow; row < numLights; row++) {
++    let allZero = true;
++    for (let col = 0; col < numButtons; col++) {
++      if (matrix[row][col] !== 0) {
++        allZero = false;
++        break;
++      }
++    }
++    if (allZero && matrix[row][numButtons] !== 0) {
++      return null;
++    }
++  }
++
++  // Count free variables (columns without pivots)
++  const pivotCols = new Set(pivotCol.filter(c => c !== -1));
++  const freeCols: number[] = [];
++  for (let col = 0; col < numButtons; col++) {
++    if (!pivotCols.has(col)) {
++      freeCols.push(col);
++    }
++  }
++
++  // If no free variables, there's a unique solution
++  if (freeCols.length === 0) {
++    const solution: number[] = [];
++    for (let row = 0; row < pivotRow; row++) {
++      if (matrix[row][numButtons] === 1) {
++        solution.push(pivotCol[row]);
++      }
++    }
++    return solution.sort((a, b) => a - b);
++  }
++
++  // Free variables exist - find solution with minimum button presses
++  // For GF(2), each free variable can be 0 or 1
++  // We need to enumerate all 2^freeCols.length combinations and pick the best
++
++  const numFree = freeCols.length;
++  if (numFree > 20) {
++    // For large number of free variables, use meet-in-the-middle
++    return solveToggleMITM(machine, matrix, pivotCol, pivotRow, freeCols);
++  }
++
++  let bestSolution: number[] | null = null;
++
++  for (let mask = 0; mask < (1 << numFree); mask++) {
++    const solution = new Array(numButtons).fill(0);
++
++    // Set free variables according to mask
++    for (let i = 0; i < numFree; i++) {
++      solution[freeCols[i]] = (mask >> i) & 1;
++    }
++
++    // Compute pivot variables
++    for (let row = 0; row < pivotRow; row++) {
++      const col = pivotCol[row];
++      let val = matrix[row][numButtons];
++      for (let c = col + 1; c < numButtons; c++) {
++        val ^= (matrix[row][c] & solution[c]);
++      }
++      solution[col] = val;
++    }
++
++    // Extract pressed buttons
++    const pressed: number[] = [];
++    for (let i = 0; i < numButtons; i++) {
++      if (solution[i] === 1) {
++        pressed.push(i);
++      }
++    }
++
++    // Check if this is better
++    if (bestSolution === null ||
++        pressed.length < bestSolution.length ||
++        (pressed.length === bestSolution.length && lexCompare(pressed, bestSolution) < 0)) {
++      bestSolution = pressed;
++    }
++  }
++
++  return bestSolution;
++}
++
++/**
++ * Meet-in-the-middle approach for large number of free variables.
++ */
++function solveToggleMITM(
++  machine: Machine,
++  matrix: number[][],
++  pivotCol: number[],
++  pivotRow: number,
++  freeCols: number[]
++): number[] | null {
++  const numButtons = machine.buttons.length;
++  const numFree = freeCols.length;
++  const half = Math.floor(numFree / 2);
++
++  // Split free variables into two halves
++  const leftFree = freeCols.slice(0, half);
++  const rightFree = freeCols.slice(half);
++  const leftCount = leftFree.length;
++  const rightCount = rightFree.length;
++
++  // For the left half, enumerate all combinations and compute contribution to pivot variables
++  const leftMap = new Map<string, number[]>();
++
++  for (let mask = 0; mask < (1 << leftCount); mask++) {
++    const partialSolution = new Array(numButtons).fill(0);
++    for (let i = 0; i < leftCount; i++) {
++      partialSolution[leftFree[i]] = (mask >> i) & 1;
++    }
++
++    // Compute partial contribution to each pivot row
++    const key: number[] = [];
++    for (let row = 0; row < pivotRow; row++) {
++      const col = pivotCol[row];
++      let val = 0;
++      for (let c = col + 1; c < numButtons; c++) {
++        val ^= (matrix[row][c] & partialSolution[c]);
++      }
++      key.push(val);
++    }
++
++    const keyStr = key.join(',');
++    const pressedLeft: number[] = [];
++    for (let i = 0; i < leftCount; i++) {
++      if ((mask >> i) & 1) {
++        pressedLeft.push(leftFree[i]);
++      }
++    }
++
++    // Keep only the best (fewest presses, then lexicographically smallest) for each key
++    if (!leftMap.has(keyStr) ||
++        pressedLeft.length < leftMap.get(keyStr)!.length ||
++        (pressedLeft.length === leftMap.get(keyStr)!.length && lexCompare(pressedLeft, leftMap.get(keyStr)!) < 0)) {
++      leftMap.set(keyStr, pressedLeft);
++    }
++  }
++
++  let bestSolution: number[] | null = null;
++
++  // For the right half, enumerate and look for matching left half
++  for (let mask = 0; mask < (1 << rightCount); mask++) {
++    const partialSolution = new Array(numButtons).fill(0);
++    for (let i = 0; i < rightCount; i++) {
++      partialSolution[rightFree[i]] = (mask >> i) & 1;
++    }
++
++    // Compute what we need from the left half
++    const neededKey: number[] = [];
++    for (let row = 0; row < pivotRow; row++) {
++      const col = pivotCol[row];
++      let val = matrix[row][numButtons];
++      for (let c = col + 1; c < numButtons; c++) {
++        val ^= (matrix[row][c] & partialSolution[c]);
++      }
++      neededKey.push(val);
++    }
++
++    const neededKeyStr = neededKey.join(',');
++
++    if (leftMap.has(neededKeyStr)) {
++      const leftPressed = leftMap.get(neededKeyStr)!;
++      const rightPressed: number[] = [];
++      for (let i = 0; i < rightCount; i++) {
++        if ((mask >> i) & 1) {
++          rightPressed.push(rightFree[i]);
++        }
++      }
++
++      // Compute full solution
++      const fullSolution = new Array(numButtons).fill(0);
++      for (const idx of leftPressed) fullSolution[idx] = 1;
++      for (const idx of rightPressed) fullSolution[idx] = 1;
++
++      // Compute pivot variables
++      for (let row = 0; row < pivotRow; row++) {
++        const col = pivotCol[row];
++        let val = matrix[row][numButtons];
++        for (let c = col + 1; c < numButtons; c++) {
++          val ^= (matrix[row][c] & fullSolution[c]);
++        }
++        fullSolution[col] = val;
++      }
++
++      const pressed: number[] = [];
++      for (let i = 0; i < numButtons; i++) {
++        if (fullSolution[i] === 1) {
++          pressed.push(i);
++        }
++      }
++
++      if (bestSolution === null ||
++          pressed.length < bestSolution.length ||
++          (pressed.length === bestSolution.length && lexCompare(pressed, bestSolution) < 0)) {
++        bestSolution = pressed;
++      }
++    }
++  }
++
++  return bestSolution;
++}
++
++/**
++ * Solve the counter puzzle using Gaussian elimination over GF(p).
++ * Each button can be pressed 0 to modulus-1 times, incrementing counters.
++ */
++export function solveCounter(
++  lights: number[],
++  buttons: number[][],
++  modulus: number
++): number[] | null {
++  const numCounters = lights.length;
++  const numButtons = buttons.length;
++
++  if (numButtons === 0) {
++    return lights.every(l => l === 0) ? [] : null;
++  }
++
++  // Build the augmented matrix over GF(p)
++  const matrix: number[][] = [];
++  for (let i = 0; i < numCounters; i++) {
++    const row: number[] = new Array(numButtons + 1).fill(0);
++    for (let j = 0; j < numButtons; j++) {
++      if (buttons[j].includes(i)) {
++        row[j] = 1;
++      }
++    }
++    row[numButtons] = lights[i] % modulus;
++    matrix.push(row);
++  }
++
++  // Gaussian elimination over GF(p)
++  const pivotCol: number[] = new Array(numCounters).fill(-1);
++  let pivotRow = 0;
++
++  for (let col = 0; col < numButtons && pivotRow < numCounters; col++) {
++    // Find a row with non-zero value in this column
++    let found = -1;
++    for (let row = pivotRow; row < numCounters; row++) {
++      if (matrix[row][col] !== 0) {
++        found = row;
++        break;
++      }
++    }
++
++    if (found === -1) {
++      continue;
++    }
++
++    // Swap rows
++    [matrix[pivotRow], matrix[found]] = [matrix[found], matrix[pivotRow]];
++    pivotCol[pivotRow] = col;
++
++    // Scale pivot row so pivot is 1
++    const inv = modInverse(matrix[pivotRow][col], modulus);
++    if (inv === null) {
++      continue;
++    }
++    for (let c = 0; c <= numButtons; c++) {
++      matrix[pivotRow][c] = (matrix[pivotRow][c] * inv) % modulus;
++    }
++
++    // Eliminate other rows
++    for (let row = 0; row < numCounters; row++) {
++      if (row !== pivotRow && matrix[row][col] !== 0) {
++        const factor = matrix[row][col];
++        for (let c = 0; c <= numButtons; c++) {
++          matrix[row][c] = (matrix[row][c] - factor * matrix[pivotRow][c] % modulus + modulus) % modulus;
++        }
++      }
++    }
++
++    pivotRow++;
++  }
++
++  // Check for inconsistency
++  for (let row = pivotRow; row < numCounters; row++) {
++    let allZero = true;
++    for (let col = 0; col < numButtons; col++) {
++      if (matrix[row][col] !== 0) {
++        allZero = false;
++        break;
++      }
++    }
++    if (allZero && matrix[row][numButtons] !== 0) {
++      return null;
++    }
++  }
++
++  // Count free variables
++  const pivotCols = new Set(pivotCol.filter(c => c !== -1));
++  const freeCols: number[] = [];
++  for (let col = 0; col < numButtons; col++) {
++    if (!pivotCols.has(col)) {
++      freeCols.push(col);
++    }
++  }
++
++  // If no free variables, there's a unique solution
++  if (freeCols.length === 0) {
++    const solution: number[] = new Array(numButtons).fill(0);
++    for (let row = 0; row < pivotRow; row++) {
++      solution[pivotCol[row]] = matrix[row][numButtons];
++    }
++    return solution;
++  }
++
++  // Free variables exist - need to find solution with minimum total presses
++  // For GF(p), each free variable can be 0 to modulus-1
++  // Use meet-in-the-middle for efficiency
++
++  return solveCounterMITM(matrix, pivotCol, pivotRow, freeCols, numButtons, modulus);
++}
++
++/**
++ * Meet-in-the-middle for counter puzzle.
++ */
++function solveCounterMITM(
++  matrix: number[][],
++  pivotCol: number[],
++  pivotRow: number,
++  freeCols: number[],
++  numButtons: number,
++  modulus: number
++): number[] | null {
++  const numFree = freeCols.length;
++
++  // For small number of free variables or small modulus, enumerate directly
++  const totalCombinations = Math.pow(modulus, numFree);
++  if (totalCombinations <= 100000) {
++    return solveCounterEnumerate(matrix, pivotCol, pivotRow, freeCols, numButtons, modulus);
++  }
++
++  // Meet-in-the-middle
++  const half = Math.floor(numFree / 2);
++  const leftFree = freeCols.slice(0, half);
++  const rightFree = freeCols.slice(half);
++
++  // Enumerate left half
++  const leftMap = new Map<string, { presses: number[], total: number }>();
++
++  const enumerateRec = (
++    idx: number,
++    current: number[],
++    freeList: number[],
++    isLeft: boolean
++  ): void => {
++    if (idx === freeList.length) {
++      if (isLeft) {
++        // Compute key and store
++        const key: number[] = [];
++        for (let row = 0; row < pivotRow; row++) {
++          const col = pivotCol[row];
++          let val = 0;
++          for (let c = col + 1; c < numButtons; c++) {
++            val = (val + matrix[row][c] * current[c]) % modulus;
++          }
++          key.push(val);
++        }
++        const keyStr = key.join(',');
++        const total = current.reduce((a, b) => a + b, 0);
++
++        if (!leftMap.has(keyStr) || total < leftMap.get(keyStr)!.total) {
++          leftMap.set(keyStr, { presses: [...current], total });
++        }
++      } else {
++        // Compute what we need from left
++        const neededKey: number[] = [];
++        for (let row = 0; row < pivotRow; row++) {
++          const col = pivotCol[row];
++          let val = matrix[row][numButtons];
++          for (let c = col + 1; c < numButtons; c++) {
++            val = (val - matrix[row][c] * current[c] % modulus + modulus) % modulus;
++          }
++          neededKey.push(val);
++        }
++        const neededKeyStr = neededKey.join(',');
++
++        if (leftMap.has(neededKeyStr)) {
++          const leftPressed = leftMap.get(neededKeyStr)!.presses;
++          const fullSolution = new Array(numButtons).fill(0);
++          for (let i = 0; i < numButtons; i++) {
++            fullSolution[i] = (leftPressed[i] + current[i]) % modulus;
++          }
++
++          // Compute pivot variables
++          for (let row = 0; row < pivotRow; row++) {
++            const col = pivotCol[row];
++            let val = matrix[row][numButtons];
++            for (let c = col + 1; c < numButtons; c++) {
++              val = (val - matrix[row][c] * fullSolution[c] % modulus + modulus) % modulus;
++            }
++            fullSolution[col] = val;
++          }
++
++          // Check against best
++          const total = fullSolution.reduce((a, b) => a + b, 0);
++          if (bestCounterSolution === null ||
++              total < bestTotal ||
++              (total === bestTotal && lexCompare(fullSolution, bestCounterSolution) < 0)) {
++            bestCounterSolution = fullSolution;
++            bestTotal = total;
++          }
++        }
++      }
++      return;
++    }
++
++    const colIdx = freeList[idx];
++    for (let val = 0; val < modulus; val++) {
++      current[colIdx] = val;
++      enumerateRec(idx + 1, current, freeList, isLeft);
++    }
++  };
++
++  let bestCounterSolution: number[] | null = null;
++  let bestTotal = Infinity;
++
++  // Enumerate left half
++  const leftCurrent = new Array(numButtons).fill(0);
++  enumerateRec(0, leftCurrent, leftFree, true);
++
++  // Enumerate right half and match
++  const rightCurrent = new Array(numButtons).fill(0);
++  enumerateRec(0, rightCurrent, rightFree, false);
++
++  return bestCounterSolution;
++}
++
++/**
++ * Direct enumeration for small search space.
++ */
++function solveCounterEnumerate(
++  matrix: number[][],
++  pivotCol: number[],
++  pivotRow: number,
++  freeCols: number[],
++  numButtons: number,
++  modulus: number
++): number[] | null {
++  let bestSolution: number[] | null = null;
++  let bestTotal = Infinity;
++
++  const solution = new Array(numButtons).fill(0);
++
++  const enumerate = (idx: number): void => {
++    if (idx === freeCols.length) {
++      // Compute pivot variables
++      for (let row = 0; row < pivotRow; row++) {
++        const col = pivotCol[row];
++        let val = matrix[row][numButtons];
++        for (let c = col + 1; c < numButtons; c++) {
++          val = (val - matrix[row][c] * solution[c] % modulus + modulus) % modulus;
++        }
++        solution[col] = val;
++      }
++
++      const total = solution.reduce((a, b) => a + b, 0);
++      if (bestSolution === null ||
++          total < bestTotal ||
++          (total === bestTotal && lexCompare(solution, bestSolution) < 0)) {
++        bestSolution = [...solution];
++        bestTotal = total;
++      }
++      return;
++    }
++
++    const colIdx = freeCols[idx];
++    for (let val = 0; val < modulus; val++) {
++      solution[colIdx] = val;
++      enumerate(idx + 1);
++    }
++  };
++
++  enumerate(0);
++  return bestSolution;
++}
++
++/**
++ * Compute modular multiplicative inverse using extended Euclidean algorithm.
++ */
++function modInverse(a: number, p: number): number | null {
++  a = ((a % p) + p) % p;
++  if (a === 0) return null;
++
++  let [old_r, r] = [a, p];
++  let [old_s, s] = [1, 0];
++
++  while (r !== 0) {
++    const quotient = Math.floor(old_r / r);
++    [old_r, r] = [r, old_r - quotient * r];
++    [old_s, s] = [s, old_s - quotient * s];
++  }
++
++  return ((old_s % p) + p) % p;
++}
++
++/**
++ * Lexicographic comparison of two arrays.
++ */
++function lexCompare(a: number[], b: number[]): number {
++  const minLen = Math.min(a.length, b.length);
++  for (let i = 0; i < minLen; i++) {
++    if (a[i] < b[i]) return -1;
++    if (a[i] > b[i]) return 1;
++  }
++  return a.length - b.length;
++}

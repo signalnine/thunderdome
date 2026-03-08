@@ -27,7 +27,7 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 | 9 | [Gas Station](#contenders) | 87.8% | 81.3% | **85.0%** | 49 | $0.85 | Opus 4.6 |
 | 10 | [Conclave v6 (Opus)](#contenders) | 85.8% | 83.4% | **84.8%** | 57 | $1.98 | Opus 4.6 |
 | 11 | [TDD (Opus)](#contenders) | 92.0% | 70.4% | **82.9%** | 24 | $2.35 | Opus 4.6 |
-| 12 | [Crush GLM-5](#contenders) | 86.5% | 78.0% | **82.9%** | 19 | $0.00 | GLM-5 |
+| 12 | [Crush GLM-5](#contenders) | 86.5% | 78.0% | **82.9%** | 19 | $0.76 | GLM-5 |
 | 13 | [Self-Review (Opus)](#contenders) | 86.1% | 77.8% | **82.6%** | 19 | $1.23 | Opus 4.6 |
 | 14 | [Brainstorm (Opus)](#contenders) | 87.9% | 75.0% | **82.5%** | 19 | $1.72 | Opus 4.6 |
 | 15 | [Claude Code](#contenders) | 85.8% | 76.9% | **82.1%** | 32 | $0.61 | Opus 4.6 |
@@ -51,7 +51,6 @@ All orchestrators with Overall scores, sorted by cost. **Bold** = Pareto-optimal
 
 | Orchestrator | Overall | Avg Cost | Pareto |
 |---|---:|---:|:---:|
-| **Crush GLM-5** | **82.9%** | **$0.00** | **best free** |
 | Cerebras CLI | 73.7% | $0.00 | |
 | Cerebras CLI Ralph | 72.0% | $0.00 | |
 | Amplifier (Gemini 2.5 Flash) | 67.8% | $0.01 | |
@@ -59,8 +58,9 @@ All orchestrators with Overall scores, sorted by cost. **Bold** = Pareto-optimal
 | **Gemini CLI** | **79.9%** | **$0.05** | **best <$0.61** |
 | Gemini CLI Flash Lite Ralph | 62.7% | $0.11 | |
 | Gemini CLI Flash Lite | 60.5% | $0.31 | |
-| **Claude Code** | **82.1%** | **$0.61** | **best <$0.63** |
+| **Claude Code** | **82.1%** | **$0.61** | **best <$0.76** |
 | Superpowers | 75.9% | $0.63 | |
+| **Crush GLM-5** | **82.9%** | **$0.76** | **best <$0.85** |
 | **Gas Station** | **85.0%** | **$0.85** | **best <$0.92** |
 | **Metacog** | **85.3%** | **$0.92** | **best <$1.06** |
 | Verify (Opus) | 81.7% | $0.94 | |
@@ -80,7 +80,7 @@ All orchestrators with Overall scores, sorted by cost. **Bold** = Pareto-optimal
 | Conclave v6 (Opus) | 84.8% | $1.98 | |
 | TDD (Opus) | 82.9% | $2.35 | |
 
-The Pareto frontier: Crush GLM-5 ($0.00, 82.9%) → Gemini CLI ($0.05, 79.9%) → Claude Code ($0.61, 82.1%) → Gas Station ($0.85, 85.0%) → Metacog ($0.92, 85.3%) → v6 Sonnet ($1.06, 88.0%) → Plans ($1.29, 88.5%) → Conclave Review ($1.58, 88.7%). Crush GLM-5 is the new free champion at 82.9%, beating all paid options under $0.85. v6 Sonnet remains the paid sweet spot: 88.0% at $1.06/task — Opus-tier quality at Sonnet pricing.
+The Pareto frontier: Gemini CLI ($0.05, 79.9%) → Claude Code ($0.61, 82.1%) → Crush GLM-5 ($0.76, 82.9%) → Gas Station ($0.85, 85.0%) → Metacog ($0.92, 85.3%) → v6 Sonnet ($1.06, 88.0%) → Plans ($1.29, 88.5%) → Conclave Review ($1.58, 88.7%). Crush GLM-5 offers 82.9% at $0.76/task with GLM-5 pricing ($1/1M input, $3.20/1M output). v6 Sonnet remains the paid sweet spot: 88.0% at $1.06/task — Opus-tier quality at Sonnet pricing.
 
 ### Gene Ablation Variants
 
@@ -994,7 +994,7 @@ The framework tests five hypotheses:
 | **Claude Code Headless** | Claude Code `-p` mode without skills | Headless baseline — no interactive user, no plugins |
 | **Amplifier + ts-dev** | Amplifier + TypeScript bundle | LSP code intelligence, TS expert agent |
 | **Cerebras CLI** | cerebras-cli (OpenCode fork) + gpt-oss-120b | Full agentic tool use (read/write/bash/glob) via Cerebras inference; direct API routing bypasses OpenCode proxy |
-| **[Crush](https://github.com/charm-bracelet/crush) GLM-5** | Crush CLI + Zhipu GLM-5 | Open-source CLI with Zhipu's GLM-5 model; 82.9% overall at $0.00 — best free option |
+| **[Crush](https://github.com/charm-bracelet/crush) GLM-5** | Crush CLI + Zhipu GLM-5 | Open-source CLI with Zhipu's GLM-5 model; 82.9% overall at $0.76/task (GLM-5 pricing: $1/1M input, $3.20/1M output) |
 | **Aider (Cerebras)** | Aider + Cerebras gpt-oss-120b | Open-weight 120B MoE via Cerebras inference (~3K tok/s); single-pass diff edits |
 
 See [`docs/survey/orchestrator-survey.md`](docs/survey/orchestrator-survey.md) for the full gene matrix and per-tool analysis.

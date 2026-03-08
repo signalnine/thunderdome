@@ -1,0 +1,655 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..bf055c0
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 519586,
++  "output_tokens": 7805,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.544562
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..d778066
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,9 @@
++Done. All 55 tests pass (40 unit + 15 integration).
++
++**Implemented modules:**
++- `src/registry/index.ts` - SQLite-based CRUD with name+version composite key, search by name/description
++- `src/resolver/index.ts` - Semver resolution using `semver` package
++- `src/runner/index.ts` - VM sandbox with timeout enforcement and memory tracking
++- `src/reviews/index.ts` - SQLite-based reviews with flagged review exclusion from averages
++- `src/deps/index.ts` - Topological sort, cycle detection, tree building via DFS
++- `src/index.ts` - `createMarketplace()` composing all modules with `installPlugin()` workflow
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index fb449ee..be7a842 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -979,7 +979,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1031,7 +1030,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1311,7 +1309,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1785,7 +1782,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3347,7 +3343,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/deps/index.ts b/src/deps/index.ts
+new file mode 100644
+index 0000000..8ce8018
+--- /dev/null
++++ b/src/deps/index.ts
+@@ -0,0 +1,113 @@
++import type { DepsService, DependencyNode, RegistryService } from '../types.js';
++
++export function createDepsService(): DepsService {
++  function buildTree(name: string, registry: RegistryService): DependencyNode {
++    const manifest = registry.get(name);
++    if (!manifest) {
++      return { name, version: '', dependencies: [] };
++    }
++
++    const dependencies: DependencyNode[] = [];
++    for (const depName of Object.keys(manifest.dependencies)) {
++      dependencies.push(buildTree(depName, registry));
++    }
++
++    return {
++      name,
++      version: manifest.version,
++      dependencies,
++    };
++  }
++
++  function detectCycles(name: string, registry: RegistryService): string[][] | null {
++    const cycles: string[][] = [];
++    const visited = new Set<string>();
++    const recursionStack = new Set<string>();
++    const path: string[] = [];
++
++    function dfs(node: string): boolean {
++      visited.add(node);
++      recursionStack.add(node);
++      path.push(node);
++
++      const manifest = registry.get(node);
++      if (manifest) {
++        for (const depName of Object.keys(manifest.dependencies)) {
++          if (!visited.has(depName)) {
++            if (dfs(depName)) {
++              return true;
++            }
++          } else if (recursionStack.has(depName)) {
++            const cycleStart = path.indexOf(depName);
++            cycles.push(path.slice(cycleStart));
++          }
++        }
++      }
++
++      path.pop();
++      recursionStack.delete(node);
++      return false;
++    }
++
++    dfs(name);
++
++    return cycles.length > 0 ? cycles : null;
++  }
++
++  function topologicalSort(name: string, registry: RegistryService): string[] {
++    const result: string[] = [];
++    const visited = new Set<string>();
++
++    function dfs(node: string): void {
++      if (visited.has(node)) return;
++      visited.add(node);
++
++      const manifest = registry.get(node);
++      if (manifest) {
++        for (const depName of Object.keys(manifest.dependencies)) {
++          dfs(depName);
++        }
++      }
++
++      result.push(node);
++    }
++
++    dfs(name);
++    return result;
++  }
++
++  function flattenDependencies(name: string, registry: RegistryService): string[] {
++    const result: string[] = [];
++    const visited = new Set<string>();
++
++    function dfs(node: string): void {
++      if (visited.has(node)) return;
++      visited.add(node);
++
++      const manifest = registry.get(node);
++      if (manifest) {
++        for (const depName of Object.keys(manifest.dependencies)) {
++          if (!visited.has(depName)) {
++            result.push(depName);
++            dfs(depName);
++          }
++        }
++      }
++    }
++
++    dfs(name);
++    return result;
++  }
++
++  function hasCircularDependency(name: string, registry: RegistryService): boolean {
++    return detectCycles(name, registry) !== null;
++  }
++
++  return {
++    buildTree,
++    detectCycles,
++    topologicalSort,
++    flattenDependencies,
++    hasCircularDependency,
++  };
++}
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..1041fb2
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,74 @@
++import { createRegistry } from './registry/index.js';
++import { createResolver } from './resolver/index.js';
++import { createRunner } from './runner/index.js';
++import { createReviewSystem } from './reviews/index.js';
++import { createDepsService } from './deps/index.js';
++import type { PluginManifest, ResolvedVersion, SandboxResult, RegistryService, ResolverService, RunnerService, ReviewService, DepsService } from './types.js';
++
++export interface Marketplace {
++  registry: RegistryService;
++  resolver: ResolverService;
++  runner: RunnerService;
++  reviews: ReviewService;
++  deps: DepsService;
++  installPlugin: (manifest: PluginManifest) => Promise<{
++    resolved: ResolvedVersion[];
++    sandboxResult: SandboxResult;
++  }>;
++}
++
++export interface InstallResult {
++  resolved: ResolvedVersion[];
++  sandboxResult: SandboxResult;
++}
++
++export function createMarketplace(): Marketplace {
++  const registry = createRegistry();
++  const resolver = createResolver();
++  const runner = createRunner();
++  const reviews = createReviewSystem();
++  const deps = createDepsService();
++
++  async function installPlugin(manifest: PluginManifest): Promise<InstallResult> {
++    if (!manifest.name || !manifest.version || !manifest.entryPoint) {
++      throw new Error('Invalid manifest: name, version, and entryPoint are required');
++    }
++
++    registry.register(manifest);
++
++    const resolved: ResolvedVersion[] = [];
++    if (Object.keys(manifest.dependencies).length > 0) {
++      const constraints = Object.entries(manifest.dependencies).map(([name, range]) => ({
++        name,
++        range,
++      }));
++
++      const available: Record<string, string[]> = {};
++      for (const name of Object.keys(manifest.dependencies)) {
++        available[name] = registry.listVersions(name);
++      }
++
++      resolved.push(...resolver.resolve(constraints, available));
++    }
++
++    if (deps.hasCircularDependency(manifest.name, registry)) {
++      throw new Error('Circular dependency detected');
++    }
++
++    const sandboxResult = await runner.execute(manifest.entryPoint);
++
++    return {
++      resolved,
++      sandboxResult,
++    };
++  }
++
++  return {
++    registry,
++    resolver,
++    runner,
++    reviews,
++    deps,
++    installPlugin,
++  };
++}
+diff --git a/src/registry/index.ts b/src/registry/index.ts
+new file mode 100644
+index 0000000..df7411d
+--- /dev/null
++++ b/src/registry/index.ts
+@@ -0,0 +1,125 @@
++import Database from 'better-sqlite3';
++import type { PluginManifest, RegistryService } from '../types.js';
++
++export function createRegistry(): RegistryService {
++  const db = new Database(':memory:');
++
++  db.exec(`
++    CREATE TABLE IF NOT EXISTS plugins (
++      name TEXT NOT NULL,
++      version TEXT NOT NULL,
++      description TEXT NOT NULL,
++      author TEXT NOT NULL,
++      dependencies TEXT NOT NULL,
++      entryPoint TEXT NOT NULL,
++      permissions TEXT NOT NULL,
++      PRIMARY KEY (name, version)
++    )
++  `);
++
++  const register = db.prepare(`
++    INSERT OR REPLACE INTO plugins (name, version, description, author, dependencies, entryPoint, permissions)
++    VALUES (@name, @version, @description, @author, @dependencies, @entryPoint, @permissions)
++  `);
++
++  const getByVersion = db.prepare(`
++    SELECT * FROM plugins WHERE name = ? AND version = ?
++  `);
++
++  const getLatest = db.prepare(`
++    SELECT * FROM plugins WHERE name = ? ORDER BY version DESC LIMIT 1
++  `);
++
++  const getAll = db.prepare(`SELECT * FROM plugins`);
++
++  const searchStmt = db.prepare(`
++    SELECT * FROM plugins WHERE name LIKE ? OR description LIKE ?
++  `);
++
++  const removeStmt = db.prepare(`
++    DELETE FROM plugins WHERE name = ? AND version = ?
++  `);
++
++  const listVersionsStmt = db.prepare(`
++    SELECT version FROM plugins WHERE name = ?
++  `);
++
++  const updateStmt = db.prepare(`
++    UPDATE plugins SET
++      description = COALESCE(@description, description),
++      author = COALESCE(@author, author),
++      dependencies = COALESCE(@dependencies, dependencies),
++      entryPoint = COALESCE(@entryPoint, entryPoint),
++      permissions = COALESCE(@permissions, permissions)
++    WHERE name = @name AND version = @version
++  `);
++
++  function rowToManifest(row: Record<string, string>): PluginManifest {
++    return {
++      name: row.name,
++      version: row.version,
++      description: row.description,
++      author: row.author,
++      dependencies: JSON.parse(row.dependencies),
++      entryPoint: row.entryPoint,
++      permissions: JSON.parse(row.permissions),
++    };
++  }
++
++  return {
++    register(manifest: PluginManifest): void {
++      register.run({
++        name: manifest.name,
++        version: manifest.version,
++        description: manifest.description,
++        author: manifest.author,
++        dependencies: JSON.stringify(manifest.dependencies),
++        entryPoint: manifest.entryPoint,
++        permissions: JSON.stringify(manifest.permissions),
++      });
++    },
++
++    get(name: string): PluginManifest | null {
++      const row = getLatest.get(name) as Record<string, string> | undefined;
++      return row ? rowToManifest(row) : null;
++    },
++
++    getVersion(name: string, version: string): PluginManifest | null {
++      const row = getByVersion.get(name, version) as Record<string, string> | undefined;
++      return row ? rowToManifest(row) : null;
++    },
++
++    list(): PluginManifest[] {
++      const rows = getAll.all() as Record<string, string>[];
++      return rows.map(rowToManifest);
++    },
++
++    search(query: string): PluginManifest[] {
++      const pattern = `%${query}%`;
++      const rows = searchStmt.all(pattern, pattern) as Record<string, string>[];
++      return rows.map(rowToManifest);
++    },
++
++    remove(name: string, version: string): boolean {
++      const result = removeStmt.run(name, version);
++      return result.changes > 0;
++    },
++
++    listVersions(name: string): string[] {
++      const rows = listVersionsStmt.all(name) as { version: string }[];
++      return rows.map((r) => r.version);
++    },
++
++    update(name: string, version: string, updates: Partial<PluginManifest>): void {
++      updateStmt.run({
++        name,
++        version,
++        description: updates.description ?? null,
++        author: updates.author ?? null,
++        dependencies: updates.dependencies ? JSON.stringify(updates.dependencies) : null,
++        entryPoint: updates.entryPoint ?? null,
++        permissions: updates.permissions ? JSON.stringify(updates.permissions) : null,
++      });
++    },
++  };
++}
+diff --git a/src/resolver/index.ts b/src/resolver/index.ts
+new file mode 100644
+index 0000000..d6cbddb
+--- /dev/null
++++ b/src/resolver/index.ts
+@@ -0,0 +1,42 @@
++import semver from 'semver';
++import type { ResolverService, VersionConstraint, ResolvedVersion } from '../types.js';
++
++export function createResolver(): ResolverService {
++  return {
++    resolve(constraints: VersionConstraint[], available: Record<string, string[]>): ResolvedVersion[] {
++      const results: ResolvedVersion[] = [];
++
++      for (const constraint of constraints) {
++        const versions = available[constraint.name];
++        if (!versions || versions.length === 0) {
++          throw new Error(`No versions available for ${constraint.name}`);
++        }
++
++        const maxVersion = semver.maxSatisfying(versions, constraint.range);
++        if (!maxVersion) {
++          throw new Error(`No version of ${constraint.name} satisfies ${constraint.range}`);
++        }
++
++        results.push({
++          name: constraint.name,
++          version: maxVersion,
++          satisfies: constraint.range,
++        });
++      }
++
++      return results;
++    },
++
++    satisfies(version: string, range: string): boolean {
++      return semver.satisfies(version, range);
++    },
++
++    maxSatisfying(versions: string[], range: string): string | null {
++      return semver.maxSatisfying(versions, range);
++    },
++
++    validRange(range: string): boolean {
++      return semver.validRange(range) !== null;
++    },
++  };
++}
+diff --git a/src/reviews/index.ts b/src/reviews/index.ts
+new file mode 100644
+index 0000000..d98954b
+--- /dev/null
++++ b/src/reviews/index.ts
+@@ -0,0 +1,126 @@
++import Database from 'better-sqlite3';
++import type { Review, ReviewService } from '../types.js';
++
++export function createReviewSystem(): ReviewService {
++  const db = new Database(':memory:');
++
++  db.exec(`
++    CREATE TABLE IF NOT EXISTS reviews (
++      id INTEGER PRIMARY KEY AUTOINCREMENT,
++      pluginName TEXT NOT NULL,
++      pluginVersion TEXT NOT NULL,
++      userId TEXT NOT NULL,
++      rating INTEGER NOT NULL,
++      comment TEXT NOT NULL,
++      flagged INTEGER NOT NULL DEFAULT 0,
++      createdAt TEXT NOT NULL
++    )
++  `);
++
++  const insertStmt = db.prepare(`
++    INSERT INTO reviews (pluginName, pluginVersion, userId, rating, comment, flagged, createdAt)
++    VALUES (@pluginName, @pluginVersion, @userId, @rating, @comment, 0, @createdAt)
++  `);
++
++  const getByPluginStmt = db.prepare(`
++    SELECT * FROM reviews WHERE pluginName = ?
++  `);
++
++  const getFlaggedStmt = db.prepare(`
++    SELECT * FROM reviews WHERE flagged = 1
++  `);
++
++  const getByUserStmt = db.prepare(`
++    SELECT * FROM reviews WHERE userId = ?
++  `);
++
++  const flagStmt = db.prepare(`
++    UPDATE reviews SET flagged = 1 WHERE id = ?
++  `);
++
++  const removeStmt = db.prepare(`
++    DELETE FROM reviews WHERE id = ?
++  `);
++
++  const getCountStmt = db.prepare(`
++    SELECT COUNT(*) as count FROM reviews WHERE pluginName = ?
++  `);
++
++  const getUnflaggedByPluginStmt = db.prepare(`
++    SELECT rating FROM reviews WHERE pluginName = ? AND flagged = 0
++  `);
++
++  function rowToReview(row: Record<string, string | number>): Review {
++    return {
++      id: row.id as number,
++      pluginName: row.pluginName as string,
++      pluginVersion: row.pluginVersion as string,
++      userId: row.userId as string,
++      rating: row.rating as number,
++      comment: row.comment as string,
++      flagged: Boolean(row.flagged),
++      createdAt: row.createdAt as string,
++    };
++  }
++
++  return {
++    addReview(review: Omit<Review, 'id' | 'createdAt' | 'flagged'>): Review {
++      const now = new Date().toISOString();
++      const result = insertStmt.run({
++        pluginName: review.pluginName,
++        pluginVersion: review.pluginVersion,
++        userId: review.userId,
++        rating: review.rating,
++        comment: review.comment,
++        createdAt: now,
++      });
++      const id = result.lastInsertRowid as number;
++      return {
++        id,
++        pluginName: review.pluginName,
++        pluginVersion: review.pluginVersion,
++        userId: review.userId,
++        rating: review.rating,
++        comment: review.comment,
++        flagged: false,
++        createdAt: now,
++      };
++    },
++
++    getReviews(pluginName: string): Review[] {
++      const rows = getByPluginStmt.all(pluginName) as Record<string, string | number>[];
++      return rows.map(rowToReview);
++    },
++
++    getAverageRating(pluginName: string): number {
++      const rows = getUnflaggedByPluginStmt.all(pluginName) as { rating: number }[];
++      if (rows.length === 0) return 0;
++      const sum = rows.reduce((acc, r) => acc + r.rating, 0);
++      return sum / rows.length;
++    },
++
++    flagReview(reviewId: number): void {
++      flagStmt.run(reviewId);
++    },
++
++    getFlaggedReviews(): Review[] {
++      const rows = getFlaggedStmt.all() as Record<string, string | number>[];
++      return rows.map(rowToReview);
++    },
++
++    removeReview(reviewId: number): boolean {
++      const result = removeStmt.run(reviewId);
++      return result.changes > 0;
++    },
++
++    getReviewsByUser(userId: string): Review[] {
++      const rows = getByUserStmt.all(userId) as Record<string, string | number>[];
++      return rows.map(rowToReview);
++    },
++
++    getReviewCount(pluginName: string): number {
++      const row = getCountStmt.get(pluginName) as { count: number };
++      return row.count;
++    },
++  };
++}
+diff --git a/src/runner/index.ts b/src/runner/index.ts
+new file mode 100644
+index 0000000..15eb48f
+--- /dev/null
++++ b/src/runner/index.ts
+@@ -0,0 +1,63 @@
++import vm from 'vm';
++import type { RunnerService, SandboxResult } from '../types.js';
++
++export function createRunner(): RunnerService {
++  async function executeInSandbox(
++    code: string,
++    timeoutMs: number | undefined,
++    context: Record<string, unknown> = {}
++  ): Promise<SandboxResult> {
++    const startMemory = process.memoryUsage().heapUsed;
++    const startTime = Date.now();
++
++    try {
++      const sandbox: Record<string, unknown> = { ...context };
++      vm.createContext(sandbox);
++
++      const wrappedCode = `(function() { ${code} })()`;
++      const script = new vm.Script(wrappedCode);
++
++      const output = script.runInContext(sandbox, {
++        timeout: timeoutMs || 5000,
++        displayErrors: true,
++      });
++
++      const endTime = Date.now();
++      const endMemory = process.memoryUsage().heapUsed;
++
++      return {
++        success: true,
++        output,
++        duration: endTime - startTime,
++        memoryUsed: endMemory - startMemory,
++      };
++    } catch (error) {
++      const endTime = Date.now();
++      const endMemory = process.memoryUsage().heapUsed;
++
++      const errorMessage = error instanceof Error ? error.message : String(error);
++
++      return {
++        success: false,
++        output: undefined,
++        duration: endTime - startTime,
++        memoryUsed: endMemory - startMemory,
++        error: errorMessage,
++      };
++    }
++  }
++
++  return {
++    async execute(code: string, context?: Record<string, unknown>): Promise<SandboxResult> {
++      return executeInSandbox(code, undefined, context);
++    },
++
++    async executeWithTimeout(
++      code: string,
++      timeoutMs: number,
++      context?: Record<string, unknown>
++    ): Promise<SandboxResult> {
++      return executeInSandbox(code, timeoutMs, context);
++    },
++  };
++}

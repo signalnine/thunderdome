@@ -1,0 +1,759 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..60ad73a
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 636472,
++  "output_tokens": 7799,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.6614288
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..67c53fd
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,15 @@
++Now let me read the test files to understand the exact API expectations:Complete. All 90 tests pass across 12 phases, TypeScript compiles, and no lint errors.
++
++**Summary of implementation in `src/index.ts`:**
++
++- **Phase 1-2:** Basic FIFO queue with named queues, auto-generated UUIDs, status tracking
++- **Phase 3:** Priority support (1-10) with FIFO within same priority
++- **Phase 4:** Delayed/scheduled tasks via `delay` and `runAt` options
++- **Phase 5:** Retry with exponential backoff (`backoffMs * 2^(attempt-1)`)
++- **Phase 6:** Dead Letter Queue for exhausted retries with `retryDLQ`/`clearDLQ`
++- **Phase 7:** Task dependencies with cycle detection at enqueue time
++- **Phase 8:** Per-queue concurrency limits via `setConcurrency`/`getConcurrency`
++- **Phase 9:** Progress tracking and task cancellation
++- **Phase 10:** Cron-based recurring tasks with `schedule`/`tick`
++- **Phase 11:** Middleware pipeline with `use`/`process`
++- **Phase 12:** Graceful shutdown with timeout and force-cancel
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index 1d53f39..3d2daad 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -964,7 +964,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1009,7 +1008,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1289,7 +1287,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1640,7 +1637,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -2919,7 +2915,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -2951,7 +2946,6 @@
+       "integrity": "sha512-o5a9xKjbtuhY6Bi5S3+HvbRERmouabWbyUcpXXUA1u+GNUKoROi9byOJ8M0nHbHYHkYICiMlqxkg1KkYmm25Sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "esbuild": "^0.21.3",
+         "postcss": "^8.4.43",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..4b0ba15
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,663 @@
++// UUID generator (no external dependencies)
++function generateUUID(): string {
++  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
++    const r = (Math.random() * 16) | 0;
++    const v = c === 'x' ? r : (r & 0x3) | 0x8;
++    return v.toString(16);
++  });
++}
++
++// Types
++export interface Task {
++  id: string;
++  payload: unknown;
++  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
++  createdAt: Date;
++  priority: number;
++  availableAt: Date;
++  attempts: number;
++  maxRetries: number;
++  backoffMs: number;
++  queueName: string;
++  lastError?: string;
++  failCount: number;
++  dependsOn: string[];
++}
++
++export interface EnqueueOptions {
++  priority?: number;
++  delay?: number;
++  runAt?: Date;
++  maxRetries?: number;
++  backoffMs?: number;
++  dependsOn?: string[];
++}
++
++export interface ProgressInfo {
++  percent: number;
++  message?: string;
++  updatedAt: Date;
++}
++
++export interface ConcurrencyInfo {
++  current: number;
++  max: number;
++}
++
++export interface DependencyInfo {
++  taskId: string;
++  status: string;
++}
++
++export interface Schedule {
++  id: string;
++  queueName: string;
++  cronExpression: string;
++  taskTemplate: unknown;
++  active: boolean;
++  lastRun?: Date;
++}
++
++export interface ShutdownSummary {
++  completed: number;
++  cancelled: number;
++  elapsed: number;
++}
++
++export type Middleware = (task: Task, next: () => Promise<void>) => Promise<void>;
++export type TaskHandler = (task: Task) => Promise<void>;
++export type ProgressCallback = (info: ProgressInfo) => void;
++export type ShutdownCallback = () => void;
++
++interface QueueData {
++  name: string;
++  tasks: Map<string, Task>;
++  dlq: Task[];
++  concurrency: number;
++  middlewares: Middleware[];
++  handler?: TaskHandler;
++}
++
++interface InternalProgress {
++  percent: number;
++  message?: string;
++  updatedAt: Date;
++}
++
++export class TaskQueue {
++  private queues: Map<string, QueueData> = new Map();
++  private tasks: Map<string, Task> = new Map();
++  private processingTasks: Map<string, Task> = new Map();
++  private schedules: Map<string, Schedule> = new Map();
++  private progressData: Map<string, InternalProgress> = new Map();
++  private progressCallbacks: Map<string, Set<ProgressCallback>> = new Map();
++  private shutdownCallbacks: Set<ShutdownCallback> = new Set();
++  private isShuttingDown = false;
++  private shutdownPromise: Promise<ShutdownSummary> | null = null;
++  private shutdownResolve: ((summary: ShutdownSummary) => void) | null = null;
++  private shutdownStartTime = 0;
++  private completedDuringShutdown = 0;
++  private cancelledDuringShutdown = 0;
++
++  private getQueue(name: string): QueueData {
++    if (!this.queues.has(name)) {
++      this.queues.set(name, {
++        name,
++        tasks: new Map(),
++        dlq: [],
++        concurrency: 0, // 0 means unlimited
++        middlewares: [],
++      });
++    }
++    return this.queues.get(name)!;
++  }
++
++  enqueue(queueNameOrPayload: string | unknown, payload?: unknown, options?: EnqueueOptions): Task {
++    if (this.isShuttingDown) {
++      throw new Error('Queue is shutting down');
++    }
++
++    // Handle overloaded signatures
++    let queueName: string;
++    let actualPayload: unknown;
++    let actualOptions: EnqueueOptions = {};
++
++    if (typeof queueNameOrPayload === 'string') {
++      queueName = queueNameOrPayload;
++      actualPayload = payload;
++      actualOptions = options || {};
++    } else {
++      queueName = 'default';
++      actualPayload = queueNameOrPayload;
++      actualOptions = (payload as EnqueueOptions) || {};
++    }
++
++    const queue = this.getQueue(queueName);
++
++    // Validate priority
++    const priority = actualOptions.priority ?? 5;
++    if (priority < 1 || priority > 10) {
++      throw new Error('Priority must be between 1 and 10');
++    }
++
++    // Validate dependencies
++    if (actualOptions.dependsOn && actualOptions.dependsOn.length > 0) {
++      for (const depId of actualOptions.dependsOn) {
++        if (!this.tasks.has(depId)) {
++          throw new Error(`Dependency task ${depId} does not exist`);
++        }
++      }
++    }
++
++    // Calculate availableAt
++    let availableAt = new Date();
++    if (actualOptions.delay !== undefined) {
++      availableAt = new Date(Date.now() + actualOptions.delay);
++    } else if (actualOptions.runAt !== undefined) {
++      availableAt = actualOptions.runAt;
++    }
++
++    const task: Task = {
++      id: generateUUID(),
++      payload: actualPayload,
++      status: 'pending',
++      createdAt: new Date(),
++      priority,
++      availableAt,
++      attempts: 0,
++      maxRetries: actualOptions.maxRetries ?? 3,
++      backoffMs: actualOptions.backoffMs ?? 1000,
++      queueName,
++      lastError: undefined,
++      failCount: 0,
++      dependsOn: actualOptions.dependsOn ?? [],
++    };
++
++    queue.tasks.set(task.id, task);
++    this.tasks.set(task.id, task);
++
++    return task;
++  }
++
++  private isTaskAvailable(task: Task): boolean {
++    // Check if task is still pending
++    if (task.status !== 'pending') {
++      return false;
++    }
++
++    // Check if available time has been reached
++    if (task.availableAt.getTime() > Date.now()) {
++      return false;
++    }
++
++    // Check dependencies
++    if (task.dependsOn.length > 0) {
++      for (const depId of task.dependsOn) {
++        const depTask = this.tasks.get(depId);
++        if (!depTask || depTask.status !== 'completed') {
++          return false;
++        }
++      }
++    }
++
++    return true;
++  }
++
++  private getAvailableTasks(queueName: string): Task[] {
++    const queue = this.queues.get(queueName);
++    if (!queue) return [];
++
++    const available: Task[] = [];
++    for (const task of queue.tasks.values()) {
++      if (this.isTaskAvailable(task)) {
++        available.push(task);
++      }
++    }
++
++    // Sort by priority (lower = higher priority), then by availableAt, then by createdAt (FIFO)
++    available.sort((a, b) => {
++      if (a.priority !== b.priority) {
++        return a.priority - b.priority;
++      }
++      if (a.availableAt.getTime() !== b.availableAt.getTime()) {
++        return a.availableAt.getTime() - b.availableAt.getTime();
++      }
++      return a.createdAt.getTime() - b.createdAt.getTime();
++    });
++
++    return available;
++  }
++
++  dequeue(queueName?: string): Task | null {
++    const name = queueName ?? 'default';
++    const queue = this.queues.get(name);
++    if (!queue) return null;
++
++    // Check concurrency limit
++    if (queue.concurrency > 0) {
++      const current = this.getProcessingCount(name);
++      if (current >= queue.concurrency) {
++        return null;
++      }
++    }
++
++    const available = this.getAvailableTasks(name);
++    if (available.length === 0) {
++      return null;
++    }
++
++    const task = available[0];
++    task.status = 'processing';
++    task.attempts++;
++    queue.tasks.delete(task.id);
++    this.processingTasks.set(task.id, task);
++
++    return task;
++  }
++
++  private getProcessingCount(queueName: string): number {
++    let count = 0;
++    for (const task of this.processingTasks.values()) {
++      if (task.queueName === queueName) {
++        count++;
++      }
++    }
++    return count;
++  }
++
++  size(): number {
++    let total = 0;
++    for (const queue of this.queues.values()) {
++      total += queue.tasks.size;
++    }
++    return total;
++  }
++
++  queueSize(queueName: string): number {
++    const queue = this.queues.get(queueName);
++    return queue ? queue.tasks.size : 0;
++  }
++
++  listQueues(): string[] {
++    return Array.from(this.queues.keys());
++  }
++
++  complete(taskId: string): void {
++    const task = this.processingTasks.get(taskId);
++    if (!task) return;
++
++    task.status = 'completed';
++    this.processingTasks.delete(taskId);
++
++    if (this.isShuttingDown) {
++      this.completedDuringShutdown++;
++      if (this.shutdownResolve && this.processingTasks.size === 0) {
++        this.shutdownResolve({
++          completed: this.completedDuringShutdown,
++          cancelled: this.cancelledDuringShutdown,
++          elapsed: Date.now() - this.shutdownStartTime,
++        });
++      }
++    }
++  }
++
++  fail(taskId: string, error?: string): void {
++    const task = this.processingTasks.get(taskId);
++    if (!task) return;
++
++    task.status = 'failed';
++    task.lastError = error;
++    task.failCount++;
++    this.processingTasks.delete(taskId);
++
++    // Check if retries are available
++    if (task.attempts <= task.maxRetries) {
++      // Re-enqueue with exponential backoff
++      const backoffDelay = task.backoffMs * Math.pow(2, task.attempts - 1);
++      task.availableAt = new Date(Date.now() + backoffDelay);
++      task.status = 'pending';
++
++      const queue = this.getQueue(task.queueName);
++      queue.tasks.set(task.id, task);
++    } else {
++      // Move to DLQ
++      const queue = this.getQueue(task.queueName);
++      queue.dlq.push(task);
++    }
++  }
++
++  getDLQ(queueName: string): Task[] {
++    const queue = this.queues.get(queueName);
++    return queue ? [...queue.dlq] : [];
++  }
++
++  retryDLQ(taskId: string): Task | null {
++    for (const queue of this.queues.values()) {
++      const index = queue.dlq.findIndex(t => t.id === taskId);
++      if (index !== -1) {
++        const task = queue.dlq.splice(index, 1)[0];
++        task.status = 'pending';
++        task.attempts = 0;
++        task.failCount = 0;
++        task.lastError = undefined;
++        task.availableAt = new Date();
++        queue.tasks.set(task.id, task);
++        return task;
++      }
++    }
++    return null;
++  }
++
++  clearDLQ(queueName: string): void {
++    const queue = this.queues.get(queueName);
++    if (queue) {
++      queue.dlq = [];
++    }
++  }
++
++  getDependencies(taskId: string): DependencyInfo[] {
++    const task = this.tasks.get(taskId);
++    if (!task) return [];
++
++    return task.dependsOn.map(depId => {
++      const depTask = this.tasks.get(depId);
++      return {
++        taskId: depId,
++        status: depTask ? depTask.status : 'unknown',
++      };
++    });
++  }
++
++  setConcurrency(queueName: string, limit: number): void {
++    const queue = this.getQueue(queueName);
++    queue.concurrency = limit;
++  }
++
++  getConcurrency(queueName: string): ConcurrencyInfo {
++    const queue = this.getQueue(queueName);
++    return {
++      current: this.getProcessingCount(queueName),
++      max: queue.concurrency || Infinity,
++    };
++  }
++
++  updateProgress(taskId: string, percent: number, message?: string): void {
++    if (percent < 0 || percent > 100) {
++      throw new Error('Progress must be between 0 and 100');
++    }
++
++    const progress: InternalProgress = {
++      percent,
++      message,
++      updatedAt: new Date(),
++    };
++    this.progressData.set(taskId, progress);
++
++    // Fire callbacks
++    const callbacks = this.progressCallbacks.get(taskId);
++    if (callbacks) {
++      for (const cb of callbacks) {
++        cb({
++          percent: progress.percent,
++          message: progress.message,
++          updatedAt: progress.updatedAt,
++        });
++      }
++    }
++  }
++
++  getProgress(taskId: string): ProgressInfo | null {
++    const progress = this.progressData.get(taskId);
++    if (!progress) return null;
++    return {
++      percent: progress.percent,
++      message: progress.message,
++      updatedAt: progress.updatedAt,
++    };
++  }
++
++  onProgress(taskId: string, callback: ProgressCallback): () => void {
++    if (!this.progressCallbacks.has(taskId)) {
++      this.progressCallbacks.set(taskId, new Set());
++    }
++    this.progressCallbacks.get(taskId)!.add(callback);
++
++    return () => {
++      const callbacks = this.progressCallbacks.get(taskId);
++      if (callbacks) {
++        callbacks.delete(callback);
++      }
++    };
++  }
++
++  cancel(taskId: string): void {
++    const task = this.tasks.get(taskId);
++    if (!task) return;
++
++    if (task.status === 'pending') {
++      // Remove from queue
++      const queue = this.queues.get(task.queueName);
++      if (queue) {
++        queue.tasks.delete(taskId);
++      }
++    } else if (task.status === 'processing') {
++      // Remove from processing
++      this.processingTasks.delete(taskId);
++    }
++
++    task.status = 'cancelled';
++  }
++
++  // Cron parsing helpers
++  private parseCronField(field: string, min: number, max: number): number[] {
++    if (field === '*') {
++      const values: number[] = [];
++      for (let i = min; i <= max; i++) values.push(i);
++      return values;
++    }
++
++    if (field.startsWith('*/')) {
++      const step = parseInt(field.slice(2), 10);
++      const values: number[] = [];
++      for (let i = min; i <= max; i += step) values.push(i);
++      return values;
++    }
++
++    return [parseInt(field, 10)];
++  }
++
++  private shouldTrigger(expression: string, date: Date): boolean {
++    const parts = expression.split(' ');
++    if (parts.length !== 5) return false;
++
++    const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
++
++    const minutes = this.parseCronField(minute, 0, 59);
++    const hours = this.parseCronField(hour, 0, 23);
++
++    const currentMinute = date.getUTCMinutes();
++    const currentHour = date.getUTCHours();
++    const currentDayOfMonth = date.getUTCDate();
++    const currentMonth = date.getUTCMonth() + 1;
++    const currentDayOfWeek = date.getUTCDay();
++
++    // Check if current time matches the cron expression
++    const minuteMatch = minutes.includes(currentMinute);
++    const hourMatch = hours.includes(currentHour);
++
++    // For day matching, we need to check both day-of-month and day-of-week
++    // If either is *, it matches. If both are specified, either can match.
++    let dayMatch = true;
++    if (dayOfMonth !== '*' || dayOfWeek !== '*') {
++      const domValues = this.parseCronField(dayOfMonth, 1, 31);
++      const dowValues = this.parseCronField(dayOfWeek, 0, 6);
++      const domMatch = domValues.includes(currentDayOfMonth);
++      const dowMatch = dowValues.includes(currentDayOfWeek);
++      dayMatch = dayOfMonth === '*' || dayOfWeek === '*' ? (domMatch || dowMatch) : (domMatch && dowMatch);
++    }
++
++    const monthMatch = this.parseCronField(month, 1, 12).includes(currentMonth);
++
++    return minuteMatch && hourMatch && dayMatch && monthMatch;
++  }
++
++  schedule(queueName: string, cronExpression: string, taskTemplate: unknown): Schedule {
++    const schedule: Schedule = {
++      id: generateUUID(),
++      queueName,
++      cronExpression,
++      taskTemplate,
++      active: true,
++    };
++    this.schedules.set(schedule.id, schedule);
++    return schedule;
++  }
++
++  unschedule(scheduleId: string): void {
++    const schedule = this.schedules.get(scheduleId);
++    if (schedule) {
++      schedule.active = false;
++    }
++  }
++
++  listSchedules(queueName?: string): Schedule[] {
++    const result: Schedule[] = [];
++    for (const schedule of this.schedules.values()) {
++      if (schedule.active) {
++        if (!queueName || schedule.queueName === queueName) {
++          result.push(schedule);
++        }
++      }
++    }
++    return result;
++  }
++
++  tick(): void {
++    const now = new Date();
++    for (const schedule of this.schedules.values()) {
++      if (!schedule.active) continue;
++
++      if (this.shouldTrigger(schedule.cronExpression, now)) {
++        // Check if we already ran this minute (avoid duplicate runs)
++        if (schedule.lastRun) {
++          const lastRunMinute = schedule.lastRun.getUTCMinutes();
++          const lastRunHour = schedule.lastRun.getUTCHours();
++          const currentMinute = now.getUTCMinutes();
++          const currentHour = now.getUTCHours();
++
++          if (lastRunMinute === currentMinute && lastRunHour === currentHour) {
++            continue;
++          }
++        }
++
++        this.enqueue(schedule.queueName, schedule.taskTemplate);
++        schedule.lastRun = now;
++      }
++    }
++  }
++
++  use(queueName: string, middleware: Middleware): void {
++    const queue = this.getQueue(queueName);
++    queue.middlewares.push(middleware);
++  }
++
++  async process(queueName: string, handler: TaskHandler): Promise<void> {
++    const queue = this.getQueue(queueName);
++    queue.handler = handler;
++
++    const task = this.dequeue(queueName);
++    if (!task) return;
++
++    const middlewares = queue.middlewares;
++    let index = 0;
++
++    const runNext = async (): Promise<void> => {
++      if (index < middlewares.length) {
++        const middleware = middlewares[index++];
++        await middleware(task, runNext);
++      } else {
++        await handler(task);
++      }
++    };
++
++    try {
++      await runNext();
++      // Only complete if task wasn't already failed/cancelled
++      if (task.status === 'processing') {
++        this.complete(task.id);
++      }
++    } catch (error) {
++      task.status = 'processing'; // Ensure it's still marked as processing for fail()
++      const errorMsg = error instanceof Error ? error.message : String(error);
++      this.fail(task.id, errorMsg);
++    }
++  }
++
++  onShutdown(callback: ShutdownCallback): void {
++    this.shutdownCallbacks.add(callback);
++  }
++
++  shutdown(timeout: number = 30000): Promise<ShutdownSummary> {
++    if (this.shutdownPromise) {
++      return this.shutdownPromise;
++    }
++
++    this.isShuttingDown = true;
++    this.shutdownStartTime = Date.now();
++    this.completedDuringShutdown = 0;
++    this.cancelledDuringShutdown = 0;
++
++    // Run shutdown callbacks
++    for (const cb of this.shutdownCallbacks) {
++      try {
++        cb();
++      } catch {
++        // Ignore callback errors
++      }
++    }
++
++    this.shutdownPromise = new Promise<ShutdownSummary>((resolve) => {
++      this.shutdownResolve = resolve;
++
++      if (this.processingTasks.size === 0) {
++        resolve({
++          completed: this.completedDuringShutdown,
++          cancelled: this.cancelledDuringShutdown,
++          elapsed: Date.now() - this.shutdownStartTime,
++        });
++        return;
++      }
++
++      // Set up timeout for force-cancellation
++      const timeoutId = setTimeout(() => {
++        // Force-cancel all remaining processing tasks
++        for (const task of this.processingTasks.values()) {
++          task.status = 'cancelled';
++          this.cancelledDuringShutdown++;
++        }
++        this.processingTasks.clear();
++
++        resolve({
++          completed: this.completedDuringShutdown,
++          cancelled: this.cancelledDuringShutdown,
++          elapsed: Date.now() - this.shutdownStartTime,
++        });
++      }, timeout);
++
++      // Poll for completion (simple approach)
++      const pollInterval = setInterval(() => {
++        if (this.processingTasks.size === 0) {
++          clearInterval(pollInterval);
++          clearTimeout(timeoutId);
++          resolve({
++            completed: this.completedDuringShutdown,
++            cancelled: this.cancelledDuringShutdown,
++            elapsed: Date.now() - this.shutdownStartTime,
++          });
++        }
++      }, 10);
++    });
++
++    return this.shutdownPromise;
++  }
++}
