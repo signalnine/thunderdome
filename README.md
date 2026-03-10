@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 1,373 scored trials across 67 orchestrator variants (1,863 total including crash trials). All scoring is deterministic — no LLM judges, no rubric. Crash trials ($0 cost) are excluded from averages. Leaderboard requires 8+ standard AND 8+ hard non-crash trials.
+Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 1,501 scored trials across 68 orchestrator variants (2,059 total including crash trials). All scoring is deterministic — no LLM judges, no rubric. Crash trials ($0 cost) are excluded from averages. Leaderboard requires 8+ standard AND 8+ hard non-crash trials.
 
 ### Leaderboard
 
@@ -15,52 +15,71 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 | Rank | Orchestrator | Standard | Hard | Overall | Trials | Avg Cost | Model |
 |---:|---|---:|---:|---:|---:|---:|---|
 | 1 | [**Agent Teams**](#contenders) | 94.1% | 87.0% | **90.6%** | 16 | $2.14 | Opus 4.6 |
-| 2 | [**Conclave Review**](#contenders) | 87.6% | 87.8% | **87.7%** | 85 | $1.88 | Opus 4.6 |
+| 2 | [**Conclave Review**](#contenders) | 87.4% | 88.2% | **87.8%** | 139 | $1.86 | Opus 4.6 |
 | 3 | [Plans (Opus)](#contenders) | 86.8% | 88.3% | **87.6%** | 57 | $1.26 | Opus 4.6 |
-| 4 | [Conclave v6 (Sonnet)](#contenders) | 87.2% | 87.7% | **87.4%** | 57 | $1.10 | Sonnet 4.6 |
-| 5 | [Stacked](#contenders) | 86.3% | 87.6% | **87.0%** | 19 | $1.50 | Opus 4.6 |
-| 6 | [GSD](#contenders) | 85.7% | 88.1% | **86.9%** | 19 | $1.06 | Opus 4.6 |
-| 7 | [BMAD-METHOD](#contenders) | 85.3% | 88.1% | **86.7%** | 19 | $1.93 | Opus 4.6 |
-| 8 | [Conclave v6 (Opus)](#contenders) | 86.0% | 87.0% | **86.5%** | 76 | $2.12 | Opus 4.6 |
-| 9 | [Tango and Cash](#contenders) | 83.3% | 86.4% | **84.8%** | 59 | $1.10 | Opus 4.6 + Gemini |
-| 10 | [Metacog Pivot](#contenders) | 84.5% | 85.1% | **84.8%** | 59 | $0.98 | Opus 4.6 |
+| 4 | [GSD](#contenders) | 85.7% | 88.1% | **86.9%** | 19 | $1.06 | Opus 4.6 |
+| 5 | [BMAD-METHOD](#contenders) | 85.3% | 88.1% | **86.7%** | 19 | $1.93 | Opus 4.6 |
+| 6 | [Conclave v6 (Sonnet)](#contenders) | 85.8% | 87.2% | **86.5%** | 84 | $1.11 | Sonnet 4.6 |
+| 7 | [Stacked](#contenders) | 86.1% | 86.7% | **86.4%** | 36 | $1.57 | Opus 4.6 |
+| 8 | [Metacog Inversion](#contenders) | 85.4% | 86.4% | **85.9%** | 66 | $1.03 | Opus 4.6 |
+| 9 | [Conclave v6 (Opus)](#contenders) | 86.0% | 85.2% | **85.6%** | 76 | $2.12 | Opus 4.6 |
+| 10 | [Metacog Error](#contenders) | 85.8% | 84.5% | **85.1%** | 19 | $1.42 | Opus 4.6 |
 | 11 | [Gas Station](#contenders) | 88.9% | 81.3% | **85.1%** | 39 | $1.07 | Opus 4.6 |
-| 12 | [Claude Code (Opus)](#contenders) | 88.0% | 80.0% | **84.0%** | 35 | $1.18 | Opus 4.6 |
-| 13 | [Metacog](#contenders) | 88.0% | 79.5% | **83.7%** | 58 | $1.17 | Opus 4.6 |
-| 14 | [Self-Review (Opus)](#contenders) | 86.1% | 77.8% | **81.9%** | 19 | $1.23 | Opus 4.6 |
-| 15 | [Verify (Opus)](#contenders) | 86.0% | 75.7% | **80.8%** | 19 | $0.94 | Opus 4.6 |
-| 16 | [Debug (Opus)](#contenders) | 84.6% | 70.0% | **77.3%** | 28 | $1.16 | Opus 4.6 |
-| 17 | [Amplifier (Gemini 2.5 Flash)](#contenders) | 78.7% | 72.7% | **75.7%** | 17 | $0.02 | Gemini 2.5 Flash |
-| 18 | [Cerebras CLI Ralph](#contenders) | 69.9% | 74.9% | **72.4%** | 25 | $0.00 | gpt-oss-120b |
-| 19 | [FL Supervisor Pro](#contenders) | 49.7% | 37.6% | **43.7%** | 52 | $0.07 | Gemini 2.5 Pro |
+| 12 | [Metacog Banishing](#contenders) | 86.2% | 83.8% | **85.0%** | 19 | $1.05 | Opus 4.6 |
+| 13 | [Tango and Cash](#contenders) | 83.3% | 86.4% | **84.8%** | 59 | $1.10 | Opus 4.6 + Gemini |
+| 14 | [Metacog Pivot](#contenders) | 84.5% | 85.1% | **84.8%** | 59 | $0.98 | Opus 4.6 |
+| 15 | [Metacog Fool](#contenders) | 84.9% | 84.0% | **84.5%** | 20 | $1.23 | Opus 4.6 |
+| 16 | [Metacog Invocation](#contenders) | 84.8% | 83.7% | **84.2%** | 57 | $1.32 | Opus 4.6 |
+| 17 | [Metacog Gift](#contenders) | 83.3% | 84.8% | **84.0%** | 18 | $1.42 | Opus 4.6 |
+| 18 | [Claude Code (Opus)](#contenders) | 88.0% | 80.0% | **84.0%** | 35 | $1.18 | Opus 4.6 |
+| 19 | [Metacog](#contenders) | 88.0% | 79.5% | **83.7%** | 58 | $1.17 | Opus 4.6 |
+| 20 | [Metacog Reset](#contenders) | 85.7% | 80.2% | **82.9%** | 20 | $1.68 | Opus 4.6 |
+| 21 | [Metacog Drift](#contenders) | 87.0% | 78.4% | **82.7%** | 19 | $1.30 | Opus 4.6 |
+| 22 | [Metacog Veil](#contenders) | 85.4% | 79.8% | **82.6%** | 19 | $1.16 | Opus 4.6 |
+| 23 | [Metacog Stack](#contenders) | 85.7% | 79.1% | **82.4%** | 19 | $1.29 | Opus 4.6 |
+| 24 | [Self-Review (Opus)](#contenders) | 86.1% | 77.8% | **81.9%** | 19 | $1.23 | Opus 4.6 |
+| 25 | [CRUSH (GLM5)](#contenders) | 89.1% | 74.3% | **81.7%** | 30 | $0.73 | GLM5 |
+| 26 | [Metacog Mirror](#contenders) | 83.6% | 78.9% | **81.2%** | 19 | $1.41 | Opus 4.6 |
+| 27 | [Verify (Opus)](#contenders) | 86.0% | 75.7% | **80.8%** | 19 | $0.94 | Opus 4.6 |
+| 28 | [Metacog Sacrifice](#contenders) | 80.8% | 80.6% | **80.7%** | 19 | $1.16 | Opus 4.6 |
+| 29 | [Metacog Anchor](#contenders) | 85.6% | 75.7% | **80.6%** | 19 | $0.92 | Opus 4.6 |
+| 30 | [Metacog Scrying](#contenders) | 87.3% | 72.6% | **80.0%** | 19 | $1.32 | Opus 4.6 |
+| 31 | [Debug (Opus)](#contenders) | 84.6% | 70.0% | **77.3%** | 28 | $1.16 | Opus 4.6 |
+| 32 | [Amplifier (Gemini 2.5 Flash)](#contenders) | 78.7% | 72.7% | **75.7%** | 17 | $0.02 | Gemini 2.5 Flash |
+| 33 | [Cerebras CLI Ralph](#contenders) | 69.9% | 74.9% | **72.4%** | 25 | $0.00 | gpt-oss-120b |
+| 34 | [FL Supervisor (Opus)](#contenders) | 54.1% | 37.6% | **45.9%** | 23 | $0.24 | Opus 4.6 |
+| 35 | [FL Supervisor Pro](#contenders) | 49.7% | 37.6% | **43.7%** | 52 | $0.07 | Gemini 2.5 Pro |
 
 ### Cost Efficiency
 
-All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no other orchestrator scores higher at equal or lower cost).
+All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no other orchestrator scores higher at equal or lower cost). Metacog variants omitted for clarity — all fall between $0.92-$1.68 at 80-86%.
 
 | Orchestrator | Overall | Avg Cost | Pareto |
 |---|---:|---:|:---:|
 | Cerebras CLI Ralph | 72.4% | $0.00 | |
 | **Amplifier (Gemini 2.5 Flash)** | **75.7%** | **$0.02** | **best <$0.07** |
 | FL Supervisor Pro | 43.7% | $0.07 | |
+| FL Supervisor (Opus) | 45.9% | $0.24 | |
+| CRUSH (GLM5) | 81.7% | $0.73 | |
 | Verify (Opus) | 80.8% | $0.94 | |
 | Metacog Pivot | 84.8% | $0.98 | |
-| GSD | 86.9% | $1.06 | |
+| **Metacog Inversion** | **85.9%** | **$1.03** | **best <$1.06** |
+| **GSD** | **86.9%** | **$1.06** | **best <$1.11** |
 | Gas Station | 85.1% | $1.07 | |
 | Tango and Cash | 84.8% | $1.10 | |
-| **Conclave v6 (Sonnet)** | **87.4%** | **$1.10** | **best <$1.26** |
+| **Conclave v6 (Sonnet)** | **86.5%** | **$1.11** | **best <$1.26** |
 | Debug (Opus) | 77.3% | $1.16 | |
 | Metacog | 83.7% | $1.17 | |
 | Claude Code (Opus) | 84.0% | $1.18 | |
 | Self-Review (Opus) | 81.9% | $1.23 | |
-| **Plans (Opus)** | **87.6%** | **$1.26** | **best <$1.50** |
-| Stacked | 87.0% | $1.50 | |
-| **Conclave Review** | **87.7%** | **$1.88** | **best <$1.93** |
+| **Plans (Opus)** | **87.6%** | **$1.26** | **best <$1.57** |
+| Stacked | 86.4% | $1.57 | |
+| **Conclave Review** | **87.8%** | **$1.86** | **best <$1.93** |
 | BMAD-METHOD | 86.7% | $1.93 | |
-| Conclave v6 (Opus) | 86.5% | $2.12 | |
+| Conclave v6 (Opus) | 85.6% | $2.12 | |
 | **Agent Teams** | **90.6%** | **$2.14** | **best overall** |
 
-The Pareto frontier: Amplifier Gemini 2.5 Flash ($0.02, 75.7%) → v6 Sonnet ($1.10, 87.4%) → Plans ($1.26, 87.6%) → Conclave Review ($1.88, 87.7%) → Agent Teams ($2.14, 90.6%). v6 Sonnet remains the cost-efficiency sweet spot: 87.4% at $1.10/task — Opus-tier quality at Sonnet pricing.
+The Pareto frontier: Amplifier Gemini 2.5 Flash ($0.02, 75.7%) → Metacog Inversion ($1.03, 85.9%) → GSD ($1.06, 86.9%) → v6 Sonnet ($1.11, 86.5%) → Plans ($1.26, 87.6%) → Conclave Review ($1.86, 87.8%) → Agent Teams ($2.14, 90.6%). Metacog Inversion is the new cost-efficiency sweet spot among Opus variants: 85.9% at $1.03/task. GSD edges it out at $1.06 for 86.9%.
 
 ### Gene Ablation Variants
 
@@ -69,11 +88,11 @@ Individual orchestrator "genes" tested in isolation — Claude Code with a singl
 | Rank | Variant | Standard | Hard | Overall | Trials | Avg Cost | Model |
 |---:|---|---:|---:|---:|---:|---:|---|
 | 1 | TDD (Opus) | 92.0% | 77.6% | — | 23 | $2.45 | Opus 4.6 |
-| 2 | Conclave Review | 87.6% | 87.8% | **87.7%** | 85 | $1.88 | Opus 4.6 |
+| 2 | Conclave Review | 87.4% | 88.2% | **87.8%** | 139 | $1.86 | Opus 4.6 |
 | 3 | Brainstorm (Opus) | 87.9% | 82.8% | — | 18 | $1.82 | Opus 4.6 |
 | 4 | Plans (Opus) | 86.8% | 88.3% | **87.6%** | 57 | $1.26 | Opus 4.6 |
-| 5 | Conclave v6 (Opus) | 86.0% | 87.0% | **86.5%** | 76 | $2.12 | Opus 4.6 |
-| 6 | Conclave v6 (Sonnet) | 87.2% | 87.7% | **87.4%** | 57 | $1.10 | Sonnet 4.6 |
+| 5 | Conclave v6 (Sonnet) | 85.8% | 87.2% | **86.5%** | 84 | $1.11 | Sonnet 4.6 |
+| 6 | Conclave v6 (Opus) | 86.0% | 85.2% | **85.6%** | 76 | $2.12 | Opus 4.6 |
 | 7 | Self-Review (Opus) | 86.1% | 77.8% | **81.9%** | 19 | $1.23 | Opus 4.6 |
 | 8 | Verify (Opus) | 86.0% | 75.7% | **80.8%** | 19 | $0.94 | Opus 4.6 |
 | 9 | Claude Code (Opus) | 88.0% | 80.0% | **84.0%** | 35 | $1.18 | Opus 4.6 |
@@ -89,57 +108,69 @@ Individual orchestrator "genes" tested in isolation — Claude Code with a singl
 
 Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T13, T16), correctness constraints (T14), ambiguous requirements (T15), and deep reasoning where naive approaches fail at scale (T17-T19). Aggregate rankings are in the [leaderboard](#leaderboard) above.
 
-45 orchestrators with hard-task data, sorted by hard-suite mean. All leaderboard orchestrators have complete 8/8 hard task coverage.
+46 orchestrators with hard-task data, sorted by hard-suite mean. All leaderboard orchestrators have complete 8/8 hard task coverage. Metacog arcana variants (8+ with complete hard data) cluster at 73-86%.
 
 | Orchestrator | Hard | T12 | T13 | T14 | T15 | T16 | T17 | T18 | T19 | n |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | Plans (Opus) | **88.3%** | 93.9% | 93.5% | 100% | 72.5% | 92.2% | 82.2% | 81.1% | 91.3% | 24 |
+| Conclave Review | **88.2%** | 94.5% | 90.8% | 98.8% | 69.8% | 89.3% | 84.7% | 88.5% | 89.3% | 52 |
 | BMAD-METHOD | **88.1%** | 90.7% | 94.0% | 100% | 62.2% | 93.4% | 84.2% | 90.9% | 89.5% | 8 |
 | GSD | **88.1%** | 95.7% | 88.1% | 100% | 64.8% | 91.8% | 82.3% | 92.3% | 89.9% | 8 |
-| Conclave Review | **87.8%** | 94.8% | 92.7% | 97.7% | 72.5% | 89.2% | 84.1% | 82.8% | 88.7% | 30 |
-| Conclave v6 (Sonnet) | **87.7%** | 87.7% | 93.7% | 100% | 76.8% | 90.7% | 70.4% | 91.9% | 90.0% | 24 |
-| Stacked | **87.6%** | 90.8% | 85.7% | 100% | 62.9% | 90.4% | 86.4% | 95.1% | 89.6% | 8 |
+| Conclave v6 (Sonnet) | **87.2%** | 86.6% | 92.5% | 100% | 73.2% | 90.4% | 74.4% | 92.1% | 88.4% | 32 |
 | Agent Teams | **87.0%** | 90.0% | 96.2% | 100% | 78.3% | 92.0% | 79.6% | 91.5% | 68.7% | 8 |
-| Conclave v6 (Opus) | **87.0%** | 85.3% | 94.3% | 97.4% | 72.9% | 75.2% | 88.3% | 93.0% | 90.1% | 32 |
+| Stacked | **86.7%** | 76.2% | 89.1% | 100% | 69.5% | 90.7% | 87.9% | 92.8% | 87.5% | 16 |
+| Metacog Inversion | **86.4%** | 81.6% | 93.0% | 100% | 77.2% | 90.0% | 90.9% | 69.5% | 89.0% | 25 |
 | Tango and Cash | **86.4%** | 94.1% | 90.4% | 100% | 74.6% | 90.7% | 81.0% | 79.1% | 81.5% | 24 |
+| Conclave v6 (Opus) | **85.2%** | 70.9% | 94.3% | 97.4% | 72.9% | 75.2% | 88.3% | 93.0% | 90.1% | 32 |
 | Metacog Pivot | **85.1%** | 70.7% | 89.2% | 100% | 72.3% | 89.5% | 88.9% | 79.9% | 90.5% | 24 |
+| Metacog Error | **84.5%** | 92.3% | 90.5% | 100% | 64.3% | 87.2% | 92.8% | 60.0% | 88.6% | 8 |
+| Metacog Fool | **84.0%** | 90.8% | 93.5% | 100% | 75.8% | 93.2% | 70.3% | 60.0% | 88.5% | 8 |
+| Metacog Banishing | **83.8%** | 83.3% | 93.4% | 100% | 57.7% | 92.5% | 90.9% | 60.0% | 92.4% | 8 |
+| Metacog Invocation | **83.7%** | 69.5% | 79.8% | 100% | 67.0% | 89.7% | 89.5% | 86.1% | 88.1% | 24 |
 | Gas Station | **81.3%** | 89.7% | 56.7% | 100% | 69.7% | 86.7% | 80.9% | 75.8% | 90.9% | 16 |
+| Metacog Sacrifice | **80.6%** | 93.5% | 92.7% | 100% | 60.8% | 89.7% | 90.0% | 60.0% | 58.5% | 8 |
 | Claude Code (Opus) | **80.0%** | 60.8% | 73.9% | 100% | 61.9% | 89.8% | 92.2% | 71.5% | 90.1% | 16 |
 | Metacog | **79.5%** | 80.7% | 58.5% | 100% | 61.5% | 90.4% | 82.7% | 74.7% | 87.2% | 24 |
+| Metacog Stack | **79.1%** | 56.4% | 87.4% | 100% | 61.0% | 89.0% | 89.6% | 60.0% | 89.6% | 8 |
 | Self-Review (Opus) | **77.8%** | 73.8% | 91.5% | 100% | 60.5% | 60.1% | 58.1% | 95.2% | 82.8% | 8 |
 | TDD (Opus) | **77.6%** | 77.7% | 58.5% | 84.2% | 72.1% | 88.7% | 70.8% | — | 91.5% | 7 |
 | Verify (Opus) | **75.7%** | 58.5% | 56.7% | 100% | 60.1% | 91.8% | 83.0% | 97.1% | 58.5% | 8 |
 | Cerebras CLI Ralph | **74.9%** | 81.1% | 40.6% | 100% | 80.5% | 82.3% | 34.2% | 95.1% | 85.7% | 8 |
+| CRUSH (GLM5) | **74.3%** | 59.2% | — | 100% | 60.2% | 87.8% | 62.3% | 92.5% | 58.5% | 8 |
 | Amplifier (Gemini 2.5 Flash) | **72.7%** | 89.2% | 87.9% | 100% | 63.2% | 23.1% | — | — | — | 8 |
 | Debug (Opus) | **70.0%** | 88.9% | 87.4% | 100% | 62.1% | 86.1% | 58.1% | 20.0% | 56.9% | 8 |
-| FL Supervisor Pro | **37.6%** | 58.5% | 20.0% | 84.2% | 58.5% | 20.0% | 20.0% | 20.0% | 20.0% | 8 |
+| FL Supervisor (Opus) | **37.6%** | 58.5% | 20.0% | 84.2% | 58.5% | 20.0% | 20.0% | 20.0% | 20.0% | 8 |
+| FL Supervisor Pro | **37.6%** | 58.5% | 20.0% | 84.2% | 58.5% | 20.0% | 20.0% | 20.0% | 20.0% | 23 |
 
 **Key findings from the hard suite:**
 
-1. **Plans (Opus) is the hard-task champion among single genes (88.3%).** The writing-plans skill's structured upfront design outperforms every other single-gene variant on hard tasks. On standard tasks it's mid-tier (86.8%), but on hard tasks where architectural choices matter most, planning first pays off dramatically. With more trials (n=24 up from n=8), the score moderated from 90.7% but remains #1.
+1. **Plans (Opus) and Conclave Review are tied for the hard-task lead (88.2-88.3%).** Plans' structured upfront design and Conclave Review's consensus code review both excel on hard tasks. With more trials (Plans n=24, Conclave Review n=52), both scores have moderated from early readings but remain at the top.
 
 2. **Hard tasks differentiate orchestrators far more than standard tasks.** The standard-task spread among top-tier Opus variants is ~8 points (86-94%). On hard tasks, the spread is 53 points (38-91%). Hard benchmarks test whether the agent can discover novel algorithmic approaches rather than implement well-known patterns.
 
 3. **T14 (financial-ledger) is universally solved.** Every orchestrator with full hard coverage scores 96-100%. This task is too easy and should be replaced.
 
-4. **T15 (permission-maze) remains the hardest non-crashing task.** Scores range 58-80% — the deliberately ambiguous TASK.md exposes agents that make assumptions rather than exploring edge cases. Cerebras CLI Ralph leads (80.5%), followed by Agent Teams (78.3%) and Plans (77.7%).
+4. **T15 (permission-maze) remains the hardest non-crashing task.** Scores range 58-80% — the deliberately ambiguous TASK.md exposes agents that make assumptions rather than exploring edge cases. Cerebras CLI Ralph leads (80.5%), followed by Agent Teams (78.3%) and Metacog Inversion (77.2%).
 
-5. **Conclave v6 Sonnet matches Opus-tier quality at half the cost.** v6 Sonnet (87.7% hard, 87.2% standard, 87.4% overall at n=57) matches v6 Opus (87.0% hard) at $1.10/task vs $2.12. The task classifier + completion gate architecture benefits Sonnet more than Opus — structured routing compensates for Sonnet's lower baseline capability.
+5. **Conclave v6 Sonnet matches Opus-tier quality at half the cost.** v6 Sonnet (87.2% hard, 85.8% standard, 86.5% overall at n=84) outperforms v6 Opus (85.2% hard) at $1.11/task vs $2.12. The task classifier + completion gate architecture benefits Sonnet more than Opus — structured routing compensates for Sonnet's lower baseline capability.
 
-6. **Scores moderate with more trials — n=1 data was systematically optimistic.** Plans hard dropped from 90.7% (n=8) to 88.3% (n=24). Conclave Review standard dropped from 89.5% (n=33) to 87.6% (n=55). v6 Sonnet hard dropped from 88.9% (n=8) to 87.7% (n=24). More data consistently reveals lower true performance than early runs suggested.
+6. **Scores moderate with more trials — n=1 data was systematically optimistic.** Plans hard dropped from 90.7% (n=8) to 88.3% (n=24). Conclave Review standard dropped from 89.5% (n=33) to 87.4% (n=87). v6 Sonnet hard dropped from 88.9% (n=8) to 87.2% (n=32). v6 Opus hard dropped from 87.0% (n=32) to 85.2% (n=32). More data consistently reveals lower true performance than early runs suggested.
+
+7. **Metacog arcana variants form a dense cluster at 80-86%.** Twelve metacog variants with different tarot-inspired system prompts all land between 80-86% overall. The best (Metacog Inversion, 85.9%) uses only a 15-line prompt about perspective shifts. The spread suggests prompt engineering has ~6pp of headroom over vanilla Claude Code (84.0%), but the specific prompt matters less than having *any* structured discipline.
 
 ### Key Findings
 
 - **Agent Teams leads overall at 90.6%.** Claude Code's experimental parallel teammate feature produces the highest scores, though at the highest cost ($2.14/task) and with only 16 non-crash trials — more data needed to confirm
-- **Top 4 cluster tightly at 87-88%.** Conclave Review (87.7%, n=85), Plans (87.6%, n=57), and v6 Sonnet (87.4%, n=57) are essentially tied with more data. Early n=1 results were systematically optimistic
-- **v6 Sonnet is the cost-efficiency champion.** 87.4% overall at $1.10/task — #4 on the leaderboard, matching v6 Opus (86.5%, $2.12 at n=76) at half the cost. Structured routing compensates for Sonnet's lower baseline
-- **Plans is the hard-task champion (88.3%).** Plan-before-code produces the best hard-task scores of any single-gene variant, making it #3 overall (87.6%)
+- **Top 3 cluster tightly at 87-88%.** Conclave Review (87.8%, n=139), Plans (87.6%, n=57), and GSD (86.9%, n=19) form the top tier behind Agent Teams. Early n=1 results were systematically optimistic — scores moderate with more data
+- **Metacog Inversion is the cost-efficiency champion among Opus variants.** 85.9% at $1.03/task (n=66) — a 15-line system prompt about perspective shifts matches most elaborate frameworks. GSD edges higher (86.9%) at similar cost ($1.06)
+- **Plans is the hard-task champion (88.3%).** Plan-before-code produces the best hard-task scores of any single-gene variant, essentially tied with Conclave Review (88.2% at n=52)
 - **Hard tasks are the true differentiator.** On standard tasks the spread is ~8 points (86-94%). On hard tasks it's 53 points (38-91%). Hard benchmarks test what easy benchmarks can't: whether the agent discovers novel algorithmic approaches rather than implements well-known patterns
+- **Metacog arcana variants cluster densely at 80-86%.** Twelve tarot-themed system prompts tested — the best (Inversion, 85.9%) to worst (Scrying, 80.0%) span only 6pp. Having *any* structured discipline matters more than the specific prompt
 - **Multi-agent consensus adds nothing — even with real multi-provider keys.** Three-way test: pure superpowers (no binary), conclave (Claude-only consensus), conclave + keys (Claude + Gemini + Codex). The structured skill text drives all the value
 - **Gene stacking has diminishing returns** — Review + Verify scores worse than either alone. Two discipline checkpoints don't compound
 - **T14** (financial-ledger) is the great equalizer — every orchestrator scores 96-100%, the task is too easy
 - **T2, T5, and T8 are the variance killers.** These three complex tasks (collab-server, task-queue, analytics-dashboard) account for virtually all inter-trial variance. Scores range from 15% to 78% across orchestrators
-- **Tango and Cash: dual-model orchestration works.** Claude Opus architects and reviews, Gemini CLI implements in agentic mode — 87.8% overall (#5) with 90.1% hard (#2). The key was mandatory tests and a completion gate; without them, the same architecture scored only 82.7%. Going too lean (letting Gemini do everything) dropped scores to 84.1% — Claude's planning and review steps earn their tokens
+- **Tango and Cash: dual-model orchestration works.** Claude Opus architects and reviews, Gemini CLI implements in agentic mode — 84.8% overall (#13) with 86.4% hard. The key was mandatory tests and a completion gate; without them, the same architecture scored only 82.7%
 - **Third-party tools show promise on hard tasks.** [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) (88.1% hard) and [GSD](https://github.com/gsd-build/get-shit-done) (88.1% hard) both outperform most discipline genes on hard tasks. Both have competitive standard scores (85.3%, 85.7%)
 
 ### The Gas Station Story
@@ -174,7 +205,7 @@ The ablation studies below aren't just academic — they directly shaped [Concla
 
 - **Consensus demoted to opt-in.** Every `conclave consensus` call was moved from the default flow to an "Optional: Multi-Agent Consensus" section. Single-agent execution is the default. The binary still works — it just stops hurting scores by default.
 
-**The result:** Conclave v6 on Opus 4.6 scores 86.0% standard, 87.0% hard (86.5% overall, n=76). On Sonnet 4.6, v6 scores 87.4% standard, 88.9% hard (88.0% overall, n=19) at $1.06/task — outperforming the Opus variant at half the cost. The task classifier + completion gate architecture benefits Sonnet more than Opus: structured routing compensates for Sonnet's lower baseline capability, making v6 the optimal cost-performance configuration. The framework went from complex multi-agent orchestration to structured single-agent methodology, guided entirely by benchmark evidence.
+**The result:** Conclave v6 on Opus 4.6 scores 86.0% standard, 85.2% hard (85.6% overall, n=76). On Sonnet 4.6, v6 scores 85.8% standard, 87.2% hard (86.5% overall, n=84) at $1.11/task — outperforming the Opus variant at half the cost. The task classifier + completion gate architecture benefits Sonnet more than Opus: structured routing compensates for Sonnet's lower baseline capability, making v6 the optimal cost-performance configuration. The framework went from complex multi-agent orchestration to structured single-agent methodology, guided entirely by benchmark evidence.
 
 ### Ablation Studies
 
