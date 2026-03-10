@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 1,539 scored trials across 68 orchestrator variants (2,097 total including crash trials). All scoring is deterministic — no LLM judges, no rubric. Crash trials ($0 cost) are excluded from averages. Leaderboard requires 8+ standard AND 8+ hard non-crash trials.
+Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 1,573 scored trials across 68 orchestrator variants (2,177 total including crash trials). All scoring is deterministic — no LLM judges, no rubric. Crash trials ($0 cost) are excluded from averages. Leaderboard requires 8+ standard AND 8+ hard non-crash trials.
 
 ### Leaderboard
 
@@ -30,7 +30,7 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 | 14 | [Metacog Pivot](#contenders) | 84.5% | 85.1% | **84.8%** | 59 | $0.98 | Opus 4.6 |
 | 15 | [Metacog Fool](#contenders) | 84.9% | 84.0% | **84.5%** | 20 | $1.23 | Opus 4.6 |
 | 16 | [Metacog Invocation](#contenders) | 84.8% | 83.7% | **84.2%** | 57 | $1.32 | Opus 4.6 |
-| 17 | [Gemini CLI](#contenders) | 82.5% | 81.8% | **82.1%** | 33 | $0.14 | Gemini 2.5 Pro |
+| 17 | [Gemini CLI](#contenders) | 80.9% | 81.6% | **81.3%** | 52 | $0.15 | Gemini 2.5 Pro |
 | 18 | [Metacog Gift](#contenders) | 83.3% | 84.8% | **84.0%** | 18 | $1.42 | Opus 4.6 |
 | 19 | [Claude Code (Opus)](#contenders) | 88.0% | 80.0% | **84.0%** | 35 | $1.18 | Opus 4.6 |
 | 20 | [Metacog](#contenders) | 88.0% | 79.5% | **83.7%** | 58 | $1.17 | Opus 4.6 |
@@ -60,7 +60,7 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no othe
 | Cerebras CLI Ralph | 72.4% | $0.00 | |
 | **Amplifier (Gemini 2.5 Flash)** | **75.7%** | **$0.02** | **best <$0.07** |
 | FL Supervisor Pro | 43.7% | $0.07 | |
-| **Gemini CLI** | **82.1%** | **$0.14** | **best <$0.92** |
+| **Gemini CLI** | **81.3%** | **$0.15** | **best <$0.92** |
 | FL Supervisor (Opus) | 45.9% | $0.24 | |
 | CRUSH (GLM5) | 81.7% | $0.73 | |
 | Metacog Anchor | 80.6% | $0.92 | |
@@ -82,7 +82,7 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no othe
 | Conclave v6 (Opus) | 85.6% | $2.12 | |
 | Agent Teams | 87.1% | $3.00 | |
 
-The Pareto frontier: Amplifier Gemini 2.5 Flash ($0.02, 75.7%) → Gemini CLI ($0.14, 82.1%) → Metacog Inversion ($1.03, 85.9%) → GSD ($1.06, 86.9%) → v6 Sonnet ($1.11, 86.5%) → Plans ($1.26, 87.6%) → Conclave Review ($1.86, 87.8%). Gemini CLI is the standout value: 82.1% at $0.14/task — 10x cheaper than any Opus variant. Agent Teams ($3.00) no longer justifies its cost premium over Conclave Review ($1.86) with more data.
+The Pareto frontier: Amplifier Gemini 2.5 Flash ($0.02, 75.7%) → Gemini CLI ($0.15, 81.3%) → Metacog Inversion ($1.03, 85.9%) → GSD ($1.06, 86.9%) → v6 Sonnet ($1.11, 86.5%) → Plans ($1.26, 87.6%) → Conclave Review ($1.86, 87.8%). Gemini CLI is the standout value: 81.3% at $0.15/task — 10x cheaper than any Opus variant. Agent Teams ($3.00) no longer justifies its cost premium over Conclave Review ($1.86) with more data.
 
 ### Gene Ablation Variants
 
@@ -130,7 +130,7 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 | Metacog Fool | **84.0%** | 90.8% | 93.5% | 100% | 75.8% | 93.2% | 70.3% | 60.0% | 88.5% | 8 |
 | Metacog Banishing | **83.8%** | 83.3% | 93.4% | 100% | 57.7% | 92.5% | 90.9% | 60.0% | 92.4% | 8 |
 | Metacog Invocation | **83.7%** | 69.5% | 79.8% | 100% | 67.0% | 89.7% | 89.5% | 86.1% | 88.1% | 24 |
-| Gemini CLI | **81.8%** | 90.0% | 66.9% | 100% | 64.1% | 88.2% | 75.8% | 96.5% | 72.7% | 20 |
+| Gemini CLI | **81.6%** | 92.2% | 72.8% | 100% | 62.8% | 88.8% | 62.6% | 95.9% | 77.7% | 28 |
 | Gas Station | **81.3%** | 89.7% | 56.7% | 100% | 69.7% | 86.7% | 80.9% | 75.8% | 90.9% | 16 |
 | Metacog Sacrifice | **80.6%** | 93.5% | 92.7% | 100% | 60.8% | 89.7% | 90.0% | 60.0% | 58.5% | 8 |
 | Claude Code (Opus) | **80.0%** | 60.8% | 73.9% | 100% | 61.9% | 89.8% | 92.2% | 71.5% | 90.1% | 16 |
@@ -175,7 +175,7 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 - **T14** (financial-ledger) is the great equalizer — every orchestrator scores 96-100%, the task is too easy
 - **T2, T5, and T8 are the variance killers.** These three complex tasks (collab-server, task-queue, analytics-dashboard) account for virtually all inter-trial variance. Scores range from 15% to 78% across orchestrators
 - **Tango and Cash: dual-model orchestration works.** Claude Opus architects and reviews, Gemini CLI implements in agentic mode — 84.8% overall (#13) with 86.4% hard. The key was mandatory tests and a completion gate; without them, the same architecture scored only 82.7%
-- **Gemini CLI is the cost-efficiency king.** 82.1% overall at $0.14/task (n=33) — 10x cheaper than any Opus variant. Competitive on hard tasks (81.8%) with strong T18 beam-splitter (96.5%). Weaker on standard tasks requiring complex architecture (T2: 53%, T8: 49%)
+- **Gemini CLI is the cost-efficiency king.** 81.3% overall at $0.15/task (n=52) — 10x cheaper than any Opus variant. Competitive on hard tasks (81.6%) with strong T18 beam-splitter (95.9%). Weaker on standard tasks requiring complex architecture (T8: 43%, T2: 55%)
 - **Third-party tools show promise on hard tasks.** [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) (88.1% hard) and [GSD](https://github.com/gsd-build/get-shit-done) (88.1% hard) both outperform most discipline genes on hard tasks. Both have competitive standard scores (85.3%, 85.7%)
 
 ### The Gas Station Story
