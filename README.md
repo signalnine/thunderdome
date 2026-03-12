@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 1,621 scored trials across 70 orchestrator variants (2,263 total including crash trials). All scoring is deterministic — no LLM judges, no rubric. Crash trials ($0 cost) are excluded from averages. Leaderboard requires 8+ standard AND 8+ hard non-crash trials.
+Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 1,796 scored trials across 70 orchestrator variants (2,483 total including crash trials). All scoring is deterministic — no LLM judges, no rubric. Crash trials ($0 cost) are excluded from averages. Leaderboard requires 8+ standard AND 8+ hard non-crash trials.
 
 ### Leaderboard
 
@@ -48,8 +48,10 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 | 32 | [Debug (Opus)](#contenders) | 84.6% | 70.0% | **77.3%** | 28 | $1.16 | Opus 4.6 |
 | 33 | [Amplifier (Gemini 2.5 Flash)](#contenders) | 78.7% | 72.7% | **75.7%** | 17 | $0.02 | Gemini 2.5 Flash |
 | 34 | [Cerebras CLI Ralph](#contenders) | 69.9% | 74.9% | **72.4%** | 25 | $0.00 | gpt-oss-120b |
-| 35 | [FL Supervisor (Opus)](#contenders) | 54.1% | 37.6% | **45.9%** | 24 | $0.24 | Opus 4.6 |
-| 36 | [FL Supervisor Pro](#contenders) | 50.1% | 37.6% | **43.9%** | 66 | $0.11 | Gemini 2.5 Pro |
+| 35 | [CRUSH (Kimi K2.5)](#contenders) | 72.8% | 65.1% | **68.9%** | 49 | $0.45 | Kimi K2.5 |
+| 36 | [CRUSH (MiniMax M2.5)](#contenders) | 71.9% | 52.9% | **62.4%** | 59 | $0.46 | MiniMax M2.5 |
+| 37 | [FL Supervisor (Opus)](#contenders) | 54.1% | 37.6% | **45.9%** | 24 | $0.24 | Opus 4.6 |
+| 38 | [FL Supervisor Pro](#contenders) | 50.1% | 37.6% | **43.9%** | 66 | $0.11 | Gemini 2.5 Pro |
 
 ### Cost Efficiency
 
@@ -62,6 +64,8 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no othe
 | FL Supervisor Pro | 43.9% | $0.11 | |
 | **Gemini CLI** | **80.9%** | **$0.14** | **best <$0.73** |
 | FL Supervisor (Opus) | 45.9% | $0.24 | |
+| CRUSH (Kimi K2.5) | 68.9% | $0.45 | |
+| CRUSH (MiniMax M2.5) | 62.4% | $0.46 | |
 | **CRUSH (GLM5)** | **81.7%** | **$0.73** | **best <$0.98** |
 | Metacog Anchor | 80.6% | $0.92 | |
 | Verify (Opus) | 80.8% | $0.94 | |
@@ -144,6 +148,8 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 | CRUSH (GLM5) | **74.3%** | 59.2% | — | 100% | 60.2% | 87.8% | 62.3% | 92.5% | 58.5% | 8 |
 | Amplifier (Gemini 2.5 Flash) | **72.7%** | 89.2% | 87.9% | 100% | 63.2% | 23.1% | — | — | — | 8 |
 | Debug (Opus) | **70.0%** | 88.9% | 87.4% | 100% | 62.1% | 86.1% | 58.1% | 20.0% | 56.9% | 8 |
+| CRUSH (Kimi K2.5) | **65.1%** | 53.7% | 71.3% | 92.1% | 59.8% | 73.3% | 41.6% | 59.0% | 69.8% | 17 |
+| CRUSH (MiniMax M2.5) | **52.9%** | 22.0% | 73.9% | 100% | 56.0% | 38.9% | 20.0% | 56.2% | 56.5% | 18 |
 | FL Supervisor (Opus) | **37.6%** | 58.5% | 20.0% | 84.2% | 58.5% | 20.0% | 20.0% | 20.0% | 20.0% | 8 |
 | FL Supervisor Pro | **37.6%** | 58.5% | 20.0% | 84.2% | 58.5% | 20.0% | 20.0% | 20.0% | 20.0% | 31 |
 
