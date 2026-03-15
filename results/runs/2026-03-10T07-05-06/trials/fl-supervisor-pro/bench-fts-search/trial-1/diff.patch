@@ -1,0 +1,226 @@
+diff --git a/package-lock.json b/package-lock.json
+index a3ad476..a7ecd82 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1131,7 +1131,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1247,7 +1246,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1540,7 +1538,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2301,7 +2298,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -4604,7 +4600,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/db.ts b/src/db.ts
+index 810e0fd..cc27bc3 100644
+--- a/src/db.ts
++++ b/src/db.ts
+@@ -18,6 +18,30 @@ export function createDatabase(path?: string): Database.Database {
+     )
+   `);
+ 
++  // FTS5 setup for full-text search
++  db.exec(`
++    CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(title, body, content="notes", content_rowid="id");
++  `);
++
++  // Triggers to synchronize FTS table with notes table
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
++      INSERT INTO notes_fts (rowid, title, body) VALUES (new.id, new.title, new.body);
++    END;
++  `);
++
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
++      UPDATE notes_fts SET title = new.title, body = new.body WHERE rowid = new.id;
++    END;
++  `);
++
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
++      DELETE FROM notes_fts WHERE rowid = old.id;
++    END;
++  `);
++
+   return db;
+ }
+ 
+diff --git a/src/routes.ts b/src/routes.ts
+index 013b2dc..e8cd82f 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -1,6 +1,6 @@
+ import { Router, Request, Response, NextFunction } from 'express';
+ import Database from 'better-sqlite3';
+-import { Note, NoteInput } from './models.js';
++import { Note, NoteInput, SearchResult, SuggestResult } from './models.js';
+ import { NotFoundError, ValidationError } from './errors.js';
+ 
+ export function createRoutes(db: Database.Database): Router {
+@@ -118,5 +118,79 @@ export function createRoutes(db: Database.Database): Router {
+     }
+   });
+ 
++  // GET /notes/search - Full-text search
++  router.get('/notes/search', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const query = req.query.q as string | undefined;
++      const page = parseInt(req.query.page as string) || 1;
++      const perPage = 20;
++      const offset = (page - 1) * perPage;
++
++      if (!query || query.trim() === '') {
++        return res.status(400).json({ error: 'Search query "q" is required and cannot be empty.' });
++      }
++
++      // FTS5 search query with snippet highlighting and BM25 ranking
++      // Join with notes table to retrieve id and title correctly.
++      const searchStmt = db.prepare(`
++        SELECT T1.id, T1.title, snippet(T2, 0, '<mark>', '</mark>', '...', 64) AS snippet, bm25(T2) AS rank
++        FROM notes AS T1
++        INNER JOIN notes_fts AS T2 ON T1.id = T2.rowid
++        WHERE T2 MATCH ?
++        ORDER BY rank DESC
++        LIMIT ? OFFSET ?
++      `);
++      const searchResults = searchStmt.all(query, perPage, offset) as SearchResult[];
++
++      // Count total results for pagination
++      const countStmt = db.prepare(`
++        SELECT COUNT(*) AS total FROM notes_fts WHERE notes_fts MATCH ?
++      `);
++      const totalResult = countStmt.get(query) as { total: number };
++      const total = totalResult.total;
++
++      res.json({
++        results: searchResults,
++        total: total,
++        page: page,
++        perPage: perPage,
++      });
++    } catch (err) {
++      next(err);
++    }
++  });
++
++  // GET /notes/search/suggest - Autocomplete suggestions
++  router.get('/notes/search/suggest', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const prefix = req.query.q as string | undefined;
++
++      if (!prefix || prefix.trim() === '') {
++        return res.status(400).json({ error: 'Search prefix "q" is required and cannot be empty.' });
++      }
++
++      // FTS5 prefix search: 'prefix*' is a common way to do prefix matching in FTS.
++      // We construct the query to explicitly search for prefixes.
++      const formattedQuery = `${prefix}*`;
++
++      // Join with notes table to retrieve id and title correctly.
++      // Use explicit table names for clarity and to potentially avoid alias issues in MATCH clause.
++      const suggestStmt = db.prepare(`
++        SELECT notes.id, notes.title
++        FROM notes
++        INNER JOIN notes_fts ON notes.id = notes_fts.rowid
++        WHERE notes_fts MATCH ?
++        ORDER BY notes.title ASC
++        LIMIT 5
++      `);
++      const suggestions = suggestStmt.all(formattedQuery) as SuggestResult[];
++
++      res.json({ results: suggestions });
++    } catch (err) {
++      next(err);
++    }
++  });
++
++
+   return router;
+ }
+diff --git a/tests/notes.test.ts b/tests/notes.test.ts
+index 0e33ee4..0aa0bd3 100644
+--- a/tests/notes.test.ts
++++ b/tests/notes.test.ts
+@@ -1,6 +1,6 @@
+ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+ import request from 'supertest';
+-import { createApp } from '../src/server.js';
++import { createApp, createSeededApp } from '../src/server.js';
+ import type { App } from '../src/server.js';
+ 
+ describe('Notes CRUD', () => {
+@@ -16,12 +16,15 @@ describe('Notes CRUD', () => {
+ 
+   // 1. GET /notes returns all notes
+   it('GET /notes returns all notes', async () => {
+-    // Insert a couple of notes
+-    appCtx.db.prepare("INSERT INTO notes (title, body) VALUES ('Note 1', 'Body 1')").run();
+-    appCtx.db.prepare("INSERT INTO notes (title, body) VALUES ('Note 2', 'Body 2')").run();
++    // The seeded data is not relevant for these tests, which focus on manual inserts.
++    // The beforeEach hook now uses createApp() for an isolated, empty database.
++    // Thus, we insert the specific notes needed for this test.
++    const note1 = appCtx.db.prepare("INSERT INTO notes (title, body) VALUES ('Note 1', 'Body 1')").run();
++    const note2 = appCtx.db.prepare("INSERT INTO notes (title, body) VALUES ('Note 2', 'Body 2')").run();
+ 
+     const res = await request(appCtx.app).get('/notes');
+     expect(res.status).toBe(200);
++    // Expecting only the two notes inserted in this test, not seeded data.
+     expect(res.body.notes).toHaveLength(2);
+   });
+ 
+@@ -128,15 +131,19 @@ describe('Notes CRUD', () => {
+ 
+   // 12. GET /notes?tag=X filters by tag
+   it('GET /notes?tag=X filters by tag', async () => {
+-    appCtx.db.prepare("INSERT INTO notes (title, body, tags) VALUES ('Tagged', 'Body', ?)")
++    // Insert specific notes for this test, not relying on seeded data.
++    appCtx.db.prepare("INSERT INTO notes (title, body, tags) VALUES ('Tagged Note 1', 'Body 1', ?)")
+       .run(JSON.stringify(['javascript', 'testing']));
+-    appCtx.db.prepare("INSERT INTO notes (title, body, tags) VALUES ('Other', 'Body', ?)")
++    appCtx.db.prepare("INSERT INTO notes (title, body, tags) VALUES ('Tagged Note 2', 'Body 2', ?)")
++      .run(JSON.stringify(['javascript', 'frontend']));
++    appCtx.db.prepare("INSERT INTO notes (title, body, tags) VALUES ('Other Note', 'Body 3', ?)")
+       .run(JSON.stringify(['python']));
+ 
+     const res = await request(appCtx.app).get('/notes?tag=javascript');
+     expect(res.status).toBe(200);
+-    expect(res.body.notes).toHaveLength(1);
+-    expect(res.body.notes[0].title).toBe('Tagged');
++    // Expecting only the two tagged notes inserted in this test.
++    expect(res.body.notes).toHaveLength(2);
++    expect(res.body.notes[0].title).toBe('Tagged Note 1'); // Assuming order is maintained or checked
+   });
+ 
+   // 13. Notes have created_at timestamp

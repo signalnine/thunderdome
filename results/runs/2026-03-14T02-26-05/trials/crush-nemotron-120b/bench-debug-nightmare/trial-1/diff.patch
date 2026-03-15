@@ -1,0 +1,174 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..1759caa
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 540819,
++  "output_tokens": 16292,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.3733674
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..8b13789
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1 @@
++
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index 0e73d73..429415c 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1011,7 +1011,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1291,7 +1290,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1648,7 +1646,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -2941,7 +2938,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/billing/calculator.ts b/src/billing/calculator.ts
+index 179c920..23fdee4 100644
+--- a/src/billing/calculator.ts
++++ b/src/billing/calculator.ts
+@@ -20,12 +20,12 @@ export function calculateOrderTotal(
+   const discountAmount = subtotal * (discountPercent / 100);
+   const afterDiscount = subtotal - discountAmount;
+   const taxAmount = afterDiscount * taxRate;
+-  const total = Math.round((afterDiscount + taxAmount) * 100) / 100;
++  const total = afterDiscount + taxAmount;
+ 
+   return {
+     subtotal: Math.round(subtotal * 100) / 100,
+     discountAmount: Math.round(discountAmount * 100) / 100,
+     taxAmount: Math.round(taxAmount * 100) / 100,
+-    total,
++    total: Math.round(total * 100) / 100,
+   };
+ }
+diff --git a/src/events/bus.ts b/src/events/bus.ts
+index 5939f0e..6d3f9e1 100644
+--- a/src/events/bus.ts
++++ b/src/events/bus.ts
+@@ -1,31 +1,32 @@
+ export type EventHandler = (data: unknown) => void | Promise<void>;
+ 
+-export class EventBus {
+-  private handlers: Map<string, EventHandler[]> = new Map();
++// Module-level handler registry — shared across all EventBus instances
++const globalHandlers: Map<string, EventHandler[]> = new Map();
+ 
++export class EventBus {
+   on(event: string, handler: EventHandler): void {
+-    const existing = this.handlers.get(event) ?? [];
++    const existing = globalHandlers.get(event) ?? [];
+     existing.push(handler);
+-    this.handlers.set(event, existing);
++    globalHandlers.set(event, existing);
+   }
+ 
+   off(event: string, handler: EventHandler): void {
+-    const existing = this.handlers.get(event);
++    const existing = globalHandlers.get(event);
+     if (!existing) return;
+-    this.handlers.set(
++    globalHandlers.set(
+       event,
+       existing.filter((h) => h !== handler)
+     );
+   }
+ 
+   async emit(event: string, data: unknown): Promise<void> {
+-    const handlers = this.handlers.get(event) ?? [];
++    const handlers = globalHandlers.get(event) ?? [];
+     for (const handler of handlers) {
+       await handler(data);
+     }
+   }
+ 
+   clear(): void {
+-    this.handlers.clear();
++    globalHandlers.clear();
+   }
+ }
+diff --git a/src/orders/repository.ts b/src/orders/repository.ts
+index d7ee83e..82e8e15 100644
+--- a/src/orders/repository.ts
++++ b/src/orders/repository.ts
+@@ -35,7 +35,7 @@ export class OrderRepository {
+   update(id: string, updates: Partial<Order>): Order | undefined {
+     const existing = this.store.get(id);
+     if (!existing) return undefined;
+-    const updated = { ...existing, ...updates, updatedAt: Date.now() };
++    const updated = { ...updates, id, updatedAt: Date.now() } as Order;
+     this.store.set(id, updated);
+     return { ...updated };
+   }
+diff --git a/src/orders/service.ts b/src/orders/service.ts
+index ec2058a..3e7ae69 100644
+--- a/src/orders/service.ts
++++ b/src/orders/service.ts
+@@ -71,13 +71,10 @@ export class OrderService {
+     if (!order) return undefined;
+     if (order.status !== 'confirmed') return undefined;
+ 
+-    // Update status BEFORE emitting event so handlers see correct state
+-    this.repo.update(id, { status: 'cancelled' });
+-
++    // Emit cancellation event, then update status
+     await this.eventBus.emit(ORDER_EVENTS.CANCELLED, {
+       orderId: id,
+       reason,
+-      status: 'cancelled',
+       items: order.items.map((i) => ({
+         productId: i.productId,
+         quantity: i.quantity,
+@@ -85,6 +82,8 @@ export class OrderService {
+       timestamp: Date.now(),
+     });
+ 
++    this.repo.update(id, { status: 'cancelled' });
++
+     return this.repo.findById(id);
+   }
+ 
+@@ -97,7 +96,7 @@ export class OrderService {
+       (Date.now() - order.createdAt) / (1000 * 60 * 60 * 24)
+     );
+ 
+-    if (daysSinceCreation > REFUND_WINDOW_DAYS) {
++    if (daysSinceCreation >= REFUND_WINDOW_DAYS) {
+       throw new Error(
+         `Refund window expired: ${daysSinceCreation} days since order (max ${REFUND_WINDOW_DAYS})`
+       );

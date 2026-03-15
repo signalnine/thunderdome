@@ -8,8 +8,8 @@ set -uo pipefail
 THUNDERDOME="./thunderdome"
 RESULTS_DIR="results"
 PARALLEL=2
-WINDOW_HOURS=5
-WINDOW_SECONDS=$((WINDOW_HOURS * 3600))
+WINDOW_HOURS=2.5
+WINDOW_SECONDS=$((5 * 3600 / 2))
 SLEEP_BETWEEN=120
 LOG_FILE="scripts/batch-top10.log"
 LAST_RUN_FILE="scripts/.batch-top10-last-run"

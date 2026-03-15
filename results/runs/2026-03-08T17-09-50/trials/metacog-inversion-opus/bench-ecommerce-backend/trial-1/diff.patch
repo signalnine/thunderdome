@@ -1,0 +1,1138 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..abc9034
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,10 @@
++{
++  "input_tokens": 0,
++  "output_tokens": 0,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "tools_used": [],
++  "duration_ms": 774,
++  "total_cost_usd": 0
++}
+\ No newline at end of file
+diff --git a/.thunderdome-output.jsonl b/.thunderdome-output.jsonl
+new file mode 100644
+index 0000000..4cf8301
+--- /dev/null
++++ b/.thunderdome-output.jsonl
+@@ -0,0 +1,3 @@
++{"type":"system","subtype":"init","cwd":"/workspace","session_id":"202f081f-c315-4b74-9b4d-93a022db2dc6","tools":["Task","TaskOutput","Bash","Glob","Grep","ExitPlanMode","Read","Edit","Write","NotebookEdit","WebFetch","TodoWrite","WebSearch","TaskStop","Skill","ToolSearch"],"mcp_servers":[],"model":"claude-opus-4-6","permissionMode":"bypassPermissions","slash_commands":["debug","metacog:metacog","compact","context","cost","init","pr-comments","release-notes","review","security-review","insights"],"apiKeySource":"none","claude_code_version":"2.1.39","output_style":"default","agents":["Bash","general-purpose","statusline-setup","Explore","Plan"],"skills":["debug","metacog:metacog"],"plugins":[{"name":"metacog","path":"/opt/metacog-plugin"}],"uuid":"9bc53596-5f82-4f19-a5d2-e6f0545b0b50","fast_mode_state":"off"}
++{"type":"assistant","message":{"id":"9ad2e4b7-a7d4-4d65-8c25-69f8f4b46e81","container":null,"model":"<synthetic>","role":"assistant","stop_reason":"stop_sequence","stop_sequence":"","type":"message","usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":null,"cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0},"inference_geo":null,"iterations":null},"content":[{"type":"text","text":"You've hit your limit · resets 8pm (UTC)"}],"context_management":null},"parent_tool_use_id":null,"session_id":"202f081f-c315-4b74-9b4d-93a022db2dc6","uuid":"4b49f44a-6557-4d1d-832a-9811926fc48d","error":"rate_limit"}
++{"type":"result","subtype":"success","is_error":true,"duration_ms":774,"duration_api_ms":0,"num_turns":1,"result":"You've hit your limit · resets 8pm (UTC)","stop_reason":"stop_sequence","session_id":"202f081f-c315-4b74-9b4d-93a022db2dc6","total_cost_usd":0,"usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[]},"modelUsage":{},"permission_denials":[],"uuid":"4bda81ca-326c-4098-b67d-05e8c2bfa877"}
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/TASK.md b/TASK.md
+index d7d26a5..96e4188 100644
+--- a/TASK.md
++++ b/TASK.md
+@@ -1,92 +1,60 @@
+-# T10: E-Commerce Backend
+-
+-**Category:** greenfield/complex
+-**Timeout:** 45 minutes
+-**Tests:** 48 unit (6 per service) + 22 integration = 70 total
+-
+-## Overview
+-
+-Build an event-driven e-commerce backend with 8 independent services communicating through a read-only event bus. Each service implements a specific interface defined in `src/types.ts` and communicates with other services exclusively through events on the shared `EventBus` from `src/bus.ts`.
+-
+-## What to Build
+-
+-Implement 8 services, each in its own directory under `src/`:
+-
+-### src/catalog/index.ts - Product Catalog
+-- CRUD operations for products (create, get, list, search, update, remove)
+-- Emits `product:created` events
+-- Export: `createCatalogService(bus: EventBus): CatalogService`
+-
+-### src/inventory/index.ts - Inventory Management
+-- Stock tracking with set, get, reserve, release operations
+-- Low stock alert system with configurable thresholds
+-- Emits `inventory:updated` and `inventory:low_stock` events
+-- Export: `createInventoryService(bus: EventBus): InventoryService`
+-
+-### src/cart/index.ts - Shopping Cart
+-- Cart creation, item add/remove/update, clear operations
+-- Emits `cart:updated` events on any cart modification
+-- Export: `createCartService(bus: EventBus): CartService`
+-
+-### src/pricing/index.ts - Price Calculation
+-- Calculate totals with 10% tax rate
+-- Discount code support (percentage-based)
+-- Listens for `product:created` to track prices
+-- Export: `createPricingService(bus: EventBus): PricingService`
+-
+-### src/orders/index.ts - Order Management
+-- Order creation with PENDING initial status
+-- Status state machine: PENDING -> CONFIRMED -> SHIPPED -> DELIVERED (or CANCELLED)
+-- Emits `order:created` and `order:status_changed` events
+-- Export: `createOrderService(bus: EventBus): OrderService`
+-
+-### src/payment/index.ts - Payment Processing
+-- Async payment processing with configurable success/failure/timeout simulation
+-- Refund support for successful transactions
+-- Emits `payment:processed` events
+-- Export: `createPaymentService(bus: EventBus, options?: PaymentServiceOptions): PaymentService`
+-
+-### src/notifications/index.ts - Notification System
+-- User subscription model
+-- Listens for `order:status_changed` and `payment:processed` events
+-- Collects notifications per subscribed user
+-- Emits `notification:sent` events
+-- Export: `createNotificationService(bus: EventBus): NotificationService`
+-
+-### src/analytics/index.ts - Analytics Tracking
+-- Event counting by type
+-- Revenue tracking from successful payments
+-- Conversion rate calculation (orders / unique carts)
+-- Top products ranking by order quantity
+-- Listens for all major event types
+-- Export: `createAnalyticsService(bus: EventBus): AnalyticsService`
+-
+-## Constraints
+-
+-- **DO NOT modify** `src/bus.ts` or `src/types.ts` (checksums are validated)
+-- Each service must take `(bus: EventBus)` as its constructor parameter (payment also accepts options)
+-- Services must NOT import from each other's directories
+-- Services communicate ONLY through the event bus
+-- Each service function is a factory that returns the service interface
++# E-Commerce Backend
++
++Build an event-driven e-commerce backend composed of 8 independent services that communicate through a shared event bus.
++
++## Provided Files (read-only)
++
++- **`src/bus.ts`** -- An `EventBus` class with `on`, `off`, `emit`, `getLog`, and `clear` methods. Do not modify this file.
++- **`src/types.ts`** -- TypeScript interfaces for all 8 services, event payload types, enums (`OrderStatus`, `PaymentStatus`), and event name constants. Do not modify this file.
++
++## Architecture
++
++Each service is a factory function that receives an `EventBus` instance and returns an object conforming to the corresponding interface from `types.ts`. Services must not import from one another -- all inter-service communication happens through events on the bus.
++
++## Services to Implement
++
++1. **Catalog** -- Manage a product catalog. Support creating, retrieving, listing, searching, updating, and removing products. Emit events when products are created.
++
++2. **Inventory** -- Track stock levels for products. Support setting stock, checking quantities, reserving stock for orders, and releasing reserved stock. Detect low-stock conditions and alert when stock falls below configurable thresholds.
++
++3. **Cart** -- Manage shopping carts for users. Support creating carts, adding/removing items, updating quantities, clearing carts, and retrieving cart contents. Items for the same product added multiple times should consolidate.
++
++4. **Pricing** -- Calculate order totals including tax (10% rate). Support registering percentage-based discount codes that reduce the subtotal before tax is applied. Listen for product creation events to track product prices.
++
++5. **Orders** -- Create and manage orders. Orders start in a pending state and progress through a status lifecycle (confirmed, shipped, delivered) with the option to cancel. Emit events on creation and status changes, including the previous status.
++
++6. **Payment** -- Process payments asynchronously. Support configurable simulation of success, failure, and timeout scenarios via an options parameter. Support refunding successful transactions. Emit events when payments are processed.
++
++7. **Notifications** -- Deliver notifications to subscribed users. Listen for order status changes and payment events, then record notifications for the relevant user. Track which orders belong to which users.
++
++8. **Analytics** -- Track platform-wide metrics by listening to events on the bus. Count events by type, track revenue from successful payments, calculate conversion rates (orders divided by unique carts), and rank products by order quantity.
++
++## Project Structure
++
++Each service should live in its own subdirectory under `src/` (directories already exist):
++
++```
++src/catalog/index.ts
++src/inventory/index.ts
++src/cart/index.ts
++src/pricing/index.ts
++src/orders/index.ts
++src/payment/index.ts
++src/notifications/index.ts
++src/analytics/index.ts
++```
++
++Export all 8 service factory functions from `src/index.ts`.
++
++## Factory Function Names
++
++Each factory follows the pattern `create<Name>Service(bus: EventBus)`. The payment service additionally accepts an optional options parameter for simulation configuration.
+ 
+ ## Validation
+ 
+ ```bash
+-npm test        # All 70 tests must pass
+-npm run build   # TypeScript must compile
++npm run build   # TypeScript must compile cleanly
+ npm run lint    # No lint errors
+ ```
+ 
+-## Event Flow
+-
+-```
+-catalog --[product:created]--> pricing (tracks prices)
+-inventory --[inventory:updated]--> (bus log)
+-inventory --[inventory:low_stock]--> (bus log)
+-cart --[cart:updated]--> (bus log)
+-orders --[order:created]--> notifications (maps userId), analytics (tracks)
+-orders --[order:status_changed]--> notifications (sends notif)
+-payment --[payment:processed]--> notifications (sends notif), analytics (tracks revenue)
+-analytics --[analytics:event]--> (bus log)
+-notifications --[notification:sent]--> (bus log)
+-```
++Writing your own tests is strongly encouraged to verify correctness before submission.
+diff --git a/package.json b/package.json
+index 639ed8e..b54cb4c 100644
+--- a/package.json
++++ b/package.json
+@@ -5,7 +5,7 @@
+   "type": "module",
+   "scripts": {
+     "build": "tsc",
+-    "lint": "eslint src/ tests/",
++    "lint": "eslint src/",
+     "test": "vitest run"
+   },
+   "dependencies": {
+@@ -19,6 +19,7 @@
+     "eslint": "^8.56.0",
+     "@typescript-eslint/parser": "^7.0.0",
+     "@typescript-eslint/eslint-plugin": "^7.0.0",
++    "@vitest/coverage-v8": "^2.0.0",
+     "@types/better-sqlite3": "^7.6.0",
+     "@types/express": "^4.17.0",
+     "@types/uuid": "^10.0.0"
+diff --git a/tests/analytics.test.ts b/tests/analytics.test.ts
+deleted file mode 100644
+index 94c8285..0000000
+--- a/tests/analytics.test.ts
++++ /dev/null
+@@ -1,61 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { EventBus } from '../src/bus.js';
+-import { createAnalyticsService } from '../src/analytics/index.js';
+-import { Events, PaymentStatus } from '../src/types.js';
+-
+-describe('AnalyticsService (unit)', () => {
+-  let bus: EventBus;
+-  let analytics: ReturnType<typeof createAnalyticsService>;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-    analytics = createAnalyticsService(bus);
+-  });
+-
+-  it('should count events by type', async () => {
+-    await bus.emit(Events.PRODUCT_CREATED, { productId: 'p1', name: 'Widget', price: 10, category: 'gadgets' });
+-    await bus.emit(Events.PRODUCT_CREATED, { productId: 'p2', name: 'Gizmo', price: 20, category: 'gadgets' });
+-    expect(analytics.getEventCount(Events.PRODUCT_CREATED)).toBe(2);
+-  });
+-
+-  it('should return 0 for unknown event type', () => {
+-    expect(analytics.getEventCount('unknown:event')).toBe(0);
+-  });
+-
+-  it('should track revenue from successful payments', async () => {
+-    await bus.emit(Events.ORDER_CREATED, { orderId: 'o1', userId: 'u1', cartId: 'c1', total: 100 });
+-    await bus.emit(Events.PAYMENT_PROCESSED, { orderId: 'o1', status: PaymentStatus.SUCCESS, transactionId: 'tx1' });
+-    expect(analytics.getRevenue()).toBe(100);
+-  });
+-
+-  it('should not track revenue from failed payments', async () => {
+-    await bus.emit(Events.ORDER_CREATED, { orderId: 'o1', userId: 'u1', cartId: 'c1', total: 100 });
+-    await bus.emit(Events.PAYMENT_PROCESSED, { orderId: 'o1', status: PaymentStatus.FAILED, error: 'declined' });
+-    expect(analytics.getRevenue()).toBe(0);
+-  });
+-
+-  it('should compute conversion rate', async () => {
+-    // Create 2 carts (via cart updated events with unique cart IDs)
+-    await bus.emit(Events.CART_UPDATED, { cartId: 'c1', userId: 'u1', items: [{ productId: 'p1', quantity: 1 }] });
+-    await bus.emit(Events.CART_UPDATED, { cartId: 'c2', userId: 'u2', items: [{ productId: 'p2', quantity: 1 }] });
+-    // Create 1 order
+-    await bus.emit(Events.ORDER_CREATED, { orderId: 'o1', userId: 'u1', cartId: 'c1', total: 50 });
+-
+-    expect(analytics.getConversionRate()).toBe(0.5);
+-  });
+-
+-  it('should return top products by order quantity', async () => {
+-    await bus.emit(Events.CART_UPDATED, {
+-      cartId: 'c1', userId: 'u1',
+-      items: [{ productId: 'p1', quantity: 5 }, { productId: 'p2', quantity: 2 }],
+-    });
+-    await bus.emit(Events.ORDER_CREATED, { orderId: 'o1', userId: 'u1', cartId: 'c1', total: 100 });
+-
+-    const top = analytics.getTopProducts(2);
+-    expect(top).toHaveLength(2);
+-    expect(top[0].productId).toBe('p1');
+-    expect(top[0].count).toBe(5);
+-    expect(top[1].productId).toBe('p2');
+-    expect(top[1].count).toBe(2);
+-  });
+-});
+diff --git a/tests/cart.test.ts b/tests/cart.test.ts
+deleted file mode 100644
+index c49a679..0000000
+--- a/tests/cart.test.ts
++++ /dev/null
+@@ -1,65 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { EventBus } from '../src/bus.js';
+-import { createCartService } from '../src/cart/index.js';
+-
+-describe('CartService (unit)', () => {
+-  let bus: EventBus;
+-  let cart: ReturnType<typeof createCartService>;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-    cart = createCartService(bus);
+-  });
+-
+-  it('should create a cart and return its id', () => {
+-    const id = cart.createCart('user1');
+-    expect(id).toBeDefined();
+-    expect(typeof id).toBe('string');
+-  });
+-
+-  it('should add items to a cart', () => {
+-    const id = cart.createCart('user1');
+-    cart.addItem(id, 'p1', 2);
+-    const c = cart.getCart(id);
+-    expect(c).not.toBeNull();
+-    expect(c!.items).toHaveLength(1);
+-    expect(c!.items[0].productId).toBe('p1');
+-    expect(c!.items[0].quantity).toBe(2);
+-  });
+-
+-  it('should merge quantities when adding same product', () => {
+-    const id = cart.createCart('user1');
+-    cart.addItem(id, 'p1', 2);
+-    cart.addItem(id, 'p1', 3);
+-    const c = cart.getCart(id);
+-    expect(c!.items).toHaveLength(1);
+-    expect(c!.items[0].quantity).toBe(5);
+-  });
+-
+-  it('should remove items from a cart', () => {
+-    const id = cart.createCart('user1');
+-    cart.addItem(id, 'p1', 2);
+-    cart.addItem(id, 'p2', 1);
+-    cart.removeItem(id, 'p1');
+-    const c = cart.getCart(id);
+-    expect(c!.items).toHaveLength(1);
+-    expect(c!.items[0].productId).toBe('p2');
+-  });
+-
+-  it('should clear all items from a cart', () => {
+-    const id = cart.createCart('user1');
+-    cart.addItem(id, 'p1', 2);
+-    cart.addItem(id, 'p2', 1);
+-    cart.clearCart(id);
+-    const c = cart.getCart(id);
+-    expect(c!.items).toHaveLength(0);
+-  });
+-
+-  it('should update item quantity', () => {
+-    const id = cart.createCart('user1');
+-    cart.addItem(id, 'p1', 2);
+-    cart.updateQuantity(id, 'p1', 10);
+-    const c = cart.getCart(id);
+-    expect(c!.items[0].quantity).toBe(10);
+-  });
+-});
+diff --git a/tests/catalog.test.ts b/tests/catalog.test.ts
+deleted file mode 100644
+index 11e4957..0000000
+--- a/tests/catalog.test.ts
++++ /dev/null
+@@ -1,73 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { EventBus } from '../src/bus.js';
+-import { createCatalogService } from '../src/catalog/index.js';
+-
+-describe('CatalogService (unit)', () => {
+-  let bus: EventBus;
+-  let catalog: ReturnType<typeof createCatalogService>;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-    catalog = createCatalogService(bus);
+-  });
+-
+-  it('should create a product and return its id', () => {
+-    const id = catalog.createProduct('Widget', 9.99, 'gadgets');
+-    expect(id).toBeDefined();
+-    expect(typeof id).toBe('string');
+-  });
+-
+-  it('should retrieve a product by id', () => {
+-    const id = catalog.createProduct('Widget', 9.99, 'gadgets');
+-    const product = catalog.getProduct(id);
+-    expect(product).not.toBeNull();
+-    expect(product!.name).toBe('Widget');
+-    expect(product!.price).toBe(9.99);
+-    expect(product!.category).toBe('gadgets');
+-  });
+-
+-  it('should return null for non-existent product', () => {
+-    const product = catalog.getProduct('non-existent');
+-    expect(product).toBeNull();
+-  });
+-
+-  it('should list products filtered by category', () => {
+-    catalog.createProduct('Widget', 9.99, 'gadgets');
+-    catalog.createProduct('Gizmo', 19.99, 'gadgets');
+-    catalog.createProduct('Book', 12.99, 'books');
+-
+-    const gadgets = catalog.listProducts('gadgets');
+-    expect(gadgets).toHaveLength(2);
+-
+-    const books = catalog.listProducts('books');
+-    expect(books).toHaveLength(1);
+-
+-    const all = catalog.listProducts();
+-    expect(all).toHaveLength(3);
+-  });
+-
+-  it('should search products by name or category', () => {
+-    catalog.createProduct('Blue Widget', 9.99, 'gadgets');
+-    catalog.createProduct('Red Gizmo', 19.99, 'electronics');
+-
+-    const results = catalog.searchProducts('widget');
+-    expect(results).toHaveLength(1);
+-    expect(results[0].name).toBe('Blue Widget');
+-
+-    const catResults = catalog.searchProducts('electronics');
+-    expect(catResults).toHaveLength(1);
+-  });
+-
+-  it('should update and remove products', () => {
+-    const id = catalog.createProduct('Widget', 9.99, 'gadgets');
+-    catalog.updateProduct(id, { price: 14.99 });
+-    expect(catalog.getProduct(id)!.price).toBe(14.99);
+-
+-    const removed = catalog.removeProduct(id);
+-    expect(removed).toBe(true);
+-    expect(catalog.getProduct(id)).toBeNull();
+-
+-    const removedAgain = catalog.removeProduct(id);
+-    expect(removedAgain).toBe(false);
+-  });
+-});
+diff --git a/tests/integration.test.ts b/tests/integration.test.ts
+deleted file mode 100644
+index 8c6d297..0000000
+--- a/tests/integration.test.ts
++++ /dev/null
+@@ -1,368 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { createHash } from 'crypto';
+-import { readFileSync, readdirSync } from 'fs';
+-import { resolve, dirname } from 'path';
+-import { fileURLToPath } from 'url';
+-import { EventBus } from '../src/bus.js';
+-import { Events, OrderStatus, PaymentStatus } from '../src/types.js';
+-import { createCatalogService } from '../src/catalog/index.js';
+-import { createInventoryService } from '../src/inventory/index.js';
+-import { createCartService } from '../src/cart/index.js';
+-import { createPricingService } from '../src/pricing/index.js';
+-import { createOrderService } from '../src/orders/index.js';
+-import { createPaymentService } from '../src/payment/index.js';
+-import { createNotificationService } from '../src/notifications/index.js';
+-import { createAnalyticsService } from '../src/analytics/index.js';
+-
+-const __filename = fileURLToPath(import.meta.url);
+-const __dirname = dirname(__filename);
+-const srcDir = resolve(__dirname, '..', 'src');
+-
+-function sha256(filePath: string): string {
+-  const content = readFileSync(filePath, 'utf-8');
+-  return createHash('sha256').update(content).digest('hex');
+-}
+-
+-describe('Integration Tests', () => {
+-  let bus: EventBus;
+-  let catalog: ReturnType<typeof createCatalogService>;
+-  let inventory: ReturnType<typeof createInventoryService>;
+-  let cart: ReturnType<typeof createCartService>;
+-  let pricing: ReturnType<typeof createPricingService>;
+-  let orders: ReturnType<typeof createOrderService>;
+-  let payment: ReturnType<typeof createPaymentService>;
+-  let notifications: ReturnType<typeof createNotificationService>;
+-  let analytics: ReturnType<typeof createAnalyticsService>;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-    catalog = createCatalogService(bus);
+-    inventory = createInventoryService(bus);
+-    cart = createCartService(bus);
+-    pricing = createPricingService(bus);
+-    orders = createOrderService(bus);
+-    payment = createPaymentService(bus);
+-    notifications = createNotificationService(bus);
+-    analytics = createAnalyticsService(bus);
+-  });
+-
+-  // 1-3: Product catalog CRUD through bus events
+-  it('1. should create a product and emit product:created event', () => {
+-    const id = catalog.createProduct('Laptop', 999.99, 'electronics');
+-    expect(id).toBeDefined();
+-    const log = bus.getLog();
+-    const createEvents = log.filter(e => e.event === Events.PRODUCT_CREATED);
+-    expect(createEvents).toHaveLength(1);
+-    const payload = createEvents[0].payload as { productId: string; name: string };
+-    expect(payload.productId).toBe(id);
+-    expect(payload.name).toBe('Laptop');
+-  });
+-
+-  it('2. should update a product and retrieve updated data', () => {
+-    const id = catalog.createProduct('Laptop', 999.99, 'electronics');
+-    catalog.updateProduct(id, { price: 899.99, name: 'Gaming Laptop' });
+-    const product = catalog.getProduct(id);
+-    expect(product!.price).toBe(899.99);
+-    expect(product!.name).toBe('Gaming Laptop');
+-  });
+-
+-  it('3. should remove a product and confirm deletion', () => {
+-    const id = catalog.createProduct('Laptop', 999.99, 'electronics');
+-    expect(catalog.removeProduct(id)).toBe(true);
+-    expect(catalog.getProduct(id)).toBeNull();
+-    expect(catalog.listProducts()).toHaveLength(0);
+-  });
+-
+-  // 4-5: Inventory management with stock events
+-  it('4. should set stock and emit inventory:updated event', () => {
+-    inventory.setStock('p1', 100);
+-    const log = bus.getLog();
+-    const invEvents = log.filter(e => e.event === Events.INVENTORY_UPDATED);
+-    expect(invEvents.length).toBeGreaterThanOrEqual(1);
+-    const payload = invEvents[0].payload as { productId: string; quantity: number };
+-    expect(payload.productId).toBe('p1');
+-    expect(payload.quantity).toBe(100);
+-  });
+-
+-  it('5. should reserve stock and reflect updated quantity', () => {
+-    inventory.setStock('p1', 10);
+-    const reserved = inventory.reserve('p1', 3);
+-    expect(reserved).toBe(true);
+-    expect(inventory.getStock('p1')).toBe(7);
+-
+-    const failedReserve = inventory.reserve('p1', 100);
+-    expect(failedReserve).toBe(false);
+-    expect(inventory.getStock('p1')).toBe(7);
+-  });
+-
+-  // 6-7: Cart operations emitting cart events
+-  it('6. should add items to cart and emit cart:updated event', () => {
+-    const cartId = cart.createCart('user1');
+-    cart.addItem(cartId, 'p1', 2);
+-    const log = bus.getLog();
+-    const cartEvents = log.filter(e => e.event === Events.CART_UPDATED);
+-    expect(cartEvents).toHaveLength(1);
+-    const payload = cartEvents[0].payload as { cartId: string; items: Array<{ productId: string; quantity: number }> };
+-    expect(payload.cartId).toBe(cartId);
+-    expect(payload.items).toHaveLength(1);
+-  });
+-
+-  it('7. should update cart quantity and reflect in cart data', () => {
+-    const cartId = cart.createCart('user1');
+-    cart.addItem(cartId, 'p1', 2);
+-    cart.updateQuantity(cartId, 'p1', 5);
+-    const c = cart.getCart(cartId);
+-    expect(c!.items[0].quantity).toBe(5);
+-  });
+-
+-  // 8-9: Pricing calculation with discount codes
+-  it('8. should calculate price with tax (10%)', () => {
+-    const result = pricing.calculateTotal([
+-      { productId: 'p1', quantity: 2, price: 50 },
+-    ]);
+-    expect(result.subtotal).toBe(100);
+-    expect(result.tax).toBe(10);
+-    expect(result.total).toBe(110);
+-  });
+-
+-  it('9. should apply discount code and compute correct total', () => {
+-    pricing.addDiscountCode('SAVE20', 20);
+-    const result = pricing.calculateTotal(
+-      [{ productId: 'p1', quantity: 1, price: 200 }],
+-      'SAVE20',
+-    );
+-    expect(result.subtotal).toBe(200);
+-    expect(result.discount).toBe(40);
+-    // After discount: 160, tax: 16, total: 176
+-    expect(result.tax).toBe(16);
+-    expect(result.total).toBe(176);
+-  });
+-
+-  // 10-12: Order creation and status transitions
+-  it('10. should create an order with PENDING status', () => {
+-    const orderId = orders.createOrder('user1', 'cart1', 150);
+-    const order = orders.getOrder(orderId);
+-    expect(order!.status).toBe(OrderStatus.PENDING);
+-    expect(order!.total).toBe(150);
+-  });
+-
+-  it('11. should transition order through status states', () => {
+-    const orderId = orders.createOrder('user1', 'cart1', 150);
+-    orders.updateStatus(orderId, OrderStatus.CONFIRMED);
+-    expect(orders.getOrder(orderId)!.status).toBe(OrderStatus.CONFIRMED);
+-
+-    orders.updateStatus(orderId, OrderStatus.SHIPPED);
+-    expect(orders.getOrder(orderId)!.status).toBe(OrderStatus.SHIPPED);
+-
+-    orders.updateStatus(orderId, OrderStatus.DELIVERED);
+-    expect(orders.getOrder(orderId)!.status).toBe(OrderStatus.DELIVERED);
+-  });
+-
+-  it('12. should emit order:status_changed events with correct previous status', () => {
+-    const orderId = orders.createOrder('user1', 'cart1', 150);
+-    orders.updateStatus(orderId, OrderStatus.CONFIRMED);
+-    orders.updateStatus(orderId, OrderStatus.SHIPPED);
+-
+-    const log = bus.getLog();
+-    const statusEvents = log.filter(e => e.event === Events.ORDER_STATUS_CHANGED);
+-    expect(statusEvents).toHaveLength(2);
+-
+-    const first = statusEvents[0].payload as { previousStatus: string; status: string };
+-    expect(first.previousStatus).toBe(OrderStatus.PENDING);
+-    expect(first.status).toBe(OrderStatus.CONFIRMED);
+-
+-    const second = statusEvents[1].payload as { previousStatus: string; status: string };
+-    expect(second.previousStatus).toBe(OrderStatus.CONFIRMED);
+-    expect(second.status).toBe(OrderStatus.SHIPPED);
+-  });
+-
+-  // 13-14: Payment processing (success and failure)
+-  it('13. should process payment successfully and emit event', async () => {
+-    const result = await payment.processPayment('order1', 99.99);
+-    expect(result.status).toBe(PaymentStatus.SUCCESS);
+-    expect(result.transactionId).toBeDefined();
+-
+-    const log = bus.getLog();
+-    const payEvents = log.filter(e => e.event === Events.PAYMENT_PROCESSED);
+-    expect(payEvents).toHaveLength(1);
+-  });
+-
+-  it('14. should handle payment failure and emit failure event', async () => {
+-    const failPayment = createPaymentService(bus, { simulateFailure: true });
+-    const result = await failPayment.processPayment('order1', 99.99);
+-    expect(result.status).toBe(PaymentStatus.FAILED);
+-
+-    const log = bus.getLog();
+-    const payEvents = log.filter(e => e.event === Events.PAYMENT_PROCESSED);
+-    const failEvent = payEvents.find(e => (e.payload as { status: string }).status === PaymentStatus.FAILED);
+-    expect(failEvent).toBeDefined();
+-  });
+-
+-  // 15-16: Notifications generated for order events
+-  it('15. should send notification on order status change', async () => {
+-    notifications.subscribe('user1');
+-    const orderId = orders.createOrder('user1', 'cart1', 100);
+-
+-    // Wait for event propagation
+-    orders.updateStatus(orderId, OrderStatus.CONFIRMED);
+-
+-    // Give async handlers a tick to resolve
+-    await new Promise(resolve => setTimeout(resolve, 10));
+-
+-    const notifs = notifications.getNotifications('user1');
+-    expect(notifs.length).toBeGreaterThanOrEqual(1);
+-    expect(notifs.some(n => n.type === 'order_status')).toBe(true);
+-  });
+-
+-  it('16. should send notification on payment processed', async () => {
+-    notifications.subscribe('user1');
+-    const orderId = orders.createOrder('user1', 'cart1', 100);
+-
+-    await payment.processPayment(orderId, 100);
+-
+-    await new Promise(resolve => setTimeout(resolve, 10));
+-
+-    const notifs = notifications.getNotifications('user1');
+-    expect(notifs.some(n => n.type === 'payment')).toBe(true);
+-  });
+-
+-  // 17-18: Analytics tracking events and computing metrics
+-  it('17. should track event counts through the bus', async () => {
+-    catalog.createProduct('Widget', 10, 'gadgets');
+-    catalog.createProduct('Gizmo', 20, 'gadgets');
+-
+-    // Wait for async propagation
+-    await new Promise(resolve => setTimeout(resolve, 10));
+-
+-    expect(analytics.getEventCount(Events.PRODUCT_CREATED)).toBe(2);
+-  });
+-
+-  it('18. should track revenue from successful payments', async () => {
+-    const orderId = orders.createOrder('user1', 'cart1', 250);
+-    await payment.processPayment(orderId, 250);
+-
+-    expect(analytics.getRevenue()).toBe(250);
+-  });
+-
+-  // 19: Full checkout flow
+-  it('19. should complete full checkout flow end-to-end', async () => {
+-    // Subscribe for notifications
+-    notifications.subscribe('user1');
+-
+-    // Create product
+-    const productId = catalog.createProduct('Premium Widget', 49.99, 'gadgets');
+-    expect(catalog.getProduct(productId)).not.toBeNull();
+-
+-    // Set stock
+-    inventory.setStock(productId, 100);
+-    expect(inventory.getStock(productId)).toBe(100);
+-
+-    // Add to cart
+-    const cartId = cart.createCart('user1');
+-    cart.addItem(cartId, productId, 2);
+-    const cartData = cart.getCart(cartId);
+-    expect(cartData!.items).toHaveLength(1);
+-
+-    // Calculate price
+-    const priceResult = pricing.calculateTotal([
+-      { productId, quantity: 2, price: 49.99 },
+-    ]);
+-    expect(priceResult.subtotal).toBe(99.98);
+-    expect(priceResult.total).toBeGreaterThan(0);
+-
+-    // Reserve inventory
+-    const reserved = inventory.reserve(productId, 2);
+-    expect(reserved).toBe(true);
+-    expect(inventory.getStock(productId)).toBe(98);
+-
+-    // Create order
+-    const orderId = orders.createOrder('user1', cartId, priceResult.total);
+-    expect(orders.getOrder(orderId)!.status).toBe(OrderStatus.PENDING);
+-
+-    // Process payment
+-    const payResult = await payment.processPayment(orderId, priceResult.total);
+-    expect(payResult.status).toBe(PaymentStatus.SUCCESS);
+-
+-    // Update order status
+-    orders.updateStatus(orderId, OrderStatus.CONFIRMED);
+-    expect(orders.getOrder(orderId)!.status).toBe(OrderStatus.CONFIRMED);
+-
+-    // Wait for async event propagation
+-    await new Promise(resolve => setTimeout(resolve, 50));
+-
+-    // Verify notifications were sent
+-    const notifs = notifications.getNotifications('user1');
+-    expect(notifs.length).toBeGreaterThanOrEqual(1);
+-
+-    // Verify analytics tracked the events
+-    expect(analytics.getEventCount(Events.PRODUCT_CREATED)).toBeGreaterThanOrEqual(1);
+-    expect(analytics.getEventCount(Events.ORDER_CREATED)).toBeGreaterThanOrEqual(1);
+-    expect(analytics.getRevenue()).toBe(priceResult.total);
+-
+-    // Verify bus log has all expected events
+-    const log = bus.getLog();
+-    const eventTypes = new Set(log.map(e => e.event));
+-    expect(eventTypes.has(Events.PRODUCT_CREATED)).toBe(true);
+-    expect(eventTypes.has(Events.INVENTORY_UPDATED)).toBe(true);
+-    expect(eventTypes.has(Events.CART_UPDATED)).toBe(true);
+-    expect(eventTypes.has(Events.ORDER_CREATED)).toBe(true);
+-    expect(eventTypes.has(Events.PAYMENT_PROCESSED)).toBe(true);
+-    expect(eventTypes.has(Events.ORDER_STATUS_CHANGED)).toBe(true);
+-  });
+-
+-  // 20: Low stock alert
+-  it('20. should trigger low stock alert when stock drops below threshold', () => {
+-    inventory.setStock('p1', 20);
+-    inventory.setLowStockThreshold('p1', 5);
+-
+-    // Reserve stock to trigger low stock
+-    inventory.reserve('p1', 16); // stock drops to 4, below threshold of 5
+-
+-    const log = bus.getLog();
+-    const alerts = log.filter(e => e.event === Events.LOW_STOCK_ALERT);
+-    expect(alerts.length).toBeGreaterThanOrEqual(1);
+-    const payload = alerts[alerts.length - 1].payload as { productId: string; currentQuantity: number; threshold: number };
+-    expect(payload.productId).toBe('p1');
+-    expect(payload.currentQuantity).toBe(4);
+-    expect(payload.threshold).toBe(5);
+-  });
+-
+-  // 21: Import graph validation
+-  it('21. should not have cross-service imports', () => {
+-    const serviceNames = ['catalog', 'inventory', 'cart', 'pricing', 'orders', 'payment', 'notifications', 'analytics'];
+-    const violations: string[] = [];
+-
+-    for (const service of serviceNames) {
+-      const serviceDir = resolve(srcDir, service);
+-      let files: string[];
+-      try {
+-        files = readdirSync(serviceDir).filter(f => f.endsWith('.ts'));
+-      } catch {
+-        continue;
+-      }
+-
+-      for (const file of files) {
+-        const content = readFileSync(resolve(serviceDir, file), 'utf-8');
+-        for (const otherService of serviceNames) {
+-          if (otherService === service) continue;
+-          // Check for imports from other service directories
+-          const importPattern = new RegExp(`from\\s+['"].*/${otherService}/`, 'g');
+-          if (importPattern.test(content)) {
+-            violations.push(`${service}/${file} imports from ${otherService}`);
+-          }
+-        }
+-      }
+-    }
+-
+-    expect(violations).toHaveLength(0);
+-  });
+-
+-  // 22: Checksum validation
+-  it('22. should have unmodified bus.ts and types.ts', () => {
+-    const busHash = sha256(resolve(srcDir, 'bus.ts'));
+-    const typesHash = sha256(resolve(srcDir, 'types.ts'));
+-
+-    expect(busHash).toBe('53821a7f0a41a0bbb4a0fbbf7707b11c566abbf92f525e9b64a70b28efe6a866');
+-    expect(typesHash).toBe('778497bd1e702d81a70c7a8ed1c5ee18d83a8bff3da14ac70bd690977abb403f');
+-  });
+-});
+diff --git a/tests/inventory.test.ts b/tests/inventory.test.ts
+deleted file mode 100644
+index c02d6cb..0000000
+--- a/tests/inventory.test.ts
++++ /dev/null
+@@ -1,50 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { EventBus } from '../src/bus.js';
+-import { createInventoryService } from '../src/inventory/index.js';
+-
+-describe('InventoryService (unit)', () => {
+-  let bus: EventBus;
+-  let inventory: ReturnType<typeof createInventoryService>;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-    inventory = createInventoryService(bus);
+-  });
+-
+-  it('should set and get stock for a product', () => {
+-    inventory.setStock('p1', 100);
+-    expect(inventory.getStock('p1')).toBe(100);
+-  });
+-
+-  it('should return 0 for unknown product stock', () => {
+-    expect(inventory.getStock('unknown')).toBe(0);
+-  });
+-
+-  it('should reserve stock when sufficient', () => {
+-    inventory.setStock('p1', 10);
+-    const result = inventory.reserve('p1', 3);
+-    expect(result).toBe(true);
+-    expect(inventory.getStock('p1')).toBe(7);
+-  });
+-
+-  it('should fail to reserve when insufficient stock', () => {
+-    inventory.setStock('p1', 2);
+-    const result = inventory.reserve('p1', 5);
+-    expect(result).toBe(false);
+-    expect(inventory.getStock('p1')).toBe(2);
+-  });
+-
+-  it('should release reserved stock', () => {
+-    inventory.setStock('p1', 10);
+-    inventory.reserve('p1', 3);
+-    inventory.release('p1', 3);
+-    expect(inventory.getStock('p1')).toBe(10);
+-  });
+-
+-  it('should emit inventory updated events', () => {
+-    inventory.setStock('p1', 50);
+-    const log = bus.getLog();
+-    expect(log.length).toBeGreaterThan(0);
+-    expect(log[0].event).toBe('inventory:updated');
+-  });
+-});
+diff --git a/tests/notifications.test.ts b/tests/notifications.test.ts
+deleted file mode 100644
+index d72cce8..0000000
+--- a/tests/notifications.test.ts
++++ /dev/null
+@@ -1,84 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { EventBus } from '../src/bus.js';
+-import { createNotificationService } from '../src/notifications/index.js';
+-import { OrderStatus, PaymentStatus } from '../src/types.js';
+-
+-describe('NotificationService (unit)', () => {
+-  let bus: EventBus;
+-  let notifications: ReturnType<typeof createNotificationService>;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-    notifications = createNotificationService(bus);
+-  });
+-
+-  it('should subscribe a user', () => {
+-    notifications.subscribe('user1');
+-    // No error thrown
+-    expect(notifications.getNotifications('user1')).toHaveLength(0);
+-  });
+-
+-  it('should return empty array for unsubscribed user', () => {
+-    expect(notifications.getNotifications('user1')).toHaveLength(0);
+-  });
+-
+-  it('should collect notification on order status change for subscribed user', async () => {
+-    notifications.subscribe('user1');
+-    // Simulate order created event to set up userId mapping
+-    await bus.emit('order:created', { orderId: 'o1', userId: 'user1', cartId: 'c1', total: 50 });
+-    // Simulate order status change
+-    await bus.emit('order:status_changed', {
+-      orderId: 'o1',
+-      status: OrderStatus.CONFIRMED,
+-      previousStatus: OrderStatus.PENDING,
+-    });
+-
+-    const notifs = notifications.getNotifications('user1');
+-    expect(notifs).toHaveLength(1);
+-    expect(notifs[0].type).toBe('order_status');
+-  });
+-
+-  it('should not notify unsubscribed users', async () => {
+-    await bus.emit('order:created', { orderId: 'o1', userId: 'user1', cartId: 'c1', total: 50 });
+-    await bus.emit('order:status_changed', {
+-      orderId: 'o1',
+-      status: OrderStatus.CONFIRMED,
+-      previousStatus: OrderStatus.PENDING,
+-    });
+-
+-    const notifs = notifications.getNotifications('user1');
+-    expect(notifs).toHaveLength(0);
+-  });
+-
+-  it('should collect notification on payment processed', async () => {
+-    notifications.subscribe('user1');
+-    await bus.emit('order:created', { orderId: 'o1', userId: 'user1', cartId: 'c1', total: 50 });
+-    await bus.emit('payment:processed', {
+-      orderId: 'o1',
+-      status: PaymentStatus.SUCCESS,
+-      transactionId: 'tx1',
+-    });
+-
+-    const notifs = notifications.getNotifications('user1');
+-    expect(notifs).toHaveLength(1);
+-    expect(notifs[0].type).toBe('payment');
+-  });
+-
+-  it('should accumulate multiple notifications', async () => {
+-    notifications.subscribe('user1');
+-    await bus.emit('order:created', { orderId: 'o1', userId: 'user1', cartId: 'c1', total: 50 });
+-    await bus.emit('order:status_changed', {
+-      orderId: 'o1',
+-      status: OrderStatus.CONFIRMED,
+-      previousStatus: OrderStatus.PENDING,
+-    });
+-    await bus.emit('payment:processed', {
+-      orderId: 'o1',
+-      status: PaymentStatus.SUCCESS,
+-      transactionId: 'tx1',
+-    });
+-
+-    const notifs = notifications.getNotifications('user1');
+-    expect(notifs).toHaveLength(2);
+-  });
+-});
+diff --git a/tests/orders.test.ts b/tests/orders.test.ts
+deleted file mode 100644
+index a35ed67..0000000
+--- a/tests/orders.test.ts
++++ /dev/null
+@@ -1,64 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { EventBus } from '../src/bus.js';
+-import { createOrderService } from '../src/orders/index.js';
+-import { OrderStatus } from '../src/types.js';
+-
+-describe('OrderService (unit)', () => {
+-  let bus: EventBus;
+-  let orders: ReturnType<typeof createOrderService>;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-    orders = createOrderService(bus);
+-  });
+-
+-  it('should create an order with PENDING status', () => {
+-    const id = orders.createOrder('user1', 'cart1', 99.99);
+-    expect(id).toBeDefined();
+-    const order = orders.getOrder(id);
+-    expect(order).not.toBeNull();
+-    expect(order!.status).toBe(OrderStatus.PENDING);
+-    expect(order!.total).toBe(99.99);
+-  });
+-
+-  it('should return null for non-existent order', () => {
+-    expect(orders.getOrder('non-existent')).toBeNull();
+-  });
+-
+-  it('should update order status', () => {
+-    const id = orders.createOrder('user1', 'cart1', 50);
+-    orders.updateStatus(id, OrderStatus.CONFIRMED);
+-    expect(orders.getOrder(id)!.status).toBe(OrderStatus.CONFIRMED);
+-  });
+-
+-  it('should track status transitions via events', () => {
+-    const id = orders.createOrder('user1', 'cart1', 50);
+-    orders.updateStatus(id, OrderStatus.CONFIRMED);
+-
+-    const log = bus.getLog();
+-    const statusEvents = log.filter(e => e.event === 'order:status_changed');
+-    expect(statusEvents).toHaveLength(1);
+-    const payload = statusEvents[0].payload as { previousStatus: string; status: string };
+-    expect(payload.previousStatus).toBe(OrderStatus.PENDING);
+-    expect(payload.status).toBe(OrderStatus.CONFIRMED);
+-  });
+-
+-  it('should list orders by user', () => {
+-    orders.createOrder('user1', 'cart1', 50);
+-    orders.createOrder('user1', 'cart2', 75);
+-    orders.createOrder('user2', 'cart3', 100);
+-
+-    const user1Orders = orders.listOrders('user1');
+-    expect(user1Orders).toHaveLength(2);
+-
+-    const user2Orders = orders.listOrders('user2');
+-    expect(user2Orders).toHaveLength(1);
+-  });
+-
+-  it('should emit order created event', () => {
+-    orders.createOrder('user1', 'cart1', 99.99);
+-    const log = bus.getLog();
+-    const createEvents = log.filter(e => e.event === 'order:created');
+-    expect(createEvents).toHaveLength(1);
+-  });
+-});
+diff --git a/tests/payment.test.ts b/tests/payment.test.ts
+deleted file mode 100644
+index 1385b6c..0000000
+--- a/tests/payment.test.ts
++++ /dev/null
+@@ -1,54 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { EventBus } from '../src/bus.js';
+-import { createPaymentService } from '../src/payment/index.js';
+-import { PaymentStatus } from '../src/types.js';
+-
+-describe('PaymentService (unit)', () => {
+-  let bus: EventBus;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-  });
+-
+-  it('should process payment successfully', async () => {
+-    const payment = createPaymentService(bus);
+-    const result = await payment.processPayment('order1', 99.99);
+-    expect(result.status).toBe(PaymentStatus.SUCCESS);
+-    expect(result.transactionId).toBeDefined();
+-  });
+-
+-  it('should simulate payment failure', async () => {
+-    const payment = createPaymentService(bus, { simulateFailure: true });
+-    const result = await payment.processPayment('order1', 99.99);
+-    expect(result.status).toBe(PaymentStatus.FAILED);
+-    expect(result.error).toBeDefined();
+-  });
+-
+-  it('should simulate payment timeout', async () => {
+-    const payment = createPaymentService(bus, { simulateTimeout: true });
+-    const result = await payment.processPayment('order1', 99.99);
+-    expect(result.status).toBe(PaymentStatus.TIMEOUT);
+-    expect(result.error).toBeDefined();
+-  });
+-
+-  it('should refund a successful transaction', async () => {
+-    const payment = createPaymentService(bus);
+-    const result = await payment.processPayment('order1', 99.99);
+-    const refunded = await payment.refund(result.transactionId!);
+-    expect(refunded).toBe(true);
+-  });
+-
+-  it('should fail to refund non-existent transaction', async () => {
+-    const payment = createPaymentService(bus);
+-    const refunded = await payment.refund('non-existent');
+-    expect(refunded).toBe(false);
+-  });
+-
+-  it('should emit payment processed event', async () => {
+-    const payment = createPaymentService(bus);
+-    await payment.processPayment('order1', 50);
+-    const log = bus.getLog();
+-    const paymentEvents = log.filter(e => e.event === 'payment:processed');
+-    expect(paymentEvents).toHaveLength(1);
+-  });
+-});
+diff --git a/tests/pricing.test.ts b/tests/pricing.test.ts
+deleted file mode 100644
+index 7234f62..0000000
+--- a/tests/pricing.test.ts
++++ /dev/null
+@@ -1,65 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { EventBus } from '../src/bus.js';
+-import { createPricingService } from '../src/pricing/index.js';
+-
+-describe('PricingService (unit)', () => {
+-  let bus: EventBus;
+-  let pricing: ReturnType<typeof createPricingService>;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-    pricing = createPricingService(bus);
+-  });
+-
+-  it('should calculate subtotal correctly', () => {
+-    const result = pricing.calculateTotal([
+-      { productId: 'p1', quantity: 2, price: 10 },
+-      { productId: 'p2', quantity: 1, price: 20 },
+-    ]);
+-    expect(result.subtotal).toBe(40);
+-  });
+-
+-  it('should apply 10% tax', () => {
+-    const result = pricing.calculateTotal([
+-      { productId: 'p1', quantity: 1, price: 100 },
+-    ]);
+-    expect(result.tax).toBe(10);
+-    expect(result.total).toBe(110);
+-  });
+-
+-  it('should apply discount codes', () => {
+-    pricing.addDiscountCode('SAVE10', 10);
+-    const result = pricing.calculateTotal(
+-      [{ productId: 'p1', quantity: 1, price: 100 }],
+-      'SAVE10'
+-    );
+-    expect(result.discount).toBe(10);
+-    expect(result.subtotal).toBe(100);
+-    // After discount: 90, tax: 9, total: 99
+-    expect(result.tax).toBe(9);
+-    expect(result.total).toBe(99);
+-  });
+-
+-  it('should ignore invalid discount codes', () => {
+-    const result = pricing.calculateTotal(
+-      [{ productId: 'p1', quantity: 1, price: 100 }],
+-      'INVALID'
+-    );
+-    expect(result.discount).toBe(0);
+-    expect(result.total).toBe(110);
+-  });
+-
+-  it('should handle empty items list', () => {
+-    const result = pricing.calculateTotal([]);
+-    expect(result.subtotal).toBe(0);
+-    expect(result.discount).toBe(0);
+-    expect(result.tax).toBe(0);
+-    expect(result.total).toBe(0);
+-  });
+-
+-  it('should track prices from product created events', async () => {
+-    await bus.emit('product:created', { productId: 'p1', name: 'Widget', price: 25.99, category: 'gadgets' });
+-    expect(pricing.getPrice('p1')).toBe(25.99);
+-    expect(pricing.getPrice('unknown')).toBe(0);
+-  });
+-});

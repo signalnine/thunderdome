@@ -1,0 +1,247 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..7d454e1
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 492406,
++  "output_tokens": 7485,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.3178986
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..c9d0c0c
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,65 @@
++There's an issue with unused code. Let me fix it:
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++Now let me verify with the example from the problem:
++
++
++
++The basic cases work. Let me run the full test suite:
++
++
++
++The tests aren't present yet. Let me verify the edge cases and performance:
++
++
++
++Wait - I need to verify beams exiting sideways are handled correctly:
++
++
++
++
++Wait, there's an issue. Let me debug:
++
++
++The source cell at the edge case isn't being handled correctly. Let me fix:
++
++
++
++Wait, I misread. Source at (0,0) goes DOWN to (1,0), not diagonally. Let me verify:
++
++
++
++Implementation is correct. Let me test performance on a large grid:
++
++
++
++
++Performance is excellent. Let me run lint:
++
++
++
++
++
++
++Done. Implementation complete in `src/index.ts`:
++
++- **`countBeamCells`**: BFS simulation tracking visited cells
++- **`countBeamPaths`**: DP with memoization computing paths from each state (row, col, direction) to exit
++
++Performance: ~11ms for 200×200 grid with 50 splitters (well under 5s limit).
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index 02b0dae..222cd7d 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..3158989
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,100 @@
++type Direction = 0 | -1 | 1;
++
++interface BeamState {
++  row: number;
++  col: number;
++  direction: Direction;
++}
++
++export function countBeamCells(grid: string[][]): number {
++  const rows = grid.length;
++  if (rows === 0) return 0;
++  const cols = grid[0].length;
++  if (cols === 0) return 0;
++
++  const visited = new Set<string>();
++  const queue: BeamState[] = [];
++
++  for (let c = 0; c < cols; c++) {
++    if (grid[0][c] === 'S') {
++      queue.push({ row: 0, col: c, direction: 0 });
++      visited.add(`0,${c}`);
++    }
++  }
++
++  const directionDeltas: Record<Direction, number> = {
++    0: 0,
++    [-1]: -1,
++    [1]: 1,
++  };
++
++  while (queue.length > 0) {
++    const beam = queue.shift()!;
++    const { row, col, direction } = beam;
++
++    const nextRow = row + 1;
++    if (nextRow >= rows) continue;
++
++    const nextCol = col + directionDeltas[direction];
++    if (nextCol < 0 || nextCol >= cols) continue;
++
++    const cell = grid[nextRow][nextCol];
++    const stateKey = `${nextRow},${nextCol}`;
++
++    if (cell === '^') {
++      if (!visited.has(stateKey)) {
++        visited.add(stateKey);
++        queue.push({ row: nextRow, col: nextCol, direction: -1 });
++        queue.push({ row: nextRow, col: nextCol, direction: 1 });
++      }
++    } else {
++      if (!visited.has(stateKey)) {
++        visited.add(stateKey);
++        queue.push({ row: nextRow, col: nextCol, direction });
++      }
++    }
++  }
++
++  return visited.size;
++}
++
++export function countBeamPaths(grid: string[][]): bigint {
++  const rows = grid.length;
++  if (rows === 0) return 0n;
++  const cols = grid[0].length;
++  if (cols === 0) return 0n;
++
++  const memo = new Map<string, bigint>();
++
++  function computePaths(row: number, col: number, direction: Direction): bigint {
++    const key = `${row},${col},${direction}`;
++    const cached = memo.get(key);
++    if (cached !== undefined) return cached;
++
++    if (row < 0 || row >= rows || col < 0 || col >= cols) {
++      return 1n;
++    }
++
++    const cell = grid[row][col];
++    let result: bigint;
++
++    if (cell === '^') {
++      result = computePaths(row + 1, col - 1, -1) + computePaths(row + 1, col + 1, 1);
++    } else {
++      const delta = direction;
++      result = computePaths(row + 1, col + delta, direction);
++    }
++
++    memo.set(key, result);
++    return result;
++  }
++
++  let totalPaths = 0n;
++  for (let c = 0; c < cols; c++) {
++    if (grid[0][c] === 'S') {
++      totalPaths += computePaths(1, c, 0);
++    }
++  }
++
++  return totalPaths;
++}
+\ No newline at end of file

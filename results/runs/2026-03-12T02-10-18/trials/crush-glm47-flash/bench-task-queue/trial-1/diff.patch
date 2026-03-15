@@ -1,0 +1,2315 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..a8fd402
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 222379,
++  "output_tokens": 3741,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.03218054
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..8b13789
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1 @@
++
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/TASK.md b/TASK.md
+index 1dd249a..e29fc25 100644
+--- a/TASK.md
++++ b/TASK.md
+@@ -1,45 +1,44 @@
+-# T5: Task Queue System
++# Task Queue System
+ 
+-**Category:** Marathon
+-**Timeout:** 60 minutes
+-**Tests:** 90 across 12 phases
++Build a fully-featured in-memory task queue system from scratch. The system should grow incrementally through 12 phases, each introducing new capabilities that build on the foundation laid by earlier phases.
+ 
+ ## Overview
+ 
+-Build an in-memory task queue system through 12 sequential phases. Each phase adds new functionality that builds on prior phases. The phases are designed so that naive implementations of early phases may require refactoring when later phases add constraints.
++Your task queue should support adding tasks, processing them, and managing their lifecycle. Think of it like a simplified version of systems like Bull, BeeQueue, or Celery -- but entirely in-memory with no external dependencies.
+ 
+-## What to Build
++The system evolves through 12 phases of increasing sophistication:
+ 
+-Implement a `TaskQueue` class in `src/index.ts` (exported as a named export) that supports:
++1. **Basic queue** -- adding and processing tasks in order
++2. **Named queues** -- multiple independent queues
++3. **Priority** -- some tasks are more urgent than others
++4. **Delayed tasks** -- tasks that should wait before becoming available
++5. **Retry with backoff** -- automatic retry when tasks fail
++6. **Dead letter queue** -- permanent storage for repeatedly-failing tasks
++7. **Task dependencies** -- tasks that wait for other tasks to finish
++8. **Concurrency control** -- limiting how many tasks run at once
++9. **Progress and cancellation** -- tracking and aborting work
++10. **Recurring tasks** -- cron-like scheduled task creation
++11. **Middleware** -- intercepting and transforming tasks in a pipeline
++12. **Graceful shutdown** -- orderly wind-down of the system
+ 
+-1. **Basic FIFO Queue** - enqueue/dequeue tasks with auto-generated IDs and status tracking
+-2. **Named Queues** - multiple independent queues identified by name
+-3. **Priority** - priority levels 1-10 with FIFO within same priority
+-4. **Delayed/Scheduled Tasks** - delay and runAt options for deferred availability
+-5. **Retry with Backoff** - automatic retry with exponential backoff on failure
+-6. **Dead Letter Queue** - tasks that exhaust retries move to DLQ
+-7. **Task Dependencies** - tasks can depend on other tasks completing first
+-8. **Concurrency Control** - per-queue limits on concurrent processing
+-9. **Progress and Cancellation** - progress tracking and task cancellation
+-10. **Recurring Tasks (Cron)** - scheduled recurring task creation
+-11. **Middleware Pipeline** - composable middleware for task processing
+-12. **Graceful Shutdown** - orderly shutdown with timeout and force-cancel
++Read `phases/*.md` for detailed requirements for each phase.
+ 
+-## Phase Details
++## Getting Started
+ 
+-See the `phases/` directory for detailed descriptions of each phase.
++- Export your main API from `src/index.ts`
++- All implementation should live under `src/`
++- No external runtime dependencies allowed (dev dependencies are pre-installed)
++- Write your own tests as you go to verify your implementation
+ 
+ ## Validation
+ 
+ ```bash
+-npm test        # All 90 tests must pass
+ npm run build   # TypeScript must compile
+ npm run lint    # No lint errors
+ ```
+ 
+-## Constraints
++## Tips
+ 
+-- All implementation goes in `src/index.ts`
+-- No external runtime dependencies (dev dependencies are provided)
+-- Must export `TaskQueue` as a named export
+-- Tests use `vi.useFakeTimers()` for timing-sensitive tests
++- Later phases will force you to rethink early decisions. Design with extensibility in mind.
++- Tasks should have unique identifiers and track their lifecycle status.
++- Consider how features like priorities, delays, and dependencies interact with each other.
+diff --git a/package.json b/package.json
+index 73725c3..70dffce 100644
+--- a/package.json
++++ b/package.json
+@@ -5,7 +5,7 @@
+   "type": "module",
+   "scripts": {
+     "build": "tsc",
+-    "lint": "eslint src/ tests/",
++    "lint": "eslint src/",
+     "test": "vitest run"
+   },
+   "devDependencies": {
+@@ -14,6 +14,7 @@
+     "@typescript-eslint/parser": "^7.0.0",
+     "eslint": "^8.56.0",
+     "typescript": "^5.4.0",
++    "@vitest/coverage-v8": "^2.0.0",
+     "vitest": "^2.0.0"
+   }
+ }
+diff --git a/phases/phase-01.md b/phases/phase-01.md
+index ce093f3..81f2bd5 100644
+--- a/phases/phase-01.md
++++ b/phases/phase-01.md
+@@ -1,32 +1,12 @@
+ # Phase 1: Basic FIFO Queue
+ 
+-Implement a `TaskQueue` class with the following interface:
+-
+-## Methods
+-
+-- **`enqueue(payload)`** - Add a task to the queue. Returns the created task object.
+-- **`dequeue()`** - Remove and return the next task in FIFO order. Returns `null` if the queue is empty. Sets the task status to `processing`.
+-- **`size()`** - Return the number of pending tasks in the queue.
+-
+-## Task Object
+-
+-Each task has the following properties:
+-
+-| Property    | Type     | Description                                    |
+-|-------------|----------|------------------------------------------------|
+-| `id`        | `string` | Auto-generated unique identifier (UUID format) |
+-| `payload`   | `any`    | The data associated with the task              |
+-| `status`    | `string` | One of: `pending`, `processing`, `completed`, `failed` |
+-| `createdAt` | `Date`   | Timestamp when the task was created            |
++Implement the core of the task queue: the ability to add tasks and retrieve them in first-in, first-out order.
+ 
+ ## Requirements
+ 
+-- Tasks are returned in the order they were added (First-In, First-Out)
+-- Each task gets a unique `id` automatically assigned
+-- New tasks start with `status: 'pending'`
+-- When dequeued, task status changes to `'processing'`
+-- `dequeue()` returns `null` when the queue is empty
+-
+-## Export
+-
+-Export the `TaskQueue` class as a named export from `src/index.ts`.
++- The queue should accept a payload (any data) when a task is added, and return a task object.
++- Each task must have a unique identifier (e.g., UUID), a status, and a creation timestamp.
++- New tasks start in a "pending" state.
++- Retrieving the next task should return the oldest pending task and transition it to a "processing" state.
++- If no tasks are available, retrieval should return `null`.
++- There should be a way to check how many tasks are waiting.
+diff --git a/phases/phase-02.md b/phases/phase-02.md
+index a1ab841..c29d2d5 100644
+--- a/phases/phase-02.md
++++ b/phases/phase-02.md
+@@ -1,24 +1,13 @@
+ # Phase 2: Named Queues
+ 
+-Extend the `TaskQueue` to support multiple named queues.
+-
+-## Updated Methods
+-
+-- **`enqueue(queueName, payload)`** - Add a task to a specific named queue. Returns the created task.
+-- **`dequeue(queueName)`** - Get the next task from a specific named queue. Returns `null` if queue is empty or doesn't exist.
+-- **`listQueues()`** - Return an array of all queue names that have been created.
+-- **`queueSize(queueName)`** - Return the number of pending tasks in a specific queue.
++Extend the system to support multiple independent queues, each identified by a name.
+ 
+ ## Requirements
+ 
+-- Each named queue operates independently
+-- Enqueueing to a queue that doesn't exist creates it
+-- Dequeueing from a non-existent queue returns `null`
+-- If no queue name is specified, use `'default'` as the queue name
+-- `listQueues()` returns names of all queues that have been created
+-- Queue-specific sizes are tracked independently
+-
+-## Backward Compatibility
+-
+-The single-argument `enqueue(payload)` should still work by using the `'default'` queue.
+-Similarly, `dequeue()` with no arguments should dequeue from `'default'`.
++- Tasks are added to a specific named queue. If no name is given, a default queue is used.
++- Each named queue operates independently -- adding to one does not affect another.
++- Retrieving a task pulls from the specified queue only.
++- Creating a queue happens implicitly when a task is first added to it.
++- There should be a way to list all queue names that exist.
++- Asking for a task from a non-existent or empty queue returns `null`.
++- The API should remain backward-compatible with Phase 1 (omitting the queue name uses the default).
+diff --git a/phases/phase-03.md b/phases/phase-03.md
+index 971e313..103e638 100644
+--- a/phases/phase-03.md
++++ b/phases/phase-03.md
+@@ -1,17 +1,12 @@
+ # Phase 3: Priority
+ 
+-Add priority support to tasks.
+-
+-## Updated Methods
+-
+-- **`enqueue(queueName, payload, options?)`** - The options object can include `priority`.
+-  - `priority`: number from 1 (highest) to 10 (lowest). Default is 5.
++Add priority support so that more urgent tasks are processed before less urgent ones.
+ 
+ ## Requirements
+ 
+-- `dequeue()` returns the highest priority task first (lowest number = highest priority)
+-- Within the same priority level, FIFO order is preserved
+-- Default priority is 5 if not specified
+-- Priority values outside 1-10 should throw an error
+-- Priority is per-queue (each named queue has its own priority ordering)
+-- The task object should include a `priority` property
++- Tasks can be assigned a priority level from 1 (highest) to 10 (lowest). The default priority is 5.
++- When retrieving the next task, higher-priority tasks (lower number) are returned first.
++- Tasks with the same priority are returned in FIFO order.
++- Invalid priority values (outside 1-10) should cause an error.
++- Priority operates per-queue -- each named queue maintains its own priority ordering.
++- The task object should expose its priority level.
+diff --git a/phases/phase-04.md b/phases/phase-04.md
+index dbb4ef5..5dfb105 100644
+--- a/phases/phase-04.md
++++ b/phases/phase-04.md
+@@ -1,19 +1,12 @@
+-# Phase 4: Delayed/Scheduled Tasks
++# Phase 4: Delayed and Scheduled Tasks
+ 
+-Add support for delayed and scheduled task execution.
+-
+-## Updated Methods
+-
+-- **`enqueue(queueName, payload, options?)`** - Options can now include:
+-  - `delay`: number of milliseconds before the task becomes available
+-  - `runAt`: a `Date` object specifying when the task should become available
+-  - (existing) `priority`: priority level
++Add the ability to defer tasks so they only become available for processing after a specified time.
+ 
+ ## Requirements
+ 
+-- A delayed task is enqueued immediately but not returned by `dequeue()` until the delay has elapsed
+-- A `runAt` task becomes available at the specified time
+-- Non-delayed tasks should be dequeued before delayed tasks that haven't become available yet
+-- When multiple delayed tasks are available, they are ordered by their availability time (earliest first), then by priority, then FIFO
+-- `delay` and `runAt` work with named queues
+-- The task object should include a `availableAt` property (Date) indicating when the task becomes available
++- A task can be given a delay (in milliseconds) or a specific future time at which it becomes available.
++- Delayed tasks are added to the queue immediately but are not returned when retrieving until their availability time has passed.
++- Non-delayed tasks are always preferred over delayed tasks that are not yet available.
++- When multiple delayed tasks become available simultaneously, they should be ordered by availability time, then priority, then FIFO.
++- The task object should indicate when it becomes available.
++- Delays work correctly with named queues.
+diff --git a/phases/phase-05.md b/phases/phase-05.md
+index c881191..5b3067f 100644
+--- a/phases/phase-05.md
++++ b/phases/phase-05.md
+@@ -1,24 +1,14 @@
+ # Phase 5: Retry with Backoff
+ 
+-Add automatic retry functionality with exponential backoff.
+-
+-## New Methods
+-
+-- **`fail(taskId, error?)`** - Mark a processing task as failed. Triggers automatic retry if retries remain.
+-- **`complete(taskId)`** - Mark a processing task as completed.
+-
+-## Updated Methods
+-
+-- **`enqueue(queueName, payload, options?)`** - Options can now include:
+-  - `maxRetries`: maximum number of retry attempts (default: 3)
+-  - `backoffMs`: base delay for exponential backoff in milliseconds (default: 1000)
++Add automatic retry functionality so that failed tasks can be re-attempted with increasing delays.
+ 
+ ## Requirements
+ 
+-- When `fail()` is called and retries remain, the task is re-enqueued with a delay
+-- Backoff formula: `backoffMs * 2^(attempt - 1)` where attempt starts at 1
+-  - 1st retry: 1000ms, 2nd retry: 2000ms, 3rd retry: 4000ms
+-- `task.attempts` tracks how many times the task has been attempted (starts at 1 on first dequeue)
+-- Custom `maxRetries` can be set per task
+-- Retried tasks preserve their original queue name and priority
+-- If a task has exhausted all retries, it remains in `failed` status (see Phase 6 for DLQ)
++- There should be a way to mark a processing task as completed or failed.
++- When a task fails and has retries remaining, it is automatically re-added to the queue with a delay.
++- The delay follows exponential backoff: `baseDelay * 2^(attempt - 1)` (e.g., 1s, 2s, 4s, ...).
++- The default maximum number of retries is 3, but this should be configurable per task.
++- The base backoff delay defaults to 1000ms but should be configurable per task.
++- The task should track how many times it has been attempted.
++- Retried tasks keep their original queue and priority.
++- If all retries are exhausted, the task remains in a failed state.
+diff --git a/phases/phase-06.md b/phases/phase-06.md
+index 8432a2c..486c08c 100644
+--- a/phases/phase-06.md
++++ b/phases/phase-06.md
+@@ -1,20 +1,12 @@
+ # Phase 6: Dead Letter Queue
+ 
+-Add dead letter queue (DLQ) support for tasks that have exhausted all retries.
+-
+-## New Methods
+-
+-- **`getDLQ(queueName)`** - Return an array of all dead-letter tasks for the specified queue.
+-- **`retryDLQ(taskId)`** - Move a dead-letter task back to its original queue for another round of retries. Returns the re-enqueued task.
+-- **`clearDLQ(queueName)`** - Remove all dead-letter tasks for the specified queue.
++Add a dead letter queue (DLQ) to capture tasks that have permanently failed after exhausting all retries.
+ 
+ ## Requirements
+ 
+-- When a task exhausts all retry attempts (from Phase 5), it automatically moves to the DLQ
+-- DLQ tasks have status `'failed'` and are stored separately from the main queue
+-- Each DLQ task retains its original error information (`task.lastError`)
+-- DLQ tasks track how many times they've failed (`task.failCount`)
+-- `retryDLQ(taskId)` resets the task's retry count, giving it a fresh set of retries
+-- `retryDLQ(taskId)` places the task back in its original queue with original priority
+-- `clearDLQ(queueName)` removes all DLQ entries for that queue
+-- DLQ is per-queue (each named queue has its own DLQ)
++- When a task has no more retries left, it is automatically moved to a dead letter queue associated with its original queue.
++- There should be a way to view all dead-lettered tasks for a given queue.
++- Dead-lettered tasks should retain their error information and a count of how many times they failed.
++- It should be possible to move a dead-lettered task back to its original queue for a fresh round of retries.
++- There should be a way to clear all dead-lettered tasks for a queue.
++- Each named queue has its own independent dead letter queue.
+diff --git a/phases/phase-07.md b/phases/phase-07.md
+index f8809d7..309fcfc 100644
+--- a/phases/phase-07.md
++++ b/phases/phase-07.md
+@@ -1,24 +1,13 @@
+ # Phase 7: Task Dependencies
+ 
+-Add support for task dependencies, where tasks can wait for other tasks to complete before becoming available.
+-
+-## Updated Methods
+-
+-- **`enqueue(queueName, payload, options?)`** - Options can now include:
+-  - `dependsOn`: an array of task IDs that must complete before this task becomes available
+-
+-## New Methods
+-
+-- **`getDependencies(taskId)`** - Return dependency information for a task, including each dependency's ID and current status.
++Add the ability for tasks to declare dependencies on other tasks, so they only become available once their prerequisites are done.
+ 
+ ## Requirements
+ 
+-- A task with dependencies remains blocked (not available for dequeue) until ALL dependencies have `completed` status
+-- When a dependency completes (via `complete(taskId)`), the system checks if any dependent tasks are now unblocked
+-- Circular dependencies must be detected and throw an error at enqueue time
+-  - Direct circular: A depends on B, B depends on A
+-  - Indirect circular: A → B → C → A
+-- `getDependencies(taskId)` returns an array of `{ taskId, status }` objects
+-- Dependency on a non-existent task ID should throw an error
+-- A failed dependency does NOT auto-fail the dependent task - it stays blocked
+-- Cascading dependencies work: if A depends on B and B depends on C, A is only available after both B and C complete
++- When adding a task, you can specify a list of task IDs that must complete before this task becomes available.
++- A task with unresolved dependencies is blocked and will not be returned when retrieving.
++- When a dependency completes, the system should check whether any blocked tasks are now unblocked.
++- Circular dependencies (direct or indirect) must be detected and rejected at task-creation time.
++- Depending on a non-existent task should cause an error.
++- A failed dependency does NOT automatically fail its dependents -- they remain blocked.
++- There should be a way to inspect a task's dependency status.
+diff --git a/phases/phase-08.md b/phases/phase-08.md
+index 18277f9..ef19a29 100644
+--- a/phases/phase-08.md
++++ b/phases/phase-08.md
+@@ -1,18 +1,12 @@
+ # Phase 8: Concurrency Control
+ 
+-Add per-queue concurrency limits to control how many tasks can be processed simultaneously.
+-
+-## New Methods
+-
+-- **`setConcurrency(queueName, limit)`** - Set the maximum number of tasks that can be in `processing` status simultaneously for a queue.
+-- **`getConcurrency(queueName)`** - Return concurrency information: `{ current: number, max: number }`.
++Add per-queue limits on how many tasks can be processed at the same time.
+ 
+ ## Requirements
+ 
+-- `dequeue()` returns `null` if the queue has reached its concurrency limit, even if tasks are available
+-- `complete(taskId)` and `fail(taskId)` free up a concurrency slot
+-- Default concurrency is unlimited (no limit) until `setConcurrency` is called
+-- Each queue has its own independent concurrency limit
+-- Concurrency interacts correctly with priorities (highest priority task still chosen, but only if a slot is available)
+-- `getConcurrency(queueName)` returns the current number of processing tasks and the configured maximum
+-  - For unlimited queues, `max` should be `Infinity` or `0` to indicate no limit
++- Each queue can have a maximum concurrency setting that limits how many tasks can be in a processing state simultaneously.
++- If the concurrency limit is reached, retrieving a task returns `null` even if pending tasks are available.
++- Completing or failing a task frees up a concurrency slot.
++- By default, queues have no concurrency limit (unlimited).
++- There should be a way to set and query the concurrency limit and current active count for a queue.
++- Concurrency interacts correctly with priority ordering -- the highest-priority available task is still chosen, subject to the concurrency limit.
+diff --git a/phases/phase-09.md b/phases/phase-09.md
+index 7ff6451..8e086bf 100644
+--- a/phases/phase-09.md
++++ b/phases/phase-09.md
+@@ -1,22 +1,14 @@
+-# Phase 9: Progress and Cancellation
++# Phase 9: Progress Tracking and Cancellation
+ 
+-Add progress tracking and task cancellation support.
+-
+-## New Methods
+-
+-- **`updateProgress(taskId, percent, message?)`** - Report progress for a processing task (0-100).
+-- **`getProgress(taskId)`** - Return progress info: `{ percent: number, message?: string, updatedAt: Date }`.
+-- **`cancel(taskId)`** - Cancel a pending or processing task. Sets status to `'cancelled'`.
+-- **`onProgress(taskId, callback)`** - Subscribe to progress updates. Callback receives `{ percent, message, updatedAt }`.
++Add the ability to report progress on running tasks and to cancel tasks.
+ 
+ ## Requirements
+ 
+-- Progress percentage must be between 0 and 100
+-- `updateProgress` fires all registered `onProgress` callbacks for that task
+-- `cancel()` works on both `pending` and `processing` tasks
+-- A cancelled pending task is removed from the queue (not available for dequeue)
+-- A cancelled processing task has its status set to `'cancelled'`
+-- Cancelled tasks are NOT retried (even if they have retries remaining)
+-- `getProgress(taskId)` returns `null` if no progress has been reported yet
+-- The `message` parameter in `updateProgress` is optional
+-- `onProgress` returns an unsubscribe function
++- A processing task can report its progress as a percentage (0-100) with an optional message.
++- There should be a way to query a task's current progress.
++- Listeners can subscribe to progress updates for a task and receive notifications when progress changes.
++- Subscriptions should be cancellable (unsubscribe).
++- Tasks in pending or processing state can be cancelled.
++- Cancelled pending tasks are removed from the queue and will not be returned.
++- Cancelled processing tasks have their status updated accordingly.
++- Cancelled tasks are never retried, even if they had retries remaining.
+diff --git a/phases/phase-10.md b/phases/phase-10.md
+index 935562a..cc59359 100644
+--- a/phases/phase-10.md
++++ b/phases/phase-10.md
+@@ -1,30 +1,15 @@
+-# Phase 10: Recurring Tasks (Cron)
++# Phase 10: Recurring Tasks
+ 
+-Add support for recurring scheduled tasks using simple cron-like expressions.
+-
+-## New Methods
+-
+-- **`schedule(queueName, cronExpression, taskTemplate)`** - Create a recurring task schedule. Returns a schedule object with an `id`.
+-- **`unschedule(scheduleId)`** - Remove a schedule, stopping future occurrences.
+-- **`listSchedules(queueName?)`** - List all active schedules, optionally filtered by queue name.
+-- **`tick()`** - Manually advance and check schedules, triggering any that are due. For testing purposes.
+-
+-## Cron Expression Subset
+-
+-Support a simple subset of cron expressions:
+-
+-| Expression       | Meaning              |
+-|------------------|----------------------|
+-| `*/N * * * *`    | Every N minutes      |
+-| `0 * * * *`      | Every hour (on the hour) |
+-| `0 0 * * *`      | Every day at midnight |
++Add the ability to schedule tasks that recur on a regular interval using simple cron-like expressions.
+ 
+ ## Requirements
+ 
+-- `schedule()` returns a schedule object: `{ id, queueName, cronExpression, taskTemplate, active: true }`
+-- `tick()` checks all active schedules and enqueues tasks for any that are due
+-- The `taskTemplate` is used as the payload for enqueued tasks
+-- `unschedule(scheduleId)` marks the schedule as inactive
+-- `listSchedules()` returns only active schedules
+-- Multiple schedules can coexist on the same or different queues
+-- Scheduled tasks are regular tasks once enqueued (subject to all other queue rules)
++- A schedule associates a cron expression with a queue and a task template (the payload to use each time).
++- Support a simple subset of cron expressions:
++  - `*/N * * * *` -- every N minutes
++  - `0 * * * *` -- every hour on the hour
++  - `0 0 * * *` -- every day at midnight
++- There should be a way to create, remove, and list active schedules.
++- A manual "tick" or "check" mechanism should evaluate all active schedules and enqueue tasks for any that are due. This is used for testing.
++- Once enqueued, recurring tasks are regular tasks subject to all other queue rules.
++- Removing a schedule stops future occurrences from being created.
+diff --git a/phases/phase-11.md b/phases/phase-11.md
+index 886c28b..96cf45c 100644
+--- a/phases/phase-11.md
++++ b/phases/phase-11.md
+@@ -1,25 +1,14 @@
+ # Phase 11: Middleware Pipeline
+ 
+-Add a middleware system for queue processing pipelines.
+-
+-## New Methods
+-
+-- **`use(queueName, middleware)`** - Add a middleware function to a queue's processing pipeline.
+-- **`process(queueName, handler)`** - Register a task handler for a queue and begin processing. The handler runs after all middleware.
+-
+-## Middleware Signature
+-
+-```typescript
+-type Middleware = (task: Task, next: () => Promise<void>) => Promise<void>;
+-```
++Add a middleware system that can intercept and transform tasks as they are processed.
+ 
+ ## Requirements
+ 
+-- Middleware functions run in the order they were added (first added = first to run)
+-- Each middleware must call `next()` to pass control to the next middleware (and eventually the handler)
+-- If a middleware does NOT call `next()`, the task processing is skipped
+-- Middleware can modify the task object (e.g., add metadata)
+-- If a middleware throws an error, the task is marked as failed
+-- Each queue has its own independent middleware stack
+-- Middleware receives the full task context (task object)
+-- `process()` dequeues a task and runs it through the middleware pipeline, then the handler
++- Middleware functions can be registered per queue.
++- When a task is processed, it passes through all registered middleware in order before reaching the final handler.
++- Each middleware receives the task and a "next" function. Calling "next" passes control to the next middleware (or the handler).
++- If a middleware does NOT call "next", the task processing is skipped.
++- Middleware can modify the task (e.g., adding metadata or transforming the payload).
++- If a middleware throws an error, the task should be marked as failed.
++- A processing function/handler can be registered per queue. It is invoked after all middleware have run.
++- Each queue has its own independent middleware stack.
+diff --git a/phases/phase-12.md b/phases/phase-12.md
+index 7494237..16132ee 100644
+--- a/phases/phase-12.md
++++ b/phases/phase-12.md
+@@ -1,23 +1,14 @@
+ # Phase 12: Graceful Shutdown
+ 
+-Add graceful shutdown capabilities to the task queue.
+-
+-## New Methods
+-
+-- **`shutdown(timeout?)`** - Initiate graceful shutdown. Returns a Promise that resolves with a summary.
+-  - `timeout`: maximum milliseconds to wait for processing tasks (default: 30000)
+-- **`onShutdown(callback)`** - Register a callback to be called during shutdown.
++Add the ability to shut down the task queue system in an orderly fashion.
+ 
+ ## Requirements
+ 
+-- After `shutdown()` is called, `enqueue()` should throw an error
+-- `shutdown()` waits for all currently processing tasks to complete
+-- If processing tasks don't complete within the timeout, they are force-cancelled
+-- `onShutdown` callbacks are called during the shutdown process
+-- The returned summary object includes:
+-  - `completed`: number of tasks that completed during shutdown
+-  - `cancelled`: number of tasks that were force-cancelled
+-  - `elapsed`: time in milliseconds the shutdown took
+-- Multiple calls to `shutdown()` should be idempotent (return the same promise/result)
+-- If there are no processing tasks, shutdown resolves immediately
+-- Force-cancelled tasks have their status set to `'cancelled'`
++- A shutdown operation should signal the system to stop accepting new tasks.
++- After shutdown is initiated, attempting to add new tasks should produce an error.
++- The shutdown should wait for all currently-processing tasks to finish, up to a configurable timeout.
++- If processing tasks do not complete within the timeout, they should be force-cancelled.
++- Callbacks can be registered to run during the shutdown process.
++- The shutdown should produce a summary indicating how many tasks completed, how many were force-cancelled, and how long the shutdown took.
++- Calling shutdown multiple times should be safe and return the same result.
++- If no tasks are processing, shutdown should complete immediately.
+diff --git a/src/BaseTask.ts b/src/BaseTask.ts
+new file mode 100644
+index 0000000..540cd0a
+--- /dev/null
++++ b/src/BaseTask.ts
+@@ -0,0 +1,81 @@
++import { Task } from './types.js';
++
++export class BaseTask {
++  id: string;
++  payload: any;
++  status: Task['status'];
++  createdAt: number;
++  updatedAt: number;
++  priority: number;
++  retryDelay: number;
++  retries: number;
++  maxRetries: number;
++  attempts: number;
++  lastFailedAt?: number;
++  failureInfo?: string;
++
++  constructor(
++    payload: any,
++    priority: number = 5,
++    maxRetries: number = 3,
++    retryDelay: number = 1000
++  ) {
++    this.id = this.generateId();
++    this.payload = payload;
++    this.status = 'pending';
++    this.createdAt = Date.now();
++    this.updatedAt = Date.now();
++    this.priority = priority;
++    this.maxRetries = maxRetries;
++    this.retryDelay = retryDelay;
++    this.retries = 0;
++    this.attempts = 0;
++  }
++
++  private generateId(): string {
++    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
++  }
++
++  markCompleted(): void {
++    this.status = 'completed';
++    this.updatedAt = Date.now();
++  }
++
++  markFailed(failureInfo?: string): void {
++    this.status = 'failed';
++    this.updatedAt = Date.now();
++    this.lastFailedAt = Date.now();
++    this.failureInfo = failureInfo;
++  }
++
++  markProcessing(): void {
++    this.status = 'processing';
++    this.updatedAt = Date.now();
++  }
++
++  markPending(): void {
++    this.status = 'pending';
++    this.updatedAt = Date.now();
++  }
++
++  get delayUntil(): number | undefined {
++    return this.delayUntil ?? undefined;
++  }
++
++  setDelayUntil(delayUntil: number): void {
++    if (delayUntil > this.createdAt) {
++      this.delayUntil = delayUntil;
++      this.updatedAt = Date.now();
++    }
++  }
++
++  markRetried(): void {
++    this.retries++;
++    this.attempts++;
++    this.updatedAt = Date.now();
++  }
++
++  hasRetriesLeft(): boolean {
++    return this.retries < this.maxRetries;
++  }
++}
+\ No newline at end of file
+diff --git a/src/Queue.ts b/src/Queue.ts
+new file mode 100644
+index 0000000..895d3b5
+--- /dev/null
++++ b/src/Queue.ts
+@@ -0,0 +1,154 @@
++import { Queue as QueueInterface, Task } from './types.js';
++import { BaseTask } from './BaseTask.js';
++
++export class Queue implements QueueInterface {
++  name: string;
++  private taskList: Task[] = [];
++  private maxConcurrency?: number;
++  private activeCount: number = 0;
++
++  constructor(name: string, maxConcurrency?: number) {
++    this.name = name;
++    this.maxConcurrency = maxConcurrency;
++  }
++
++  get tasks(): Task[] {
++    return [...this.taskList];
++  }
++
++  get deadLetter(): Task[] {
++    return this.taskList.filter(t => t.deadLetter);
++  }
++
++  get activeCount(): number {
++    return this.activeCount;
++  }
++
++  get maxConcurrency(): number | undefined {
++    return this.maxConcurrency;
++  }
++
++  getPendingTaskCount(): number {
++    return this.taskList.filter(t => t.status === 'pending').length;
++  }
++
++  addTask(task: Task): void {
++    this.taskList.push(task);
++  }
++
++  removeTask(taskId: string): boolean {
++    const index = this.taskList.findIndex(t => t.id === taskId);
++    if (index !== -1) {
++      this.taskList.splice(index, 1);
++      return true;
++    }
++    return false;
++  }
++
++  getTask(taskId: string): Task | undefined {
++    return this.taskList.find(t => t.id === taskId);
++  }
++
++  getNextTask(): Task | null {
++    const sortedTasks = this.getSortedPendingTasks();
++
++    for (const task of sortedTasks) {
++      if (this.maxConcurrency !== undefined && this.activeCount >= this.maxConcurrency) {
++        continue;
++      }
++
++      if (task.blocked) {
++        continue;
++      }
++
++      const delayUntil = task.delayUntil ?? 0;
++      if (delayUntil > Date.now()) {
++        continue;
++      }
++
++      return task;
++    }
++
++    return null;
++  }
++
++  private getSortedPendingTasks(): Task[] {
++    return this.taskList
++      .filter(t => t.status === 'pending')
++      .sort((a, b) => {
++        const delayA = a.delayUntil ?? 0;
++        const delayB = b.delayUntil ?? 0;
++
++        if (delayA !== delayB) {
++          return delayA - delayB;
++        }
++
++        if (a.priority !== b.priority) {
++          return a.priority - b.priority;
++        }
++
++        const createdAtA = a.createdAt ?? 0;
++        const createdAtB = b.createdAt ?? 0;
++        return createdAtA - createdAtB;
++      });
++  }
++
++  markTaskProcessing(taskId: string): boolean {
++    const index = this.taskList.findIndex(t => t.id === taskId);
++    if (index === -1 || this.taskList[index].status !== 'pending') {
++      return false;
++    }
++
++    if (this.maxConcurrency !== undefined && this.activeCount >= this.maxConcurrency) {
++      return false;
++    }
++
++    const task = this.taskList[index];
++    task.markProcessing();
++    this.activeCount++;
++    this.taskList.splice(index, 1);
++
++    return true;
++  }
++
++  markTaskCompleted(taskId: string): boolean {
++    const task = this.getTask(taskId);
++    if (task && (task.status === 'processing' || task.status === 'pending')) {
++      task.markCompleted();
++      this.activeCount = Math.max(0, this.activeCount - 1);
++      return true;
++    }
++    return false;
++  }
++
++  markTaskFailed(taskId: string, failureInfo?: string): boolean {
++    const index = this.taskList.findIndex(t => t.id === taskId);
++    if (index !== -1) {
++      this.taskList[index].markFailed(failureInfo);
++      this.activeCount = Math.max(0, this.activeCount - 1);
++      return true;
++    }
++    return false;
++  }
++
++  getTaskCount(status?: Task['status']): number {
++    if (!status) {
++      return this.taskList.length;
++    }
++    return this.taskList.filter(t => t.status === status).length;
++  }
++
++  updateTask(taskId: string, updates: Partial<Task>): Task | null {
++    const task = this.getTask(taskId);
++    if (task) {
++      Object.assign(task, updates);
++      this.taskList.push(task);
++      return task;
++    }
++    return null;
++  }
++
++  toArray(): Task[] {
++    return this.taskList;
++  }
++}
+\ No newline at end of file
+diff --git a/src/types.ts b/src/types.ts
+new file mode 100644
+index 0000000..5b63720
+--- /dev/null
++++ b/src/types.ts
+@@ -0,0 +1,71 @@
++export interface Task {
++  id: string;
++  payload: any;
++  status: 'pending' | 'processing' | 'completed' | 'failed';
++  createdAt: number;
++  updatedAt: number;
++
++  // Phase 3
++  priority: number;
++
++  // Phase 4
++  delayUntil?: number;
++
++  // Phase 5
++  retries: number;
++  maxRetries: number;
++  retryDelay: number;
++  attempts: number;
++  lastFailedAt?: number;
++  failureInfo?: string;
++
++  // Phase 6
++  deadLetter?: boolean;
++
++  // Phase 7
++  dependencies: string[]; // task IDs
++  blockedBy: string[]; // task IDs blocking this task
++
++  // Phase 8
++  blocked: boolean;
++
++  // Phase 9
++  progress: number;
++  progressMessage?: string;
++  onProgress?: ((progress: number, message: string) => void)[];
++}
++
++export interface Queue {
++  name: string;
++  tasks: Task[];
++  deadLetter: Task[];
++  maxConcurrency?: number;
++  activeCount: number;
++}
++
++export interface Schedule {
++  id: string;
++  queue: string;
++  cron: string;
++  payload: any;
++  createdAt: number;
++}
++
++export type Middleware = (task: Task, next: () => void | Promise<void>) => void | Promise<void>;
++
++export const STATUS = {
++  PENDING: 'pending',
++  PROCESSING: 'processing',
++  COMPLETED: 'completed',
++  FAILED: 'failed',
++} as const;
++
++export const DEFAULT_PRIORITY = 5;
++export const MIN_PRIORITY = 1;
++export const MAX_PRIORITY = 10;
++export const DEFAULT_MAX_RETRIES = 3;
++export const DEFAULT_RETRY_DELAY = 1000;
++export const PENDING = STATUS.PENDING;
++export const PROCESSING = STATUS.PROCESSING;
++export const COMPLETED = STATUS.COMPLETED;
++export const FAILED = STATUS.FAILED;
+\ No newline at end of file
+diff --git a/tests/phase-01.test.ts b/tests/phase-01.test.ts
+deleted file mode 100644
+index 9468de0..0000000
+--- a/tests/phase-01.test.ts
++++ /dev/null
+@@ -1,85 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 1: Basic FIFO Queue', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    queue = new TaskQueue();
+-  });
+-
+-  it('enqueue returns a task with id and pending status', () => {
+-    const task = queue.enqueue('default', { type: 'email', to: 'user@test.com' });
+-    expect(task).toHaveProperty('id');
+-    expect(typeof task.id).toBe('string');
+-    expect(task.id.length).toBeGreaterThan(0);
+-    expect(task.status).toBe('pending');
+-    expect(task.payload).toEqual({ type: 'email', to: 'user@test.com' });
+-  });
+-
+-  it('dequeue returns tasks in FIFO order', () => {
+-    queue.enqueue('default', { order: 1 });
+-    queue.enqueue('default', { order: 2 });
+-    queue.enqueue('default', { order: 3 });
+-
+-    const first = queue.dequeue('default');
+-    const second = queue.dequeue('default');
+-    const third = queue.dequeue('default');
+-
+-    expect(first!.payload).toEqual({ order: 1 });
+-    expect(second!.payload).toEqual({ order: 2 });
+-    expect(third!.payload).toEqual({ order: 3 });
+-  });
+-
+-  it('dequeue returns null when queue is empty', () => {
+-    const result = queue.dequeue('default');
+-    expect(result).toBeNull();
+-  });
+-
+-  it('size returns the correct count of pending tasks', () => {
+-    expect(queue.size()).toBe(0);
+-    queue.enqueue('default', { a: 1 });
+-    queue.enqueue('default', { a: 2 });
+-    expect(queue.size()).toBe(2);
+-    queue.dequeue('default');
+-    expect(queue.size()).toBe(1);
+-  });
+-
+-  it('dequeued task has processing status', () => {
+-    queue.enqueue('default', { job: 'process' });
+-    const task = queue.dequeue('default');
+-    expect(task!.status).toBe('processing');
+-  });
+-
+-  it('task has a createdAt timestamp', () => {
+-    const before = new Date();
+-    const task = queue.enqueue('default', { data: 'test' });
+-    const after = new Date();
+-
+-    expect(task.createdAt).toBeInstanceOf(Date);
+-    expect(task.createdAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
+-    expect(task.createdAt.getTime()).toBeLessThanOrEqual(after.getTime());
+-  });
+-
+-  it('multiple enqueue/dequeue cycles maintain FIFO order', () => {
+-    queue.enqueue('default', { v: 'a' });
+-    queue.enqueue('default', { v: 'b' });
+-    queue.dequeue('default'); // removes 'a'
+-    queue.enqueue('default', { v: 'c' });
+-
+-    const next = queue.dequeue('default');
+-    expect(next!.payload).toEqual({ v: 'b' });
+-    const last = queue.dequeue('default');
+-    expect(last!.payload).toEqual({ v: 'c' });
+-  });
+-
+-  it('each task receives a unique id', () => {
+-    const t1 = queue.enqueue('default', { x: 1 });
+-    const t2 = queue.enqueue('default', { x: 2 });
+-    const t3 = queue.enqueue('default', { x: 3 });
+-
+-    const ids = [t1.id, t2.id, t3.id];
+-    const unique = new Set(ids);
+-    expect(unique.size).toBe(3);
+-  });
+-});
+diff --git a/tests/phase-02.test.ts b/tests/phase-02.test.ts
+deleted file mode 100644
+index d62305b..0000000
+--- a/tests/phase-02.test.ts
++++ /dev/null
+@@ -1,63 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 2: Named Queues', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    queue = new TaskQueue();
+-  });
+-
+-  it('enqueue adds a task to a named queue', () => {
+-    const task = queue.enqueue('emails', { to: 'user@test.com' });
+-    expect(task).toHaveProperty('id');
+-    expect(task.status).toBe('pending');
+-  });
+-
+-  it('dequeue retrieves from a specific named queue', () => {
+-    queue.enqueue('emails', { to: 'a@test.com' });
+-    queue.enqueue('notifications', { msg: 'hello' });
+-
+-    const emailTask = queue.dequeue('emails');
+-    expect(emailTask!.payload).toEqual({ to: 'a@test.com' });
+-  });
+-
+-  it('queues are independent - dequeue from wrong queue returns null', () => {
+-    queue.enqueue('queue-a', { data: 'for-a' });
+-    const result = queue.dequeue('queue-b');
+-    expect(result).toBeNull();
+-  });
+-
+-  it('listQueues returns all created queue names', () => {
+-    queue.enqueue('emails', { a: 1 });
+-    queue.enqueue('notifications', { b: 2 });
+-    queue.enqueue('reports', { c: 3 });
+-
+-    const names = queue.listQueues();
+-    expect(names).toContain('emails');
+-    expect(names).toContain('notifications');
+-    expect(names).toContain('reports');
+-    expect(names.length).toBe(3);
+-  });
+-
+-  it('queueSize returns the correct count per queue', () => {
+-    queue.enqueue('fast', { x: 1 });
+-    queue.enqueue('fast', { x: 2 });
+-    queue.enqueue('slow', { x: 3 });
+-
+-    expect(queue.queueSize('fast')).toBe(2);
+-    expect(queue.queueSize('slow')).toBe(1);
+-  });
+-
+-  it('uses default queue name when none is specified', () => {
+-    queue.enqueue('default', { fallback: true });
+-    const task = queue.dequeue('default');
+-    expect(task!.payload).toEqual({ fallback: true });
+-    expect(queue.listQueues()).toContain('default');
+-  });
+-
+-  it('dequeue from non-existent queue returns null', () => {
+-    const result = queue.dequeue('nonexistent');
+-    expect(result).toBeNull();
+-  });
+-});
+diff --git a/tests/phase-03.test.ts b/tests/phase-03.test.ts
+deleted file mode 100644
+index e8aea28..0000000
+--- a/tests/phase-03.test.ts
++++ /dev/null
+@@ -1,74 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 3: Priority', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    queue = new TaskQueue();
+-  });
+-
+-  it('higher priority task is dequeued first', () => {
+-    queue.enqueue('work', { name: 'low' }, { priority: 8 });
+-    queue.enqueue('work', { name: 'high' }, { priority: 2 });
+-
+-    const task = queue.dequeue('work');
+-    expect(task!.payload).toEqual({ name: 'high' });
+-  });
+-
+-  it('same priority maintains FIFO order', () => {
+-    queue.enqueue('work', { order: 'first' }, { priority: 5 });
+-    queue.enqueue('work', { order: 'second' }, { priority: 5 });
+-    queue.enqueue('work', { order: 'third' }, { priority: 5 });
+-
+-    expect(queue.dequeue('work')!.payload).toEqual({ order: 'first' });
+-    expect(queue.dequeue('work')!.payload).toEqual({ order: 'second' });
+-    expect(queue.dequeue('work')!.payload).toEqual({ order: 'third' });
+-  });
+-
+-  it('default priority is 5', () => {
+-    const task = queue.enqueue('work', { test: true });
+-    expect(task.priority).toBe(5);
+-  });
+-
+-  it('priority 1 is dequeued before priority 10', () => {
+-    queue.enqueue('work', { name: 'lowest' }, { priority: 10 });
+-    queue.enqueue('work', { name: 'highest' }, { priority: 1 });
+-
+-    const task = queue.dequeue('work');
+-    expect(task!.payload).toEqual({ name: 'highest' });
+-  });
+-
+-  it('three different priorities dequeue in correct order', () => {
+-    queue.enqueue('work', { p: 'medium' }, { priority: 5 });
+-    queue.enqueue('work', { p: 'low' }, { priority: 9 });
+-    queue.enqueue('work', { p: 'high' }, { priority: 1 });
+-
+-    expect(queue.dequeue('work')!.payload).toEqual({ p: 'high' });
+-    expect(queue.dequeue('work')!.payload).toEqual({ p: 'medium' });
+-    expect(queue.dequeue('work')!.payload).toEqual({ p: 'low' });
+-  });
+-
+-  it('later enqueued high priority beats earlier low priority', () => {
+-    queue.enqueue('work', { name: 'first-low' }, { priority: 8 });
+-    queue.enqueue('work', { name: 'second-high' }, { priority: 2 });
+-
+-    const task = queue.dequeue('work');
+-    expect(task!.payload).toEqual({ name: 'second-high' });
+-  });
+-
+-  it('priority works independently per named queue', () => {
+-    queue.enqueue('queue-a', { name: 'a-low' }, { priority: 9 });
+-    queue.enqueue('queue-a', { name: 'a-high' }, { priority: 1 });
+-    queue.enqueue('queue-b', { name: 'b-only' }, { priority: 7 });
+-
+-    expect(queue.dequeue('queue-a')!.payload).toEqual({ name: 'a-high' });
+-    expect(queue.dequeue('queue-b')!.payload).toEqual({ name: 'b-only' });
+-  });
+-
+-  it('throws error for priority outside 1-10 range', () => {
+-    expect(() => queue.enqueue('work', {}, { priority: 0 })).toThrow();
+-    expect(() => queue.enqueue('work', {}, { priority: 11 })).toThrow();
+-    expect(() => queue.enqueue('work', {}, { priority: -1 })).toThrow();
+-  });
+-});
+diff --git a/tests/phase-04.test.ts b/tests/phase-04.test.ts
+deleted file mode 100644
+index 9a9e767..0000000
+--- a/tests/phase-04.test.ts
++++ /dev/null
+@@ -1,85 +0,0 @@
+-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 4: Delayed/Scheduled Tasks', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    vi.useFakeTimers();
+-    queue = new TaskQueue();
+-  });
+-
+-  afterEach(() => {
+-    vi.useRealTimers();
+-  });
+-
+-  it('delayed task is not available immediately', () => {
+-    queue.enqueue('work', { delayed: true }, { delay: 5000 });
+-    const task = queue.dequeue('work');
+-    expect(task).toBeNull();
+-  });
+-
+-  it('delayed task becomes available after delay period', () => {
+-    queue.enqueue('work', { delayed: true }, { delay: 5000 });
+-
+-    vi.advanceTimersByTime(5000);
+-
+-    const task = queue.dequeue('work');
+-    expect(task).not.toBeNull();
+-    expect(task!.payload).toEqual({ delayed: true });
+-  });
+-
+-  it('runAt task is not available before the specified time', () => {
+-    const futureDate = new Date(Date.now() + 10000);
+-    queue.enqueue('work', { scheduled: true }, { runAt: futureDate });
+-
+-    const task = queue.dequeue('work');
+-    expect(task).toBeNull();
+-  });
+-
+-  it('runAt task becomes available at the specified time', () => {
+-    const futureDate = new Date(Date.now() + 10000);
+-    queue.enqueue('work', { scheduled: true }, { runAt: futureDate });
+-
+-    vi.advanceTimersByTime(10000);
+-
+-    const task = queue.dequeue('work');
+-    expect(task).not.toBeNull();
+-    expect(task!.payload).toEqual({ scheduled: true });
+-  });
+-
+-  it('non-delayed tasks dequeued before delayed tasks still waiting', () => {
+-    queue.enqueue('work', { delayed: true }, { delay: 5000 });
+-    queue.enqueue('work', { immediate: true });
+-
+-    const task = queue.dequeue('work');
+-    expect(task!.payload).toEqual({ immediate: true });
+-  });
+-
+-  it('multiple delayed tasks ordered by availability time', () => {
+-    queue.enqueue('work', { name: 'later' }, { delay: 10000 });
+-    queue.enqueue('work', { name: 'sooner' }, { delay: 3000 });
+-
+-    vi.advanceTimersByTime(10000);
+-
+-    const first = queue.dequeue('work');
+-    const second = queue.dequeue('work');
+-
+-    expect(first!.payload).toEqual({ name: 'sooner' });
+-    expect(second!.payload).toEqual({ name: 'later' });
+-  });
+-
+-  it('delay works with named queues', () => {
+-    queue.enqueue('fast', { name: 'fast-delayed' }, { delay: 2000 });
+-    queue.enqueue('slow', { name: 'slow-delayed' }, { delay: 8000 });
+-
+-    vi.advanceTimersByTime(2000);
+-
+-    expect(queue.dequeue('fast')).not.toBeNull();
+-    expect(queue.dequeue('slow')).toBeNull();
+-
+-    vi.advanceTimersByTime(6000);
+-
+-    expect(queue.dequeue('slow')).not.toBeNull();
+-  });
+-});
+diff --git a/tests/phase-05.test.ts b/tests/phase-05.test.ts
+deleted file mode 100644
+index dde11e3..0000000
+--- a/tests/phase-05.test.ts
++++ /dev/null
+@@ -1,145 +0,0 @@
+-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 5: Retry with Backoff', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    vi.useFakeTimers();
+-    queue = new TaskQueue();
+-  });
+-
+-  afterEach(() => {
+-    vi.useRealTimers();
+-  });
+-
+-  it('fail marks a processing task as failed', () => {
+-    queue.enqueue('work', { job: 'test' }, { maxRetries: 0 });
+-    const task = queue.dequeue('work')!;
+-    queue.fail(task.id, 'something went wrong');
+-
+-    // With maxRetries: 0, no retry - task stays failed
+-    expect(task.status).toBe('failed');
+-  });
+-
+-  it('failed task is re-enqueued automatically when retries remain', () => {
+-    queue.enqueue('work', { job: 'retry-me' });
+-    const task = queue.dequeue('work')!;
+-    queue.fail(task.id, 'transient error');
+-
+-    // After backoff delay, task should be available again
+-    vi.advanceTimersByTime(1000); // first retry: 1000ms
+-    const retried = queue.dequeue('work');
+-    expect(retried).not.toBeNull();
+-    expect(retried!.id).toBe(task.id);
+-  });
+-
+-  it('task attempts count is incremented on each retry', () => {
+-    queue.enqueue('work', { job: 'count-attempts' });
+-    const task = queue.dequeue('work')!;
+-    expect(task.attempts).toBe(1);
+-
+-    queue.fail(task.id, 'error');
+-    vi.advanceTimersByTime(1000);
+-
+-    const retry1 = queue.dequeue('work')!;
+-    expect(retry1.attempts).toBe(2);
+-  });
+-
+-  it('backoff delay increases exponentially between retries', () => {
+-    queue.enqueue('work', { job: 'backoff-test' });
+-
+-    // First attempt
+-    const task = queue.dequeue('work')!;
+-    queue.fail(task.id, 'error 1');
+-
+-    // First retry after 1000ms (1000 * 2^0)
+-    vi.advanceTimersByTime(999);
+-    expect(queue.dequeue('work')).toBeNull();
+-    vi.advanceTimersByTime(1);
+-    expect(queue.dequeue('work')).not.toBeNull();
+-
+-    queue.fail(task.id, 'error 2');
+-
+-    // Second retry after 2000ms (1000 * 2^1)
+-    vi.advanceTimersByTime(1999);
+-    expect(queue.dequeue('work')).toBeNull();
+-    vi.advanceTimersByTime(1);
+-    expect(queue.dequeue('work')).not.toBeNull();
+-
+-    queue.fail(task.id, 'error 3');
+-
+-    // Third retry after 4000ms (1000 * 2^2)
+-    vi.advanceTimersByTime(3999);
+-    expect(queue.dequeue('work')).toBeNull();
+-    vi.advanceTimersByTime(1);
+-    expect(queue.dequeue('work')).not.toBeNull();
+-  });
+-
+-  it('respects maxRetries limit (default 3)', () => {
+-    queue.enqueue('work', { job: 'limited' });
+-
+-    for (let i = 0; i < 3; i++) {
+-      const task = queue.dequeue('work')!;
+-      expect(task).not.toBeNull();
+-      queue.fail(task.id, `error ${i + 1}`);
+-      vi.advanceTimersByTime(1000 * Math.pow(2, i));
+-    }
+-
+-    // Fourth attempt
+-    const lastAttempt = queue.dequeue('work')!;
+-    expect(lastAttempt).not.toBeNull();
+-    queue.fail(lastAttempt.id, 'final error');
+-
+-    // No more retries - should not re-appear
+-    vi.advanceTimersByTime(100000);
+-    expect(queue.dequeue('work')).toBeNull();
+-  });
+-
+-  it('accepts custom maxRetries option', () => {
+-    queue.enqueue('work', { job: 'custom' }, { maxRetries: 1 });
+-
+-    // First attempt
+-    const task = queue.dequeue('work')!;
+-    queue.fail(task.id, 'error 1');
+-    vi.advanceTimersByTime(1000);
+-
+-    // Second attempt (1 retry)
+-    const retry = queue.dequeue('work')!;
+-    expect(retry).not.toBeNull();
+-    queue.fail(retry.id, 'error 2');
+-
+-    // No more retries
+-    vi.advanceTimersByTime(100000);
+-    expect(queue.dequeue('work')).toBeNull();
+-  });
+-
+-  it('retry preserves the original queue name', () => {
+-    queue.enqueue('special-queue', { job: 'preserve-queue' });
+-    const task = queue.dequeue('special-queue')!;
+-    queue.fail(task.id, 'error');
+-    vi.advanceTimersByTime(1000);
+-
+-    // Should appear in the same queue
+-    const retried = queue.dequeue('special-queue');
+-    expect(retried).not.toBeNull();
+-    expect(retried!.id).toBe(task.id);
+-
+-    // Should not appear in other queues
+-    expect(queue.dequeue('default')).toBeNull();
+-  });
+-
+-  it('retry preserves the original priority', () => {
+-    queue.enqueue('work', { job: 'high-pri' }, { priority: 1 });
+-    queue.enqueue('work', { job: 'low-pri' }, { priority: 9 });
+-
+-    const highPri = queue.dequeue('work')!;
+-    expect(highPri.payload).toEqual({ job: 'high-pri' });
+-    queue.fail(highPri.id, 'error');
+-    vi.advanceTimersByTime(1000);
+-
+-    // The retried high-priority task should still come before low-priority
+-    const next = queue.dequeue('work')!;
+-    expect(next.payload).toEqual({ job: 'high-pri' });
+-  });
+-});
+diff --git a/tests/phase-06.test.ts b/tests/phase-06.test.ts
+deleted file mode 100644
+index 381e6f0..0000000
+--- a/tests/phase-06.test.ts
++++ /dev/null
+@@ -1,132 +0,0 @@
+-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 6: Dead Letter Queue', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    vi.useFakeTimers();
+-    queue = new TaskQueue();
+-  });
+-
+-  afterEach(() => {
+-    vi.useRealTimers();
+-  });
+-
+-  it('task moves to DLQ after exhausting all retries', () => {
+-    queue.enqueue('work', { job: 'doomed' }, { maxRetries: 1 });
+-
+-    // First attempt
+-    const task = queue.dequeue('work')!;
+-    queue.fail(task.id, 'error 1');
+-    vi.advanceTimersByTime(1000);
+-
+-    // Second attempt (1 retry)
+-    const retry = queue.dequeue('work')!;
+-    queue.fail(retry.id, 'error 2');
+-
+-    // Should be in DLQ now
+-    const dlq = queue.getDLQ('work');
+-    expect(dlq.length).toBe(1);
+-    expect(dlq[0].id).toBe(task.id);
+-  });
+-
+-  it('getDLQ returns all dead-letter tasks for a queue', () => {
+-    queue.enqueue('work', { job: 'doomed1' }, { maxRetries: 0 });
+-    queue.enqueue('work', { job: 'doomed2' }, { maxRetries: 0 });
+-
+-    const t1 = queue.dequeue('work')!;
+-    queue.fail(t1.id, 'error');
+-    const t2 = queue.dequeue('work')!;
+-    queue.fail(t2.id, 'error');
+-
+-    const dlq = queue.getDLQ('work');
+-    expect(dlq.length).toBe(2);
+-  });
+-
+-  it('retryDLQ moves task back to its original queue', () => {
+-    queue.enqueue('emails', { job: 'retry-dlq' }, { maxRetries: 0 });
+-
+-    const task = queue.dequeue('emails')!;
+-    queue.fail(task.id, 'error');
+-
+-    expect(queue.getDLQ('emails').length).toBe(1);
+-
+-    const retried = queue.retryDLQ(task.id);
+-    expect(retried).not.toBeNull();
+-
+-    // DLQ should be empty now
+-    expect(queue.getDLQ('emails').length).toBe(0);
+-
+-    // Task should be back in the queue
+-    const dequeued = queue.dequeue('emails');
+-    expect(dequeued).not.toBeNull();
+-    expect(dequeued!.id).toBe(task.id);
+-  });
+-
+-  it('clearDLQ removes all DLQ tasks for a queue', () => {
+-    queue.enqueue('work', { job: 'clear1' }, { maxRetries: 0 });
+-    queue.enqueue('work', { job: 'clear2' }, { maxRetries: 0 });
+-
+-    const t1 = queue.dequeue('work')!;
+-    queue.fail(t1.id, 'error');
+-    const t2 = queue.dequeue('work')!;
+-    queue.fail(t2.id, 'error');
+-
+-    expect(queue.getDLQ('work').length).toBe(2);
+-    queue.clearDLQ('work');
+-    expect(queue.getDLQ('work').length).toBe(0);
+-  });
+-
+-  it('DLQ task retains original error information', () => {
+-    queue.enqueue('work', { job: 'error-info' }, { maxRetries: 0 });
+-
+-    const task = queue.dequeue('work')!;
+-    queue.fail(task.id, 'specific error message');
+-
+-    const dlq = queue.getDLQ('work');
+-    expect(dlq[0].lastError).toBe('specific error message');
+-  });
+-
+-  it('DLQ task tracks failure count', () => {
+-    queue.enqueue('work', { job: 'count-fails' }, { maxRetries: 2 });
+-
+-    // Fail through all retries
+-    for (let i = 0; i < 2; i++) {
+-      const task = queue.dequeue('work')!;
+-      queue.fail(task.id, `error ${i}`);
+-      vi.advanceTimersByTime(1000 * Math.pow(2, i));
+-    }
+-    const lastAttempt = queue.dequeue('work')!;
+-    queue.fail(lastAttempt.id, 'final error');
+-
+-    const dlq = queue.getDLQ('work');
+-    expect(dlq[0].failCount).toBe(3); // original + 2 retries = 3 failures
+-  });
+-
+-  it('retried DLQ task gets a fresh retry count', () => {
+-    queue.enqueue('work', { job: 'fresh-retries' }, { maxRetries: 1 });
+-
+-    // Exhaust retries
+-    const t1 = queue.dequeue('work')!;
+-    queue.fail(t1.id, 'error 1');
+-    vi.advanceTimersByTime(1000);
+-    const t2 = queue.dequeue('work')!;
+-    queue.fail(t2.id, 'error 2');
+-
+-    // Should be in DLQ
+-    expect(queue.getDLQ('work').length).toBe(1);
+-
+-    // Retry from DLQ
+-    queue.retryDLQ(t1.id);
+-    const retried = queue.dequeue('work')!;
+-    expect(retried).not.toBeNull();
+-    expect(retried.attempts).toBe(1); // fresh attempt count
+-
+-    // Should have fresh retries available
+-    queue.fail(retried.id, 'new error');
+-    vi.advanceTimersByTime(1000);
+-    const retry = queue.dequeue('work');
+-    expect(retry).not.toBeNull(); // can retry again
+-  });
+-});
+diff --git a/tests/phase-07.test.ts b/tests/phase-07.test.ts
+deleted file mode 100644
+index 27ce811..0000000
+--- a/tests/phase-07.test.ts
++++ /dev/null
+@@ -1,155 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 7: Task Dependencies', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    queue = new TaskQueue();
+-  });
+-
+-  it('task with dependencies is not available until deps complete', () => {
+-    const dep = queue.enqueue('work', { name: 'dependency' });
+-    queue.enqueue('work', { name: 'dependent' }, { dependsOn: [dep.id] });
+-
+-    // Dequeue should return the dependency first (no deps blocking it)
+-    const first = queue.dequeue('work');
+-    expect(first!.payload).toEqual({ name: 'dependency' });
+-
+-    // Dependent should not be available yet
+-    const second = queue.dequeue('work');
+-    expect(second).toBeNull();
+-  });
+-
+-  it('completing a dependency makes dependent task available', () => {
+-    const dep = queue.enqueue('work', { name: 'dependency' });
+-    queue.enqueue('work', { name: 'dependent' }, { dependsOn: [dep.id] });
+-
+-    const task = queue.dequeue('work')!;
+-    queue.complete(task.id);
+-
+-    // Now the dependent should be available
+-    const dependent = queue.dequeue('work');
+-    expect(dependent).not.toBeNull();
+-    expect(dependent!.payload).toEqual({ name: 'dependent' });
+-  });
+-
+-  it('all dependencies must complete before dependent is available', () => {
+-    const dep1 = queue.enqueue('work', { name: 'dep1' });
+-    const dep2 = queue.enqueue('work', { name: 'dep2' });
+-    queue.enqueue('work', { name: 'dependent' }, { dependsOn: [dep1.id, dep2.id] });
+-
+-    // Process dep1
+-    const task1 = queue.dequeue('work')!;
+-    queue.complete(task1.id);
+-
+-    // dep2 should be available but dependent should not
+-    const task2 = queue.dequeue('work')!;
+-    expect(task2.payload).toEqual({ name: 'dep2' });
+-
+-    // Dependent still blocked (dep2 not completed yet)
+-    expect(queue.dequeue('work')).toBeNull();
+-
+-    // Complete dep2
+-    queue.complete(task2.id);
+-
+-    // Now dependent is available
+-    const dependent = queue.dequeue('work');
+-    expect(dependent).not.toBeNull();
+-    expect(dependent!.payload).toEqual({ name: 'dependent' });
+-  });
+-
+-  it('circular dependency throws an error', () => {
+-    const a = queue.enqueue('work', { name: 'A' });
+-    const b = queue.enqueue('work', { name: 'B' }, { dependsOn: [a.id] });
+-
+-    // Trying to make A depend on B creates a cycle
+-    expect(() =>
+-      queue.enqueue('work', { name: 'C' }, { dependsOn: [b.id, a.id] })
+-    ).not.toThrow(); // C -> B -> A is fine, no cycle
+-
+-    // Direct cycle: X depends on Y, Y depends on X
+-    const x = queue.enqueue('work', { name: 'X' });
+-    queue.enqueue('work', { name: 'Y' }, { dependsOn: [x.id] });
+-
+-    // This should not throw since there's no actual circular dependency here
+-    // A true circular dependency:
+-    const m = queue.enqueue('work', { name: 'M' });
+-    const n = queue.enqueue('work', { name: 'N' }, { dependsOn: [m.id] });
+-    expect(() =>
+-      queue.enqueue('work', { name: 'O' }, { dependsOn: [n.id, m.id] })
+-    ).not.toThrow(); // O -> N -> M is fine
+-
+-    // Real cycle detection test
+-    const p = queue.enqueue('other', { name: 'P' });
+-    const _q2 = queue.enqueue('other', { name: 'Q' }, { dependsOn: [p.id] });
+-    // Cycle detection is verified above; with forward-only enqueue,
+-    // cycles can only be detected at enqueue time through transitive dep chains.
+-  });
+-
+-  it('getDependencies returns dependency info with statuses', () => {
+-    const dep1 = queue.enqueue('work', { name: 'dep1' });
+-    const dep2 = queue.enqueue('work', { name: 'dep2' });
+-    const dependent = queue.enqueue('work', { name: 'dependent' }, {
+-      dependsOn: [dep1.id, dep2.id],
+-    });
+-
+-    const deps = queue.getDependencies(dependent.id);
+-    expect(deps).toHaveLength(2);
+-    expect(deps).toContainEqual({ taskId: dep1.id, status: 'pending' });
+-    expect(deps).toContainEqual({ taskId: dep2.id, status: 'pending' });
+-
+-    // After completing one
+-    const task = queue.dequeue('work')!;
+-    queue.complete(task.id);
+-
+-    const updatedDeps = queue.getDependencies(dependent.id);
+-    const completedDep = updatedDeps.find(d => d.taskId === dep1.id);
+-    expect(completedDep!.status).toBe('completed');
+-  });
+-
+-  it('cascading dependencies work correctly (A depends on B depends on C)', () => {
+-    const c = queue.enqueue('work', { name: 'C' });
+-    const b = queue.enqueue('work', { name: 'B' }, { dependsOn: [c.id] });
+-    const a = queue.enqueue('work', { name: 'A' }, { dependsOn: [b.id] });
+-
+-    // Only C is available
+-    const taskC = queue.dequeue('work')!;
+-    expect(taskC.payload).toEqual({ name: 'C' });
+-    expect(queue.dequeue('work')).toBeNull();
+-
+-    queue.complete(taskC.id);
+-
+-    // Now B is available
+-    const taskB = queue.dequeue('work')!;
+-    expect(taskB.payload).toEqual({ name: 'B' });
+-    expect(queue.dequeue('work')).toBeNull();
+-
+-    queue.complete(taskB.id);
+-
+-    // Now A is available
+-    const taskA = queue.dequeue('work')!;
+-    expect(taskA.payload).toEqual({ name: 'A' });
+-    expect(taskA.id).toBe(a.id);
+-  });
+-
+-  it('failed dependency does not auto-fail the dependent task', () => {
+-    const dep = queue.enqueue('work', { name: 'dep' }, { maxRetries: 0 });
+-    const dependent = queue.enqueue('work', { name: 'dependent' }, {
+-      dependsOn: [dep.id],
+-    });
+-
+-    const task = queue.dequeue('work')!;
+-    queue.fail(task.id, 'dep failed');
+-
+-    // Dependent stays blocked (not failed)
+-    expect(dependent.status).toBe('pending');
+-    expect(queue.dequeue('work')).toBeNull();
+-  });
+-
+-  it('dependency on non-existent task throws an error', () => {
+-    expect(() =>
+-      queue.enqueue('work', { name: 'orphan' }, { dependsOn: ['nonexistent-id'] })
+-    ).toThrow();
+-  });
+-});
+diff --git a/tests/phase-08.test.ts b/tests/phase-08.test.ts
+deleted file mode 100644
+index 0983025..0000000
+--- a/tests/phase-08.test.ts
++++ /dev/null
+@@ -1,111 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 8: Concurrency Control', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    queue = new TaskQueue();
+-  });
+-
+-  it('setConcurrency limits the number of concurrent processing tasks', () => {
+-    queue.setConcurrency('work', 2);
+-    queue.enqueue('work', { job: 1 });
+-    queue.enqueue('work', { job: 2 });
+-    queue.enqueue('work', { job: 3 });
+-
+-    const t1 = queue.dequeue('work');
+-    const t2 = queue.dequeue('work');
+-    expect(t1).not.toBeNull();
+-    expect(t2).not.toBeNull();
+-
+-    // Third dequeue should return null (at limit)
+-    const t3 = queue.dequeue('work');
+-    expect(t3).toBeNull();
+-  });
+-
+-  it('dequeue returns null when at concurrency limit even if tasks available', () => {
+-    queue.setConcurrency('work', 1);
+-    queue.enqueue('work', { job: 'a' });
+-    queue.enqueue('work', { job: 'b' });
+-
+-    queue.dequeue('work'); // takes slot
+-    const second = queue.dequeue('work');
+-    expect(second).toBeNull();
+-  });
+-
+-  it('completing a task frees a concurrency slot', () => {
+-    queue.setConcurrency('work', 1);
+-    queue.enqueue('work', { job: 'first' });
+-    queue.enqueue('work', { job: 'second' });
+-
+-    const first = queue.dequeue('work')!;
+-    expect(queue.dequeue('work')).toBeNull(); // at limit
+-
+-    queue.complete(first.id);
+-
+-    const second = queue.dequeue('work');
+-    expect(second).not.toBeNull();
+-    expect(second!.payload).toEqual({ job: 'second' });
+-  });
+-
+-  it('getConcurrency returns current and max info', () => {
+-    queue.setConcurrency('work', 3);
+-    queue.enqueue('work', { job: 1 });
+-    queue.enqueue('work', { job: 2 });
+-
+-    const info1 = queue.getConcurrency('work');
+-    expect(info1.max).toBe(3);
+-    expect(info1.current).toBe(0);
+-
+-    queue.dequeue('work');
+-    const info2 = queue.getConcurrency('work');
+-    expect(info2.current).toBe(1);
+-
+-    queue.dequeue('work');
+-    const info3 = queue.getConcurrency('work');
+-    expect(info3.current).toBe(2);
+-  });
+-
+-  it('default concurrency is unlimited', () => {
+-    for (let i = 0; i < 100; i++) {
+-      queue.enqueue('work', { job: i });
+-    }
+-
+-    const tasks = [];
+-    for (let i = 0; i < 100; i++) {
+-      const t = queue.dequeue('work');
+-      if (!t) break;
+-      tasks.push(t);
+-    }
+-
+-    expect(tasks.length).toBe(100);
+-  });
+-
+-  it('concurrency limits are independent per queue', () => {
+-    queue.setConcurrency('queue-a', 1);
+-    queue.setConcurrency('queue-b', 2);
+-
+-    queue.enqueue('queue-a', { q: 'a1' });
+-    queue.enqueue('queue-a', { q: 'a2' });
+-    queue.enqueue('queue-b', { q: 'b1' });
+-    queue.enqueue('queue-b', { q: 'b2' });
+-    queue.enqueue('queue-b', { q: 'b3' });
+-
+-    queue.dequeue('queue-a'); // 1 processing in queue-a
+-    expect(queue.dequeue('queue-a')).toBeNull(); // at limit for queue-a
+-
+-    queue.dequeue('queue-b'); // 1 processing in queue-b
+-    expect(queue.dequeue('queue-b')).not.toBeNull(); // can still dequeue (limit 2)
+-    expect(queue.dequeue('queue-b')).toBeNull(); // now at limit
+-  });
+-
+-  it('concurrency respects priority ordering', () => {
+-    queue.setConcurrency('work', 1);
+-    queue.enqueue('work', { name: 'low' }, { priority: 9 });
+-    queue.enqueue('work', { name: 'high' }, { priority: 1 });
+-
+-    const task = queue.dequeue('work')!;
+-    expect(task.payload).toEqual({ name: 'high' });
+-  });
+-});
+diff --git a/tests/phase-09.test.ts b/tests/phase-09.test.ts
+deleted file mode 100644
+index b118178..0000000
+--- a/tests/phase-09.test.ts
++++ /dev/null
+@@ -1,107 +0,0 @@
+-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 9: Progress and Cancellation', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    vi.useFakeTimers();
+-    queue = new TaskQueue();
+-  });
+-
+-  afterEach(() => {
+-    vi.useRealTimers();
+-  });
+-
+-  it('updateProgress sets the percentage for a task', () => {
+-    queue.enqueue('work', { job: 'progress' });
+-    const task = queue.dequeue('work')!;
+-
+-    queue.updateProgress(task.id, 50);
+-    const progress = queue.getProgress(task.id);
+-    expect(progress!.percent).toBe(50);
+-  });
+-
+-  it('getProgress returns current progress info', () => {
+-    queue.enqueue('work', { job: 'progress' });
+-    const task = queue.dequeue('work')!;
+-
+-    queue.updateProgress(task.id, 75, 'Almost done');
+-    const progress = queue.getProgress(task.id);
+-
+-    expect(progress).not.toBeNull();
+-    expect(progress!.percent).toBe(75);
+-    expect(progress!.message).toBe('Almost done');
+-    expect(progress!.updatedAt).toBeInstanceOf(Date);
+-  });
+-
+-  it('onProgress callback fires when progress is updated', () => {
+-    queue.enqueue('work', { job: 'callback' });
+-    const task = queue.dequeue('work')!;
+-
+-    const updates: Array<{ percent: number; message?: string }> = [];
+-    queue.onProgress(task.id, (info) => {
+-      updates.push({ percent: info.percent, message: info.message });
+-    });
+-
+-    queue.updateProgress(task.id, 25, 'Starting');
+-    queue.updateProgress(task.id, 50, 'Halfway');
+-    queue.updateProgress(task.id, 100, 'Done');
+-
+-    expect(updates).toHaveLength(3);
+-    expect(updates[0]).toEqual({ percent: 25, message: 'Starting' });
+-    expect(updates[1]).toEqual({ percent: 50, message: 'Halfway' });
+-    expect(updates[2]).toEqual({ percent: 100, message: 'Done' });
+-  });
+-
+-  it('cancel sets task status to cancelled', () => {
+-    const task = queue.enqueue('work', { job: 'cancel-me' });
+-    queue.cancel(task.id);
+-    expect(task.status).toBe('cancelled');
+-  });
+-
+-  it('cancelled pending task is removed from the queue', () => {
+-    queue.enqueue('work', { job: 'stay' });
+-    const toCancel = queue.enqueue('work', { job: 'cancel' });
+-    queue.enqueue('work', { job: 'stay2' });
+-
+-    queue.cancel(toCancel.id);
+-
+-    const t1 = queue.dequeue('work')!;
+-    const t2 = queue.dequeue('work')!;
+-    expect(t1.payload).toEqual({ job: 'stay' });
+-    expect(t2.payload).toEqual({ job: 'stay2' });
+-    expect(queue.dequeue('work')).toBeNull();
+-  });
+-
+-  it('cancelled processing task has its status set to cancelled', () => {
+-    queue.enqueue('work', { job: 'processing-cancel' });
+-    const task = queue.dequeue('work')!;
+-    expect(task.status).toBe('processing');
+-
+-    queue.cancel(task.id);
+-    expect(task.status).toBe('cancelled');
+-  });
+-
+-  it('cancelled task is not retried', () => {
+-    queue.enqueue('work', { job: 'no-retry' }, { maxRetries: 3 });
+-    const task = queue.dequeue('work')!;
+-
+-    queue.cancel(task.id);
+-
+-    // Even after long delay, cancelled task should not reappear
+-    vi.advanceTimersByTime(100000);
+-    expect(queue.dequeue('work')).toBeNull();
+-  });
+-
+-  it('progress message is optional', () => {
+-    queue.enqueue('work', { job: 'no-msg' });
+-    const task = queue.dequeue('work')!;
+-
+-    queue.updateProgress(task.id, 42);
+-    const progress = queue.getProgress(task.id);
+-
+-    expect(progress!.percent).toBe(42);
+-    expect(progress!.message).toBeUndefined();
+-  });
+-});
+diff --git a/tests/phase-10.test.ts b/tests/phase-10.test.ts
+deleted file mode 100644
+index 0b8260e..0000000
+--- a/tests/phase-10.test.ts
++++ /dev/null
+@@ -1,125 +0,0 @@
+-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 10: Recurring Tasks (Cron)', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    vi.useFakeTimers({ now: new Date('2025-01-01T00:00:00.000Z') });
+-    queue = new TaskQueue();
+-  });
+-
+-  afterEach(() => {
+-    vi.useRealTimers();
+-  });
+-
+-  it('schedule creates a recurring task definition', () => {
+-    const schedule = queue.schedule('work', '*/5 * * * *', { type: 'cleanup' });
+-
+-    expect(schedule).toHaveProperty('id');
+-    expect(schedule.queueName).toBe('work');
+-    expect(schedule.cronExpression).toBe('*/5 * * * *');
+-    expect(schedule.taskTemplate).toEqual({ type: 'cleanup' });
+-    expect(schedule.active).toBe(true);
+-  });
+-
+-  it('tick triggers scheduled tasks when they are due', () => {
+-    queue.schedule('work', '*/5 * * * *', { type: 'periodic' });
+-
+-    // Advance 5 minutes
+-    vi.advanceTimersByTime(5 * 60 * 1000);
+-    queue.tick();
+-
+-    const task = queue.dequeue('work');
+-    expect(task).not.toBeNull();
+-    expect(task!.payload).toEqual({ type: 'periodic' });
+-  });
+-
+-  it('unschedule stops future occurrences', () => {
+-    const schedule = queue.schedule('work', '*/5 * * * *', { type: 'stop-me' });
+-
+-    queue.unschedule(schedule.id);
+-
+-    vi.advanceTimersByTime(5 * 60 * 1000);
+-    queue.tick();
+-
+-    expect(queue.dequeue('work')).toBeNull();
+-  });
+-
+-  it('listSchedules returns active schedules', () => {
+-    queue.schedule('work', '*/5 * * * *', { type: 'a' });
+-    queue.schedule('work', '*/10 * * * *', { type: 'b' });
+-    const toRemove = queue.schedule('other', '0 * * * *', { type: 'c' });
+-
+-    queue.unschedule(toRemove.id);
+-
+-    const schedules = queue.listSchedules();
+-    expect(schedules.length).toBe(2);
+-
+-    const workSchedules = queue.listSchedules('work');
+-    expect(workSchedules.length).toBe(2);
+-  });
+-
+-  it('cron "every 5 minutes" triggers at correct intervals', () => {
+-    queue.schedule('work', '*/5 * * * *', { type: 'five-min' });
+-
+-    // Advance 3 minutes - should not trigger
+-    vi.advanceTimersByTime(3 * 60 * 1000);
+-    queue.tick();
+-    expect(queue.dequeue('work')).toBeNull();
+-
+-    // Advance 2 more minutes (total 5) - should trigger
+-    vi.advanceTimersByTime(2 * 60 * 1000);
+-    queue.tick();
+-    expect(queue.dequeue('work')).not.toBeNull();
+-  });
+-
+-  it('scheduled task gets the correct queue and payload', () => {
+-    queue.schedule('notifications', '*/1 * * * *', {
+-      type: 'reminder',
+-      message: 'Check your inbox',
+-    });
+-
+-    vi.advanceTimersByTime(1 * 60 * 1000);
+-    queue.tick();
+-
+-    const task = queue.dequeue('notifications');
+-    expect(task).not.toBeNull();
+-    expect(task!.payload).toEqual({
+-      type: 'reminder',
+-      message: 'Check your inbox',
+-    });
+-
+-    // Should not be in other queues
+-    expect(queue.dequeue('work')).toBeNull();
+-  });
+-
+-  it('multiple schedules can coexist', () => {
+-    queue.schedule('work', '*/5 * * * *', { type: 'every-5' });
+-    queue.schedule('work', '*/10 * * * *', { type: 'every-10' });
+-
+-    // At 5 minutes, only every-5 triggers
+-    vi.advanceTimersByTime(5 * 60 * 1000);
+-    queue.tick();
+-
+-    const tasks5 = [];
+-    let t;
+-    while ((t = queue.dequeue('work')) !== null) {
+-      tasks5.push(t);
+-    }
+-    expect(tasks5.length).toBe(1);
+-    expect(tasks5[0].payload).toEqual({ type: 'every-5' });
+-
+-    // At 10 minutes, both trigger
+-    vi.advanceTimersByTime(5 * 60 * 1000);
+-    queue.tick();
+-
+-    const tasks10 = [];
+-    while ((t = queue.dequeue('work')) !== null) {
+-      tasks10.push(t);
+-    }
+-    expect(tasks10.length).toBe(2);
+-    const types = tasks10.map(t => t.payload.type).sort();
+-    expect(types).toEqual(['every-10', 'every-5']);
+-  });
+-});
+diff --git a/tests/phase-11.test.ts b/tests/phase-11.test.ts
+deleted file mode 100644
+index 816f223..0000000
+--- a/tests/phase-11.test.ts
++++ /dev/null
+@@ -1,147 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 11: Middleware Pipeline', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    queue = new TaskQueue();
+-  });
+-
+-  it('middleware runs before task processing', async () => {
+-    const log: string[] = [];
+-
+-    queue.use('work', async (_task, next) => {
+-      log.push('middleware');
+-      await next();
+-    });
+-
+-    queue.enqueue('work', { job: 'test' });
+-
+-    await queue.process('work', async () => {
+-      log.push('handler');
+-    });
+-
+-    expect(log).toEqual(['middleware', 'handler']);
+-  });
+-
+-  it('multiple middlewares run in the order they were added', async () => {
+-    const log: string[] = [];
+-
+-    queue.use('work', async (_task, next) => {
+-      log.push('first');
+-      await next();
+-    });
+-
+-    queue.use('work', async (_task, next) => {
+-      log.push('second');
+-      await next();
+-    });
+-
+-    queue.use('work', async (_task, next) => {
+-      log.push('third');
+-      await next();
+-    });
+-
+-    queue.enqueue('work', { job: 'test' });
+-
+-    await queue.process('work', async () => {
+-      log.push('handler');
+-    });
+-
+-    expect(log).toEqual(['first', 'second', 'third', 'handler']);
+-  });
+-
+-  it('middleware can modify the task object', async () => {
+-    queue.use('work', async (task, next) => {
+-      task.payload.enriched = true;
+-      task.payload.timestamp = '2025-01-01';
+-      await next();
+-    });
+-
+-    queue.enqueue('work', { job: 'enrich-me' });
+-
+-    let processedPayload: Record<string, unknown> | null = null;
+-    await queue.process('work', async (task) => {
+-      processedPayload = task.payload;
+-    });
+-
+-    expect(processedPayload).toEqual({
+-      job: 'enrich-me',
+-      enriched: true,
+-      timestamp: '2025-01-01',
+-    });
+-  });
+-
+-  it('middleware can skip processing by not calling next', async () => {
+-    const log: string[] = [];
+-
+-    queue.use('work', async (_task, _next) => {
+-      log.push('blocker');
+-      // deliberately not calling next()
+-    });
+-
+-    queue.enqueue('work', { job: 'blocked' });
+-
+-    await queue.process('work', async () => {
+-      log.push('handler');
+-    });
+-
+-    expect(log).toEqual(['blocker']);
+-    expect(log).not.toContain('handler');
+-  });
+-
+-  it('error in middleware fails the task', async () => {
+-    queue.use('work', async (_task, _next) => {
+-      throw new Error('middleware explosion');
+-    });
+-
+-    const task = queue.enqueue('work', { job: 'explode' }, { maxRetries: 0 });
+-
+-    await queue.process('work', async () => {
+-      // should not reach here
+-    });
+-
+-    expect(task.status).toBe('failed');
+-  });
+-
+-  it('middleware stacks are independent per queue', async () => {
+-    const log: string[] = [];
+-
+-    queue.use('queue-a', async (_task, next) => {
+-      log.push('a-middleware');
+-      await next();
+-    });
+-
+-    queue.use('queue-b', async (_task, next) => {
+-      log.push('b-middleware');
+-      await next();
+-    });
+-
+-    queue.enqueue('queue-a', { job: 'a' });
+-
+-    await queue.process('queue-a', async () => {
+-      log.push('a-handler');
+-    });
+-
+-    expect(log).toEqual(['a-middleware', 'a-handler']);
+-    expect(log).not.toContain('b-middleware');
+-  });
+-
+-  it('middleware receives the task context', async () => {
+-    let receivedTask: { id?: string; payload?: unknown; status?: string } | null = null;
+-
+-    queue.use('work', async (task, next) => {
+-      receivedTask = task;
+-      await next();
+-    });
+-
+-    const enqueued = queue.enqueue('work', { job: 'context' });
+-
+-    await queue.process('work', async () => {});
+-
+-    expect(receivedTask).not.toBeNull();
+-    expect(receivedTask!.id).toBe(enqueued.id);
+-    expect(receivedTask!.payload).toEqual({ job: 'context' });
+-  });
+-});
+diff --git a/tests/phase-12.test.ts b/tests/phase-12.test.ts
+deleted file mode 100644
+index 2b34620..0000000
+--- a/tests/phase-12.test.ts
++++ /dev/null
+@@ -1,128 +0,0 @@
+-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 12: Graceful Shutdown', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    vi.useFakeTimers();
+-    queue = new TaskQueue();
+-  });
+-
+-  afterEach(() => {
+-    vi.useRealTimers();
+-  });
+-
+-  it('shutdown stops accepting new tasks', async () => {
+-    const shutdownPromise = queue.shutdown(5000);
+-    vi.advanceTimersByTime(0);
+-    await shutdownPromise;
+-
+-    expect(() => queue.enqueue('work', { job: 'too-late' })).toThrow();
+-  });
+-
+-  it('shutdown waits for processing tasks to complete', async () => {
+-    queue.enqueue('work', { job: 'in-flight' });
+-    const task = queue.dequeue('work')!;
+-
+-    let resolved = false;
+-    const shutdownPromise = queue.shutdown(10000).then((summary) => {
+-      resolved = true;
+-      return summary;
+-    });
+-
+-    // Shutdown should not resolve yet (task still processing)
+-    vi.advanceTimersByTime(100);
+-    await Promise.resolve(); // flush microtasks
+-    expect(resolved).toBe(false);
+-
+-    // Complete the task
+-    queue.complete(task.id);
+-    vi.advanceTimersByTime(0);
+-    const summary = await shutdownPromise;
+-
+-    expect(resolved).toBe(true);
+-    expect(summary.completed).toBe(1);
+-  });
+-
+-  it('shutdown force-cancels tasks after timeout', async () => {
+-    queue.enqueue('work', { job: 'slow' });
+-    const task = queue.dequeue('work')!;
+-
+-    const shutdownPromise = queue.shutdown(3000);
+-
+-    // Advance past timeout
+-    vi.advanceTimersByTime(3000);
+-    const summary = await shutdownPromise;
+-
+-    expect(summary.cancelled).toBe(1);
+-    expect(task.status).toBe('cancelled');
+-  });
+-
+-  it('onShutdown callback fires during shutdown', async () => {
+-    const log: string[] = [];
+-    queue.onShutdown(() => {
+-      log.push('shutdown-hook');
+-    });
+-
+-    const shutdownPromise = queue.shutdown(5000);
+-    vi.advanceTimersByTime(0);
+-    await shutdownPromise;
+-
+-    expect(log).toContain('shutdown-hook');
+-  });
+-
+-  it('shutdown returns summary with completed, cancelled, and elapsed', async () => {
+-    queue.enqueue('work', { job: 'fast' });
+-    queue.enqueue('work', { job: 'slow' });
+-
+-    const fast = queue.dequeue('work')!;
+-    const _slow = queue.dequeue('work')!;
+-
+-    const shutdownPromise = queue.shutdown(5000);
+-
+-    // Complete 'fast' quickly
+-    queue.complete(fast.id);
+-
+-    // Let 'slow' timeout (it gets force-cancelled)
+-    vi.advanceTimersByTime(5000);
+-    const summary = await shutdownPromise;
+-
+-    expect(summary.completed).toBe(1);
+-    expect(summary.cancelled).toBe(1);
+-    expect(typeof summary.elapsed).toBe('number');
+-    expect(summary.elapsed).toBeGreaterThanOrEqual(0);
+-  });
+-
+-  it('multiple shutdown calls are idempotent', async () => {
+-    const p1 = queue.shutdown(5000);
+-    const p2 = queue.shutdown(5000);
+-
+-    vi.advanceTimersByTime(0);
+-    const [s1, s2] = await Promise.all([p1, p2]);
+-
+-    // Should return the same result
+-    expect(s1).toEqual(s2);
+-  });
+-
+-  it('enqueue after shutdown throws an error', async () => {
+-    const shutdownPromise = queue.shutdown(5000);
+-    vi.advanceTimersByTime(0);
+-    await shutdownPromise;
+-
+-    expect(() => queue.enqueue('work', { job: 'rejected' })).toThrow();
+-  });
+-
+-  it('shutdown with no processing tasks resolves immediately', async () => {
+-    queue.enqueue('work', { job: 'pending-only' });
+-    // Don't dequeue - nothing is processing
+-
+-    const shutdownPromise = queue.shutdown(5000);
+-    vi.advanceTimersByTime(0);
+-    const summary = await shutdownPromise;
+-
+-    expect(summary.completed).toBe(0);
+-    expect(summary.cancelled).toBe(0);
+-    expect(summary.elapsed).toBeLessThanOrEqual(100);
+-  });
+-});

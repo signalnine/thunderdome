@@ -1,0 +1,228 @@
+diff --git a/package-lock.json b/package-lock.json
+index a3ad476..a7ecd82 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1131,7 +1131,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1247,7 +1246,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1540,7 +1538,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2301,7 +2298,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -4604,7 +4600,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/db.ts b/src/db.ts
+index 810e0fd..d4a0210 100644
+--- a/src/db.ts
++++ b/src/db.ts
+@@ -18,23 +18,41 @@ export function createDatabase(path?: string): Database.Database {
+     )
+   `);
+ 
+-  return db;
+-}
++  // Create FTS5 virtual table for full-text search
++  // It stores the original note ID and the searchable fields (title, body)
++  db.exec(`
++    CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
++        id,
++        title,
++        body
++    );
++  `);
+ 
+-export function seedDatabase(db: Database.Database): void {
+-  const insert = db.prepare(`
+-    INSERT INTO notes (title, body, tags) VALUES (?, ?, ?)
++  // Create triggers to synchronize FTS table with notes table
++  // Trigger for INSERT operations
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
++      INSERT INTO notes_fts (id, title, body) VALUES (new.id, new.title, new.body);
++    END;
+   `);
+ 
+-  const notes = getSeedNotes();
++  // Trigger for UPDATE operations
++  // This trigger updates the FTS table if the title or body of a note changes.
++  // It assumes the 'id' remains constant for a given note.
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
++      UPDATE notes_fts SET id = new.id, title = new.title, body = new.body WHERE id = new.id;
++    END;
++  `);
+ 
+-  const insertMany = db.transaction((items: { title: string; body: string; tags: string }[]) => {
+-    for (const item of items) {
+-      insert.run(item.title, item.body, item.tags);
+-    }
+-  });
++  // Trigger for DELETE operations
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
++      DELETE FROM notes_fts WHERE id = old.id;
++    END;
++  `);
+ 
+-  insertMany(notes);
++  return db;
+ }
+ 
+ function getSeedNotes(): { title: string; body: string; tags: string }[] {
+@@ -286,3 +304,19 @@ function getSeedNotes(): { title: string; body: string; tags: string }[] {
+     },
+   ];
+ }
++
++export function seedDatabase(db: Database.Database): void {
++  const insert = db.prepare(`
++    INSERT INTO notes (title, body, tags) VALUES (?, ?, ?)
++  `);
++
++  const notes = getSeedNotes();
++
++  const insertMany = db.transaction((items: { title: string; body: string; tags: string }[]) => {
++    for (const item of items) {
++      insert.run(item.title, item.body, item.tags);
++    }
++  });
++
++  insertMany(notes);
++}
+diff --git a/src/routes.ts b/src/routes.ts
+index 013b2dc..980c808 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -1,9 +1,9 @@
+ import { Router, Request, Response, NextFunction } from 'express';
+ import Database from 'better-sqlite3';
+-import { Note, NoteInput } from './models.js';
++import { Note, NoteInput, SearchResult, SuggestResult } from './models.js';
+ import { NotFoundError, ValidationError } from './errors.js';
+ 
+-export function createRoutes(db: Database.Database): Router {
++export function createRoutes(db: Database.Database): Router { // Revert to original function signature
+   const router = Router();
+ 
+   // GET /notes - List all notes (with optional tag filter)
+@@ -118,5 +118,66 @@ export function createRoutes(db: Database.Database): Router {
+     }
+   });
+ 
++  // GET /notes/search?q=<query>&page=N - Full-text search endpoint
++  router.get('/notes/search', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const query = req.query.q as string;
++      const page = parseInt(req.query.page as string) || 1;
++      const perPage = 20;
++      const offset = (page - 1) * perPage;
++
++      if (!query || query.trim() === '') {
++        throw new ValidationError('Query parameter "q" is required');
++      }
++
++      // SQL to fetch search results with snippet highlighting and rank
++      // The FTS5 MATCH operator allows for complex queries, including quoted phrases.
++      // The snippet function uses the same query to generate highlighted results.
++      const selectSql = `
++        SELECT
++            n.id,
++            n.title,
++            snippet(fts, ?, '<mark>', '</mark>', 10) AS snippet,
++            fts.rank
++        FROM notes AS n
++        JOIN notes_fts AS fts ON n.id = fts.id
++        WHERE fts.title MATCH ? OR fts.body MATCH ?
++        ORDER BY fts.rank DESC
++        LIMIT ? OFFSET ?
++      `;
++      const searchStmt = db.prepare(selectSql);
++      // Pass the query string for snippet generation, title search, and body search.
++      const searchResults = searchStmt.all(query, query, query, perPage, offset) as SearchResult[];
++
++      // SQL to count total matching results
++      const countSql = `
++        SELECT COUNT(n.id) AS total
++        FROM notes AS n
++        JOIN notes_fts AS fts ON n.id = fts.id
++        WHERE fts.title MATCH ? OR fts.body MATCH ?
++      `;
++      const countStmt = db.prepare(countSql);
++      // Pass the query string for both title and body search for counting.
++      const totalResult = countStmt.get(query, query) as { total: number };
++
++      res.json({
++        results: searchResults,
++        total: totalResult.total,
++        page: page,
++        perPage: perPage,
++      });
++    } catch (err) {
++      next(err);
++    }
++  });
++
++  // GET /notes/search/suggest?q=<prefix> - Autocomplete suggestions
++  // This endpoint will be implemented in the next subtask.
++  // For now, we can add a placeholder or leave it out.
++  // router.get('/notes/search/suggest', (req: Request, res: Response, next: NextFunction) => {
++  //   // Implementation for suggest endpoint
++  // });
++
++
+   return router;
+ }
+diff --git a/src/server.ts b/src/server.ts
+index 7f12dd8..55ab306 100644
+--- a/src/server.ts
++++ b/src/server.ts
+@@ -1,6 +1,6 @@
+ import express from 'express';
+ import { createDatabase, seedDatabase } from './db.js';
+-import { createRoutes } from './routes.js';
++import { createRoutes } from './routes.js'; // Revert to original import
+ import { errorHandler } from './errors.js';
+ import Database from 'better-sqlite3';
+ 
+@@ -15,8 +15,8 @@ export function createApp(dbPath?: string): App {
+ 
+   app.use(express.json());
+ 
+-  const routes = createRoutes(db);
+-  app.use(routes);
++  const routes = createRoutes(db); // Revert to original call
++  app.use(routes); // Revert to original mount
+ 
+   app.use(errorHandler);
+ 

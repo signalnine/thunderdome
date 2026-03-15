@@ -1,0 +1,190 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..047a35d
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 2075516,
++  "output_tokens": 36267,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 1.3541105999999998
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..8b13789
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1 @@
++
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index a3ad476..a7ecd82 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1131,7 +1131,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1247,7 +1246,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1540,7 +1538,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2301,7 +2298,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -4604,7 +4600,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/db.ts b/src/db.ts
+index 810e0fd..b74157a 100644
+--- a/src/db.ts
++++ b/src/db.ts
+@@ -18,6 +18,17 @@ export function createDatabase(path?: string): Database.Database {
+     )
+   `);
+ 
++  // Create FTS5 virtual table for full-text search
++  // Using content options for automatic synchronization
++  db.exec(`
++    CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
++      title,
++      body,
++      content='notes',
++      content_rowid='id'
++    )
++  `);
++
+   return db;
+ }
+ 
+diff --git a/src/routes.ts b/src/routes.ts
+index 013b2dc..41d17ad 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -1,6 +1,6 @@
+ import { Router, Request, Response, NextFunction } from 'express';
+ import Database from 'better-sqlite3';
+-import { Note, NoteInput } from './models.js';
++import { Note, NoteInput, SearchResult, SuggestResult } from './models.js';
+ import { NotFoundError, ValidationError } from './errors.js';
+ 
+ export function createRoutes(db: Database.Database): Router {
+@@ -31,6 +31,87 @@ export function createRoutes(db: Database.Database): Router {
+     }
+   });
+ 
++  // GET /notes/search?q=<query> - Full-text search across note titles and bodies
++  router.get('/notes/search', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const q = req.query.q as string | undefined;
++      const page = parseInt(req.query.page as string) || 1;
++      const perPage = 20;
++      const offset = (page - 1) * perPage;
++
++      if (!q || q.trim() === '') {
++        throw new ValidationError('Search query is required');
++      }
++
++      const searchQuery = q.trim();
++
++      // Get total count of matching records
++      const countStmt = db.prepare(`
++        SELECT COUNT(*) as total FROM notes_fts WHERE notes_fts MATCH ?
++      `);
++      const { total } = countStmt.get(searchQuery) as { total: number };
++
++      // Get paginated results with snippet highlighting and rank
++      const stmt = db.prepare(`
++        SELECT 
++          notes.id,
++          notes.title,
++          snippet(notes_fts, '<mark>', '</mark>', '...') as snippet,
++          rank
++        FROM notes_fts
++        JOIN notes ON notes.id = notes_fts.rowid
++        WHERE notes_fts MATCH ?
++        ORDER BY rank
++        LIMIT ? OFFSET ?
++      `);
++      const results = stmt.all(searchQuery, perPage, offset) as {
++        id: number;
++        title: string;
++        snippet: string;
++        rank: number;
++      }[];
++
++      res.json({
++        results,
++        total,
++        page,
++        perPage
++      });
++    } catch (err) {
++      next(err);
++    }
++  });
++
++  // GET /notes/search/suggest?q=<prefix> - Autocomplete for note titles
++  router.get('/notes/search/suggest', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const q = req.query.q as string | undefined;
++      if (!q || q.trim() === '') {
++        throw new ValidationError('Search query is required');
++      }
++
++      const prefix = q.trim();
++      // Use FTS5 prefix search (append * for prefix matching)
++      const suggestStmt = db.prepare(`
++        SELECT 
++          notes_fts.rowid as id,
++          notes_fts.title
++        FROM notes_fts
++        WHERE notes_fts MATCH ?
++        ORDER BY rank
++        LIMIT 5
++      `);
++      const results = suggestStmt.all(prefix + '*') as {
++        id: number;
++        title: string;
++      }[];
++
++      res.json({ results });
++    } catch (err) {
++      next(err);
++    }
++  });
++
+   // GET /notes/:id - Get single note
+   router.get('/notes/:id', (req: Request, res: Response, next: NextFunction) => {
+     try {

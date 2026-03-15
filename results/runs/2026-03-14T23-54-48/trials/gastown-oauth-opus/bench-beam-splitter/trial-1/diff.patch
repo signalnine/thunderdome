@@ -1,0 +1,445 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..0a90260
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,50 @@
++{
++  "input_tokens": 24,
++  "output_tokens": 7655,
++  "cache_read_tokens": 472056,
++  "cache_creation_tokens": 17763,
++  "turns": 26,
++  "tools_used": [
++    "Read",
++    "Glob",
++    "TodoWrite",
++    "Write",
++    "Bash",
++    "Edit"
++  ],
++  "duration_ms": 187000,
++  "total_cost_usd": 0.553,
++  "gastown_meta": {
++    "strategy": "single",
++    "polecat_count": 1,
++    "roles": {
++      "mayor": {
++        "input_tokens": 3,
++        "output_tokens": 407,
++        "cache_read_tokens": 7687,
++        "cache_creation_tokens": 1621,
++        "turns": 1,
++        "tools_used": [],
++        "duration_ms": 10065,
++        "total_cost_usd": 0.02416475
++      },
++      "polecat-0": {
++        "input_tokens": 21,
++        "output_tokens": 7248,
++        "cache_read_tokens": 464369,
++        "cache_creation_tokens": 16142,
++        "turns": 25,
++        "tools_used": [
++          "Read",
++          "Glob",
++          "TodoWrite",
++          "Write",
++          "Bash",
++          "Edit"
++        ],
++        "duration_ms": 164733,
++        "total_cost_usd": 0.5291870000000002
++      }
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/package-lock.json b/package-lock.json
+index 02b0dae..222cd7d 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..6f39c32
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,197 @@
++type Direction = 'down' | 'down-left' | 'down-right';
++
++interface BeamState {
++  row: number;
++  col: number;
++  dir: Direction;
++}
++
++function findSource(grid: string[][]): [number, number] {
++  for (let c = 0; c < grid[0].length; c++) {
++    if (grid[0][c] === 'S') return [0, c];
++  }
++  throw new Error('No source found');
++}
++
++function step(row: number, col: number, dir: Direction): [number, number] {
++  switch (dir) {
++    case 'down': return [row + 1, col];
++    case 'down-left': return [row + 1, col - 1];
++    case 'down-right': return [row + 1, col + 1];
++  }
++}
++
++function inBounds(row: number, col: number, rows: number, cols: number): boolean {
++  return row >= 0 && row < rows && col >= 0 && col < cols;
++}
++
++export function countBeamCells(grid: string[][]): number {
++  const rows = grid.length;
++  const cols = grid[0].length;
++  const [sRow, sCol] = findSource(grid);
++
++  const visited = new Set<string>();
++  // Track visited states (row, col, dir) to avoid infinite processing
++  const seenStates = new Set<string>();
++  const queue: BeamState[] = [];
++
++  // Source cell is visited
++  visited.add(`${sRow},${sCol}`);
++  // Initial beam goes straight down from source
++  queue.push({ row: sRow, col: sCol, dir: 'down' });
++  seenStates.add(`${sRow},${sCol},down`);
++
++  while (queue.length > 0) {
++    const { row, col, dir } = queue.shift()!;
++
++    // Take one step in the current direction
++    const [nr, nc] = step(row, col, dir);
++
++    // Check bounds
++    if (!inBounds(nr, nc, rows, cols)) continue;
++
++    // Mark cell as visited
++    visited.add(`${nr},${nc}`);
++
++    if (grid[nr][nc] === '^') {
++      // Hit a splitter: split into down-left and down-right
++      for (const newDir of ['down-left', 'down-right'] as Direction[]) {
++        const stateKey = `${nr},${nc},${newDir}`;
++        if (!seenStates.has(stateKey)) {
++          seenStates.add(stateKey);
++          queue.push({ row: nr, col: nc, dir: newDir });
++        }
++      }
++    } else {
++      // Continue in same direction
++      const stateKey = `${nr},${nc},${dir}`;
++      if (!seenStates.has(stateKey)) {
++        seenStates.add(stateKey);
++        queue.push({ row: nr, col: nc, dir });
++      }
++    }
++  }
++
++  return visited.size;
++}
++
++/**
++ * Trace a beam from (startRow, startCol) in direction dir.
++ * Returns the sequence of cells visited (excluding start) and what happens:
++ * - If hits a splitter: returns { type: 'splitter', row, col, cells }
++ * - If exits grid: returns { type: 'exit', cells }
++ */
++interface TraceResultSplitter {
++  type: 'splitter';
++  row: number;
++  col: number;
++}
++
++interface TraceResultExit {
++  type: 'exit';
++}
++
++type TraceResult = TraceResultSplitter | TraceResultExit;
++
++function traceBeam(
++  startRow: number, startCol: number, dir: Direction,
++  rows: number, cols: number, grid: string[][]
++): TraceResult {
++  let r = startRow;
++  let c = startCol;
++
++  // Beams always move downward (row+1), so max steps is bounded by rows
++  const maxSteps = rows + cols;
++  for (let i = 0; i < maxSteps; i++) {
++    const [nr, nc] = step(r, c, dir);
++    if (!inBounds(nr, nc, rows, cols)) {
++      return { type: 'exit' };
++    }
++    if (grid[nr][nc] === '^') {
++      return { type: 'splitter', row: nr, col: nc };
++    }
++    r = nr;
++    c = nc;
++  }
++
++  return { type: 'exit' };
++}
++
++export function countBeamPaths(grid: string[][]): bigint {
++  const rows = grid.length;
++  const cols = grid[0].length;
++  const [sRow, sCol] = findSource(grid);
++
++  // Trace from source going down
++  const sourceTrace = traceBeam(sRow, sCol, 'down', rows, cols, grid);
++
++  if (sourceTrace.type === 'exit') {
++    // Beam goes straight through without hitting any splitter: 1 path
++    return 1n;
++  }
++
++  // Build splitter graph
++  // For each splitter, find what its down-left and down-right beams reach
++  // Key: "row,col" of splitter
++  // Value: { left: TraceResult, right: TraceResult }
++
++  type SplitterKey = string;
++  const splitterEdges = new Map<SplitterKey, { left: TraceResult; right: TraceResult }>();
++
++  // BFS to discover all reachable splitters
++  const discovered = new Set<SplitterKey>();
++  const splitterQueue: SplitterKey[] = [];
++
++  const firstKey = `${sourceTrace.row},${sourceTrace.col}`;
++  discovered.add(firstKey);
++  splitterQueue.push(firstKey);
++
++  while (splitterQueue.length > 0) {
++    const key = splitterQueue.shift()!;
++    const [r, c] = key.split(',').map(Number);
++
++    const leftResult = traceBeam(r, c, 'down-left', rows, cols, grid);
++    const rightResult = traceBeam(r, c, 'down-right', rows, cols, grid);
++
++    splitterEdges.set(key, { left: leftResult, right: rightResult });
++
++    for (const result of [leftResult, rightResult]) {
++      if (result.type === 'splitter') {
++        const rkey = `${result.row},${result.col}`;
++        if (!discovered.has(rkey)) {
++          discovered.add(rkey);
++          splitterQueue.push(rkey);
++        }
++      }
++    }
++  }
++
++  // DP: compute path count for each splitter
++  // paths(splitter) = paths(left) + paths(right)
++  // where paths(exit) = 1n
++  const memo = new Map<SplitterKey, bigint>();
++
++  function pathsFrom(key: SplitterKey): bigint {
++    if (memo.has(key)) return memo.get(key)!;
++
++    const edges = splitterEdges.get(key)!;
++    let count = 0n;
++
++    if (edges.left.type === 'exit') {
++      count += 1n;
++    } else {
++      count += pathsFrom(`${edges.left.row},${edges.left.col}`);
++    }
++
++    if (edges.right.type === 'exit') {
++      count += 1n;
++    } else {
++      count += pathsFrom(`${edges.right.row},${edges.right.col}`);
++    }
++
++    memo.set(key, count);
++    return count;
++  }
++
++  return pathsFrom(firstKey);
++}
+diff --git a/tests/index.test.ts b/tests/index.test.ts
+new file mode 100644
+index 0000000..234af40
+--- /dev/null
++++ b/tests/index.test.ts
+@@ -0,0 +1,127 @@
++import { describe, it, expect } from 'vitest';
++import { countBeamCells, countBeamPaths } from '../src/index.js';
++
++describe('countBeamCells', () => {
++  it('example 1: single splitter', () => {
++    const grid = [
++      ['.', 'S', '.', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++      ['.', '^', '.', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++    ];
++    expect(countBeamCells(grid)).toBe(5);
++  });
++
++  it('example 2: two splitters', () => {
++    const grid = [
++      ['.', 'S', '.', '.', '.'],
++      ['.', '^', '.', '.', '.'],
++      ['^', '.', '^', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++    ];
++    expect(countBeamCells(grid)).toBe(6);
++  });
++
++  it('no splitters: straight beam', () => {
++    const grid = [
++      ['.', 'S', '.'],
++      ['.', '.', '.'],
++      ['.', '.', '.'],
++    ];
++    // Visits (0,1), (1,1), (2,1)
++    expect(countBeamCells(grid)).toBe(3);
++  });
++
++  it('source at edge, beam exits immediately on split', () => {
++    const grid = [
++      ['S'],
++    ];
++    // Only source cell visited, beam exits below
++    expect(countBeamCells(grid)).toBe(1);
++  });
++
++  it('splitter at very bottom row', () => {
++    const grid = [
++      ['S'],
++      ['^'],
++    ];
++    // Source (0,0) visited, splitter (1,0) visited
++    // Both split beams exit immediately
++    expect(countBeamCells(grid)).toBe(2);
++  });
++});
++
++describe('countBeamPaths', () => {
++  it('example 1: single splitter → 2 paths', () => {
++    const grid = [
++      ['.', 'S', '.', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++      ['.', '^', '.', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++    ];
++    expect(countBeamPaths(grid)).toBe(2n);
++  });
++
++  it('example 2: two splitters → 4 paths', () => {
++    const grid = [
++      ['.', 'S', '.', '.', '.'],
++      ['.', '^', '.', '.', '.'],
++      ['^', '.', '^', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++    ];
++    expect(countBeamPaths(grid)).toBe(4n);
++  });
++
++  it('no splitters → 1 path', () => {
++    const grid = [
++      ['.', 'S', '.'],
++      ['.', '.', '.'],
++      ['.', '.', '.'],
++    ];
++    expect(countBeamPaths(grid)).toBe(1n);
++  });
++
++  it('chain of splitters', () => {
++    // S at (0,2), splitter at (1,2), splitters at (2,1) and (2,3)
++    const grid = [
++      ['.', '.', 'S', '.', '.'],
++      ['.', '.', '^', '.', '.'],
++      ['.', '^', '.', '^', '.'],
++      ['.', '.', '.', '.', '.'],
++    ];
++    // S -> (1,2) splitter -> left to (2,1) splitter, right to (2,3) splitter
++    // (2,1) splitter -> left exits, right exits -> 2 paths
++    // (2,3) splitter -> left exits, right exits -> 2 paths
++    // Total: 4 paths
++    expect(countBeamPaths(grid)).toBe(4n);
++  });
++
++  it('source beam exits before hitting any splitter', () => {
++    const grid = [
++      ['S', '.', '.'],
++      ['.', '.', '.'],
++    ];
++    expect(countBeamPaths(grid)).toBe(1n);
++  });
++
++  it('large grid performance: 200x200 with splitters', () => {
++    const rows = 200;
++    const cols = 200;
++    const grid: string[][] = Array.from({ length: rows }, () =>
++      Array.from({ length: cols }, () => '.')
++    );
++    grid[0][100] = 'S';
++    // Place a chain of splitters in a pattern
++    // Each level doubles paths
++    let col = 100;
++    for (let r = 1; r <= 50 && r < rows; r += 2) {
++      grid[r][col] = '^';
++      col = Math.min(col + 1, cols - 2);
++    }
++    const start = Date.now();
++    const result = countBeamPaths(grid);
++    const elapsed = Date.now() - start;
++    expect(result).toBeGreaterThan(0n);
++    expect(elapsed).toBeLessThan(5000);
++  });
++});

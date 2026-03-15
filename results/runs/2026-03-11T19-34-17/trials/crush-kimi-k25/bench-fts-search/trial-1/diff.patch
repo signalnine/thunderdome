@@ -1,0 +1,252 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..2fc17c1
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 388222,
++  "output_tokens": 3949,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.24478019999999998
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..8b13789
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1 @@
++
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index a3ad476..a7ecd82 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1131,7 +1131,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1247,7 +1246,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1540,7 +1538,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2301,7 +2298,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -4604,7 +4600,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/db.ts b/src/db.ts
+index 810e0fd..a8c4b9d 100644
+--- a/src/db.ts
++++ b/src/db.ts
+@@ -18,6 +18,39 @@ export function createDatabase(path?: string): Database.Database {
+     )
+   `);
+ 
++  // Create FTS5 virtual table for full-text search
++  db.exec(`
++    CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
++      title,
++      body,
++      content='notes',
++      content_rowid='id'
++    )
++  `);
++
++  // Create triggers to keep FTS index in sync
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_fts_insert AFTER INSERT ON notes BEGIN
++      INSERT INTO notes_fts(rowid, title, body)
++      VALUES (new.id, new.title, new.body);
++    END
++  `);
++
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_fts_update AFTER UPDATE ON notes BEGIN
++      UPDATE notes_fts SET
++        title = new.title,
++        body = new.body
++      WHERE rowid = old.id;
++    END
++  `);
++
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_fts_delete AFTER DELETE ON notes BEGIN
++      DELETE FROM notes_fts WHERE rowid = old.id;
++    END
++  `);
++
+   return db;
+ }
+ 
+@@ -35,6 +68,9 @@ export function seedDatabase(db: Database.Database): void {
+   });
+ 
+   insertMany(notes);
++
++  // Rebuild FTS index after seeding
++  db.exec('INSERT INTO notes_fts(notes_fts) VALUES (\'rebuild\')');
+ }
+ 
+ function getSeedNotes(): { title: string; body: string; tags: string }[] {
+diff --git a/src/routes.ts b/src/routes.ts
+index 013b2dc..a2c11dd 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -1,6 +1,6 @@
+ import { Router, Request, Response, NextFunction } from 'express';
+ import Database from 'better-sqlite3';
+-import { Note, NoteInput } from './models.js';
++import { Note, NoteInput, SearchResult, SuggestResult } from './models.js';
+ import { NotFoundError, ValidationError } from './errors.js';
+ 
+ export function createRoutes(db: Database.Database): Router {
+@@ -118,5 +118,117 @@ export function createRoutes(db: Database.Database): Router {
+     }
+   });
+ 
++  // GET /notes/search - Full-text search
++  router.get('/notes/search', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const query = req.query.q as string | undefined;
++
++      if (!query || query.trim() === '') {
++        throw new ValidationError('Query parameter q is required');
++      }
++
++      const page = parseInt(req.query.page as string) || 1;
++      const perPage = 20;
++      const offset = (page - 1) * perPage;
++
++      // Escape special characters for FTS5
++      const escapedQuery = query.replace(/"/g, '""');
++
++      // Search using BM25 ranking
++      const searchStmt = db.prepare(`
++        SELECT
++          notes.id,
++          notes.title,
++          notes.body,
++          bm25(notes_fts) as rank
++        FROM notes_fts
++        JOIN notes ON notes_fts.rowid = notes.id
++        WHERE notes_fts MATCH ?
++        ORDER BY bm25(notes_fts)
++        LIMIT ? OFFSET ?
++      `);
++
++      // Get total count
++      const countStmt = db.prepare(`
++        SELECT COUNT(*) as total
++        FROM notes_fts
++        WHERE notes_fts MATCH ?
++      `);
++
++      const results = searchStmt.all(escapedQuery, perPage, offset) as Array<{
++        id: number;
++        title: string;
++        body: string;
++        rank: number;
++      }>;
++
++      const countResult = countStmt.get(escapedQuery) as { total: number };
++      const total = countResult.total;
++
++      // Generate snippets with highlighting
++      const snippetStmt = db.prepare(`
++        SELECT snippet(notes_fts, 0, '<mark>', '</mark>', '...', 32) as snippet
++        FROM notes_fts
++        WHERE rowid = ? AND notes_fts MATCH ?
++      `);
++
++      const searchResults: SearchResult[] = results.map((row) => {
++        // Try to get snippet from FTS, fallback to body excerpt
++        let snippet: string;
++        try {
++          const snippetResult = snippetStmt.get(row.id, escapedQuery) as { snippet: string } | undefined;
++          snippet = snippetResult?.snippet || row.body.substring(0, 150) + '...';
++        } catch {
++          snippet = row.body.substring(0, 150) + '...';
++        }
++
++        return {
++          id: row.id,
++          title: row.title,
++          snippet,
++          rank: row.rank,
++        };
++      });
++
++      res.json({
++        results: searchResults,
++        total,
++        page,
++        perPage,
++      });
++    } catch (err) {
++      next(err);
++    }
++  });
++
++  // GET /notes/search/suggest - Autocomplete suggestions
++  router.get('/notes/search/suggest', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const prefix = req.query.q as string | undefined;
++
++      if (!prefix || prefix.trim() === '') {
++        throw new ValidationError('Query parameter q is required');
++      }
++
++      // Use prefix query for autocomplete
++      const suggestStmt = db.prepare(`
++        SELECT DISTINCT notes.id, notes.title
++        FROM notes_fts
++        JOIN notes ON notes_fts.rowid = notes.id
++        WHERE notes_fts MATCH ?
++        LIMIT 5
++      `);
++
++      // Create prefix query (e.g., "learn*" matches "learning", "learns", etc.)
++      const prefixQuery = `${prefix}*`;
++
++      const results = suggestStmt.all(prefixQuery) as SuggestResult[];
++
++      res.json({ results });
++    } catch (err) {
++      next(err);
++    }
++  });
++
+   return router;
+ }

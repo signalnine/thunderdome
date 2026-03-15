@@ -1,0 +1,376 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..919eb76
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 243573,
++  "output_tokens": 4770,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.16045379999999998
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..8b13789
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1 @@
++
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index 97d25c0..3c003c8 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..d71e21e
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,294 @@
++export interface Gate {
++  op: 'AND' | 'OR' | 'XOR';
++  in1: string;
++  in2: string;
++  out: string;
++}
++
++export function simulate(gates: Gate[], inputs: Record<string, number>): Record<string, number> {
++  const values: Record<string, number> = { ...inputs };
++  const remaining = new Set(gates);
++
++  while (remaining.size > 0) {
++    let progressed = false;
++
++    for (const gate of remaining) {
++      if (gate.in1 in values && gate.in2 in values) {
++        const v1 = values[gate.in1];
++        const v2 = values[gate.in2];
++        let result: number;
++
++        switch (gate.op) {
++          case 'AND':
++            result = v1 & v2;
++            break;
++          case 'OR':
++            result = v1 | v2;
++            break;
++          case 'XOR':
++            result = v1 ^ v2;
++            break;
++        }
++
++        values[gate.out] = result;
++        remaining.delete(gate);
++        progressed = true;
++      }
++    }
++
++    if (!progressed && remaining.size > 0) {
++      throw new Error('Circular dependency or missing inputs detected');
++    }
++  }
++
++  return values;
++}
++
++export function findSwappedWires(gates: Gate[]): string[] {
++  // Build lookup maps
++  const outToGate = new Map<string, Gate>();
++  const inToGates = new Map<string, Gate[]>();
++
++  for (const gate of gates) {
++    outToGate.set(gate.out, gate);
++    if (!inToGates.has(gate.in1)) inToGates.set(gate.in1, []);
++    if (!inToGates.has(gate.in2)) inToGates.set(gate.in2, []);
++    inToGates.get(gate.in1)!.push(gate);
++    inToGates.get(gate.in2)!.push(gate);
++  }
++
++  // Find max bit position
++  const zWires = [...outToGate.keys()].filter(w => w.startsWith('z')).sort();
++  const maxZ = Math.max(...zWires.map(w => parseInt(w.slice(1), 10)));
++
++  const swapped = new Set<string>();
++
++  // Analyze each bit position
++  for (let bit = 0; bit <= maxZ; bit++) {
++    const zWire = `z${bit.toString().padStart(2, '0')}`;
++    const xWire = `x${bit.toString().padStart(2, '0')}`;
++    const yWire = `y${bit.toString().padStart(2, '0')}`;
++
++    const zGate = outToGate.get(zWire);
++    if (!zGate) continue;
++
++    if (bit === 0) {
++      // Bit 0: z00 should be XOR(x00, y00)
++      if (zGate.op !== 'XOR' ||
++          !((zGate.in1 === xWire && zGate.in2 === yWire) ||
++            (zGate.in1 === yWire && zGate.in2 === xWire))) {
++        swapped.add(zWire);
++      }
++    } else if (bit === maxZ) {
++      // Last bit should be the final carry (OR or direct from previous)
++      // This is typically just the carry-out from the previous bit
++    } else {
++      // Bits 1..N-1: zNN should be XOR(partial_sum, carry_in)
++      if (zGate.op !== 'XOR') {
++        swapped.add(zWire);
++      } else {
++        // Check if this XOR combines a partial sum (XOR of x,y) with a carry
++        const leftIn = zGate.in1;
++        const rightIn = zGate.in2;
++
++        const leftGate = outToGate.get(leftIn);
++        const rightGate = outToGate.get(rightIn);
++
++        // One input should be XOR(x,y) for partial sum, other should be carry
++        let hasPartialSum = false;
++        let hasCarry = false;
++
++        if (leftGate && leftGate.op === 'XOR') {
++          if ((leftGate.in1 === xWire && leftGate.in2 === yWire) ||
++              (leftGate.in1 === yWire && leftGate.in2 === xWire)) {
++            hasPartialSum = true;
++          }
++        }
++
++        if (rightGate && rightGate.op === 'XOR') {
++          if ((rightGate.in1 === xWire && rightGate.in2 === yWire) ||
++              (rightGate.in1 === yWire && rightGate.in2 === xWire)) {
++            hasPartialSum = true;
++          }
++        }
++
++        // Check if the other input looks like a carry (from OR gate)
++        const otherGate = hasPartialSum ?
++          (leftGate?.op === 'XOR' ? rightGate : leftGate) :
++          (rightGate?.op === 'XOR' ? leftGate : rightGate);
++
++        if (otherGate && otherGate.op === 'OR') {
++          hasCarry = true;
++        } else if (bit === 1) {
++          // Bit 1 carry comes from bit 0 AND directly
++          if (otherGate && otherGate.op === 'AND') {
++            hasCarry = true;
++          }
++        }
++
++        if (!hasPartialSum || !hasCarry) {
++          swapped.add(zWire);
++        }
++      }
++    }
++  }
++
++  // Now check the carry chain structure
++  // For each bit, verify the carry-out logic
++  for (let bit = 0; bit < maxZ; bit++) {
++    const xWire = `x${bit.toString().padStart(2, '0')}`;
++    const yWire = `y${bit.toString().padStart(2, '0')}`;
++
++    // Find AND(x,y) gate - generates carry
++    const xyAnd = gates.find(g =>
++      g.op === 'AND' &&
++      ((g.in1 === xWire && g.in2 === yWire) || (g.in1 === yWire && g.in2 === xWire))
++    );
++
++    if (bit === 0) {
++      // Bit 0 carry is just AND(x00, y00)
++      // Its output should feed into bit 1's carry calculation
++    } else {
++      // Bits 1+: carry-out = OR(AND(x,y), AND(partial_sum, carry_in))
++      // Find XOR(x,y) for partial sum
++      const xyXor = gates.find(g =>
++        g.op === 'XOR' &&
++        ((g.in1 === xWire && g.in2 === yWire) || (g.in1 === yWire && g.in2 === xWire))
++      );
++
++      if (xyXor) {
++        // Find what uses the partial sum
++        const partialSumUsers = inToGates.get(xyXor.out) || [];
++
++        // One should be XOR with carry -> zNN
++        const sumXor = partialSumUsers.find(g => g.op === 'XOR');
++
++        // Another should be AND with carry -> propagate
++        const propAnd = partialSumUsers.find(g => g.op === 'AND');
++
++        // Verify carry-out structure
++        if (xyAnd && propAnd) {
++          // Find OR that combines generate and propagate
++          const generateOut = xyAnd.out;
++          const propagateOut = propAnd.out;
++
++          const carryOut = gates.find(g =>
++            g.op === 'OR' &&
++            ((g.in1 === generateOut && g.in2 === propagateOut) ||
++             (g.in1 === propagateOut && g.in2 === generateOut))
++          );
++
++          if (!carryOut) {
++            // Check if generateOut or propagateOut is swapped
++            // The outputs should feed into something
++            const genUsers = inToGates.get(generateOut) || [];
++            const propUsers = inToGates.get(propagateOut) || [];
++
++            if (genUsers.length === 0) swapped.add(generateOut);
++            if (propUsers.length === 0) swapped.add(propagateOut);
++          }
++        }
++      }
++    }
++  }
++
++  // Additional check: verify by testing with specific inputs
++  // This helps catch swaps that don't break the structure detection
++
++  // Build inputs for testing: x=0, y=0 (all zeros)
++  const testInputs1: Record<string, number> = {};
++  for (let i = 0; i < maxZ; i++) {
++    testInputs1[`x${i.toString().padStart(2, '0')}`] = 0;
++    testInputs1[`y${i.toString().padStart(2, '0')}`] = 0;
++  }
++
++  // Test with x=1, y=0 (only x00 set)
++  const testInputs2: Record<string, number> = {};
++  for (let i = 0; i < maxZ; i++) {
++    testInputs2[`x${i.toString().padStart(2, '0')}`] = i === 0 ? 1 : 0;
++    testInputs2[`y${i.toString().padStart(2, '0')}`] = 0;
++  }
++
++  // Test with x=0, y=1
++  const testInputs3: Record<string, number> = {};
++  for (let i = 0; i < maxZ; i++) {
++    testInputs3[`x${i.toString().padStart(2, '0')}`] = 0;
++    testInputs3[`y${i.toString().padStart(2, '0')}`] = i === 0 ? 1 : 0;
++  }
++
++  // Test with x=1, y=1
++  const testInputs4: Record<string, number> = {};
++  for (let i = 0; i < maxZ; i++) {
++    testInputs4[`x${i.toString().padStart(2, '0')}`] = i === 0 ? 1 : 0;
++    testInputs4[`y${i.toString().padStart(2, '0')}`] = i === 0 ? 1 : 0;
++  }
++
++  try {
++    const result1 = simulate(gates, testInputs1);
++    const result2 = simulate(gates, testInputs2);
++    const result3 = simulate(gates, testInputs3);
++    const result4 = simulate(gates, testInputs4);
++
++    // Check expected results for simple cases
++    // 0 + 0 = 0, so z00 should be 0
++    const z00 = result1['z00'];
++    if (z00 !== 0) swapped.add('z00');
++
++    // 1 + 0 = 1, so z00 should be 1
++    const z00_2 = result2['z00'];
++    if (z00_2 !== 1) swapped.add('z00');
++
++    // 0 + 1 = 1, so z00 should be 1
++    const z00_3 = result3['z00'];
++    if (z00_3 !== 1) swapped.add('z00');
++
++    // 1 + 1 = 2 (binary 10), so z00=0, z01=1
++    const z00_4 = result4['z00'];
++    const z01_4 = result4['z01'];
++    if (z00_4 !== 0) swapped.add('z00');
++    if (z01_4 !== 1) swapped.add('z01');
++  } catch {
++    // If simulation fails, we definitely have swapped wires
++  }
++
++  // If we still don't have enough, try additional structural analysis
++  // Look for gates that don't fit the adder pattern
++
++  // Find all intermediate wires (not x, y, z)
++  const allWires = new Set<string>();
++  for (const gate of gates) {
++    allWires.add(gate.in1);
++    allWires.add(gate.in2);
++    allWires.add(gate.out);
++  }
++
++  // Check each gate's output wire usage
++  for (const gate of gates) {
++    const outWire = gate.out;
++    const users = inToGates.get(outWire) || [];
++
++    // z wires (except highest) should not be used as inputs
++    if (outWire.startsWith('z') && outWire !== `z${maxZ.toString().padStart(2, '0')}`) {
++      if (users.length > 0) {
++        swapped.add(outWire);
++      }
++    }
++
++    // x and y wires should not be outputs
++    if (outWire.startsWith('x') || outWire.startsWith('y')) {
++      swapped.add(outWire);
++    }
++  }
++
++  // Verify final carry wire
++  const finalZ = `z${maxZ.toString().padStart(2, '0')}`;
++  const finalGate = outToGate.get(finalZ);
++  if (finalGate && finalGate.op !== 'OR' && maxZ > 1) {
++    // Final z might be coming from the last carry
++    // Check if it's fed by an OR gate or directly from previous carry
++    const prevBit = maxZ - 1;
++    // This is a heuristic - final z should be a carry output
++  }
++
++  return Array.from(swapped).sort();
++}

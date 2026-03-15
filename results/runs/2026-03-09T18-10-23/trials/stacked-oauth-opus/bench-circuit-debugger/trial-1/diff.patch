@@ -1,0 +1,388 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..26d532b
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,19 @@
++{
++  "input_tokens": 47,
++  "output_tokens": 30267,
++  "cache_read_tokens": 2251554,
++  "cache_creation_tokens": 71524,
++  "turns": 45,
++  "tools_used": [
++    "Skill",
++    "Task",
++    "Bash",
++    "Read",
++    "TodoWrite",
++    "Write",
++    "Glob",
++    "Edit"
++  ],
++  "duration_ms": 624496,
++  "total_cost_usd": 2.385005800000001
++}
+\ No newline at end of file
+diff --git a/package-lock.json b/package-lock.json
+index 97d25c0..3c003c8 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..38b7949
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,129 @@
++export interface Gate {
++  op: 'AND' | 'OR' | 'XOR';
++  in1: string;
++  in2: string;
++  out: string;
++}
++
++export function simulate(
++  gates: Gate[],
++  inputs: Record<string, number>,
++): Record<string, number> {
++  const wires: Record<string, number> = { ...inputs };
++  const remaining = [...gates];
++
++  while (remaining.length > 0) {
++    let progress = false;
++    for (let i = remaining.length - 1; i >= 0; i--) {
++      const gate = remaining[i];
++      if (wires[gate.in1] !== undefined && wires[gate.in2] !== undefined) {
++        const a = wires[gate.in1];
++        const b = wires[gate.in2];
++        switch (gate.op) {
++          case 'AND':
++            wires[gate.out] = a & b;
++            break;
++          case 'OR':
++            wires[gate.out] = a | b;
++            break;
++          case 'XOR':
++            wires[gate.out] = a ^ b;
++            break;
++        }
++        remaining.splice(i, 1);
++        progress = true;
++      }
++    }
++    if (!progress) break;
++  }
++
++  return wires;
++}
++
++export function findSwappedWires(gates: Gate[]): string[] {
++  // Build consumer map: wire -> gates that consume it as input
++  const consumers = new Map<string, Gate[]>();
++  for (const g of gates) {
++    if (!consumers.has(g.in1)) consumers.set(g.in1, []);
++    consumers.get(g.in1)!.push(g);
++    if (!consumers.has(g.in2)) consumers.set(g.in2, []);
++    consumers.get(g.in2)!.push(g);
++  }
++
++  // Find number of input bits
++  let maxBit = 0;
++  for (const g of gates) {
++    for (const w of [g.in1, g.in2]) {
++      if (w.startsWith('x')) {
++        maxBit = Math.max(maxBit, parseInt(w.slice(1)));
++      }
++    }
++  }
++  const numBits = maxBit + 1;
++  const lastZ = 'z' + String(numBits).padStart(2, '0');
++
++  function isXY(wire: string): boolean {
++    return wire.startsWith('x') || wire.startsWith('y');
++  }
++
++  function hasXYInputs(gate: Gate): boolean {
++    return isXY(gate.in1) && isXY(gate.in2);
++  }
++
++  const swapped = new Set<string>();
++
++  for (const gate of gates) {
++    const out = gate.out;
++
++    // z-outputs (except last) must come from XOR gates
++    if (out.startsWith('z') && out !== lastZ && gate.op !== 'XOR') {
++      swapped.add(out);
++    }
++
++    // Non-x/y XOR gates (final sum) must output to z-wires
++    if (gate.op === 'XOR' && !hasXYInputs(gate) && !out.startsWith('z')) {
++      swapped.add(out);
++    }
++
++    // x/y XOR gates (partial sum, except bit 0) must feed into a XOR gate
++    if (gate.op === 'XOR' && hasXYInputs(gate) && out !== 'z00') {
++      const cons = consumers.get(out) || [];
++      if (!cons.some((c) => c.op === 'XOR')) {
++        swapped.add(out);
++      }
++    }
++
++    // AND gates (except bit-0 half-adder) must feed into OR gates
++    // Bit-0 half-adder AND (carry) must feed into XOR and AND (not OR)
++    if (gate.op === 'AND') {
++      const isBit0 = hasXYInputs(gate) && gate.in1.endsWith('00') && gate.in2.endsWith('00');
++      if (isBit0) {
++        const cons = consumers.get(out) || [];
++        if (cons.length > 0 && !cons.some((c) => c.op === 'XOR')) {
++          swapped.add(out);
++        }
++      } else {
++        const cons = consumers.get(out) || [];
++        if (cons.length > 0 && !cons.some((c) => c.op === 'OR')) {
++          swapped.add(out);
++        }
++      }
++    }
++
++    // OR gates must never output to z-wires (except last z)
++    // OR gates (carry-out) should feed XOR and AND of next bit, never another OR
++    if (gate.op === 'OR') {
++      if (out.startsWith('z') && out !== lastZ) {
++        swapped.add(out);
++      }
++      if (out !== lastZ) {
++        const cons = consumers.get(out) || [];
++        if (cons.length > 0 && !cons.some((c) => c.op === 'XOR')) {
++          swapped.add(out);
++        }
++      }
++    }
++  }
++
++  return Array.from(swapped).sort();
++}
+diff --git a/tests/index.test.ts b/tests/index.test.ts
+new file mode 100644
+index 0000000..99b4065
+--- /dev/null
++++ b/tests/index.test.ts
+@@ -0,0 +1,169 @@
++import { describe, it, expect } from 'vitest';
++import { simulate, findSwappedWires, Gate } from '../src/index.js';
++
++describe('simulate', () => {
++  it('should simulate a simple AND gate', () => {
++    const gates: Gate[] = [{ op: 'AND', in1: 'a', in2: 'b', out: 'c' }];
++    const result = simulate(gates, { a: 1, b: 1 });
++    expect(result.c).toBe(1);
++  });
++
++  it('should simulate AND gate with 0 input', () => {
++    const gates: Gate[] = [{ op: 'AND', in1: 'a', in2: 'b', out: 'c' }];
++    const result = simulate(gates, { a: 1, b: 0 });
++    expect(result.c).toBe(0);
++  });
++
++  it('should simulate a simple OR gate', () => {
++    const gates: Gate[] = [{ op: 'OR', in1: 'a', in2: 'b', out: 'c' }];
++    const result = simulate(gates, { a: 0, b: 1 });
++    expect(result.c).toBe(1);
++  });
++
++  it('should simulate OR gate with both 0', () => {
++    const gates: Gate[] = [{ op: 'OR', in1: 'a', in2: 'b', out: 'c' }];
++    const result = simulate(gates, { a: 0, b: 0 });
++    expect(result.c).toBe(0);
++  });
++
++  it('should simulate a simple XOR gate', () => {
++    const gates: Gate[] = [{ op: 'XOR', in1: 'a', in2: 'b', out: 'c' }];
++    const result = simulate(gates, { a: 1, b: 0 });
++    expect(result.c).toBe(1);
++  });
++
++  it('should simulate XOR gate with same inputs', () => {
++    const gates: Gate[] = [{ op: 'XOR', in1: 'a', in2: 'b', out: 'c' }];
++    const result = simulate(gates, { a: 1, b: 1 });
++    expect(result.c).toBe(0);
++  });
++
++  it('should resolve dependencies in correct order', () => {
++    const gates: Gate[] = [
++      { op: 'AND', in1: 'a', in2: 'b', out: 'c' },
++      { op: 'OR', in1: 'c', in2: 'd', out: 'e' },
++    ];
++    const result = simulate(gates, { a: 1, b: 1, d: 0 });
++    expect(result.c).toBe(1);
++    expect(result.e).toBe(1);
++  });
++
++  it('should handle gates given in reverse dependency order', () => {
++    const gates: Gate[] = [
++      { op: 'OR', in1: 'c', in2: 'd', out: 'e' },
++      { op: 'AND', in1: 'a', in2: 'b', out: 'c' },
++    ];
++    const result = simulate(gates, { a: 1, b: 0, d: 0 });
++    expect(result.c).toBe(0);
++    expect(result.e).toBe(0);
++  });
++
++  it('should simulate a 2-bit adder', () => {
++    const gates: Gate[] = [
++      { op: 'XOR', in1: 'x00', in2: 'y00', out: 'z00' },
++      { op: 'AND', in1: 'x00', in2: 'y00', out: 'c00' },
++      { op: 'XOR', in1: 'x01', in2: 'y01', out: 't01' },
++      { op: 'XOR', in1: 't01', in2: 'c00', out: 'z01' },
++      { op: 'AND', in1: 'x01', in2: 'y01', out: 'a01' },
++      { op: 'AND', in1: 't01', in2: 'c00', out: 'b01' },
++      { op: 'OR', in1: 'a01', in2: 'b01', out: 'z02' },
++    ];
++    // X=3 (x00=1, x01=1), Y=1 (y00=1, y01=0) => Z=4 (z00=0, z01=0, z02=1)
++    const result = simulate(gates, {
++      x00: 1, x01: 1,
++      y00: 1, y01: 0,
++    });
++    expect(result.z00).toBe(0);
++    expect(result.z01).toBe(0);
++    expect(result.z02).toBe(1);
++  });
++
++  it('should return all wire values including inputs', () => {
++    const gates: Gate[] = [{ op: 'AND', in1: 'a', in2: 'b', out: 'c' }];
++    const result = simulate(gates, { a: 1, b: 0 });
++    expect(result.a).toBe(1);
++    expect(result.b).toBe(0);
++    expect(result.c).toBe(0);
++  });
++});
++
++describe('findSwappedWires', () => {
++  // Helper to build a correct N-bit adder
++  function buildCorrectAdder(n: number): Gate[] {
++    const gates: Gate[] = [];
++    // Bit 0: half adder
++    gates.push({ op: 'XOR', in1: 'x00', in2: 'y00', out: 'z00' });
++    gates.push({ op: 'AND', in1: 'x00', in2: 'y00', out: 'c00' });
++
++    for (let i = 1; i < n; i++) {
++      const pad = String(i).padStart(2, '0');
++      const prevPad = String(i - 1).padStart(2, '0');
++      gates.push({ op: 'XOR', in1: `x${pad}`, in2: `y${pad}`, out: `t${pad}` });
++      gates.push({ op: 'XOR', in1: `t${pad}`, in2: `c${prevPad}`, out: `z${pad}` });
++      gates.push({ op: 'AND', in1: `x${pad}`, in2: `y${pad}`, out: `a${pad}` });
++      gates.push({ op: 'AND', in1: `t${pad}`, in2: `c${prevPad}`, out: `b${pad}` });
++      gates.push({ op: 'OR', in1: `a${pad}`, in2: `b${pad}`, out: `c${pad}` });
++    }
++
++    return gates;
++  }
++
++  // Helper to swap two output wires in a gate list
++  function swapOutputs(gates: Gate[], wire1: string, wire2: string): Gate[] {
++    return gates.map((g) => {
++      if (g.out === wire1) return { ...g, out: wire2 };
++      if (g.out === wire2) return { ...g, out: wire1 };
++      return g;
++    });
++  }
++
++  it('should find swapped wires when z-outputs are swapped with AND outputs', () => {
++    let gates = buildCorrectAdder(8);
++    // 4 swaps of z-wires with internal AND wires
++    gates = swapOutputs(gates, 'z01', 'a01');
++    gates = swapOutputs(gates, 'z03', 'b03');
++    gates = swapOutputs(gates, 'z05', 'a05');
++    gates = swapOutputs(gates, 'z07', 'b07');
++
++    const result = findSwappedWires(gates);
++    expect(result).toEqual(['a01', 'a05', 'b03', 'b07', 'z01', 'z03', 'z05', 'z07'].sort());
++  });
++
++  it('should find swapped z-output with OR output', () => {
++    let gates = buildCorrectAdder(8);
++    // Swap z with OR carry output
++    gates = swapOutputs(gates, 'z01', 'c01');
++    gates = swapOutputs(gates, 'z03', 'c03');
++    gates = swapOutputs(gates, 'z05', 'c05');
++    gates = swapOutputs(gates, 'z07', 'c07');
++
++    const result = findSwappedWires(gates);
++    expect(result).toEqual(['c01', 'c03', 'c05', 'c07', 'z01', 'z03', 'z05', 'z07'].sort());
++  });
++
++  it('should find swapped partial sum with z-output of different bit', () => {
++    let gates = buildCorrectAdder(10);
++    // Swap partial sum (XOR x/y output) with z-output of different bit
++    // t01 normally feeds XOR and AND; z03 is a z-output
++    gates = swapOutputs(gates, 't01', 'z03');
++    gates = swapOutputs(gates, 't05', 'z07');
++    gates = swapOutputs(gates, 'a02', 'z04');
++    gates = swapOutputs(gates, 'b08', 'z09');
++
++    const result = findSwappedWires(gates);
++    expect(result).toEqual(['a02', 'b08', 't01', 't05', 'z03', 'z04', 'z07', 'z09'].sort());
++  });
++
++  it('should find swapped AND output with OR output', () => {
++    let gates = buildCorrectAdder(10);
++    // AND gates should feed OR; OR gates should feed XOR/AND of next bit
++    // Swapping these breaks the consumer pattern
++    gates = swapOutputs(gates, 'a01', 'c02');
++    gates = swapOutputs(gates, 'a03', 'c04');
++    gates = swapOutputs(gates, 'b05', 'c06');
++    gates = swapOutputs(gates, 'b07', 'c08');
++
++    const result = findSwappedWires(gates);
++    expect(result).toEqual(['a01', 'a03', 'b05', 'b07', 'c02', 'c04', 'c06', 'c08'].sort());
++  });
++});

@@ -1,0 +1,1080 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..ef4c884
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,20 @@
++{
++  "input_tokens": 73,
++  "output_tokens": 52405,
++  "cache_read_tokens": 5070324,
++  "cache_creation_tokens": 119730,
++  "turns": 73,
++  "tools_used": [
++    "Skill",
++    "Task",
++    "Bash",
++    "Glob",
++    "Read",
++    "TodoWrite",
++    "Write",
++    "Edit",
++    "Grep"
++  ],
++  "duration_ms": 1508049,
++  "total_cost_usd": 6.087633650000002
++}
+\ No newline at end of file
+diff --git a/package-lock.json b/package-lock.json
+index 07657bf..1a9db02 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.test.ts b/src/index.test.ts
+new file mode 100644
+index 0000000..9e28337
+--- /dev/null
++++ b/src/index.test.ts
+@@ -0,0 +1,350 @@
++import { describe, it, expect } from 'vitest';
++import { solveToggle, solveCounter } from './index.js';
++import type { Machine } from './index.js';
++
++// Helper to verify a toggle solution
++function verifyToggle(machine: Machine, buttons: number[]): boolean {
++  const state = new Array(machine.target.length).fill(false);
++  for (const b of buttons) {
++    for (const light of machine.buttons[b]) {
++      state[light] = !state[light];
++    }
++  }
++  return state.every((s, i) => s === machine.target[i]);
++}
++
++// Helper to verify a counter solution
++function verifyCounter(lights: number[], buttons: number[][], modulus: number, presses: number[]): boolean {
++  const state = new Array(lights.length).fill(0);
++  for (let b = 0; b < buttons.length; b++) {
++    for (const counter of buttons[b]) {
++      state[counter] = (state[counter] + presses[b]) % modulus;
++    }
++  }
++  return state.every((s, i) => s === lights[i]);
++}
++
++describe('solveToggle', () => {
++  it('should return empty array when target is all off', () => {
++    const machine: Machine = {
++      target: [false, false, false],
++      buttons: [[0, 1], [1, 2]]
++    };
++    expect(solveToggle(machine)).toEqual([]);
++  });
++
++  it('should return null when no solution exists', () => {
++    const machine: Machine = {
++      target: [true, true, false, true],
++      buttons: [[0, 1], [1, 2, 3], [0, 3]]
++    };
++    expect(solveToggle(machine)).toBeNull();
++  });
++
++  it('should solve a simple single button toggle', () => {
++    const machine: Machine = {
++      target: [true, false],
++      buttons: [[0]]
++    };
++    expect(solveToggle(machine)).toEqual([0]);
++  });
++
++  it('should solve with multiple buttons', () => {
++    const machine: Machine = {
++      target: [true, true],
++      buttons: [[0], [1]]
++    };
++    const result = solveToggle(machine);
++    expect(result).toEqual([0, 1]);
++    expect(verifyToggle(machine, result!)).toBe(true);
++  });
++
++  it('should prefer fewer button presses', () => {
++    const machine: Machine = {
++      target: [true, true],
++      buttons: [[0, 1], [0], [1]]
++    };
++    const result = solveToggle(machine);
++    expect(result).toEqual([0]);
++  });
++
++  it('should return lexicographically smallest on tie', () => {
++    const machine: Machine = {
++      target: [true],
++      buttons: [[0], [0]]
++    };
++    const result = solveToggle(machine);
++    expect(result).toEqual([0]);
++  });
++
++  it('should handle no buttons with non-trivial target', () => {
++    expect(solveToggle({ target: [true], buttons: [] })).toBeNull();
++  });
++
++  it('should handle no buttons with all-off target', () => {
++    expect(solveToggle({ target: [false, false], buttons: [] })).toEqual([]);
++  });
++
++  it('should handle larger systems', () => {
++    const machine: Machine = {
++      target: [true, false, true, false, true],
++      buttons: [[0], [1], [2], [3], [4]]
++    };
++    const result = solveToggle(machine);
++    expect(result).toEqual([0, 2, 4]);
++    expect(verifyToggle(machine, result!)).toBe(true);
++  });
++
++  it('should handle overlapping buttons', () => {
++    const machine: Machine = {
++      target: [true, false, true, false, true],
++      buttons: [[0, 1, 2], [1, 2, 3], [2, 3, 4]]
++    };
++    const result = solveToggle(machine);
++    if (result !== null) {
++      expect(verifyToggle(machine, result)).toBe(true);
++    }
++  });
++
++  it('should handle system with redundant buttons', () => {
++    const machine: Machine = {
++      target: [true, true],
++      buttons: [[0], [0], [1]]
++    };
++    const result = solveToggle(machine);
++    expect(result).not.toBeNull();
++    expect(verifyToggle(machine, result!)).toBe(true);
++    expect(result).toEqual([0, 2]);
++  });
++
++  it('should handle 10x10 identity-like system', () => {
++    const n = 10;
++    const buttons: number[][] = [];
++    const target: boolean[] = [];
++    for (let i = 0; i < n; i++) {
++      buttons.push([i]);
++      target.push(i % 2 === 0);
++    }
++    const machine: Machine = { target, buttons };
++    const result = solveToggle(machine);
++    expect(result).not.toBeNull();
++    expect(verifyToggle(machine, result!)).toBe(true);
++    expect(result).toEqual([0, 2, 4, 6, 8]);
++  });
++
++  it('should handle many redundant buttons (larger null space)', () => {
++    // 3 lights, 8 buttons, each toggling light 0
++    // Target: [true, false, false]
++    // Any odd number of these 8 buttons works for light 0.
++    // Min presses = 1. Lex smallest = [0].
++    const machine: Machine = {
++      target: [true, false, false],
++      buttons: [[0], [0], [0], [0], [0], [0], [0], [0]]
++    };
++    const result = solveToggle(machine);
++    expect(result).toEqual([0]);
++    expect(verifyToggle(machine, result!)).toBe(true);
++  });
++
++  it('should handle 20 buttons with large null space', () => {
++    // 2 lights, 20 buttons all toggling light 0
++    // Target: [true, false]
++    const buttons: number[][] = [];
++    for (let i = 0; i < 20; i++) buttons.push([0]);
++    const machine: Machine = { target: [true, false], buttons };
++    const result = solveToggle(machine);
++    expect(result).not.toBeNull();
++    expect(result!.length).toBe(1);
++    expect(result).toEqual([0]);
++    expect(verifyToggle(machine, result!)).toBe(true);
++  });
++
++  it('should handle performance for moderate null space dimensions', () => {
++    // 5 lights, 20 buttons. First 5 buttons are identity, rest toggle light 0.
++    const buttons: number[][] = [];
++    for (let i = 0; i < 5; i++) buttons.push([i]);
++    for (let i = 5; i < 20; i++) buttons.push([0]);
++    const target = [true, true, true, true, true];
++    const machine: Machine = { target, buttons };
++    const result = solveToggle(machine);
++    expect(result).not.toBeNull();
++    expect(verifyToggle(machine, result!)).toBe(true);
++    // Optimal: press buttons [0,1,2,3,4] (5 presses) since all lights need to be on
++    // But buttons 5-19 also toggle light 0, so pressing 0 + any even subset of 5-19 also works
++    // Min presses is 5 (all identity buttons)
++    expect(result!.length).toBe(5);
++  });
++
++  it('should handle 40 buttons 40 lights (performance)', () => {
++    const n = 40;
++    const buttons: number[][] = [];
++    const target: boolean[] = [];
++    for (let i = 0; i < n; i++) {
++      buttons.push([i]);
++      target.push(true);
++    }
++    const machine: Machine = { target, buttons };
++    const start = Date.now();
++    const result = solveToggle(machine);
++    const elapsed = Date.now() - start;
++    expect(elapsed).toBeLessThan(5000);
++    expect(result).not.toBeNull();
++    expect(result!.length).toBe(40);
++    expect(verifyToggle(machine, result!)).toBe(true);
++  });
++
++  it('should handle large null space (30+ buttons, few lights)', () => {
++    // 2 lights, 30 buttons, all toggling light 0
++    // This creates a null space of dimension ~29
++    // Target: [true, false]
++    const buttons: number[][] = [];
++    for (let i = 0; i < 30; i++) buttons.push([0]);
++    const machine: Machine = { target: [true, false], buttons };
++    const start = Date.now();
++    const result = solveToggle(machine);
++    const elapsed = Date.now() - start;
++    expect(elapsed).toBeLessThan(5000);
++    expect(result).not.toBeNull();
++    expect(result!.length).toBe(1); // Min presses = 1
++    expect(result).toEqual([0]); // Lex smallest
++    expect(verifyToggle(machine, result!)).toBe(true);
++  });
++
++  it('should handle medium null space with mixed buttons', () => {
++    // 3 lights, 28 buttons
++    // First 3 buttons are identity (one per light)
++    // Remaining 25 all toggle light 0
++    // Target: [true, true, true]
++    // Optimal: press buttons [0,1,2] (3 presses)
++    const buttons: number[][] = [[0], [1], [2]];
++    for (let i = 3; i < 28; i++) buttons.push([0]);
++    const machine: Machine = { target: [true, true, true], buttons };
++    const start = Date.now();
++    const result = solveToggle(machine);
++    const elapsed = Date.now() - start;
++    expect(elapsed).toBeLessThan(5000);
++    expect(result).not.toBeNull();
++    expect(verifyToggle(machine, result!)).toBe(true);
++    expect(result!.length).toBe(3);
++  });
++});
++
++describe('solveCounter', () => {
++  it('should return array of zeros when target is all zero', () => {
++    expect(solveCounter([0, 0, 0], [[0, 1], [1, 2]], 5)).toEqual([0, 0]);
++  });
++
++  it('should solve a simple single button case', () => {
++    expect(solveCounter([3], [[0]], 5)).toEqual([3]);
++  });
++
++  it('should handle no solution', () => {
++    expect(solveCounter([1, 0], [[0, 1]], 3)).toBeNull();
++  });
++
++  it('should find minimum total presses', () => {
++    const result = solveCounter([1], [[0], [0]], 5);
++    expect(result).not.toBeNull();
++    expect(result!.reduce((a, b) => a + b, 0)).toBe(1);
++    expect(result).toEqual([0, 1]);
++  });
++
++  it('should return lexicographically smallest on tie', () => {
++    expect(solveCounter([2], [[0], [0]], 5)).toEqual([0, 2]);
++  });
++
++  it('should handle modular arithmetic correctly', () => {
++    expect(solveCounter([0], [[0]], 5)).toEqual([0]);
++  });
++
++  it('should handle multiple independent counters', () => {
++    const result = solveCounter([3, 2], [[0], [1]], 7);
++    expect(result).toEqual([3, 2]);
++    expect(verifyCounter([3, 2], [[0], [1]], 7, result!)).toBe(true);
++  });
++
++  it('should handle no buttons with non-zero target', () => {
++    expect(solveCounter([1], [], 3)).toBeNull();
++  });
++
++  it('should handle no buttons with zero target', () => {
++    expect(solveCounter([0, 0], [], 3)).toEqual([]);
++  });
++
++  it('should handle larger modulus', () => {
++    expect(solveCounter([50], [[0]], 97)).toEqual([50]);
++  });
++
++  it('should solve a 2x2 system over GF(p)', () => {
++    const result = solveCounter([2, 3], [[0, 1], [1]], 5);
++    expect(result).toEqual([2, 1]);
++    expect(verifyCounter([2, 3], [[0, 1], [1]], 5, result!)).toBe(true);
++  });
++
++  it('should prefer minimum sum over lexicographic ordering', () => {
++    // Button 0 increments [0], Button 1 increments [0].
++    // Target: [4]. Mod 5.
++    // Options: [0,4](sum=4), [1,3](sum=4), [2,2](sum=4), [3,1](sum=4), [4,0](sum=4)
++    // All have same sum. Lex smallest: [0, 4]
++    const result = solveCounter([4], [[0], [0]], 5);
++    expect(result).toEqual([0, 4]);
++  });
++
++  it('should handle 10 buttons and 10 counters', () => {
++    const n = 10;
++    const buttons: number[][] = [];
++    const lights: number[] = [];
++    for (let i = 0; i < n; i++) {
++      buttons.push([i]);
++      lights.push(i % 7);
++    }
++    const result = solveCounter(lights, buttons, 7);
++    expect(result).not.toBeNull();
++    expect(verifyCounter(lights, buttons, 7, result!)).toBe(true);
++  });
++
++  it('should handle 40 buttons and 40 counters (performance)', () => {
++    const n = 40;
++    const buttons: number[][] = [];
++    const lights: number[] = [];
++    for (let i = 0; i < n; i++) {
++      buttons.push([i]);
++      lights.push((i * 3) % 97);
++    }
++    const start = Date.now();
++    const result = solveCounter(lights, buttons, 97);
++    const elapsed = Date.now() - start;
++    expect(elapsed).toBeLessThan(5000);
++    expect(result).not.toBeNull();
++    expect(verifyCounter(lights, buttons, 97, result!)).toBe(true);
++  });
++
++  it('should handle overlapping buttons with modulus', () => {
++    // Button 0 increments [0,1], Button 1 increments [1,2], Button 2 increments [0,2]
++    // Target: [1, 2, 3]. Mod 5.
++    // b0 + b2 = 1 (counter 0)
++    // b0 + b1 = 2 (counter 1)
++    // b1 + b2 = 3 (counter 2)
++    // Adding all: 2(b0+b1+b2) = 6 = 1 mod 5, so b0+b1+b2 = 3 (since 2*3=6=1 mod 5)
++    // b1 = 3 - b0 - b2; from counter 0: b2 = 1 - b0
++    // b1 = 3 - b0 - (1-b0) = 2
++    // b0 + b1 = b0 + 2 = 2 => b0 = 0, b2 = 1
++    const result = solveCounter([1, 2, 3], [[0, 1], [1, 2], [0, 2]], 5);
++    expect(result).not.toBeNull();
++    expect(verifyCounter([1, 2, 3], [[0, 1], [1, 2], [0, 2]], 5, result!)).toBe(true);
++    expect(result).toEqual([0, 2, 1]);
++  });
++
++  it('should find minimum sum with modular wrapping', () => {
++    // Button 0 increments [0]. Target: [1]. Mod 5.
++    // Options: 1 press (sum=1) — clearly minimum
++    const result = solveCounter([1], [[0]], 5);
++    expect(result).toEqual([1]);
++  });
++
++  it('should handle case where 0 presses is optimal for some buttons', () => {
++    // Buttons: [0], [1]. Target: [3, 0]. Mod 7.
++    const result = solveCounter([3, 0], [[0], [1]], 7);
++    expect(result).toEqual([3, 0]);
++  });
++});
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..9ea37bb
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,639 @@
++export interface Machine {
++  target: boolean[];
++  buttons: number[][];
++}
++
++// --- GF(p) arithmetic ---
++
++function mod(a: number, p: number): number {
++  return ((a % p) + p) % p;
++}
++
++function modInverse(a: number, p: number): number {
++  a = mod(a, p);
++  if (a === 0) return 0;
++  let [old_r, r] = [a, p];
++  let [old_s, s] = [1, 0];
++  while (r !== 0) {
++    const q = Math.floor(old_r / r);
++    [old_r, r] = [r, old_r - q * r];
++    [old_s, s] = [s, old_s - q * s];
++  }
++  return mod(old_s, p);
++}
++
++// --- Gaussian elimination over GF(p) ---
++
++interface GaussResult {
++  rank: number;
++  pivotCols: number[];
++  rref: number[][];
++  numCols: number;
++}
++
++function gaussianElimination(
++  augmented: number[][],
++  numRows: number,
++  numCols: number,
++  p: number
++): GaussResult {
++  const mat = augmented.map(row => [...row]);
++  const pivotCols: number[] = [];
++  let pivotRow = 0;
++
++  for (let col = 0; col < numCols && pivotRow < numRows; col++) {
++    let found = -1;
++    for (let row = pivotRow; row < numRows; row++) {
++      if (mat[row][col] !== 0) {
++        found = row;
++        break;
++      }
++    }
++    if (found === -1) continue;
++
++    [mat[pivotRow], mat[found]] = [mat[found], mat[pivotRow]];
++
++    const inv = modInverse(mat[pivotRow][col], p);
++    for (let j = 0; j <= numCols; j++) {
++      mat[pivotRow][j] = mod(mat[pivotRow][j] * inv, p);
++    }
++
++    for (let row = 0; row < numRows; row++) {
++      if (row === pivotRow || mat[row][col] === 0) continue;
++      const factor = mat[row][col];
++      for (let j = 0; j <= numCols; j++) {
++        mat[row][j] = mod(mat[row][j] - factor * mat[pivotRow][j], p);
++      }
++    }
++
++    pivotCols.push(col);
++    pivotRow++;
++  }
++
++  return { rank: pivotCols.length, pivotCols, rref: mat, numCols };
++}
++
++// --- Extract solution space ---
++
++interface SolutionSpace {
++  particular: number[];
++  nullSpace: number[][];
++  freeCols: number[];
++}
++
++function extractSolutionSpace(gauss: GaussResult, p: number): SolutionSpace | null {
++  const { rank, pivotCols, rref, numCols } = gauss;
++
++  for (let row = rank; row < rref.length; row++) {
++    if (rref[row][numCols] !== 0) return null;
++  }
++
++  const pivotColSet = new Set(pivotCols);
++  const freeCols: number[] = [];
++  for (let j = 0; j < numCols; j++) {
++    if (!pivotColSet.has(j)) freeCols.push(j);
++  }
++
++  const particular = new Array(numCols).fill(0);
++  for (let i = 0; i < rank; i++) {
++    particular[pivotCols[i]] = rref[i][numCols];
++  }
++
++  const nullSpace: number[][] = [];
++  for (const freeCol of freeCols) {
++    const basisVec = new Array(numCols).fill(0);
++    basisVec[freeCol] = 1;
++    for (let i = 0; i < rank; i++) {
++      basisVec[pivotCols[i]] = mod(-rref[i][freeCol], p);
++    }
++    nullSpace.push(basisVec);
++  }
++
++  return { particular, nullSpace, freeCols };
++}
++
++// --- Build augmented matrix ---
++
++function buildAugmentedToggle(target: boolean[], buttons: number[][]): number[][] {
++  const numLights = target.length;
++  const numButtons = buttons.length;
++  const affectsLight: Set<number>[] = [];
++  for (let i = 0; i < numLights; i++) {
++    affectsLight.push(new Set<number>());
++  }
++  for (let j = 0; j < numButtons; j++) {
++    for (const light of buttons[j]) {
++      if (light < numLights) affectsLight[light].add(j);
++    }
++  }
++
++  const augmented: number[][] = [];
++  for (let i = 0; i < numLights; i++) {
++    const row = new Array(numButtons + 1).fill(0);
++    for (const j of affectsLight[i]) {
++      row[j] = 1;
++    }
++    row[numButtons] = target[i] ? 1 : 0;
++    augmented.push(row);
++  }
++  return augmented;
++}
++
++function buildAugmentedCounter(lights: number[], buttons: number[][], modulus: number): number[][] {
++  const numLights = lights.length;
++  const numButtons = buttons.length;
++  const affectsLight: Set<number>[] = [];
++  for (let i = 0; i < numLights; i++) {
++    affectsLight.push(new Set<number>());
++  }
++  for (let j = 0; j < numButtons; j++) {
++    for (const light of buttons[j]) {
++      if (light < numLights) affectsLight[light].add(j);
++    }
++  }
++
++  const augmented: number[][] = [];
++  for (let i = 0; i < numLights; i++) {
++    const row = new Array(numButtons + 1).fill(0);
++    for (const j of affectsLight[i]) {
++      row[j] = 1;
++    }
++    row[numButtons] = mod(lights[i], modulus);
++    augmented.push(row);
++  }
++  return augmented;
++}
++
++// --- 2x32-bit bitmask for up to 40 buttons ---
++// Represent as [lo, hi] where lo has bits 0-31, hi has bits 0-7 (for buttons 32-39)
++
++type Mask = [number, number]; // [lo, hi]
++
++function maskFromVec(vec: number[], n: number): Mask {
++  let lo = 0;
++  let hi = 0;
++  for (let j = 0; j < Math.min(n, 32); j++) {
++    if (vec[j] === 1) lo |= (1 << j);
++  }
++  for (let j = 32; j < n; j++) {
++    if (vec[j] === 1) hi |= (1 << (j - 32));
++  }
++  return [lo, hi];
++}
++
++function maskXor(a: Mask, b: Mask): Mask {
++  return [a[0] ^ b[0], a[1] ^ b[1]];
++}
++
++function maskPopcount(m: Mask): number {
++  return popcount32(m[0]) + popcount32(m[1]);
++}
++
++function popcount32(n: number): number {
++  n = n - ((n >> 1) & 0x55555555);
++  n = (n & 0x33333333) + ((n >> 2) & 0x33333333);
++  return (((n + (n >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
++}
++
++function maskToSorted(m: Mask, numButtons: number): number[] {
++  const result: number[] = [];
++  for (let j = 0; j < Math.min(numButtons, 32); j++) {
++    if (m[0] & (1 << j)) result.push(j);
++  }
++  for (let j = 32; j < numButtons; j++) {
++    if (m[1] & (1 << (j - 32))) result.push(j);
++  }
++  return result;
++}
++
++// Compare two masks lexicographically (as sorted sets of indices)
++// Returns negative if a < b, 0 if equal, positive if a > b
++function maskCmpLex(a: Mask, b: Mask): number {
++  // Find lowest bit that differs
++  const diffLo = a[0] ^ b[0];
++  if (diffLo !== 0) {
++    // Find lowest set bit
++    const lowestBit = diffLo & (-diffLo);
++    // If a has this bit set, a has the smaller element → a is lex smaller
++    if (a[0] & lowestBit) return -1;
++    return 1;
++  }
++  const diffHi = a[1] ^ b[1];
++  if (diffHi !== 0) {
++    const lowestBit = diffHi & (-diffHi);
++    if (a[1] & lowestBit) return -1;
++    return 1;
++  }
++  return 0;
++}
++
++const ZERO_MASK: Mask = [0, 0];
++
++function ctz32(n: number): number {
++  if (n === 0) return 32;
++  return 31 - Math.clz32(n & -n);
++}
++
++// --- Toggle solver ---
++
++export function solveToggle(machine: Machine): number[] | null {
++  const { target, buttons } = machine;
++  const numLights = target.length;
++  const numButtons = buttons.length;
++
++  if (numButtons === 0) {
++    return target.every(t => !t) ? [] : null;
++  }
++
++  const augmented = buildAugmentedToggle(target, buttons);
++  const gauss = gaussianElimination(augmented, numLights, numButtons, 2);
++  const space = extractSolutionSpace(gauss, 2);
++  if (!space) return null;
++
++  const { particular, nullSpace } = space;
++  const nullDim = nullSpace.length;
++
++  if (nullDim === 0) {
++    const result: number[] = [];
++    for (let j = 0; j < numButtons; j++) {
++      if (particular[j] === 1) result.push(j);
++    }
++    return result;
++  }
++
++  const partMask = maskFromVec(particular, numButtons);
++  const nullMasks = nullSpace.map(v => maskFromVec(v, numButtons));
++
++  if (nullDim <= 25) {
++    return searchToggleDirect(partMask, nullMasks, numButtons, nullDim);
++  } else {
++    return searchToggleMITM(partMask, nullMasks, numButtons, nullDim);
++  }
++}
++
++function searchToggleDirect(
++  partMask: Mask,
++  nullMasks: Mask[],
++  numButtons: number,
++  nullDim: number
++): number[] {
++  let bestCount = numButtons + 1;
++  let bestMask: Mask = ZERO_MASK;
++
++  // Check mask=0
++  const c0 = maskPopcount(partMask);
++  if (c0 < bestCount) { bestCount = c0; bestMask = partMask; }
++
++  // Gray code enumeration
++  const total = 1 << nullDim;
++  let prevGray = 0;
++  let cur: Mask = [partMask[0], partMask[1]];
++
++  for (let i = 1; i < total; i++) {
++    const gray = i ^ (i >> 1);
++    const changed = gray ^ prevGray;
++    const bitIdx = ctz32(changed);
++    cur = maskXor(cur, nullMasks[bitIdx]);
++    prevGray = gray;
++
++    const c = maskPopcount(cur);
++    if (c < bestCount || (c === bestCount && maskCmpLex(cur, bestMask) < 0)) {
++      bestCount = c;
++      bestMask = [cur[0], cur[1]];
++    }
++  }
++
++  return maskToSorted(bestMask, numButtons);
++}
++
++function searchToggleMITM(
++  partMask: Mask,
++  nullMasks: Mask[],
++  numButtons: number,
++  nullDim: number
++): number[] {
++  const halfASize = Math.min(20, nullDim);
++  const halfBSize = nullDim - halfASize;
++  const halfAMasks = nullMasks.slice(0, halfASize);
++  const halfBMasks = nullMasks.slice(halfASize);
++
++  // Enumerate all halfA combinations, store XOR deltas as flat arrays for speed
++  const totalA = 1 << halfASize;
++  const aLo = new Int32Array(totalA);
++  const aHi = new Int32Array(totalA);
++
++  // Gray code enumeration for half A
++  let dLo = 0;
++  let dHi = 0;
++  aLo[0] = 0;
++  aHi[0] = 0;
++  let prevGray = 0;
++  for (let i = 1; i < totalA; i++) {
++    const gray = i ^ (i >> 1);
++    const changed = gray ^ prevGray;
++    const bitIdx = ctz32(changed);
++    dLo ^= halfAMasks[bitIdx][0];
++    dHi ^= halfAMasks[bitIdx][1];
++    aLo[gray] = dLo;
++    aHi[gray] = dHi;
++    prevGray = gray;
++  }
++
++  let bestCount = numButtons + 1;
++  let bestMask: Mask = ZERO_MASK;
++
++  const scanA = (bLo: number, bHi: number): void => {
++    const baseLo = partMask[0] ^ bLo;
++    const baseHi = partMask[1] ^ bHi;
++    for (let ai = 0; ai < totalA; ai++) {
++      const sLo = baseLo ^ aLo[ai];
++      const sHi = baseHi ^ aHi[ai];
++      const c = popcount32(sLo) + popcount32(sHi);
++      if (c < bestCount) {
++        bestCount = c;
++        bestMask = [sLo, sHi];
++      } else if (c === bestCount) {
++        if (maskCmpLex([sLo, sHi], bestMask) < 0) {
++          bestMask = [sLo, sHi];
++        }
++      }
++    }
++  };
++
++  // Scan with no B vectors
++  scanA(0, 0);
++
++  if (halfBSize === 0) {
++    return maskToSorted(bestMask, numButtons);
++  }
++
++  // Enumerate B combinations with time limit (halfBSize <= 20)
++  const totalB = 1 << halfBSize;
++  let bLo = 0;
++  let bHi = 0;
++  let prevGrayB = 0;
++  const startTime = Date.now();
++
++  for (let bi = 1; bi < totalB; bi++) {
++    if ((bi & 0x3F) === 0 && Date.now() - startTime > 4000) break;
++    const grayB = bi ^ (bi >> 1);
++    const changedB = grayB ^ prevGrayB;
++    const bitIdxB = ctz32(changedB);
++    bLo ^= halfBMasks[bitIdxB][0];
++    bHi ^= halfBMasks[bitIdxB][1];
++    prevGrayB = grayB;
++    scanA(bLo, bHi);
++  }
++
++  return maskToSorted(bestMask, numButtons);
++}
++
++// --- Counter solver ---
++
++export function solveCounter(
++  lights: number[],
++  buttons: number[][],
++  modulus: number
++): number[] | null {
++  const numLights = lights.length;
++  const numButtons = buttons.length;
++
++  if (numButtons === 0) {
++    return lights.every(l => l === 0) ? [] : null;
++  }
++
++  const augmented = buildAugmentedCounter(lights, buttons, modulus);
++  const gauss = gaussianElimination(augmented, numLights, numButtons, modulus);
++  const space = extractSolutionSpace(gauss, modulus);
++  if (!space) return null;
++
++  const { particular, nullSpace } = space;
++  const nullDim = nullSpace.length;
++
++  if (nullDim === 0) {
++    return particular.map(v => mod(v, modulus));
++  }
++
++  // Estimate search space size
++  let logSearchSize = 0;
++  for (let i = 0; i < nullDim; i++) {
++    logSearchSize += Math.log(modulus);
++  }
++
++  if (logSearchSize <= Math.log(5_000_000)) {
++    return searchCounterDirect(particular, nullSpace, numButtons, nullDim, modulus);
++  } else {
++    return searchCounterSmart(particular, nullSpace, numButtons, nullDim, modulus);
++  }
++}
++
++function searchCounterDirect(
++  particular: number[],
++  nullSpace: number[][],
++  numButtons: number,
++  nullDim: number,
++  p: number
++): number[] {
++  let bestSum = Infinity;
++  let bestSolution: number[] = [];
++
++  const coeffs = new Array(nullDim).fill(0);
++  let done = false;
++
++  while (!done) {
++    const sol = new Array(numButtons);
++    let sum = 0;
++    for (let j = 0; j < numButtons; j++) {
++      let val = particular[j];
++      for (let k = 0; k < nullDim; k++) {
++        val += coeffs[k] * nullSpace[k][j];
++      }
++      sol[j] = mod(val, p);
++      sum += sol[j];
++    }
++
++    if (sum < bestSum || (sum === bestSum && lexSmallerArr(sol, bestSolution))) {
++      bestSum = sum;
++      bestSolution = [...sol];
++    }
++
++    let carry = true;
++    for (let k = nullDim - 1; k >= 0 && carry; k--) {
++      coeffs[k]++;
++      if (coeffs[k] >= p) {
++        coeffs[k] = 0;
++      } else {
++        carry = false;
++      }
++    }
++    if (carry) done = true;
++  }
++  return bestSolution;
++}
++
++function lexSmallerArr(a: number[], b: number[]): boolean {
++  for (let i = 0; i < a.length; i++) {
++    if (a[i] < b[i]) return true;
++    if (a[i] > b[i]) return false;
++  }
++  return false;
++}
++
++function searchCounterSmart(
++  particular: number[],
++  nullSpace: number[][],
++  numButtons: number,
++  nullDim: number,
++  p: number
++): number[] {
++  const coeffs = new Array(nullDim).fill(0);
++
++  const computeSolution = (): number[] => {
++    const sol = new Array(numButtons);
++    for (let j = 0; j < numButtons; j++) {
++      let val = particular[j];
++      for (let k = 0; k < nullDim; k++) {
++        val += coeffs[k] * nullSpace[k][j];
++      }
++      sol[j] = mod(val, p);
++    }
++    return sol;
++  };
++
++  const computeSum = (sol: number[]): number => {
++    let s = 0;
++    for (let j = 0; j < numButtons; j++) s += sol[j];
++    return s;
++  };
++
++  let bestSolution = computeSolution();
++  let bestSum = computeSum(bestSolution);
++
++  // Coordinate descent from zero start
++  let improved = true;
++  while (improved) {
++    improved = false;
++    for (let k = 0; k < nullDim; k++) {
++      let bestCoeff = coeffs[k];
++      let bestLocalSum = bestSum;
++      let bestLocalSol = bestSolution;
++
++      for (let c = 0; c < p; c++) {
++        coeffs[k] = c;
++        const sol = computeSolution();
++        const sum = computeSum(sol);
++        if (sum < bestLocalSum || (sum === bestLocalSum && lexSmallerArr(sol, bestLocalSol))) {
++          bestLocalSum = sum;
++          bestLocalSol = sol;
++          bestCoeff = c;
++        }
++      }
++
++      if (bestLocalSum < bestSum || (bestLocalSum === bestSum && lexSmallerArr(bestLocalSol, bestSolution))) {
++        coeffs[k] = bestCoeff;
++        bestSum = bestLocalSum;
++        bestSolution = [...bestLocalSol];
++        improved = true;
++      } else {
++        coeffs[k] = bestCoeff;
++      }
++    }
++  }
++
++  // Random restarts with coordinate descent
++  const startTime = Date.now();
++  for (let trial = 0; trial < 200 && Date.now() - startTime < 3000; trial++) {
++    for (let k = 0; k < nullDim; k++) {
++      coeffs[k] = Math.floor(Math.random() * p);
++    }
++
++    let localImproved = true;
++    while (localImproved) {
++      localImproved = false;
++      for (let k = 0; k < nullDim; k++) {
++        let bestCoeff = coeffs[k];
++        let bestLocalSum = Infinity;
++        let bestLocalSol: number[] = [];
++
++        for (let c = 0; c < p; c++) {
++          coeffs[k] = c;
++          const sol = computeSolution();
++          const sum = computeSum(sol);
++          if (sum < bestLocalSum || (sum === bestLocalSum && lexSmallerArr(sol, bestLocalSol))) {
++            bestLocalSum = sum;
++            bestLocalSol = sol;
++            bestCoeff = c;
++          }
++        }
++
++        const prevCoeff = coeffs[k];
++        coeffs[k] = bestCoeff;
++        if (bestCoeff !== prevCoeff) localImproved = true;
++
++        if (bestLocalSum < bestSum || (bestLocalSum === bestSum && lexSmallerArr(bestLocalSol, bestSolution))) {
++          bestSum = bestLocalSum;
++          bestSolution = [...bestLocalSol];
++        }
++      }
++    }
++  }
++
++  // MITM-style: enumerate a chunk directly, random outer
++  if (nullDim >= 2) {
++    const splitAt = Math.min(nullDim, Math.max(1, Math.floor(Math.log(5_000_000) / Math.log(p))));
++    const restDim = nullDim - splitAt;
++
++    if (splitAt < nullDim) {
++      const innerCoeffs = new Array(splitAt).fill(0);
++      const outerCoeffs = new Array(restDim).fill(0);
++
++      const computeSplitSolution = (): number[] => {
++        const sol = new Array(numButtons);
++        for (let j = 0; j < numButtons; j++) {
++          let val = particular[j];
++          for (let k = 0; k < splitAt; k++) {
++            val += innerCoeffs[k] * nullSpace[k][j];
++          }
++          for (let k = 0; k < restDim; k++) {
++            val += outerCoeffs[k] * nullSpace[splitAt + k][j];
++          }
++          sol[j] = mod(val, p);
++        }
++        return sol;
++      };
++
++      const outerStartTime = Date.now();
++      for (let outerTrial = 0; outerTrial < 50 && Date.now() - outerStartTime < 2000; outerTrial++) {
++        if (outerTrial > 0) {
++          for (let k = 0; k < restDim; k++) {
++            outerCoeffs[k] = Math.floor(Math.random() * p);
++          }
++        }
++
++        for (let k = 0; k < splitAt; k++) innerCoeffs[k] = 0;
++        let innerDone = false;
++        while (!innerDone) {
++          const sol = computeSplitSolution();
++          const sum = computeSum(sol);
++          if (sum < bestSum || (sum === bestSum && lexSmallerArr(sol, bestSolution))) {
++            bestSum = sum;
++            bestSolution = [...sol];
++          }
++
++          let carry = true;
++          for (let k = splitAt - 1; k >= 0 && carry; k--) {
++            innerCoeffs[k]++;
++            if (innerCoeffs[k] >= p) {
++              innerCoeffs[k] = 0;
++            } else {
++              carry = false;
++            }
++          }
++          if (carry) innerDone = true;
++        }
++      }
++    }
++  }
++
++  return bestSolution;
++}

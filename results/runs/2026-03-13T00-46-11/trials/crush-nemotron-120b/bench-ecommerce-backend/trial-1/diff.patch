@@ -1,0 +1,3879 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..a3235de
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 2944766,
++  "output_tokens": 65313,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 1.9627986
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..8b13789
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1 @@
++
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/TASK.md b/TASK.md
+index d7d26a5..96e4188 100644
+--- a/TASK.md
++++ b/TASK.md
+@@ -1,92 +1,60 @@
+-# T10: E-Commerce Backend
+-
+-**Category:** greenfield/complex
+-**Timeout:** 45 minutes
+-**Tests:** 48 unit (6 per service) + 22 integration = 70 total
+-
+-## Overview
+-
+-Build an event-driven e-commerce backend with 8 independent services communicating through a read-only event bus. Each service implements a specific interface defined in `src/types.ts` and communicates with other services exclusively through events on the shared `EventBus` from `src/bus.ts`.
+-
+-## What to Build
+-
+-Implement 8 services, each in its own directory under `src/`:
+-
+-### src/catalog/index.ts - Product Catalog
+-- CRUD operations for products (create, get, list, search, update, remove)
+-- Emits `product:created` events
+-- Export: `createCatalogService(bus: EventBus): CatalogService`
+-
+-### src/inventory/index.ts - Inventory Management
+-- Stock tracking with set, get, reserve, release operations
+-- Low stock alert system with configurable thresholds
+-- Emits `inventory:updated` and `inventory:low_stock` events
+-- Export: `createInventoryService(bus: EventBus): InventoryService`
+-
+-### src/cart/index.ts - Shopping Cart
+-- Cart creation, item add/remove/update, clear operations
+-- Emits `cart:updated` events on any cart modification
+-- Export: `createCartService(bus: EventBus): CartService`
+-
+-### src/pricing/index.ts - Price Calculation
+-- Calculate totals with 10% tax rate
+-- Discount code support (percentage-based)
+-- Listens for `product:created` to track prices
+-- Export: `createPricingService(bus: EventBus): PricingService`
+-
+-### src/orders/index.ts - Order Management
+-- Order creation with PENDING initial status
+-- Status state machine: PENDING -> CONFIRMED -> SHIPPED -> DELIVERED (or CANCELLED)
+-- Emits `order:created` and `order:status_changed` events
+-- Export: `createOrderService(bus: EventBus): OrderService`
+-
+-### src/payment/index.ts - Payment Processing
+-- Async payment processing with configurable success/failure/timeout simulation
+-- Refund support for successful transactions
+-- Emits `payment:processed` events
+-- Export: `createPaymentService(bus: EventBus, options?: PaymentServiceOptions): PaymentService`
+-
+-### src/notifications/index.ts - Notification System
+-- User subscription model
+-- Listens for `order:status_changed` and `payment:processed` events
+-- Collects notifications per subscribed user
+-- Emits `notification:sent` events
+-- Export: `createNotificationService(bus: EventBus): NotificationService`
+-
+-### src/analytics/index.ts - Analytics Tracking
+-- Event counting by type
+-- Revenue tracking from successful payments
+-- Conversion rate calculation (orders / unique carts)
+-- Top products ranking by order quantity
+-- Listens for all major event types
+-- Export: `createAnalyticsService(bus: EventBus): AnalyticsService`
+-
+-## Constraints
+-
+-- **DO NOT modify** `src/bus.ts` or `src/types.ts` (checksums are validated)
+-- Each service must take `(bus: EventBus)` as its constructor parameter (payment also accepts options)
+-- Services must NOT import from each other's directories
+-- Services communicate ONLY through the event bus
+-- Each service function is a factory that returns the service interface
++# E-Commerce Backend
++
++Build an event-driven e-commerce backend composed of 8 independent services that communicate through a shared event bus.
++
++## Provided Files (read-only)
++
++- **`src/bus.ts`** -- An `EventBus` class with `on`, `off`, `emit`, `getLog`, and `clear` methods. Do not modify this file.
++- **`src/types.ts`** -- TypeScript interfaces for all 8 services, event payload types, enums (`OrderStatus`, `PaymentStatus`), and event name constants. Do not modify this file.
++
++## Architecture
++
++Each service is a factory function that receives an `EventBus` instance and returns an object conforming to the corresponding interface from `types.ts`. Services must not import from one another -- all inter-service communication happens through events on the bus.
++
++## Services to Implement
++
++1. **Catalog** -- Manage a product catalog. Support creating, retrieving, listing, searching, updating, and removing products. Emit events when products are created.
++
++2. **Inventory** -- Track stock levels for products. Support setting stock, checking quantities, reserving stock for orders, and releasing reserved stock. Detect low-stock conditions and alert when stock falls below configurable thresholds.
++
++3. **Cart** -- Manage shopping carts for users. Support creating carts, adding/removing items, updating quantities, clearing carts, and retrieving cart contents. Items for the same product added multiple times should consolidate.
++
++4. **Pricing** -- Calculate order totals including tax (10% rate). Support registering percentage-based discount codes that reduce the subtotal before tax is applied. Listen for product creation events to track product prices.
++
++5. **Orders** -- Create and manage orders. Orders start in a pending state and progress through a status lifecycle (confirmed, shipped, delivered) with the option to cancel. Emit events on creation and status changes, including the previous status.
++
++6. **Payment** -- Process payments asynchronously. Support configurable simulation of success, failure, and timeout scenarios via an options parameter. Support refunding successful transactions. Emit events when payments are processed.
++
++7. **Notifications** -- Deliver notifications to subscribed users. Listen for order status changes and payment events, then record notifications for the relevant user. Track which orders belong to which users.
++
++8. **Analytics** -- Track platform-wide metrics by listening to events on the bus. Count events by type, track revenue from successful payments, calculate conversion rates (orders divided by unique carts), and rank products by order quantity.
++
++## Project Structure
++
++Each service should live in its own subdirectory under `src/` (directories already exist):
++
++```
++src/catalog/index.ts
++src/inventory/index.ts
++src/cart/index.ts
++src/pricing/index.ts
++src/orders/index.ts
++src/payment/index.ts
++src/notifications/index.ts
++src/analytics/index.ts
++```
++
++Export all 8 service factory functions from `src/index.ts`.
++
++## Factory Function Names
++
++Each factory follows the pattern `create<Name>Service(bus: EventBus)`. The payment service additionally accepts an optional options parameter for simulation configuration.
+ 
+ ## Validation
+ 
+ ```bash
+-npm test        # All 70 tests must pass
+-npm run build   # TypeScript must compile
++npm run build   # TypeScript must compile cleanly
+ npm run lint    # No lint errors
+ ```
+ 
+-## Event Flow
+-
+-```
+-catalog --[product:created]--> pricing (tracks prices)
+-inventory --[inventory:updated]--> (bus log)
+-inventory --[inventory:low_stock]--> (bus log)
+-cart --[cart:updated]--> (bus log)
+-orders --[order:created]--> notifications (maps userId), analytics (tracks)
+-orders --[order:status_changed]--> notifications (sends notif)
+-payment --[payment:processed]--> notifications (sends notif), analytics (tracks revenue)
+-analytics --[analytics:event]--> (bus log)
+-notifications --[notification:sent]--> (bus log)
+-```
++Writing your own tests is strongly encouraged to verify correctness before submission.
+diff --git a/package-lock.json b/package-lock.json
+index 783de11..493db19 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -18,11 +18,83 @@
+         "@types/uuid": "^10.0.0",
+         "@typescript-eslint/eslint-plugin": "^7.0.0",
+         "@typescript-eslint/parser": "^7.0.0",
++        "@vitest/coverage-v8": "^2.0.0",
+         "eslint": "^8.56.0",
+         "typescript": "^5.4.0",
+         "vitest": "^2.0.0"
+       }
+     },
++    "node_modules/@ampproject/remapping": {
++      "version": "2.3.0",
++      "resolved": "https://registry.npmjs.org/@ampproject/remapping/-/remapping-2.3.0.tgz",
++      "integrity": "sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@jridgewell/gen-mapping": "^0.3.5",
++        "@jridgewell/trace-mapping": "^0.3.24"
++      },
++      "engines": {
++        "node": ">=6.0.0"
++      }
++    },
++    "node_modules/@babel/helper-string-parser": {
++      "version": "7.27.1",
++      "resolved": "https://registry.npmjs.org/@babel/helper-string-parser/-/helper-string-parser-7.27.1.tgz",
++      "integrity": "sha512-qMlSxKbpRlAridDExk92nSobyDdpPijUq2DW6oDnUqd0iOGxmQjyqhMIihI9+zv4LPyZdRje2cavWPbCbWm3eA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/helper-validator-identifier": {
++      "version": "7.28.5",
++      "resolved": "https://registry.npmjs.org/@babel/helper-validator-identifier/-/helper-validator-identifier-7.28.5.tgz",
++      "integrity": "sha512-qSs4ifwzKJSV39ucNjsvc6WVHs6b7S03sOh2OcHF9UHfVPqWWALUsNUVzhSBiItjRZoLHx7nIarVjqKVusUZ1Q==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/parser": {
++      "version": "7.29.0",
++      "resolved": "https://registry.npmjs.org/@babel/parser/-/parser-7.29.0.tgz",
++      "integrity": "sha512-IyDgFV5GeDUVX4YdF/3CPULtVGSXXMLh1xVIgdCgxApktqnQV0r7/8Nqthg+8YLGaAtdyIlo2qIdZrbCv4+7ww==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/types": "^7.29.0"
++      },
++      "bin": {
++        "parser": "bin/babel-parser.js"
++      },
++      "engines": {
++        "node": ">=6.0.0"
++      }
++    },
++    "node_modules/@babel/types": {
++      "version": "7.29.0",
++      "resolved": "https://registry.npmjs.org/@babel/types/-/types-7.29.0.tgz",
++      "integrity": "sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/helper-string-parser": "^7.27.1",
++        "@babel/helper-validator-identifier": "^7.28.5"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@bcoe/v8-coverage": {
++      "version": "0.2.3",
++      "resolved": "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz",
++      "integrity": "sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/@esbuild/aix-ppc64": {
+       "version": "0.21.5",
+       "resolved": "https://registry.npmjs.org/@esbuild/aix-ppc64/-/aix-ppc64-0.21.5.tgz",
+@@ -563,6 +635,84 @@
+       "dev": true,
+       "license": "BSD-3-Clause"
+     },
++    "node_modules/@isaacs/cliui": {
++      "version": "8.0.2",
++      "resolved": "https://registry.npmjs.org/@isaacs/cliui/-/cliui-8.0.2.tgz",
++      "integrity": "sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "string-width": "^5.1.2",
++        "string-width-cjs": "npm:string-width@^4.2.0",
++        "strip-ansi": "^7.0.1",
++        "strip-ansi-cjs": "npm:strip-ansi@^6.0.1",
++        "wrap-ansi": "^8.1.0",
++        "wrap-ansi-cjs": "npm:wrap-ansi@^7.0.0"
++      },
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@isaacs/cliui/node_modules/ansi-regex": {
++      "version": "6.2.2",
++      "resolved": "https://registry.npmjs.org/ansi-regex/-/ansi-regex-6.2.2.tgz",
++      "integrity": "sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/ansi-regex?sponsor=1"
++      }
++    },
++    "node_modules/@isaacs/cliui/node_modules/strip-ansi": {
++      "version": "7.2.0",
++      "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-7.2.0.tgz",
++      "integrity": "sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-regex": "^6.2.2"
++      },
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/strip-ansi?sponsor=1"
++      }
++    },
++    "node_modules/@istanbuljs/schema": {
++      "version": "0.1.3",
++      "resolved": "https://registry.npmjs.org/@istanbuljs/schema/-/schema-0.1.3.tgz",
++      "integrity": "sha512-ZXRY4jNvVgSVQ8DL3LTcakaAtXwTVUxE81hslsyD2AtoXW/wVob10HkOJ1X/pAlcI7D+2YoZKg5do8G/w6RYgA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/@jridgewell/gen-mapping": {
++      "version": "0.3.13",
++      "resolved": "https://registry.npmjs.org/@jridgewell/gen-mapping/-/gen-mapping-0.3.13.tgz",
++      "integrity": "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@jridgewell/sourcemap-codec": "^1.5.0",
++        "@jridgewell/trace-mapping": "^0.3.24"
++      }
++    },
++    "node_modules/@jridgewell/resolve-uri": {
++      "version": "3.1.2",
++      "resolved": "https://registry.npmjs.org/@jridgewell/resolve-uri/-/resolve-uri-3.1.2.tgz",
++      "integrity": "sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.0.0"
++      }
++    },
+     "node_modules/@jridgewell/sourcemap-codec": {
+       "version": "1.5.5",
+       "resolved": "https://registry.npmjs.org/@jridgewell/sourcemap-codec/-/sourcemap-codec-1.5.5.tgz",
+@@ -570,6 +720,17 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/@jridgewell/trace-mapping": {
++      "version": "0.3.31",
++      "resolved": "https://registry.npmjs.org/@jridgewell/trace-mapping/-/trace-mapping-0.3.31.tgz",
++      "integrity": "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@jridgewell/resolve-uri": "^3.1.0",
++        "@jridgewell/sourcemap-codec": "^1.4.14"
++      }
++    },
+     "node_modules/@nodelib/fs.scandir": {
+       "version": "2.1.5",
+       "resolved": "https://registry.npmjs.org/@nodelib/fs.scandir/-/fs.scandir-2.1.5.tgz",
+@@ -608,6 +769,17 @@
+         "node": ">= 8"
+       }
+     },
++    "node_modules/@pkgjs/parseargs": {
++      "version": "0.11.0",
++      "resolved": "https://registry.npmjs.org/@pkgjs/parseargs/-/parseargs-0.11.0.tgz",
++      "integrity": "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==",
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "engines": {
++        "node": ">=14"
++      }
++    },
+     "node_modules/@rollup/rollup-android-arm-eabi": {
+       "version": "4.57.1",
+       "resolved": "https://registry.npmjs.org/@rollup/rollup-android-arm-eabi/-/rollup-android-arm-eabi-4.57.1.tgz",
+@@ -1042,7 +1214,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1141,7 +1312,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1302,6 +1472,39 @@
+       "dev": true,
+       "license": "ISC"
+     },
++    "node_modules/@vitest/coverage-v8": {
++      "version": "2.1.9",
++      "resolved": "https://registry.npmjs.org/@vitest/coverage-v8/-/coverage-v8-2.1.9.tgz",
++      "integrity": "sha512-Z2cOr0ksM00MpEfyVE8KXIYPEcBFxdbLSs56L8PO0QQMxt/6bDj45uQfxoc96v05KW3clk7vvgP0qfDit9DmfQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@ampproject/remapping": "^2.3.0",
++        "@bcoe/v8-coverage": "^0.2.3",
++        "debug": "^4.3.7",
++        "istanbul-lib-coverage": "^3.2.2",
++        "istanbul-lib-report": "^3.0.1",
++        "istanbul-lib-source-maps": "^5.0.6",
++        "istanbul-reports": "^3.1.7",
++        "magic-string": "^0.30.12",
++        "magicast": "^0.3.5",
++        "std-env": "^3.8.0",
++        "test-exclude": "^7.0.1",
++        "tinyrainbow": "^1.2.0"
++      },
++      "funding": {
++        "url": "https://opencollective.com/vitest"
++      },
++      "peerDependencies": {
++        "@vitest/browser": "2.1.9",
++        "vitest": "2.1.9"
++      },
++      "peerDependenciesMeta": {
++        "@vitest/browser": {
++          "optional": true
++        }
++      }
++    },
+     "node_modules/@vitest/expect": {
+       "version": "2.1.9",
+       "resolved": "https://registry.npmjs.org/@vitest/expect/-/expect-2.1.9.tgz",
+@@ -1434,7 +1637,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1985,12 +2187,26 @@
+         "node": ">= 0.4"
+       }
+     },
++    "node_modules/eastasianwidth": {
++      "version": "0.2.0",
++      "resolved": "https://registry.npmjs.org/eastasianwidth/-/eastasianwidth-0.2.0.tgz",
++      "integrity": "sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/ee-first": {
+       "version": "1.1.1",
+       "resolved": "https://registry.npmjs.org/ee-first/-/ee-first-1.1.1.tgz",
+       "integrity": "sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==",
+       "license": "MIT"
+     },
++    "node_modules/emoji-regex": {
++      "version": "9.2.2",
++      "resolved": "https://registry.npmjs.org/emoji-regex/-/emoji-regex-9.2.2.tgz",
++      "integrity": "sha512-L18DaJsXSUk2+42pv8mLs5jJT2hqFkFE4j21wOmgbUqsZ2hL72NsUU785g9RXgo3s0ZNgVl42TiHp3ZtOv/Vyg==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/encodeurl": {
+       "version": "2.0.0",
+       "resolved": "https://registry.npmjs.org/encodeurl/-/encodeurl-2.0.0.tgz",
+@@ -2111,7 +2327,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -2544,6 +2759,23 @@
+       "dev": true,
+       "license": "ISC"
+     },
++    "node_modules/foreground-child": {
++      "version": "3.3.1",
++      "resolved": "https://registry.npmjs.org/foreground-child/-/foreground-child-3.3.1.tgz",
++      "integrity": "sha512-gIXjKqtFuWEgzFRJA9WCQeSJLZDjgJUOMCMzxtvFq/37KojM1BFGufqsCy0r4qSQmYLsZYMeyRqzIWOMup03sw==",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "cross-spawn": "^7.0.6",
++        "signal-exit": "^4.0.1"
++      },
++      "engines": {
++        "node": ">=14"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
+     "node_modules/forwarded": {
+       "version": "0.2.0",
+       "resolved": "https://registry.npmjs.org/forwarded/-/forwarded-0.2.0.tgz",
+@@ -2791,6 +3023,13 @@
+         "node": ">= 0.4"
+       }
+     },
++    "node_modules/html-escaper": {
++      "version": "2.0.2",
++      "resolved": "https://registry.npmjs.org/html-escaper/-/html-escaper-2.0.2.tgz",
++      "integrity": "sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/http-errors": {
+       "version": "2.0.1",
+       "resolved": "https://registry.npmjs.org/http-errors/-/http-errors-2.0.1.tgz",
+@@ -2923,6 +3162,16 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/is-fullwidth-code-point": {
++      "version": "3.0.0",
++      "resolved": "https://registry.npmjs.org/is-fullwidth-code-point/-/is-fullwidth-code-point-3.0.0.tgz",
++      "integrity": "sha512-zymm5+u+sCsSWyD9qNaejV3DFvhCKclKdizYaJUuHA83RLjb7nSuGnddCHGv0hk+KY7BMAlsWeK4Ueg6EV6XQg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=8"
++      }
++    },
+     "node_modules/is-glob": {
+       "version": "4.0.3",
+       "resolved": "https://registry.npmjs.org/is-glob/-/is-glob-4.0.3.tgz",
+@@ -2963,6 +3212,76 @@
+       "dev": true,
+       "license": "ISC"
+     },
++    "node_modules/istanbul-lib-coverage": {
++      "version": "3.2.2",
++      "resolved": "https://registry.npmjs.org/istanbul-lib-coverage/-/istanbul-lib-coverage-3.2.2.tgz",
++      "integrity": "sha512-O8dpsF+r0WV/8MNRKfnmrtCWhuKjxrq2w+jpzBL5UZKTi2LeVWnWOmWRxFlesJONmc+wLAGvKQZEOanko0LFTg==",
++      "dev": true,
++      "license": "BSD-3-Clause",
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/istanbul-lib-report": {
++      "version": "3.0.1",
++      "resolved": "https://registry.npmjs.org/istanbul-lib-report/-/istanbul-lib-report-3.0.1.tgz",
++      "integrity": "sha512-GCfE1mtsHGOELCU8e/Z7YWzpmybrx/+dSTfLrvY8qRmaY6zXTKWn6WQIjaAFw069icm6GVMNkgu0NzI4iPZUNw==",
++      "dev": true,
++      "license": "BSD-3-Clause",
++      "dependencies": {
++        "istanbul-lib-coverage": "^3.0.0",
++        "make-dir": "^4.0.0",
++        "supports-color": "^7.1.0"
++      },
++      "engines": {
++        "node": ">=10"
++      }
++    },
++    "node_modules/istanbul-lib-source-maps": {
++      "version": "5.0.6",
++      "resolved": "https://registry.npmjs.org/istanbul-lib-source-maps/-/istanbul-lib-source-maps-5.0.6.tgz",
++      "integrity": "sha512-yg2d+Em4KizZC5niWhQaIomgf5WlL4vOOjZ5xGCmF8SnPE/mDWWXgvRExdcpCgh9lLRRa1/fSYp2ymmbJ1pI+A==",
++      "dev": true,
++      "license": "BSD-3-Clause",
++      "dependencies": {
++        "@jridgewell/trace-mapping": "^0.3.23",
++        "debug": "^4.1.1",
++        "istanbul-lib-coverage": "^3.0.0"
++      },
++      "engines": {
++        "node": ">=10"
++      }
++    },
++    "node_modules/istanbul-reports": {
++      "version": "3.2.0",
++      "resolved": "https://registry.npmjs.org/istanbul-reports/-/istanbul-reports-3.2.0.tgz",
++      "integrity": "sha512-HGYWWS/ehqTV3xN10i23tkPkpH46MLCIMFNCaaKNavAXTF1RkqxawEPtnjnGZ6XKSInBKkiOA5BKS+aZiY3AvA==",
++      "dev": true,
++      "license": "BSD-3-Clause",
++      "dependencies": {
++        "html-escaper": "^2.0.0",
++        "istanbul-lib-report": "^3.0.0"
++      },
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/jackspeak": {
++      "version": "3.4.3",
++      "resolved": "https://registry.npmjs.org/jackspeak/-/jackspeak-3.4.3.tgz",
++      "integrity": "sha512-OGlZQpz2yfahA/Rd1Y8Cd9SIEsqvXkLVoSw/cgwhnhFMDbsQFeZYoJJ7bIZBS9BcamUW96asq/npPWugM+RQBw==",
++      "dev": true,
++      "license": "BlueOak-1.0.0",
++      "dependencies": {
++        "@isaacs/cliui": "^8.0.2"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      },
++      "optionalDependencies": {
++        "@pkgjs/parseargs": "^0.11.0"
++      }
++    },
+     "node_modules/js-yaml": {
+       "version": "4.1.1",
+       "resolved": "https://registry.npmjs.org/js-yaml/-/js-yaml-4.1.1.tgz",
+@@ -3051,6 +3370,13 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/lru-cache": {
++      "version": "10.4.3",
++      "resolved": "https://registry.npmjs.org/lru-cache/-/lru-cache-10.4.3.tgz",
++      "integrity": "sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==",
++      "dev": true,
++      "license": "ISC"
++    },
+     "node_modules/magic-string": {
+       "version": "0.30.21",
+       "resolved": "https://registry.npmjs.org/magic-string/-/magic-string-0.30.21.tgz",
+@@ -3061,6 +3387,34 @@
+         "@jridgewell/sourcemap-codec": "^1.5.5"
+       }
+     },
++    "node_modules/magicast": {
++      "version": "0.3.5",
++      "resolved": "https://registry.npmjs.org/magicast/-/magicast-0.3.5.tgz",
++      "integrity": "sha512-L0WhttDl+2BOsybvEOLK7fW3UA0OQ0IQ2d6Zl2x/a6vVRs3bAY0ECOSHHeL5jD+SbOpOCUEi0y1DgHEn9Qn1AQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/parser": "^7.25.4",
++        "@babel/types": "^7.25.4",
++        "source-map-js": "^1.2.0"
++      }
++    },
++    "node_modules/make-dir": {
++      "version": "4.0.0",
++      "resolved": "https://registry.npmjs.org/make-dir/-/make-dir-4.0.0.tgz",
++      "integrity": "sha512-hXdUTZYIVOt1Ex//jAQi+wTZZpUpwBj/0QsOzqegb3rGMMeJiSEu5xLHnYfBrRV4RH2+OCSOO95Is/7x1WJ4bw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "semver": "^7.5.3"
++      },
++      "engines": {
++        "node": ">=10"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
+     "node_modules/math-intrinsics": {
+       "version": "1.1.0",
+       "resolved": "https://registry.npmjs.org/math-intrinsics/-/math-intrinsics-1.1.0.tgz",
+@@ -3191,6 +3545,16 @@
+         "url": "https://github.com/sponsors/ljharb"
+       }
+     },
++    "node_modules/minipass": {
++      "version": "7.1.3",
++      "resolved": "https://registry.npmjs.org/minipass/-/minipass-7.1.3.tgz",
++      "integrity": "sha512-tEBHqDnIoM/1rXME1zgka9g6Q2lcoCkxHLuc7ODJ5BxbP5d4c2Z5cGgtXAku59200Cx7diuHTOYfSBD8n6mm8A==",
++      "dev": true,
++      "license": "BlueOak-1.0.0",
++      "engines": {
++        "node": ">=16 || 14 >=14.17"
++      }
++    },
+     "node_modules/mkdirp-classic": {
+       "version": "0.5.3",
+       "resolved": "https://registry.npmjs.org/mkdirp-classic/-/mkdirp-classic-0.5.3.tgz",
+@@ -3339,6 +3703,13 @@
+         "url": "https://github.com/sponsors/sindresorhus"
+       }
+     },
++    "node_modules/package-json-from-dist": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/package-json-from-dist/-/package-json-from-dist-1.0.1.tgz",
++      "integrity": "sha512-UEZIS3/by4OC8vL3P2dTXRETpebLI2NiI5vIrjaD/5UtrkFX/tNbwjTSRAGC/+7CAo2pIcBaRgWmcBBHcsaCIw==",
++      "dev": true,
++      "license": "BlueOak-1.0.0"
++    },
+     "node_modules/parent-module": {
+       "version": "1.0.1",
+       "resolved": "https://registry.npmjs.org/parent-module/-/parent-module-1.0.1.tgz",
+@@ -3391,6 +3762,23 @@
+         "node": ">=8"
+       }
+     },
++    "node_modules/path-scurry": {
++      "version": "1.11.1",
++      "resolved": "https://registry.npmjs.org/path-scurry/-/path-scurry-1.11.1.tgz",
++      "integrity": "sha512-Xa4Nw17FS9ApQFJ9umLiJS4orGjm7ZzwUrwamcGQuHSzDyth9boKDaycYdDcZDuqYATXw4HFXgaqWTctW/v1HA==",
++      "dev": true,
++      "license": "BlueOak-1.0.0",
++      "dependencies": {
++        "lru-cache": "^10.2.0",
++        "minipass": "^5.0.0 || ^6.0.2 || ^7.0.0"
++      },
++      "engines": {
++        "node": ">=16 || 14 >=14.18"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
+     "node_modules/path-to-regexp": {
+       "version": "0.1.12",
+       "resolved": "https://registry.npmjs.org/path-to-regexp/-/path-to-regexp-0.1.12.tgz",
+@@ -3947,6 +4335,19 @@
+       "dev": true,
+       "license": "ISC"
+     },
++    "node_modules/signal-exit": {
++      "version": "4.1.0",
++      "resolved": "https://registry.npmjs.org/signal-exit/-/signal-exit-4.1.0.tgz",
++      "integrity": "sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==",
++      "dev": true,
++      "license": "ISC",
++      "engines": {
++        "node": ">=14"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
+     "node_modules/simple-concat": {
+       "version": "1.0.1",
+       "resolved": "https://registry.npmjs.org/simple-concat/-/simple-concat-1.0.1.tgz",
+@@ -4044,6 +4445,76 @@
+         "safe-buffer": "~5.2.0"
+       }
+     },
++    "node_modules/string-width": {
++      "version": "5.1.2",
++      "resolved": "https://registry.npmjs.org/string-width/-/string-width-5.1.2.tgz",
++      "integrity": "sha512-HnLOCR3vjcY8beoNLtcjZ5/nxn2afmME6lhrDrebokqMap+XbeW8n9TXpPDOqdGK5qcI3oT0GKTW6wC7EMiVqA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "eastasianwidth": "^0.2.0",
++        "emoji-regex": "^9.2.2",
++        "strip-ansi": "^7.0.1"
++      },
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
++    "node_modules/string-width-cjs": {
++      "name": "string-width",
++      "version": "4.2.3",
++      "resolved": "https://registry.npmjs.org/string-width/-/string-width-4.2.3.tgz",
++      "integrity": "sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "emoji-regex": "^8.0.0",
++        "is-fullwidth-code-point": "^3.0.0",
++        "strip-ansi": "^6.0.1"
++      },
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/string-width-cjs/node_modules/emoji-regex": {
++      "version": "8.0.0",
++      "resolved": "https://registry.npmjs.org/emoji-regex/-/emoji-regex-8.0.0.tgz",
++      "integrity": "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/string-width/node_modules/ansi-regex": {
++      "version": "6.2.2",
++      "resolved": "https://registry.npmjs.org/ansi-regex/-/ansi-regex-6.2.2.tgz",
++      "integrity": "sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/ansi-regex?sponsor=1"
++      }
++    },
++    "node_modules/string-width/node_modules/strip-ansi": {
++      "version": "7.2.0",
++      "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-7.2.0.tgz",
++      "integrity": "sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-regex": "^6.2.2"
++      },
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/strip-ansi?sponsor=1"
++      }
++    },
+     "node_modules/strip-ansi": {
+       "version": "6.0.1",
+       "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-6.0.1.tgz",
+@@ -4057,6 +4528,20 @@
+         "node": ">=8"
+       }
+     },
++    "node_modules/strip-ansi-cjs": {
++      "name": "strip-ansi",
++      "version": "6.0.1",
++      "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-6.0.1.tgz",
++      "integrity": "sha512-Y38VPSHcqkFrCpFnQ9vuSXmquuv5oXOKpGeT6aGrr3o3Gc9AlVa6JBfUSOCnbxGGZF+/0ooI7KrPuUSztUdU5A==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-regex": "^5.0.1"
++      },
++      "engines": {
++        "node": ">=8"
++      }
++    },
+     "node_modules/strip-json-comments": {
+       "version": "3.1.1",
+       "resolved": "https://registry.npmjs.org/strip-json-comments/-/strip-json-comments-3.1.1.tgz",
+@@ -4111,6 +4596,98 @@
+         "node": ">=6"
+       }
+     },
++    "node_modules/test-exclude": {
++      "version": "7.0.2",
++      "resolved": "https://registry.npmjs.org/test-exclude/-/test-exclude-7.0.2.tgz",
++      "integrity": "sha512-u9E6A+ZDYdp7a4WnarkXPZOx8Ilz46+kby6p1yZ8zsGTz9gYa6FIS7lj2oezzNKmtdyyJNNmmXDppga5GB7kSw==",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "@istanbuljs/schema": "^0.1.2",
++        "glob": "^10.4.1",
++        "minimatch": "^10.2.2"
++      },
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/test-exclude/node_modules/balanced-match": {
++      "version": "4.0.4",
++      "resolved": "https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz",
++      "integrity": "sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": "18 || 20 || >=22"
++      }
++    },
++    "node_modules/test-exclude/node_modules/glob": {
++      "version": "10.5.0",
++      "resolved": "https://registry.npmjs.org/glob/-/glob-10.5.0.tgz",
++      "integrity": "sha512-DfXN8DfhJ7NH3Oe7cFmu3NCu1wKbkReJ8TorzSAFbSKrlNaQSKfIzqYqVY8zlbs2NLBbWpRiU52GX2PbaBVNkg==",
++      "deprecated": "Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "foreground-child": "^3.1.0",
++        "jackspeak": "^3.1.2",
++        "minimatch": "^9.0.4",
++        "minipass": "^7.1.2",
++        "package-json-from-dist": "^1.0.0",
++        "path-scurry": "^1.11.1"
++      },
++      "bin": {
++        "glob": "dist/esm/bin.mjs"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
++    "node_modules/test-exclude/node_modules/glob/node_modules/minimatch": {
++      "version": "9.0.9",
++      "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-9.0.9.tgz",
++      "integrity": "sha512-OBwBN9AL4dqmETlpS2zasx+vTeWclWzkblfZk7KTA5j3jeOONz/tRCnZomUyvNg83wL5Zv9Ss6HMJXAgL8R2Yg==",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "brace-expansion": "^2.0.2"
++      },
++      "engines": {
++        "node": ">=16 || 14 >=14.17"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
++    "node_modules/test-exclude/node_modules/minimatch": {
++      "version": "10.2.4",
++      "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-10.2.4.tgz",
++      "integrity": "sha512-oRjTw/97aTBN0RHbYCdtF1MQfvusSIBQM0IZEgzl6426+8jSC0nF1a/GmnVLpfB9yyr6g6FTqWqiZVbxrtaCIg==",
++      "dev": true,
++      "license": "BlueOak-1.0.0",
++      "dependencies": {
++        "brace-expansion": "^5.0.2"
++      },
++      "engines": {
++        "node": "18 || 20 || >=22"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
++    "node_modules/test-exclude/node_modules/minimatch/node_modules/brace-expansion": {
++      "version": "5.0.4",
++      "resolved": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.4.tgz",
++      "integrity": "sha512-h+DEnpVvxmfVefa4jFbCf5HdH5YMDXRsmKflpf1pILZWRFlTbJpxeU55nJl4Smt5HQaGzg1o6RHFPJaOqnmBDg==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "balanced-match": "^4.0.2"
++      },
++      "engines": {
++        "node": "18 || 20 || >=22"
++      }
++    },
+     "node_modules/text-table": {
+       "version": "0.2.0",
+       "resolved": "https://registry.npmjs.org/text-table/-/text-table-0.2.0.tgz",
+@@ -4254,7 +4831,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -4518,6 +5094,107 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/wrap-ansi": {
++      "version": "8.1.0",
++      "resolved": "https://registry.npmjs.org/wrap-ansi/-/wrap-ansi-8.1.0.tgz",
++      "integrity": "sha512-si7QWI6zUMq56bESFvagtmzMdGOtoxfR+Sez11Mobfc7tm+VkUckk9bW2UeffTGVUbOksxmSw0AA2gs8g71NCQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-styles": "^6.1.0",
++        "string-width": "^5.0.1",
++        "strip-ansi": "^7.0.1"
++      },
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/wrap-ansi?sponsor=1"
++      }
++    },
++    "node_modules/wrap-ansi-cjs": {
++      "name": "wrap-ansi",
++      "version": "7.0.0",
++      "resolved": "https://registry.npmjs.org/wrap-ansi/-/wrap-ansi-7.0.0.tgz",
++      "integrity": "sha512-YVGIj2kamLSTxw6NsZjoBxfSwsn0ycdesmc4p+Q21c5zPuZ1pl+NfxVdxPtdHvmNVOQ6XSYG4AUtyt/Fi7D16Q==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-styles": "^4.0.0",
++        "string-width": "^4.1.0",
++        "strip-ansi": "^6.0.0"
++      },
++      "engines": {
++        "node": ">=10"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/wrap-ansi?sponsor=1"
++      }
++    },
++    "node_modules/wrap-ansi-cjs/node_modules/emoji-regex": {
++      "version": "8.0.0",
++      "resolved": "https://registry.npmjs.org/emoji-regex/-/emoji-regex-8.0.0.tgz",
++      "integrity": "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/wrap-ansi-cjs/node_modules/string-width": {
++      "version": "4.2.3",
++      "resolved": "https://registry.npmjs.org/string-width/-/string-width-4.2.3.tgz",
++      "integrity": "sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "emoji-regex": "^8.0.0",
++        "is-fullwidth-code-point": "^3.0.0",
++        "strip-ansi": "^6.0.1"
++      },
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/wrap-ansi/node_modules/ansi-regex": {
++      "version": "6.2.2",
++      "resolved": "https://registry.npmjs.org/ansi-regex/-/ansi-regex-6.2.2.tgz",
++      "integrity": "sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/ansi-regex?sponsor=1"
++      }
++    },
++    "node_modules/wrap-ansi/node_modules/ansi-styles": {
++      "version": "6.2.3",
++      "resolved": "https://registry.npmjs.org/ansi-styles/-/ansi-styles-6.2.3.tgz",
++      "integrity": "sha512-4Dj6M28JB+oAH8kFkTLUo+a2jwOFkuqb3yucU0CANcRRUbxS0cP0nZYCGjcc3BNXwRIsUVmDGgzawme7zvJHvg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/ansi-styles?sponsor=1"
++      }
++    },
++    "node_modules/wrap-ansi/node_modules/strip-ansi": {
++      "version": "7.2.0",
++      "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-7.2.0.tgz",
++      "integrity": "sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-regex": "^6.2.2"
++      },
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/strip-ansi?sponsor=1"
++      }
++    },
+     "node_modules/wrappy": {
+       "version": "1.0.2",
+       "resolved": "https://registry.npmjs.org/wrappy/-/wrappy-1.0.2.tgz",
+diff --git a/package.json b/package.json
+index 639ed8e..b54cb4c 100644
+--- a/package.json
++++ b/package.json
+@@ -5,7 +5,7 @@
+   "type": "module",
+   "scripts": {
+     "build": "tsc",
+-    "lint": "eslint src/ tests/",
++    "lint": "eslint src/",
+     "test": "vitest run"
+   },
+   "dependencies": {
+@@ -19,6 +19,7 @@
+     "eslint": "^8.56.0",
+     "@typescript-eslint/parser": "^7.0.0",
+     "@typescript-eslint/eslint-plugin": "^7.0.0",
++    "@vitest/coverage-v8": "^2.0.0",
+     "@types/better-sqlite3": "^7.6.0",
+     "@types/express": "^4.17.0",
+     "@types/uuid": "^10.0.0"
+diff --git a/src/analytics/index.d.ts b/src/analytics/index.d.ts
+new file mode 100644
+index 0000000..89cd76f
+--- /dev/null
++++ b/src/analytics/index.d.ts
+@@ -0,0 +1,4 @@
++import { EventBus } from '../bus.ts';
++import { AnalyticsService } from '../types.ts';
++export declare function createAnalyticsService(bus: EventBus): AnalyticsService;
++//# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/src/analytics/index.d.ts.map b/src/analytics/index.d.ts.map
+new file mode 100644
+index 0000000..fa6e32b
+--- /dev/null
++++ b/src/analytics/index.d.ts.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,QAAQ,EAAE,MAAM,WAAW,CAAC;AACrC,OAAO,EAAE,gBAAgB,EAAsC,MAAM,aAAa,CAAC;AAEnF,wBAAgB,sBAAsB,CAAC,GAAG,EAAE,QAAQ,GAAG,gBAAgB,CAyFtE"}
+\ No newline at end of file
+diff --git a/src/analytics/index.js b/src/analytics/index.js
+new file mode 100644
+index 0000000..f336073
+--- /dev/null
++++ b/src/analytics/index.js
+@@ -0,0 +1,85 @@
++import { Events, PaymentStatus } from '../types.ts';
++export function createAnalyticsService(bus) {
++    // State for analytics
++    const eventCounts = new Map();
++    let revenue = 0;
++    const cartItems = new Map(); // cartId -> { productId => quantity }
++    const uniqueCarts = new Set();
++    const orderCount = { value: 0 }; // using object to allow modification in inner functions
++    const orderTotals = new Map(); // orderId => total
++    const productOrderQuantities = new Map(); // productId => total quantity ordered
++    // Helper to increment event count
++    const incrementEventCount = (eventType) => {
++        const current = eventCounts.get(eventType) ?? 0;
++        eventCounts.set(eventType, current + 1);
++    };
++    // Listen to all events except ANALYTICS_EVENT to avoid self-loop
++    const eventNames = Object.values(Events).filter((e) => e !== Events.ANALYTICS_EVENT);
++    for (const eventName of eventNames) {
++        bus.on(eventName, (payload) => {
++            // Increment count for this event type
++            incrementEventCount(eventName);
++            // Handle specific events for metrics
++            switch (eventName) {
++                case Events.CART_UPDATED: {
++                    const event = payload;
++                    // Update cart items for this cart (replace with current items)
++                    const itemsMap = new Map();
++                    for (const item of event.items) {
++                        itemsMap.set(item.productId, item.quantity);
++                    }
++                    cartItems.set(event.cartId, itemsMap);
++                    uniqueCarts.add(event.cartId);
++                    break;
++                }
++                case Events.ORDER_CREATED: {
++                    const event = payload;
++                    orderCount.value += 1;
++                    orderTotals.set(event.orderId, event.total);
++                    // Use cart items at the time of order to count product quantities
++                    const cartItemMap = cartItems.get(event.cartId);
++                    if (cartItemMap) {
++                        for (const [productId, quantity] of cartItemMap.entries()) {
++                            const current = productOrderQuantities.get(productId) ?? 0;
++                            productOrderQuantities.set(productId, current + quantity);
++                        }
++                    }
++                    break;
++                }
++                case Events.PAYMENT_PROCESSED: {
++                    const event = payload;
++                    if (event.status === PaymentStatus.SUCCESS) {
++                        const total = orderTotals.get(event.orderId);
++                        if (total !== undefined) {
++                            revenue += total;
++                        }
++                    }
++                    break;
++                }
++                // No specific handling needed for other events for our metrics
++                default:
++                    break;
++            }
++        });
++    }
++    return {
++        getEventCount(eventType) {
++            return eventCounts.get(eventType) ?? 0;
++        },
++        getRevenue() {
++            return revenue;
++        },
++        getConversionRate() {
++            const cartsCreated = uniqueCarts.size;
++            return cartsCreated > 0 ? orderCount.value / cartsCreated : 0;
++        },
++        getTopProducts(limit) {
++            // Convert map to array, sort by count descending, take top limit
++            const productsArray = Array.from(productOrderQuantities.entries())
++                .map(([productId, count]) => ({ productId, count }))
++                .sort((a, b) => b.count - a.count);
++            return productsArray.slice(0, limit);
++        }
++    };
++}
++//# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/src/analytics/index.js.map b/src/analytics/index.js.map
+new file mode 100644
+index 0000000..df1dc0b
+--- /dev/null
++++ b/src/analytics/index.js.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.js","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"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"}
+\ No newline at end of file
+diff --git a/src/analytics/index.ts b/src/analytics/index.ts
+new file mode 100644
+index 0000000..80a6780
+--- /dev/null
++++ b/src/analytics/index.ts
+@@ -0,0 +1,93 @@
++import { EventBus } from '../bus.ts';
++import { AnalyticsService, Events, OrderStatus, PaymentStatus } from '../types.ts';
++
++export function createAnalyticsService(bus: EventBus): AnalyticsService {
++  // State for analytics
++  const eventCounts = new Map<string, number>();
++  let revenue = 0;
++  const cartItems = new Map<string, Map<string, number>>(); // cartId -> { productId => quantity }
++  const uniqueCarts = new Set<string>();
++  const orderCount = { value: 0 }; // using object to allow modification in inner functions
++  const orderTotals = new Map<string, number>(); // orderId => total
++  const productOrderQuantities = new Map<string, number>(); // productId => total quantity ordered
++
++  // Helper to increment event count
++  const incrementEventCount = (eventType: string) => {
++    const current = eventCounts.get(eventType) ?? 0;
++    eventCounts.set(eventType, current + 1);
++  };
++
++  // Listen to all events except ANALYTICS_EVENT to avoid self-loop
++  const eventNames = (Object.values(Events) as string[]).filter(
++    (e) => e !== Events.ANALYTICS_EVENT
++  );
++
++  for (const eventName of eventNames) {
++    bus.on(eventName, (payload: unknown) => {
++      // Increment count for this event type
++      incrementEventCount(eventName);
++
++      // Handle specific events for metrics
++      switch (eventName) {
++        case Events.CART_UPDATED: {
++          const event = payload as { cartId: string; userId: string; items: Array<{ productId: string; quantity: number }> };
++          // Update cart items for this cart (replace with current items)
++          const itemsMap = new Map<string, number>();
++          for (const item of event.items) {
++            itemsMap.set(item.productId, item.quantity);
++          }
++          cartItems.set(event.cartId, itemsMap);
++          uniqueCarts.add(event.cartId);
++          break;
++        }
++        case Events.ORDER_CREATED: {
++          const event = payload as { orderId: string; userId: string; cartId: string; total: number };
++          orderCount.value += 1;
++          orderTotals.set(event.orderId, event.total);
++          // Use cart items at the time of order to count product quantities
++          const cartItemMap = cartItems.get(event.cartId);
++          if (cartItemMap) {
++            for (const [productId, quantity] of cartItemMap.entries()) {
++              const current = productOrderQuantities.get(productId) ?? 0;
++              productOrderQuantities.set(productId, current + quantity);
++            }
++          }
++          break;
++        }
++        case Events.PAYMENT_PROCESSED: {
++          const event = payload as { orderId: string; status: PaymentStatus; transactionId?: string; error?: string };
++          if (event.status === PaymentStatus.SUCCESS) {
++            const total = orderTotals.get(event.orderId);
++            if (total !== undefined) {
++              revenue += total;
++            }
++          }
++          break;
++        }
++        // No specific handling needed for other events for our metrics
++        default:
++          break;
++      }
++    });
++  }
++
++  return {
++    getEventCount(eventType: string): number {
++      return eventCounts.get(eventType) ?? 0;
++    },
++    getRevenue(): number {
++      return revenue;
++    },
++    getConversionRate(): number {
++      const cartsCreated = uniqueCarts.size;
++      return cartsCreated > 0 ? orderCount.value / cartsCreated : 0;
++    },
++    getTopProducts(limit: number): Array<{ productId: string; count: number }> {
++      // Convert map to array, sort by count descending, take top limit
++      const productsArray = Array.from(productOrderQuantities.entries())
++        .map(([productId, count]) => ({ productId, count }))
++        .sort((a, b) => b.count - a.count);
++      return productsArray.slice(0, limit);
++    }
++  };
++}
+\ No newline at end of file
+diff --git a/src/bus.d.ts b/src/bus.d.ts
+new file mode 100644
+index 0000000..4484218
+--- /dev/null
++++ b/src/bus.d.ts
+@@ -0,0 +1,16 @@
++type EventHandler = (payload: unknown) => void | Promise<void>;
++export declare class EventBus {
++    private handlers;
++    private eventLog;
++    on(event: string, handler: EventHandler): void;
++    off(event: string, handler: EventHandler): void;
++    emit(event: string, payload: unknown): Promise<void>;
++    getLog(): Array<{
++        event: string;
++        payload: unknown;
++        timestamp: number;
++    }>;
++    clear(): void;
++}
++export {};
++//# sourceMappingURL=bus.d.ts.map
+\ No newline at end of file
+diff --git a/src/bus.d.ts.map b/src/bus.d.ts.map
+new file mode 100644
+index 0000000..88c6d64
+--- /dev/null
++++ b/src/bus.d.ts.map
+@@ -0,0 +1 @@
++{"version":3,"file":"bus.d.ts","sourceRoot":"","sources":["bus.ts"],"names":[],"mappings":"AAAA,KAAK,YAAY,GAAG,CAAC,OAAO,EAAE,OAAO,KAAK,IAAI,GAAG,OAAO,CAAC,IAAI,CAAC,CAAC;AAE/D,qBAAa,QAAQ;IACnB,OAAO,CAAC,QAAQ,CAAwC;IACxD,OAAO,CAAC,QAAQ,CAAqE;IAErF,EAAE,CAAC,KAAK,EAAE,MAAM,EAAE,OAAO,EAAE,YAAY,GAAG,IAAI;IAO9C,GAAG,CAAC,KAAK,EAAE,MAAM,EAAE,OAAO,EAAE,YAAY,GAAG,IAAI;IAIzC,IAAI,CAAC,KAAK,EAAE,MAAM,EAAE,OAAO,EAAE,OAAO,GAAG,OAAO,CAAC,IAAI,CAAC;IAU1D,MAAM,IAAI,KAAK,CAAC;QAAE,KAAK,EAAE,MAAM,CAAC;QAAC,OAAO,EAAE,OAAO,CAAC;QAAC,SAAS,EAAE,MAAM,CAAA;KAAE,CAAC;IAIvE,KAAK,IAAI,IAAI;CAId"}
+\ No newline at end of file
+diff --git a/src/bus.js b/src/bus.js
+new file mode 100644
+index 0000000..f7c2a32
+--- /dev/null
++++ b/src/bus.js
+@@ -0,0 +1,30 @@
++export class EventBus {
++    handlers = new Map();
++    eventLog = [];
++    on(event, handler) {
++        if (!this.handlers.has(event)) {
++            this.handlers.set(event, new Set());
++        }
++        this.handlers.get(event).add(handler);
++    }
++    off(event, handler) {
++        this.handlers.get(event)?.delete(handler);
++    }
++    async emit(event, payload) {
++        this.eventLog.push({ event, payload, timestamp: Date.now() });
++        const handlers = this.handlers.get(event);
++        if (handlers) {
++            for (const handler of handlers) {
++                await handler(payload);
++            }
++        }
++    }
++    getLog() {
++        return [...this.eventLog];
++    }
++    clear() {
++        this.handlers.clear();
++        this.eventLog = [];
++    }
++}
++//# sourceMappingURL=bus.js.map
+\ No newline at end of file
+diff --git a/src/bus.js.map b/src/bus.js.map
+new file mode 100644
+index 0000000..f2c33d3
+--- /dev/null
++++ b/src/bus.js.map
+@@ -0,0 +1 @@
++{"version":3,"file":"bus.js","sourceRoot":"","sources":["bus.ts"],"names":[],"mappings":"AAEA,MAAM,OAAO,QAAQ;IACX,QAAQ,GAAG,IAAI,GAAG,EAA6B,CAAC;IAChD,QAAQ,GAAkE,EAAE,CAAC;IAErF,EAAE,CAAC,KAAa,EAAE,OAAqB;QACrC,IAAI,CAAC,IAAI,CAAC,QAAQ,CAAC,GAAG,CAAC,KAAK,CAAC,EAAE,CAAC;YAC9B,IAAI,CAAC,QAAQ,CAAC,GAAG,CAAC,KAAK,EAAE,IAAI,GAAG,EAAE,CAAC,CAAC;QACtC,CAAC;QACD,IAAI,CAAC,QAAQ,CAAC,GAAG,CAAC,KAAK,CAAE,CAAC,GAAG,CAAC,OAAO,CAAC,CAAC;IACzC,CAAC;IAED,GAAG,CAAC,KAAa,EAAE,OAAqB;QACtC,IAAI,CAAC,QAAQ,CAAC,GAAG,CAAC,KAAK,CAAC,EAAE,MAAM,CAAC,OAAO,CAAC,CAAC;IAC5C,CAAC;IAED,KAAK,CAAC,IAAI,CAAC,KAAa,EAAE,OAAgB;QACxC,IAAI,CAAC,QAAQ,CAAC,IAAI,CAAC,EAAE,KAAK,EAAE,OAAO,EAAE,SAAS,EAAE,IAAI,CAAC,GAAG,EAAE,EAAE,CAAC,CAAC;QAC9D,MAAM,QAAQ,GAAG,IAAI,CAAC,QAAQ,CAAC,GAAG,CAAC,KAAK,CAAC,CAAC;QAC1C,IAAI,QAAQ,EAAE,CAAC;YACb,KAAK,MAAM,OAAO,IAAI,QAAQ,EAAE,CAAC;gBAC/B,MAAM,OAAO,CAAC,OAAO,CAAC,CAAC;YACzB,CAAC;QACH,CAAC;IACH,CAAC;IAED,MAAM;QACJ,OAAO,CAAC,GAAG,IAAI,CAAC,QAAQ,CAAC,CAAC;IAC5B,CAAC;IAED,KAAK;QACH,IAAI,CAAC,QAAQ,CAAC,KAAK,EAAE,CAAC;QACtB,IAAI,CAAC,QAAQ,GAAG,EAAE,CAAC;IACrB,CAAC;CACF"}
+\ No newline at end of file
+diff --git a/src/cart/index.d.ts b/src/cart/index.d.ts
+new file mode 100644
+index 0000000..45f446a
+--- /dev/null
++++ b/src/cart/index.d.ts
+@@ -0,0 +1,4 @@
++import { EventBus } from '../bus.ts';
++import { CartService } from '../types.ts';
++export declare function createCartService(bus: EventBus): CartService;
++//# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/src/cart/index.d.ts.map b/src/cart/index.d.ts.map
+new file mode 100644
+index 0000000..6d710a6
+--- /dev/null
++++ b/src/cart/index.d.ts.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,QAAQ,EAAE,MAAM,WAAW,CAAC;AACrC,OAAO,EAAE,WAAW,EAAU,MAAM,aAAa,CAAC;AAElD,wBAAgB,iBAAiB,CAAC,GAAG,EAAE,QAAQ,GAAG,WAAW,CA6E5D"}
+\ No newline at end of file
+diff --git a/src/cart/index.js b/src/cart/index.js
+new file mode 100644
+index 0000000..de535f6
+--- /dev/null
++++ b/src/cart/index.js
+@@ -0,0 +1,80 @@
++import { Events } from '../types.ts';
++export function createCartService(bus) {
++    const carts = new Map();
++    let cartIdCounter = 1;
++    function generateCartId() {
++        return `cart_${cartIdCounter++}`;
++    }
++    function emitCartUpdated(cartId) {
++        const cart = carts.get(cartId);
++        if (!cart)
++            return;
++        const itemsArray = Array.from(cart.items.entries()).map(([productId, quantity]) => ({
++            productId,
++            quantity
++        }));
++        bus.emit(Events.CART_UPDATED, {
++            cartId,
++            userId: cart.userId,
++            items: itemsArray
++        });
++    }
++    return {
++        createCart(userId) {
++            const id = generateCartId();
++            carts.set(id, { userId, items: new Map() });
++            emitCartUpdated(id);
++            return id;
++        },
++        addItem(cartId, productId, quantity) {
++            if (quantity <= 0)
++                return;
++            const cart = carts.get(cartId);
++            if (!cart)
++                return;
++            const current = cart.items.get(productId) ?? 0;
++            cart.items.set(productId, current + quantity);
++            emitCartUpdated(cartId);
++        },
++        removeItem(cartId, productId) {
++            const cart = carts.get(cartId);
++            if (!cart)
++                return;
++            cart.items.delete(productId);
++            emitCartUpdated(cartId);
++        },
++        getCart(cartId) {
++            const cart = carts.get(cartId);
++            if (!cart)
++                return null;
++            return {
++                id: cartId,
++                userId: cart.userId,
++                items: Array.from(cart.items.entries()).map(([productId, quantity]) => ({
++                    productId,
++                    quantity
++                }))
++            };
++        },
++        clearCart(cartId) {
++            const cart = carts.get(cartId);
++            if (!cart)
++                return;
++            cart.items.clear();
++            emitCartUpdated(cartId);
++        },
++        updateQuantity(cartId, productId, quantity) {
++            const cart = carts.get(cartId);
++            if (!cart)
++                return;
++            if (quantity <= 0) {
++                cart.items.delete(productId);
++            }
++            else {
++                cart.items.set(productId, quantity);
++            }
++            emitCartUpdated(cartId);
++        }
++    };
++}
++//# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/src/cart/index.js.map b/src/cart/index.js.map
+new file mode 100644
+index 0000000..62a38fb
+--- /dev/null
++++ b/src/cart/index.js.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.js","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"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"}
+\ No newline at end of file
+diff --git a/src/cart/index.ts b/src/cart/index.ts
+new file mode 100644
+index 0000000..15fe85d
+--- /dev/null
++++ b/src/cart/index.ts
+@@ -0,0 +1,81 @@
++import { EventBus } from '../bus.ts';
++import { CartService, Events } from '../types.ts';
++
++export function createCartService(bus: EventBus): CartService {
++  const carts = new Map<string, { userId: string; items: Map<string, number> }>();
++  let cartIdCounter = 1;
++
++  function generateCartId(): string {
++    return `cart_${cartIdCounter++}`;
++  }
++
++  function emitCartUpdated(cartId: string): void {
++    const cart = carts.get(cartId);
++    if (!cart) return;
++    const itemsArray = Array.from(cart.items.entries()).map(([productId, quantity]) => ({
++      productId,
++      quantity
++    }));
++    bus.emit(Events.CART_UPDATED, {
++      cartId,
++      userId: cart.userId,
++      items: itemsArray
++    });
++  }
++
++  return {
++    createCart(userId: string): string {
++      const id = generateCartId();
++      carts.set(id, { userId, items: new Map() });
++      emitCartUpdated(id);
++      return id;
++    },
++
++    addItem(cartId: string, productId: string, quantity: number): void {
++      if (quantity <= 0) return;
++      const cart = carts.get(cartId);
++      if (!cart) return;
++      const current = cart.items.get(productId) ?? 0;
++      cart.items.set(productId, current + quantity);
++      emitCartUpdated(cartId);
++    },
++
++    removeItem(cartId: string, productId: string): void {
++      const cart = carts.get(cartId);
++      if (!cart) return;
++      cart.items.delete(productId);
++      emitCartUpdated(cartId);
++    },
++
++    getCart(cartId: string): { id: string; userId: string; items: Array<{ productId: string; quantity: number }> } | null {
++      const cart = carts.get(cartId);
++      if (!cart) return null;
++      return {
++        id: cartId,
++        userId: cart.userId,
++        items: Array.from(cart.items.entries()).map(([productId, quantity]) => ({
++          productId,
++          quantity
++        }))
++      };
++    },
++
++    clearCart(cartId: string): void {
++      const cart = carts.get(cartId);
++      if (!cart) return;
++      cart.items.clear();
++      emitCartUpdated(cartId);
++    },
++
++    updateQuantity(cartId: string, productId: string, quantity: number): void {
++      const cart = carts.get(cartId);
++      if (!cart) return;
++      if (quantity <= 0) {
++        cart.items.delete(productId);
++      } else {
++        cart.items.set(productId, quantity);
++      }
++      emitCartUpdated(cartId);
++    }
++  };
++}
+\ No newline at end of file
+diff --git a/src/catalog/index.d.ts b/src/catalog/index.d.ts
+new file mode 100644
+index 0000000..d77ddcb
+--- /dev/null
++++ b/src/catalog/index.d.ts
+@@ -0,0 +1,4 @@
++import { EventBus } from '../bus.ts';
++import { CatalogService } from '../types.ts';
++export declare function createCatalogService(bus: EventBus): CatalogService;
++//# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/src/catalog/index.d.ts.map b/src/catalog/index.d.ts.map
+new file mode 100644
+index 0000000..13137b8
+--- /dev/null
++++ b/src/catalog/index.d.ts.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,QAAQ,EAAE,MAAM,WAAW,CAAC;AACrC,OAAO,EAAE,cAAc,EAAU,MAAM,aAAa,CAAC;AAErD,wBAAgB,oBAAoB,CAAC,GAAG,EAAE,QAAQ,GAAG,cAAc,CA0DlE"}
+\ No newline at end of file
+diff --git a/src/catalog/index.js b/src/catalog/index.js
+new file mode 100644
+index 0000000..8901be3
+--- /dev/null
++++ b/src/catalog/index.js
+@@ -0,0 +1,52 @@
++import { Events } from '../types.ts';
++export function createCatalogService(bus) {
++    const products = new Map();
++    let idCounter = 1;
++    function generateId() {
++        return `prod_${idCounter++}`;
++    }
++    return {
++        createProduct(name, price, category) {
++            const id = generateId();
++            const product = { id, name, price, category };
++            products.set(id, product);
++            bus.emit(Events.PRODUCT_CREATED, { productId: id, name, price, category });
++            return id;
++        },
++        getProduct(productId) {
++            return products.get(productId) ?? null;
++        },
++        listProducts(category) {
++            if (category) {
++                return Array.from(products.values())
++                    .filter(p => p.category === category)
++                    .map(p => ({ id: p.id, name: p.name, price: p.price, category: p.category }));
++            }
++            return Array.from(products.values()).map(p => ({
++                id: p.id,
++                name: p.name,
++                price: p.price,
++                category: p.category
++            }));
++        },
++        searchProducts(query) {
++            const lowerQuery = query.toLowerCase();
++            return Array.from(products.values())
++                .filter(p => p.name.toLowerCase().includes(lowerQuery) ||
++                p.category.toLowerCase().includes(lowerQuery))
++                .map(p => ({ id: p.id, name: p.name, price: p.price, category: p.category }));
++        },
++        updateProduct(productId, updates) {
++            const product = products.get(productId);
++            if (!product) {
++                return;
++            }
++            const updated = { ...product, ...updates };
++            products.set(productId, updated);
++        },
++        removeProduct(productId) {
++            return products.delete(productId);
++        }
++    };
++}
++//# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/src/catalog/index.js.map b/src/catalog/index.js.map
+new file mode 100644
+index 0000000..652c42f
+--- /dev/null
++++ b/src/catalog/index.js.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.js","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"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"}
+\ No newline at end of file
+diff --git a/src/catalog/index.ts b/src/catalog/index.ts
+new file mode 100644
+index 0000000..309e510
+--- /dev/null
++++ b/src/catalog/index.ts
+@@ -0,0 +1,62 @@
++import { EventBus } from '../bus.ts';
++import { CatalogService, Events } from '../types.ts';
++
++export function createCatalogService(bus: EventBus): CatalogService {
++  const products = new Map<string, { id: string; name: string; price: number; category: string }>();
++  let idCounter = 1;
++
++  function generateId(): string {
++    return `prod_${idCounter++}`;
++  }
++
++  return {
++    createProduct(name: string, price: number, category: string): string {
++      const id = generateId();
++      const product = { id, name, price, category };
++      products.set(id, product);
++      bus.emit(Events.PRODUCT_CREATED, { productId: id, name, price, category });
++      return id;
++    },
++
++    getProduct(productId: string): { id: string; name: string; price: number; category: string } | null {
++      return products.get(productId) ?? null;
++    },
++
++    listProducts(category?: string): Array<{ id: string; name: string; price: number; category: string }> {
++      if (category) {
++        return Array.from(products.values())
++          .filter(p => p.category === category)
++          .map(p => ({ id: p.id, name: p.name, price: p.price, category: p.category }));
++      }
++      return Array.from(products.values()).map(p => ({
++        id: p.id,
++        name: p.name,
++        price: p.price,
++        category: p.category
++      }));
++    },
++
++    searchProducts(query: string): Array<{ id: string; name: string; price: number; category: string }> {
++      const lowerQuery = query.toLowerCase();
++      return Array.from(products.values())
++        .filter(p =>
++          p.name.toLowerCase().includes(lowerQuery) ||
++          p.category.toLowerCase().includes(lowerQuery)
++        )
++        .map(p => ({ id: p.id, name: p.name, price: p.price, category: p.category }));
++    },
++
++    updateProduct(productId: string, updates: Partial<{ name: string; price: number; category: string }>): void {
++      const product = products.get(productId);
++      if (!product) {
++        return;
++      }
++      const updated = { ...product, ...updates };
++      products.set(productId, updated);
++    },
++
++    removeProduct(productId: string): boolean {
++      return products.delete(productId);
++    }
++  };
++}
+\ No newline at end of file
+diff --git a/src/index.d.ts b/src/index.d.ts
+new file mode 100644
+index 0000000..55cfbb4
+--- /dev/null
++++ b/src/index.d.ts
+@@ -0,0 +1,9 @@
++export { createCatalogService } from './catalog/index.ts';
++export { createInventoryService } from './inventory/index.ts';
++export { createCartService } from './cart/index.ts';
++export { createPricingService } from './pricing/index.ts';
++export { createOrderService } from './orders/index.ts';
++export { createPaymentService } from './payment/index.ts';
++export { createNotificationService } from './notifications/index.ts';
++export { createAnalyticsService } from './analytics/index.ts';
++//# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/src/index.d.ts.map b/src/index.d.ts.map
+new file mode 100644
+index 0000000..b983cf3
+--- /dev/null
++++ b/src/index.d.ts.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,oBAAoB,EAAE,MAAM,oBAAoB,CAAC;AAC1D,OAAO,EAAE,sBAAsB,EAAE,MAAM,sBAAsB,CAAC;AAC9D,OAAO,EAAE,iBAAiB,EAAE,MAAM,iBAAiB,CAAC;AACpD,OAAO,EAAE,oBAAoB,EAAE,MAAM,oBAAoB,CAAC;AAC1D,OAAO,EAAE,kBAAkB,EAAE,MAAM,mBAAmB,CAAC;AACvD,OAAO,EAAE,oBAAoB,EAAE,MAAM,oBAAoB,CAAC;AAC1D,OAAO,EAAE,yBAAyB,EAAE,MAAM,0BAA0B,CAAC;AACrE,OAAO,EAAE,sBAAsB,EAAE,MAAM,sBAAsB,CAAC"}
+\ No newline at end of file
+diff --git a/src/index.js b/src/index.js
+new file mode 100644
+index 0000000..37f4e60
+--- /dev/null
++++ b/src/index.js
+@@ -0,0 +1,9 @@
++export { createCatalogService } from './catalog/index.ts';
++export { createInventoryService } from './inventory/index.ts';
++export { createCartService } from './cart/index.ts';
++export { createPricingService } from './pricing/index.ts';
++export { createOrderService } from './orders/index.ts';
++export { createPaymentService } from './payment/index.ts';
++export { createNotificationService } from './notifications/index.ts';
++export { createAnalyticsService } from './analytics/index.ts';
++//# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/src/index.js.map b/src/index.js.map
+new file mode 100644
+index 0000000..2625d97
+--- /dev/null
++++ b/src/index.js.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.js","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,oBAAoB,EAAE,MAAM,oBAAoB,CAAC;AAC1D,OAAO,EAAE,sBAAsB,EAAE,MAAM,sBAAsB,CAAC;AAC9D,OAAO,EAAE,iBAAiB,EAAE,MAAM,iBAAiB,CAAC;AACpD,OAAO,EAAE,oBAAoB,EAAE,MAAM,oBAAoB,CAAC;AAC1D,OAAO,EAAE,kBAAkB,EAAE,MAAM,mBAAmB,CAAC;AACvD,OAAO,EAAE,oBAAoB,EAAE,MAAM,oBAAoB,CAAC;AAC1D,OAAO,EAAE,yBAAyB,EAAE,MAAM,0BAA0B,CAAC;AACrE,OAAO,EAAE,sBAAsB,EAAE,MAAM,sBAAsB,CAAC"}
+\ No newline at end of file
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..c4f83f4
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,8 @@
++export { createCatalogService } from './catalog/index.ts';
++export { createInventoryService } from './inventory/index.ts';
++export { createCartService } from './cart/index.ts';
++export { createPricingService } from './pricing/index.ts';
++export { createOrderService } from './orders/index.ts';
++export { createPaymentService } from './payment/index.ts';
++export { createNotificationService } from './notifications/index.ts';
++export { createAnalyticsService } from './analytics/index.ts';
+\ No newline at end of file
+diff --git a/src/inventory/index.d.ts b/src/inventory/index.d.ts
+new file mode 100644
+index 0000000..e136039
+--- /dev/null
++++ b/src/inventory/index.d.ts
+@@ -0,0 +1,4 @@
++import { EventBus } from '../bus.ts';
++import { InventoryService } from '../types.ts';
++export declare function createInventoryService(bus: EventBus): InventoryService;
++//# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/src/inventory/index.d.ts.map b/src/inventory/index.d.ts.map
+new file mode 100644
+index 0000000..1f5536a
+--- /dev/null
++++ b/src/inventory/index.d.ts.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,QAAQ,EAAE,MAAM,WAAW,CAAC;AACrC,OAAO,EAAE,gBAAgB,EAAU,MAAM,aAAa,CAAC;AAEvD,wBAAgB,sBAAsB,CAAC,GAAG,EAAE,QAAQ,GAAG,gBAAgB,CAsEtE"}
+\ No newline at end of file
+diff --git a/src/inventory/index.js b/src/inventory/index.js
+new file mode 100644
+index 0000000..08ebaec
+--- /dev/null
++++ b/src/inventory/index.js
+@@ -0,0 +1,69 @@
++import { Events } from '../types.ts';
++export function createInventoryService(bus) {
++    const inventory = new Map();
++    // Initialize product when created
++    bus.on(Events.PRODUCT_CREATED, (payload) => {
++        const event = payload;
++        if (!inventory.has(event.productId)) {
++            inventory.set(event.productId, { total: 0, reserved: 0, threshold: 0 });
++        }
++    });
++    return {
++        setStock(productId, quantity) {
++            let item = inventory.get(productId);
++            if (!item) {
++                item = { total: 0, reserved: 0, threshold: 0 };
++                inventory.set(productId, item);
++            }
++            item.total = quantity;
++            // Emit inventory updated event
++            bus.emit(Events.INVENTORY_UPDATED, { productId, quantity: item.total });
++            // Check for low stock
++            if (item.total < item.threshold) {
++                bus.emit(Events.LOW_STOCK_ALERT, {
++                    productId,
++                    currentQuantity: item.total,
++                    threshold: item.threshold
++                });
++            }
++        },
++        getStock(productId) {
++            const item = inventory.get(productId);
++            return item ? item.total : 0;
++        },
++        reserve(productId, quantity) {
++            const item = inventory.get(productId);
++            if (!item)
++                return false;
++            const available = item.total - item.reserved;
++            if (available >= quantity) {
++                item.reserved += quantity;
++                return true;
++            }
++            return false;
++        },
++        release(productId, quantity) {
++            const item = inventory.get(productId);
++            if (!item)
++                return;
++            item.reserved = Math.max(0, item.reserved - quantity);
++        },
++        setLowStockThreshold(productId, threshold) {
++            let item = inventory.get(productId);
++            if (!item) {
++                item = { total: 0, reserved: 0, threshold: 0 };
++                inventory.set(productId, item);
++            }
++            item.threshold = threshold;
++            // Check if current stock is below new threshold
++            if (item.total < item.threshold) {
++                bus.emit(Events.LOW_STOCK_ALERT, {
++                    productId,
++                    currentQuantity: item.total,
++                    threshold: item.threshold
++                });
++            }
++        }
++    };
++}
++//# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/src/inventory/index.js.map b/src/inventory/index.js.map
+new file mode 100644
+index 0000000..ac373f6
+--- /dev/null
++++ b/src/inventory/index.js.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.js","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"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"}
+\ No newline at end of file
+diff --git a/src/inventory/index.ts b/src/inventory/index.ts
+new file mode 100644
+index 0000000..d8d1be9
+--- /dev/null
++++ b/src/inventory/index.ts
+@@ -0,0 +1,74 @@
++import { EventBus } from '../bus.ts';
++import { InventoryService, Events } from '../types.ts';
++
++export function createInventoryService(bus: EventBus): InventoryService {
++  const inventory = new Map<string, { total: number; reserved: number; threshold: number }>();
++
++  // Initialize product when created
++  bus.on(Events.PRODUCT_CREATED, (payload: unknown) => {
++    const event = payload as { productId: string };
++    if (!inventory.has(event.productId)) {
++      inventory.set(event.productId, { total: 0, reserved: 0, threshold: 0 });
++    }
++  });
++
++  return {
++    setStock(productId: string, quantity: number): void {
++      let item = inventory.get(productId);
++      if (!item) {
++        item = { total: 0, reserved: 0, threshold: 0 };
++        inventory.set(productId, item);
++      }
++      item.total = quantity;
++      // Emit inventory updated event
++      bus.emit(Events.INVENTORY_UPDATED, { productId, quantity: item.total });
++      // Check for low stock
++      if (item.total < item.threshold) {
++        bus.emit(Events.LOW_STOCK_ALERT, {
++          productId,
++          currentQuantity: item.total,
++          threshold: item.threshold
++        });
++      }
++    },
++
++    getStock(productId: string): number {
++      const item = inventory.get(productId);
++      return item ? item.total : 0;
++    },
++
++    reserve(productId: string, quantity: number): boolean {
++      const item = inventory.get(productId);
++      if (!item) return false;
++      const available = item.total - item.reserved;
++      if (available >= quantity) {
++        item.reserved += quantity;
++        return true;
++      }
++      return false;
++    },
++
++    release(productId: string, quantity: number): void {
++      const item = inventory.get(productId);
++      if (!item) return;
++      item.reserved = Math.max(0, item.reserved - quantity);
++    },
++
++    setLowStockThreshold(productId: string, threshold: number): void {
++      let item = inventory.get(productId);
++      if (!item) {
++        item = { total: 0, reserved: 0, threshold: 0 };
++        inventory.set(productId, item);
++      }
++      item.threshold = threshold;
++      // Check if current stock is below new threshold
++      if (item.total < item.threshold) {
++        bus.emit(Events.LOW_STOCK_ALERT, {
++          productId,
++          currentQuantity: item.total,
++          threshold: item.threshold
++        });
++      }
++    }
++  };
++}
+\ No newline at end of file
+diff --git a/src/notifications/index.d.ts b/src/notifications/index.d.ts
+new file mode 100644
+index 0000000..8a9420a
+--- /dev/null
++++ b/src/notifications/index.d.ts
+@@ -0,0 +1,4 @@
++import { EventBus } from '../bus.ts';
++import { NotificationService } from '../types.ts';
++export declare function createNotificationService(bus: EventBus): NotificationService;
++//# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/src/notifications/index.d.ts.map b/src/notifications/index.d.ts.map
+new file mode 100644
+index 0000000..0dd902d
+--- /dev/null
++++ b/src/notifications/index.d.ts.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,QAAQ,EAAE,MAAM,WAAW,CAAC;AACrC,OAAO,EAAE,mBAAmB,EAAU,MAAM,aAAa,CAAC;AAE1D,wBAAgB,yBAAyB,CAAC,GAAG,EAAE,QAAQ,GAAG,mBAAmB,CAoF5E"}
+\ No newline at end of file
+diff --git a/src/notifications/index.js b/src/notifications/index.js
+new file mode 100644
+index 0000000..df7dfdd
+--- /dev/null
++++ b/src/notifications/index.js
+@@ -0,0 +1,80 @@
++import { Events } from '../types.ts';
++export function createNotificationService(bus) {
++    // Map of userId to array of notifications
++    const notifications = new Map();
++    // Map of orderId to userId to track which order belongs to which user
++    const orderUserMap = new Map();
++    // Listen for order status changes and payment events to send notifications
++    bus.on(Events.ORDER_STATUS_CHANGED, (payload) => {
++        const event = payload;
++        const userId = orderUserMap.get(event.orderId);
++        if (!userId)
++            return;
++        const message = `Your order #${event.orderId} status changed from ${event.previousStatus} to ${event.status}`;
++        const notification = { type: 'order_status', message, timestamp: Date.now() };
++        const userNotifications = notifications.get(userId) ?? [];
++        userNotifications.push(notification);
++        notifications.set(userId, userNotifications);
++        // Also emit notification sent event for analytics
++        bus.emit(Events.NOTIFICATION_SENT, {
++            userId,
++            type: 'order_status',
++            message
++        });
++    });
++    bus.on(Events.PAYMENT_PROCESSED, (payload) => {
++        const event = payload;
++        // We need to get the userId from the order. However, we don't have the order service here.
++        // Instead, we can rely on the orderUserMap that we populate when an order is created.
++        // But we don't listen for order created. Let's listen for order created as well.
++        // Actually, we can get the userId from the orderUserMap only if we have stored it.
++        // We'll need to listen for order created to populate orderUserMap.
++        // Let's adjust: we'll listen for order created and order status changed and payment processed.
++        // For now, we'll just leave a comment and implement order created listener below.
++    });
++    // We need to listen for order created to map order to user
++    bus.on(Events.ORDER_CREATED, (payload) => {
++        const event = payload;
++        orderUserMap.set(event.orderId, event.userId);
++    });
++    // Now we can implement the payment processed listener fully
++    bus.on(Events.PAYMENT_PROCESSED, (payload) => {
++        const event = payload;
++        const userId = orderUserMap.get(event.orderId);
++        if (!userId)
++            return;
++        let message = '';
++        if (event.status === 'success') {
++            message = `Payment for order #${event.orderId} was successful`;
++        }
++        else if (event.status === 'failed') {
++            message = `Payment for order #${event.orderId} failed: ${event.error || 'Unknown error'}`;
++        }
++        else if (event.status === 'timeout') {
++            message = `Payment for order #${event.orderId} timed out`;
++        }
++        if (message) {
++            const notification = { type: 'payment', message, timestamp: Date.now() };
++            const userNotifications = notifications.get(userId) ?? [];
++            userNotifications.push(notification);
++            notifications.set(userId, userNotifications);
++            bus.emit(Events.NOTIFICATION_SENT, {
++                userId,
++                type: 'payment',
++                message
++            });
++        }
++    });
++    return {
++        subscribe(userId) {
++            // Ensure the user has an empty array for notifications if not already present
++            if (!notifications.has(userId)) {
++                notifications.set(userId, []);
++            }
++        },
++        getNotifications(userId) {
++            return notifications.get(userId) ?? [];
++        }
++    };
++}
++//# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/src/notifications/index.js.map b/src/notifications/index.js.map
+new file mode 100644
+index 0000000..374ba31
+--- /dev/null
++++ b/src/notifications/index.js.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.js","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"AACA,OAAO,EAAuB,MAAM,EAAE,MAAM,aAAa,CAAC;AAE1D,MAAM,UAAU,yBAAyB,CAAC,GAAa;IACrD,0CAA0C;IAC1C,MAAM,aAAa,GAAG,IAAI,GAAG,EAAuE,CAAC;IACrG,sEAAsE;IACtE,MAAM,YAAY,GAAG,IAAI,GAAG,EAAkB,CAAC;IAE/C,2EAA2E;IAC3E,GAAG,CAAC,EAAE,CAAC,MAAM,CAAC,oBAAoB,EAAE,CAAC,OAAgB,EAAE,EAAE;QACvD,MAAM,KAAK,GAAG,OAAsE,CAAC;QACrF,MAAM,MAAM,GAAG,YAAY,CAAC,GAAG,CAAC,KAAK,CAAC,OAAO,CAAC,CAAC;QAC/C,IAAI,CAAC,MAAM;YAAE,OAAO;QAEpB,MAAM,OAAO,GAAG,eAAe,KAAK,CAAC,OAAO,wBAAwB,KAAK,CAAC,cAAc,OAAO,KAAK,CAAC,MAAM,EAAE,CAAC;QAC9G,MAAM,YAAY,GAAG,EAAE,IAAI,EAAE,cAAc,EAAE,OAAO,EAAE,SAAS,EAAE,IAAI,CAAC,GAAG,EAAE,EAAE,CAAC;QAC9E,MAAM,iBAAiB,GAAG,aAAa,CAAC,GAAG,CAAC,MAAM,CAAC,IAAI,EAAE,CAAC;QAC1D,iBAAiB,CAAC,IAAI,CAAC,YAAY,CAAC,CAAC;QACrC,aAAa,CAAC,GAAG,CAAC,MAAM,EAAE,iBAAiB,CAAC,CAAC;QAE7C,kDAAkD;QAClD,GAAG,CAAC,IAAI,CAAC,MAAM,CAAC,iBAAiB,EAAE;YACjC,MAAM;YACN,IAAI,EAAE,cAAc;YACpB,OAAO;SACR,CAAC,CAAC;IACL,CAAC,CAAC,CAAC;IAEH,GAAG,CAAC,EAAE,CAAC,MAAM,CAAC,iBAAiB,EAAE,CAAC,OAAgB,EAAE,EAAE;QACpD,MAAM,KAAK,GAAG,OAAsF,CAAC;QACrG,2FAA2F;QAC3F,sFAAsF;QACtF,iFAAiF;QACjF,mFAAmF;QACnF,mEAAmE;QACnE,+FAA+F;QAC/F,kFAAkF;IACpF,CAAC,CAAC,CAAC;IAEH,2DAA2D;IAC3D,GAAG,CAAC,EAAE,CAAC,MAAM,CAAC,aAAa,EAAE,CAAC,OAAgB,EAAE,EAAE;QAChD,MAAM,KAAK,GAAG,OAA6E,CAAC;QAC5F,YAAY,CAAC,GAAG,CAAC,KAAK,CAAC,OAAO,EAAE,KAAK,CAAC,MAAM,CAAC,CAAC;IAChD,CAAC,CAAC,CAAC;IAEH,4DAA4D;IAC5D,GAAG,CAAC,EAAE,CAAC,MAAM,CAAC,iBAAiB,EAAE,CAAC,OAAgB,EAAE,EAAE;QACpD,MAAM,KAAK,GAAG,OAAsF,CAAC;QACrG,MAAM,MAAM,GAAG,YAAY,CAAC,GAAG,CAAC,KAAK,CAAC,OAAO,CAAC,CAAC;QAC/C,IAAI,CAAC,MAAM;YAAE,OAAO;QAEpB,IAAI,OAAO,GAAG,EAAE,CAAC;QACjB,IAAI,KAAK,CAAC,MAAM,KAAK,SAAS,EAAE,CAAC;YAC/B,OAAO,GAAG,sBAAsB,KAAK,CAAC,OAAO,iBAAiB,CAAC;QACjE,CAAC;aAAM,IAAI,KAAK,CAAC,MAAM,KAAK,QAAQ,EAAE,CAAC;YACrC,OAAO,GAAG,sBAAsB,KAAK,CAAC,OAAO,YAAY,KAAK,CAAC,KAAK,IAAI,eAAe,EAAE,CAAC;QAC5F,CAAC;aAAM,IAAI,KAAK,CAAC,MAAM,KAAK,SAAS,EAAE,CAAC;YACtC,OAAO,GAAG,sBAAsB,KAAK,CAAC,OAAO,YAAY,CAAC;QAC5D,CAAC;QAED,IAAI,OAAO,EAAE,CAAC;YACZ,MAAM,YAAY,GAAG,EAAE,IAAI,EAAE,SAAS,EAAE,OAAO,EAAE,SAAS,EAAE,IAAI,CAAC,GAAG,EAAE,EAAE,CAAC;YACzE,MAAM,iBAAiB,GAAG,aAAa,CAAC,GAAG,CAAC,MAAM,CAAC,IAAI,EAAE,CAAC;YAC1D,iBAAiB,CAAC,IAAI,CAAC,YAAY,CAAC,CAAC;YACrC,aAAa,CAAC,GAAG,CAAC,MAAM,EAAE,iBAAiB,CAAC,CAAC;YAE7C,GAAG,CAAC,IAAI,CAAC,MAAM,CAAC,iBAAiB,EAAE;gBACjC,MAAM;gBACN,IAAI,EAAE,SAAS;gBACf,OAAO;aACR,CAAC,CAAC;QACL,CAAC;IACH,CAAC,CAAC,CAAC;IAEH,OAAO;QACL,SAAS,CAAC,MAAc;YACtB,8EAA8E;YAC9E,IAAI,CAAC,aAAa,CAAC,GAAG,CAAC,MAAM,CAAC,EAAE,CAAC;gBAC/B,aAAa,CAAC,GAAG,CAAC,MAAM,EAAE,EAAE,CAAC,CAAC;YAChC,CAAC;QACH,CAAC;QAED,gBAAgB,CAAC,MAAc;YAC7B,OAAO,aAAa,CAAC,GAAG,CAAC,MAAM,CAAC,IAAI,EAAE,CAAC;QACzC,CAAC;KACF,CAAC;AACJ,CAAC"}
+\ No newline at end of file
+diff --git a/src/notifications/index.ts b/src/notifications/index.ts
+new file mode 100644
+index 0000000..4c04b54
+--- /dev/null
++++ b/src/notifications/index.ts
+@@ -0,0 +1,88 @@
++import { EventBus } from '../bus.ts';
++import { NotificationService, Events } from '../types.ts';
++
++export function createNotificationService(bus: EventBus): NotificationService {
++  // Map of userId to array of notifications
++  const notifications = new Map<string, Array<{ type: string; message: string; timestamp: number }>>();
++  // Map of orderId to userId to track which order belongs to which user
++  const orderUserMap = new Map<string, string>();
++
++  // Listen for order status changes and payment events to send notifications
++  bus.on(Events.ORDER_STATUS_CHANGED, (payload: unknown) => {
++    const event = payload as { orderId: string; status: string; previousStatus: string };
++    const userId = orderUserMap.get(event.orderId);
++    if (!userId) return;
++
++    const message = `Your order #${event.orderId} status changed from ${event.previousStatus} to ${event.status}`;
++    const notification = { type: 'order_status', message, timestamp: Date.now() };
++    const userNotifications = notifications.get(userId) ?? [];
++    userNotifications.push(notification);
++    notifications.set(userId, userNotifications);
++
++    // Also emit notification sent event for analytics
++    bus.emit(Events.NOTIFICATION_SENT, {
++      userId,
++      type: 'order_status',
++      message
++    });
++  });
++
++  bus.on(Events.PAYMENT_PROCESSED, (payload: unknown) => {
++    const event = payload as { orderId: string; status: string; transactionId?: string; error?: string };
++    // We need to get the userId from the order. However, we don't have the order service here.
++    // Instead, we can rely on the orderUserMap that we populate when an order is created.
++    // But we don't listen for order created. Let's listen for order created as well.
++    // Actually, we can get the userId from the orderUserMap only if we have stored it.
++    // We'll need to listen for order created to populate orderUserMap.
++    // Let's adjust: we'll listen for order created and order status changed and payment processed.
++    // For now, we'll just leave a comment and implement order created listener below.
++  });
++
++  // We need to listen for order created to map order to user
++  bus.on(Events.ORDER_CREATED, (payload: unknown) => {
++    const event = payload as { orderId: string; userId: string; cartId: string; total: number };
++    orderUserMap.set(event.orderId, event.userId);
++  });
++
++  // Now we can implement the payment processed listener fully
++  bus.on(Events.PAYMENT_PROCESSED, (payload: unknown) => {
++    const event = payload as { orderId: string; status: string; transactionId?: string; error?: string };
++    const userId = orderUserMap.get(event.orderId);
++    if (!userId) return;
++
++    let message = '';
++    if (event.status === 'success') {
++      message = `Payment for order #${event.orderId} was successful`;
++    } else if (event.status === 'failed') {
++      message = `Payment for order #${event.orderId} failed: ${event.error || 'Unknown error'}`;
++    } else if (event.status === 'timeout') {
++      message = `Payment for order #${event.orderId} timed out`;
++    }
++
++    if (message) {
++      const notification = { type: 'payment', message, timestamp: Date.now() };
++      const userNotifications = notifications.get(userId) ?? [];
++      userNotifications.push(notification);
++      notifications.set(userId, userNotifications);
++
++      bus.emit(Events.NOTIFICATION_SENT, {
++        userId,
++        type: 'payment',
++        message
++      });
++    }
++  });
++
++  return {
++    subscribe(userId: string): void {
++      // Ensure the user has an empty array for notifications if not already present
++      if (!notifications.has(userId)) {
++        notifications.set(userId, []);
++      }
++    },
++
++    getNotifications(userId: string): Array<{ type: string; message: string; timestamp: number }> {
++      return notifications.get(userId) ?? [];
++    }
++  };
++}
+\ No newline at end of file
+diff --git a/src/orders/index.d.ts b/src/orders/index.d.ts
+new file mode 100644
+index 0000000..b1495ce
+--- /dev/null
++++ b/src/orders/index.d.ts
+@@ -0,0 +1,4 @@
++import { EventBus } from '../bus';
++import { OrderService } from '../types';
++export declare function createOrderService(bus: EventBus): OrderService;
++//# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/src/orders/index.d.ts.map b/src/orders/index.d.ts.map
+new file mode 100644
+index 0000000..65e0d59
+--- /dev/null
++++ b/src/orders/index.d.ts.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,QAAQ,EAAE,MAAM,QAAQ,CAAC;AAClC,OAAO,EAAE,YAAY,EAAuB,MAAM,UAAU,CAAC;AAE7D,wBAAgB,kBAAkB,CAAC,GAAG,EAAE,QAAQ,GAAG,YAAY,CA4C9D"}
+\ No newline at end of file
+diff --git a/src/orders/index.js b/src/orders/index.js
+new file mode 100644
+index 0000000..65c0526
+--- /dev/null
++++ b/src/orders/index.js
+@@ -0,0 +1,43 @@
++import { Events, OrderStatus } from '../types';
++export function createOrderService(bus) {
++    const orders = new Map();
++    let orderIdCounter = 1;
++    function generateOrderId() {
++        return `order_${orderIdCounter++}`;
++    }
++    return {
++        createOrder(userId, cartId, total) {
++            const id = generateOrderId();
++            const order = { id, userId, status: OrderStatus.PENDING, total };
++            orders.set(id, order);
++            bus.emit(Events.ORDER_CREATED, { orderId: id, userId, cartId, total });
++            return id;
++        },
++        getOrder(orderId) {
++            return orders.get(orderId) ?? null;
++        },
++        updateStatus(orderId, status) {
++            const order = orders.get(orderId);
++            if (!order)
++                return;
++            const previousStatus = order.status;
++            // Validate transition? Not required, but we can allow any transition.
++            order.status = status;
++            bus.emit(Events.ORDER_STATUS_CHANGED, {
++                orderId,
++                status,
++                previousStatus
++            });
++        },
++        listOrders(userId) {
++            return Array.from(orders.values())
++                .filter(order => order.userId === userId)
++                .map(order => ({
++                id: order.id,
++                status: order.status,
++                total: order.total
++            }));
++        }
++    };
++}
++//# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/src/orders/index.js.map b/src/orders/index.js.map
+new file mode 100644
+index 0000000..176ca78
+--- /dev/null
++++ b/src/orders/index.js.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.js","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"AACA,OAAO,EAAgB,MAAM,EAAE,WAAW,EAAE,MAAM,UAAU,CAAC;AAE7D,MAAM,UAAU,kBAAkB,CAAC,GAAa;IAC9C,MAAM,MAAM,GAAG,IAAI,GAAG,EAA8E,CAAC;IACrG,IAAI,cAAc,GAAG,CAAC,CAAC;IAEvB,SAAS,eAAe;QACtB,OAAO,SAAS,cAAc,EAAE,EAAE,CAAC;IACrC,CAAC;IAED,OAAO;QACL,WAAW,CAAC,MAAc,EAAE,MAAc,EAAE,KAAa;YACvD,MAAM,EAAE,GAAG,eAAe,EAAE,CAAC;YAC7B,MAAM,KAAK,GAAG,EAAE,EAAE,EAAE,MAAM,EAAE,MAAM,EAAE,WAAW,CAAC,OAAO,EAAE,KAAK,EAAE,CAAC;YACjE,MAAM,CAAC,GAAG,CAAC,EAAE,EAAE,KAAK,CAAC,CAAC;YACtB,GAAG,CAAC,IAAI,CAAC,MAAM,CAAC,aAAa,EAAE,EAAE,OAAO,EAAE,EAAE,EAAE,MAAM,EAAE,MAAM,EAAE,KAAK,EAAE,CAAC,CAAC;YACvE,OAAO,EAAE,CAAC;QACZ,CAAC;QAED,QAAQ,CAAC,OAAe;YACtB,OAAO,MAAM,CAAC,GAAG,CAAC,OAAO,CAAC,IAAI,IAAI,CAAC;QACrC,CAAC;QAED,YAAY,CAAC,OAAe,EAAE,MAAmB;YAC/C,MAAM,KAAK,GAAG,MAAM,CAAC,GAAG,CAAC,OAAO,CAAC,CAAC;YAClC,IAAI,CAAC,KAAK;gBAAE,OAAO;YACnB,MAAM,cAAc,GAAG,KAAK,CAAC,MAAM,CAAC;YACpC,sEAAsE;YACtE,KAAK,CAAC,MAAM,GAAG,MAAM,CAAC;YACtB,GAAG,CAAC,IAAI,CAAC,MAAM,CAAC,oBAAoB,EAAE;gBACpC,OAAO;gBACP,MAAM;gBACN,cAAc;aACf,CAAC,CAAC;QACL,CAAC;QAED,UAAU,CAAC,MAAc;YACvB,OAAO,KAAK,CAAC,IAAI,CAAC,MAAM,CAAC,MAAM,EAAE,CAAC;iBAC/B,MAAM,CAAC,KAAK,CAAC,EAAE,CAAC,KAAK,CAAC,MAAM,KAAK,MAAM,CAAC;iBACxC,GAAG,CAAC,KAAK,CAAC,EAAE,CAAC,CAAC;gBACb,EAAE,EAAE,KAAK,CAAC,EAAE;gBACZ,MAAM,EAAE,KAAK,CAAC,MAAM;gBACpB,KAAK,EAAE,KAAK,CAAC,KAAK;aACnB,CAAC,CAAC,CAAC;QACR,CAAC;KACF,CAAC;AACJ,CAAC"}
+\ No newline at end of file
+diff --git a/src/orders/index.ts b/src/orders/index.ts
+new file mode 100644
+index 0000000..122936b
+--- /dev/null
++++ b/src/orders/index.ts
+@@ -0,0 +1,48 @@
++import { EventBus } from '../bus.ts';
++import { OrderService, Events, OrderStatus } from '../types.ts';
++
++export function createOrderService(bus: EventBus): OrderService {
++  const orders = new Map<string, { id: string; userId: string; status: OrderStatus; total: number }>();
++  let orderIdCounter = 1;
++
++  function generateOrderId(): string {
++    return `order_${orderIdCounter++}`;
++  }
++
++  return {
++    createOrder(userId: string, cartId: string, total: number): string {
++      const id = generateOrderId();
++      const order = { id, userId, status: OrderStatus.PENDING, total };
++      orders.set(id, order);
++      bus.emit(Events.ORDER_CREATED, { orderId: id, userId, cartId, total });
++      return id;
++    },
++
++    getOrder(orderId: string): { id: string; userId: string; status: OrderStatus; total: number } | null {
++      return orders.get(orderId) ?? null;
++    },
++
++    updateStatus(orderId: string, status: OrderStatus): void {
++      const order = orders.get(orderId);
++      if (!order) return;
++      const previousStatus = order.status;
++      // Validate transition? Not required, but we can allow any transition.
++      order.status = status;
++      bus.emit(Events.ORDER_STATUS_CHANGED, {
++        orderId,
++        status,
++        previousStatus
++      });
++    },
++
++    listOrders(userId: string): Array<{ id: string; status: OrderStatus; total: number }> {
++      return Array.from(orders.values())
++        .filter(order => order.userId === userId)
++        .map(order => ({
++          id: order.id,
++          status: order.status,
++          total: order.total
++        }));
++    }
++  };
++}
+\ No newline at end of file
+diff --git a/src/payment/index.d.ts b/src/payment/index.d.ts
+new file mode 100644
+index 0000000..ed3e9fd
+--- /dev/null
++++ b/src/payment/index.d.ts
+@@ -0,0 +1,12 @@
++import { EventBus } from '../bus.ts';
++import { PaymentService } from '../types.ts';
++interface PaymentServiceOptions {
++    mode?: 'success' | 'failure' | 'timeout' | 'random';
++    successRate?: number;
++    failureRate?: number;
++    timeoutRate?: number;
++    delayMs?: number;
++}
++export declare function createPaymentService(bus: EventBus, options?: PaymentServiceOptions): PaymentService;
++export {};
++//# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/src/payment/index.d.ts.map b/src/payment/index.d.ts.map
+new file mode 100644
+index 0000000..a144da9
+--- /dev/null
++++ b/src/payment/index.d.ts.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,QAAQ,EAAE,MAAM,WAAW,CAAC;AACrC,OAAO,EAAE,cAAc,EAAyB,MAAM,aAAa,CAAC;AAEpE,UAAU,qBAAqB;IAC7B,IAAI,CAAC,EAAE,SAAS,GAAG,SAAS,GAAG,SAAS,GAAG,QAAQ,CAAC;IACpD,WAAW,CAAC,EAAE,MAAM,CAAC;IACrB,WAAW,CAAC,EAAE,MAAM,CAAC;IACrB,WAAW,CAAC,EAAE,MAAM,CAAC;IACrB,OAAO,CAAC,EAAE,MAAM,CAAC;CAClB;AAED,wBAAgB,oBAAoB,CAAC,GAAG,EAAE,QAAQ,EAAE,OAAO,GAAE,qBAA0B,GAAG,cAAc,CA2FvG"}
+\ No newline at end of file
+diff --git a/src/payment/index.js b/src/payment/index.js
+new file mode 100644
+index 0000000..2999a49
+--- /dev/null
++++ b/src/payment/index.js
+@@ -0,0 +1,79 @@
++import { Events, PaymentStatus } from '../types.ts';
++export function createPaymentService(bus, options = {}) {
++    const { mode = 'success', successRate = 1.0, failureRate = 0.0, timeoutRate = 0.0, delayMs = 0 } = options;
++    // Ensure rates are valid
++    const total = successRate + failureRate + timeoutRate;
++    const normalizedSuccessRate = total > 0 ? successRate / total : 1.0;
++    const normalizedFailureRate = total > 0 ? failureRate / total : 0.0;
++    const normalizedTimeoutRate = total > 0 ? timeoutRate / total : 0.0;
++    const transactionMap = new Map();
++    let transactionIdCounter = 1;
++    function generateTransactionId() {
++        return `txn_${transactionIdCounter++}`;
++    }
++    function determineStatus() {
++        if (mode !== 'random') {
++            switch (mode) {
++                case 'success': return PaymentStatus.SUCCESS;
++                case 'failure': return PaymentStatus.FAILED;
++                case 'timeout': return PaymentStatus.TIMEOUT;
++                default: return PaymentStatus.SUCCESS;
++            }
++        }
++        const rand = Math.random();
++        if (rand < normalizedSuccessRate) {
++            return PaymentStatus.SUCCESS;
++        }
++        else if (rand < normalizedSuccessRate + normalizedFailureRate) {
++            return PaymentStatus.FAILED;
++        }
++        else {
++            return PaymentStatus.TIMEOUT;
++        }
++    }
++    async function processPayment(orderId, amount) {
++        // Simulate delay if specified
++        if (delayMs > 0) {
++            await new Promise(resolve => setTimeout(resolve, delayMs));
++        }
++        const status = determineStatus();
++        let transactionId;
++        let error;
++        if (status === PaymentStatus.SUCCESS) {
++            transactionId = generateTransactionId();
++            transactionMap.set(transactionId, { orderId, amount });
++        }
++        else if (status === PaymentStatus.FAILED) {
++            error = 'Payment failed';
++        }
++        else if (status === PaymentStatus.TIMEOUT) {
++            error = 'Payment timeout';
++        }
++        const result = {
++            status,
++            ...(transactionId ? { transactionId } : {}),
++            ...(error ? { error } : {})
++        };
++        // Emit payment processed event
++        await bus.emit(Events.PAYMENT_PROCESSED, {
++            orderId,
++            ...result
++        });
++        return result;
++    }
++    async function refund(transactionId) {
++        const transaction = transactionMap.get(transactionId);
++        if (!transaction) {
++            return false;
++        }
++        transactionMap.delete(transactionId);
++        // In a real system, we would actually process the refund
++        // For simulation, we just remove the transaction and return true
++        return true;
++    }
++    return {
++        processPayment,
++        refund
++    };
++}
++//# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/src/payment/index.js.map b/src/payment/index.js.map
+new file mode 100644
+index 0000000..20bf8e4
+--- /dev/null
++++ b/src/payment/index.js.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.js","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"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"}
+\ No newline at end of file
+diff --git a/src/payment/index.ts b/src/payment/index.ts
+new file mode 100644
+index 0000000..466beca
+--- /dev/null
++++ b/src/payment/index.ts
+@@ -0,0 +1,103 @@
++import { EventBus } from '../bus.ts';
++import { PaymentService, Events, PaymentStatus } from '../types.ts';
++
++interface PaymentServiceOptions {
++  mode?: 'success' | 'failure' | 'timeout' | 'random';
++  successRate?: number;
++  failureRate?: number;
++  timeoutRate?: number;
++  delayMs?: number;
++}
++
++export function createPaymentService(bus: EventBus, options: PaymentServiceOptions = {}): PaymentService {
++  const {
++    mode = 'success',
++    successRate = 1.0,
++    failureRate = 0.0,
++    timeoutRate = 0.0,
++    delayMs = 0
++  } = options;
++
++  // Ensure rates are valid
++  const total = successRate + failureRate + timeoutRate;
++  const normalizedSuccessRate = total > 0 ? successRate / total : 1.0;
++  const normalizedFailureRate = total > 0 ? failureRate / total : 0.0;
++  const normalizedTimeoutRate = total > 0 ? timeoutRate / total : 0.0;
++
++  const transactionMap = new Map<string, { orderId: string; amount: number }>();
++  let transactionIdCounter = 1;
++
++  function generateTransactionId(): string {
++    return `txn_${transactionIdCounter++}`;
++  }
++
++  function determineStatus(): PaymentStatus {
++    if (mode !== 'random') {
++      switch (mode) {
++        case 'success': return PaymentStatus.SUCCESS;
++        case 'failure': return PaymentStatus.FAILED;
++        case 'timeout': return PaymentStatus.TIMEOUT;
++        default: return PaymentStatus.SUCCESS;
++      }
++    }
++
++    const rand = Math.random();
++    if (rand < normalizedSuccessRate) {
++      return PaymentStatus.SUCCESS;
++    } else if (rand < normalizedSuccessRate + normalizedFailureRate) {
++      return PaymentStatus.FAILED;
++    } else {
++      return PaymentStatus.TIMEOUT;
++    }
++  }
++
++  async function processPayment(orderId: string, amount: number): Promise<{ status: PaymentStatus; transactionId?: string; error?: string }> {
++    // Simulate delay if specified
++    if (delayMs > 0) {
++      await new Promise(resolve => setTimeout(resolve, delayMs));
++    }
++
++    const status = determineStatus();
++    let transactionId: string | undefined;
++    let error: string | undefined;
++
++    if (status === PaymentStatus.SUCCESS) {
++      transactionId = generateTransactionId();
++      transactionMap.set(transactionId, { orderId, amount });
++    } else if (status === PaymentStatus.FAILED) {
++      error = 'Payment failed';
++    } else if (status === PaymentStatus.TIMEOUT) {
++      error = 'Payment timeout';
++    }
++
++    const result = { 
++      status, 
++      ...(transactionId ? { transactionId } : {}), 
++      ...(error ? { error } : {}) 
++    };
++
++    // Emit payment processed event
++    await bus.emit(Events.PAYMENT_PROCESSED, {
++      orderId,
++      ...result
++    });
++
++    return result;
++  }
++
++  async function refund(transactionId: string): Promise<boolean> {
++    const transaction = transactionMap.get(transactionId);
++    if (!transaction) {
++      return false;
++    }
++    transactionMap.delete(transactionId);
++    // In a real system, we would actually process the refund
++    // For simulation, we just remove the transaction and return true
++    return true;
++  }
++
++  return {
++    processPayment,
++    refund
++  };
++}
+\ No newline at end of file
+diff --git a/src/pricing/index.d.ts b/src/pricing/index.d.ts
+new file mode 100644
+index 0000000..2f30e20
+--- /dev/null
++++ b/src/pricing/index.d.ts
+@@ -0,0 +1,4 @@
++import { EventBus } from '../bus';
++import { PricingService } from '../types';
++export declare function createPricingService(bus: EventBus): PricingService;
++//# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/src/pricing/index.d.ts.map b/src/pricing/index.d.ts.map
+new file mode 100644
+index 0000000..40da2e2
+--- /dev/null
++++ b/src/pricing/index.d.ts.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,QAAQ,EAAE,MAAM,QAAQ,CAAC;AAClC,OAAO,EAAE,cAAc,EAAU,MAAM,UAAU,CAAC;AAElD,wBAAgB,oBAAoB,CAAC,GAAG,EAAE,QAAQ,GAAG,cAAc,CA0ClE"}
+\ No newline at end of file
+diff --git a/src/pricing/index.js b/src/pricing/index.js
+new file mode 100644
+index 0000000..e8c5825
+--- /dev/null
++++ b/src/pricing/index.js
+@@ -0,0 +1,41 @@
++import { Events } from '../types';
++export function createPricingService(bus) {
++    const productPrices = new Map();
++    const discountCodes = new Map(); // code -> percentage
++    // Listen for product creation to track prices
++    bus.on(Events.PRODUCT_CREATED, (payload) => {
++        const event = payload;
++        productPrices.set(event.productId, event.price);
++    });
++    return {
++        calculateTotal(items, discountCode) {
++            let subtotal = 0;
++            for (const item of items) {
++                // Use tracked price if available, otherwise fall back to provided price
++                const price = productPrices.get(item.productId) ?? item.price;
++                subtotal += price * item.quantity;
++            }
++            const discountPercentage = discountCodes.get(discountCode ?? '') ?? 0;
++            const discount = subtotal * (discountPercentage / 100);
++            const subtotalAfterDiscount = subtotal - discount;
++            const tax = subtotalAfterDiscount * 0.1; // 10% tax rate
++            const total = subtotalAfterDiscount + tax;
++            return {
++                subtotal: Number(subtotal.toFixed(2)),
++                discount: Number(discount.toFixed(2)),
++                tax: Number(tax.toFixed(2)),
++                total: Number(total.toFixed(2))
++            };
++        },
++        addDiscountCode(code, percentage) {
++            if (percentage < 0 || percentage > 100) {
++                throw new Error('Discount percentage must be between 0 and 100');
++            }
++            discountCodes.set(code, percentage);
++        },
++        getPrice(productId) {
++            return productPrices.get(productId) ?? 0;
++        }
++    };
++}
++//# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/src/pricing/index.js.map b/src/pricing/index.js.map
+new file mode 100644
+index 0000000..fa13eca
+--- /dev/null
++++ b/src/pricing/index.js.map
+@@ -0,0 +1 @@
++{"version":3,"file":"index.js","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"AACA,OAAO,EAAkB,MAAM,EAAE,MAAM,UAAU,CAAC;AAElD,MAAM,UAAU,oBAAoB,CAAC,GAAa;IAChD,MAAM,aAAa,GAAG,IAAI,GAAG,EAAkB,CAAC;IAChD,MAAM,aAAa,GAAG,IAAI,GAAG,EAAkB,CAAC,CAAC,qBAAqB;IAEtE,8CAA8C;IAC9C,GAAG,CAAC,EAAE,CAAC,MAAM,CAAC,eAAe,EAAE,CAAC,OAAgB,EAAE,EAAE;QAClD,MAAM,KAAK,GAAG,OAA+C,CAAC;QAC9D,aAAa,CAAC,GAAG,CAAC,KAAK,CAAC,SAAS,EAAE,KAAK,CAAC,KAAK,CAAC,CAAC;IAClD,CAAC,CAAC,CAAC;IAEH,OAAO;QACL,cAAc,CAAC,KAAoE,EAAE,YAAqB;YACxG,IAAI,QAAQ,GAAG,CAAC,CAAC;YACjB,KAAK,MAAM,IAAI,IAAI,KAAK,EAAE,CAAC;gBACzB,wEAAwE;gBACxE,MAAM,KAAK,GAAG,aAAa,CAAC,GAAG,CAAC,IAAI,CAAC,SAAS,CAAC,IAAI,IAAI,CAAC,KAAK,CAAC;gBAC9D,QAAQ,IAAI,KAAK,GAAG,IAAI,CAAC,QAAQ,CAAC;YACpC,CAAC;YACD,MAAM,kBAAkB,GAAG,aAAa,CAAC,GAAG,CAAC,YAAY,IAAI,EAAE,CAAC,IAAI,CAAC,CAAC;YACtE,MAAM,QAAQ,GAAG,QAAQ,GAAG,CAAC,kBAAkB,GAAG,GAAG,CAAC,CAAC;YACvD,MAAM,qBAAqB,GAAG,QAAQ,GAAG,QAAQ,CAAC;YAClD,MAAM,GAAG,GAAG,qBAAqB,GAAG,GAAG,CAAC,CAAC,eAAe;YACxD,MAAM,KAAK,GAAG,qBAAqB,GAAG,GAAG,CAAC;YAC1C,OAAO;gBACL,QAAQ,EAAE,MAAM,CAAC,QAAQ,CAAC,OAAO,CAAC,CAAC,CAAC,CAAC;gBACrC,QAAQ,EAAE,MAAM,CAAC,QAAQ,CAAC,OAAO,CAAC,CAAC,CAAC,CAAC;gBACrC,GAAG,EAAE,MAAM,CAAC,GAAG,CAAC,OAAO,CAAC,CAAC,CAAC,CAAC;gBAC3B,KAAK,EAAE,MAAM,CAAC,KAAK,CAAC,OAAO,CAAC,CAAC,CAAC,CAAC;aAChC,CAAC;QACJ,CAAC;QAED,eAAe,CAAC,IAAY,EAAE,UAAkB;YAC9C,IAAI,UAAU,GAAG,CAAC,IAAI,UAAU,GAAG,GAAG,EAAE,CAAC;gBACvC,MAAM,IAAI,KAAK,CAAC,+CAA+C,CAAC,CAAC;YACnE,CAAC;YACD,aAAa,CAAC,GAAG,CAAC,IAAI,EAAE,UAAU,CAAC,CAAC;QACtC,CAAC;QAED,QAAQ,CAAC,SAAiB;YACxB,OAAO,aAAa,CAAC,GAAG,CAAC,SAAS,CAAC,IAAI,CAAC,CAAC;QAC3C,CAAC;KACF,CAAC;AACJ,CAAC"}
+\ No newline at end of file
+diff --git a/src/pricing/index.ts b/src/pricing/index.ts
+new file mode 100644
+index 0000000..3e948ed
+--- /dev/null
++++ b/src/pricing/index.ts
+@@ -0,0 +1,46 @@
++import { EventBus } from '../bus';
++import { PricingService, Events } from '../types';
++
++export function createPricingService(bus: EventBus): PricingService {
++  const productPrices = new Map<string, number>();
++  const discountCodes = new Map<string, number>(); // code -> percentage
++
++  // Listen for product creation to track prices
++  bus.on(Events.PRODUCT_CREATED, (payload: unknown) => {
++    const event = payload as { productId: string; price: number };
++    productPrices.set(event.productId, event.price);
++  });
++
++  return {
++    calculateTotal(items: Array<{ productId: string; quantity: number; price: number }>, discountCode?: string): { subtotal: number; discount: number; tax: number; total: number } {
++      let subtotal = 0;
++      for (const item of items) {
++        // Use tracked price if available, otherwise fall back to provided price
++        const price = productPrices.get(item.productId) ?? item.price;
++        subtotal += price * item.quantity;
++      }
++      const discountPercentage = discountCodes.get(discountCode ?? '') ?? 0;
++      const discount = subtotal * (discountPercentage / 100);
++      const subtotalAfterDiscount = subtotal - discount;
++      const tax = subtotalAfterDiscount * 0.1; // 10% tax rate
++      const total = subtotalAfterDiscount + tax;
++      return {
++        subtotal: Number(subtotal.toFixed(2)),
++        discount: Number(discount.toFixed(2)),
++        tax: Number(tax.toFixed(2)),
++        total: Number(total.toFixed(2))
++      };
++    },
++
++    addDiscountCode(code: string, percentage: number): void {
++      if (percentage < 0 || percentage > 100) {
++        throw new Error('Discount percentage must be between 0 and 100');
++      }
++      discountCodes.set(code, percentage);
++    },
++
++    getPrice(productId: string): number {
++      return productPrices.get(productId) ?? 0;
++    }
++  };
++}
+\ No newline at end of file
+diff --git a/src/types.d.ts b/src/types.d.ts
+new file mode 100644
+index 0000000..7e0a47e
+--- /dev/null
++++ b/src/types.d.ts
+@@ -0,0 +1,186 @@
++export declare enum OrderStatus {
++    PENDING = "pending",
++    CONFIRMED = "confirmed",
++    SHIPPED = "shipped",
++    DELIVERED = "delivered",
++    CANCELLED = "cancelled"
++}
++export declare enum PaymentStatus {
++    PENDING = "pending",
++    SUCCESS = "success",
++    FAILED = "failed",
++    TIMEOUT = "timeout"
++}
++export interface ProductCreatedEvent {
++    productId: string;
++    name: string;
++    price: number;
++    category: string;
++}
++export interface InventoryUpdatedEvent {
++    productId: string;
++    quantity: number;
++}
++export interface CartUpdatedEvent {
++    cartId: string;
++    userId: string;
++    items: Array<{
++        productId: string;
++        quantity: number;
++    }>;
++}
++export interface PriceCalculatedEvent {
++    cartId: string;
++    subtotal: number;
++    discount: number;
++    tax: number;
++    total: number;
++}
++export interface OrderCreatedEvent {
++    orderId: string;
++    userId: string;
++    cartId: string;
++    total: number;
++}
++export interface OrderStatusChangedEvent {
++    orderId: string;
++    status: OrderStatus;
++    previousStatus: OrderStatus;
++}
++export interface PaymentProcessedEvent {
++    orderId: string;
++    status: PaymentStatus;
++    transactionId?: string;
++    error?: string;
++}
++export interface NotificationSentEvent {
++    userId: string;
++    type: string;
++    message: string;
++}
++export interface AnalyticsEvent {
++    event: string;
++    data: Record<string, unknown>;
++    timestamp: number;
++}
++export interface LowStockAlertEvent {
++    productId: string;
++    currentQuantity: number;
++    threshold: number;
++}
++export interface CatalogService {
++    createProduct(name: string, price: number, category: string): string;
++    getProduct(productId: string): {
++        id: string;
++        name: string;
++        price: number;
++        category: string;
++    } | null;
++    listProducts(category?: string): Array<{
++        id: string;
++        name: string;
++        price: number;
++        category: string;
++    }>;
++    searchProducts(query: string): Array<{
++        id: string;
++        name: string;
++        price: number;
++        category: string;
++    }>;
++    updateProduct(productId: string, updates: Partial<{
++        name: string;
++        price: number;
++        category: string;
++    }>): void;
++    removeProduct(productId: string): boolean;
++}
++export interface InventoryService {
++    setStock(productId: string, quantity: number): void;
++    getStock(productId: string): number;
++    reserve(productId: string, quantity: number): boolean;
++    release(productId: string, quantity: number): void;
++    setLowStockThreshold(productId: string, threshold: number): void;
++}
++export interface CartService {
++    createCart(userId: string): string;
++    addItem(cartId: string, productId: string, quantity: number): void;
++    removeItem(cartId: string, productId: string): void;
++    getCart(cartId: string): {
++        id: string;
++        userId: string;
++        items: Array<{
++            productId: string;
++            quantity: number;
++        }>;
++    } | null;
++    clearCart(cartId: string): void;
++    updateQuantity(cartId: string, productId: string, quantity: number): void;
++}
++export interface PricingService {
++    calculateTotal(items: Array<{
++        productId: string;
++        quantity: number;
++        price: number;
++    }>, discountCode?: string): {
++        subtotal: number;
++        discount: number;
++        tax: number;
++        total: number;
++    };
++    addDiscountCode(code: string, percentage: number): void;
++    getPrice(productId: string): number;
++}
++export interface OrderService {
++    createOrder(userId: string, cartId: string, total: number): string;
++    getOrder(orderId: string): {
++        id: string;
++        userId: string;
++        status: OrderStatus;
++        total: number;
++    } | null;
++    updateStatus(orderId: string, status: OrderStatus): void;
++    listOrders(userId: string): Array<{
++        id: string;
++        status: OrderStatus;
++        total: number;
++    }>;
++}
++export interface PaymentService {
++    processPayment(orderId: string, amount: number): Promise<{
++        status: PaymentStatus;
++        transactionId?: string;
++        error?: string;
++    }>;
++    refund(transactionId: string): Promise<boolean>;
++}
++export interface NotificationService {
++    subscribe(userId: string): void;
++    getNotifications(userId: string): Array<{
++        type: string;
++        message: string;
++        timestamp: number;
++    }>;
++}
++export interface AnalyticsService {
++    getEventCount(eventType: string): number;
++    getRevenue(): number;
++    getConversionRate(): number;
++    getTopProducts(limit: number): Array<{
++        productId: string;
++        count: number;
++    }>;
++}
++export declare const Events: {
++    readonly PRODUCT_CREATED: "product:created";
++    readonly INVENTORY_UPDATED: "inventory:updated";
++    readonly LOW_STOCK_ALERT: "inventory:low_stock";
++    readonly CART_UPDATED: "cart:updated";
++    readonly PRICE_CALCULATED: "price:calculated";
++    readonly ORDER_CREATED: "order:created";
++    readonly ORDER_STATUS_CHANGED: "order:status_changed";
++    readonly PAYMENT_PROCESSED: "payment:processed";
++    readonly NOTIFICATION_SENT: "notification:sent";
++    readonly ANALYTICS_EVENT: "analytics:event";
++};
++//# sourceMappingURL=types.d.ts.map
+\ No newline at end of file
+diff --git a/src/types.d.ts.map b/src/types.d.ts.map
+new file mode 100644
+index 0000000..74479c6
+--- /dev/null
++++ b/src/types.d.ts.map
+@@ -0,0 +1 @@
++{"version":3,"file":"types.d.ts","sourceRoot":"","sources":["types.ts"],"names":[],"mappings":"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"}
+\ No newline at end of file
+diff --git a/src/types.js b/src/types.js
+new file mode 100644
+index 0000000..e99cd39
+--- /dev/null
++++ b/src/types.js
+@@ -0,0 +1,30 @@
++// Order status state machine
++export var OrderStatus;
++(function (OrderStatus) {
++    OrderStatus["PENDING"] = "pending";
++    OrderStatus["CONFIRMED"] = "confirmed";
++    OrderStatus["SHIPPED"] = "shipped";
++    OrderStatus["DELIVERED"] = "delivered";
++    OrderStatus["CANCELLED"] = "cancelled";
++})(OrderStatus || (OrderStatus = {}));
++export var PaymentStatus;
++(function (PaymentStatus) {
++    PaymentStatus["PENDING"] = "pending";
++    PaymentStatus["SUCCESS"] = "success";
++    PaymentStatus["FAILED"] = "failed";
++    PaymentStatus["TIMEOUT"] = "timeout";
++})(PaymentStatus || (PaymentStatus = {}));
++// Event names (constants)
++export const Events = {
++    PRODUCT_CREATED: 'product:created',
++    INVENTORY_UPDATED: 'inventory:updated',
++    LOW_STOCK_ALERT: 'inventory:low_stock',
++    CART_UPDATED: 'cart:updated',
++    PRICE_CALCULATED: 'price:calculated',
++    ORDER_CREATED: 'order:created',
++    ORDER_STATUS_CHANGED: 'order:status_changed',
++    PAYMENT_PROCESSED: 'payment:processed',
++    NOTIFICATION_SENT: 'notification:sent',
++    ANALYTICS_EVENT: 'analytics:event',
++};
++//# sourceMappingURL=types.js.map
+\ No newline at end of file
+diff --git a/src/types.js.map b/src/types.js.map
+new file mode 100644
+index 0000000..313c0cb
+--- /dev/null
++++ b/src/types.js.map
+@@ -0,0 +1 @@
++{"version":3,"file":"types.js","sourceRoot":"","sources":["types.ts"],"names":[],"mappings":"AAAA,6BAA6B;AAC7B,MAAM,CAAN,IAAY,WAMX;AAND,WAAY,WAAW;IACrB,kCAAmB,CAAA;IACnB,sCAAuB,CAAA;IACvB,kCAAmB,CAAA;IACnB,sCAAuB,CAAA;IACvB,sCAAuB,CAAA;AACzB,CAAC,EANW,WAAW,KAAX,WAAW,QAMtB;AAED,MAAM,CAAN,IAAY,aAKX;AALD,WAAY,aAAa;IACvB,oCAAmB,CAAA;IACnB,oCAAmB,CAAA;IACnB,kCAAiB,CAAA;IACjB,oCAAmB,CAAA;AACrB,CAAC,EALW,aAAa,KAAb,aAAa,QAKxB;AAuED,0BAA0B;AAC1B,MAAM,CAAC,MAAM,MAAM,GAAG;IACpB,eAAe,EAAE,iBAAiB;IAClC,iBAAiB,EAAE,mBAAmB;IACtC,eAAe,EAAE,qBAAqB;IACtC,YAAY,EAAE,cAAc;IAC5B,gBAAgB,EAAE,kBAAkB;IACpC,aAAa,EAAE,eAAe;IAC9B,oBAAoB,EAAE,sBAAsB;IAC5C,iBAAiB,EAAE,mBAAmB;IACtC,iBAAiB,EAAE,mBAAmB;IACtC,eAAe,EAAE,iBAAiB;CAC1B,CAAC"}
+\ No newline at end of file
+diff --git a/tests/analytics.test.ts b/tests/analytics.test.ts
+deleted file mode 100644
+index 94c8285..0000000
+--- a/tests/analytics.test.ts
++++ /dev/null
+@@ -1,61 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { EventBus } from '../src/bus.js';
+-import { createAnalyticsService } from '../src/analytics/index.js';
+-import { Events, PaymentStatus } from '../src/types.js';
+-
+-describe('AnalyticsService (unit)', () => {
+-  let bus: EventBus;
+-  let analytics: ReturnType<typeof createAnalyticsService>;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-    analytics = createAnalyticsService(bus);
+-  });
+-
+-  it('should count events by type', async () => {
+-    await bus.emit(Events.PRODUCT_CREATED, { productId: 'p1', name: 'Widget', price: 10, category: 'gadgets' });
+-    await bus.emit(Events.PRODUCT_CREATED, { productId: 'p2', name: 'Gizmo', price: 20, category: 'gadgets' });
+-    expect(analytics.getEventCount(Events.PRODUCT_CREATED)).toBe(2);
+-  });
+-
+-  it('should return 0 for unknown event type', () => {
+-    expect(analytics.getEventCount('unknown:event')).toBe(0);
+-  });
+-
+-  it('should track revenue from successful payments', async () => {
+-    await bus.emit(Events.ORDER_CREATED, { orderId: 'o1', userId: 'u1', cartId: 'c1', total: 100 });
+-    await bus.emit(Events.PAYMENT_PROCESSED, { orderId: 'o1', status: PaymentStatus.SUCCESS, transactionId: 'tx1' });
+-    expect(analytics.getRevenue()).toBe(100);
+-  });
+-
+-  it('should not track revenue from failed payments', async () => {
+-    await bus.emit(Events.ORDER_CREATED, { orderId: 'o1', userId: 'u1', cartId: 'c1', total: 100 });
+-    await bus.emit(Events.PAYMENT_PROCESSED, { orderId: 'o1', status: PaymentStatus.FAILED, error: 'declined' });
+-    expect(analytics.getRevenue()).toBe(0);
+-  });
+-
+-  it('should compute conversion rate', async () => {
+-    // Create 2 carts (via cart updated events with unique cart IDs)
+-    await bus.emit(Events.CART_UPDATED, { cartId: 'c1', userId: 'u1', items: [{ productId: 'p1', quantity: 1 }] });
+-    await bus.emit(Events.CART_UPDATED, { cartId: 'c2', userId: 'u2', items: [{ productId: 'p2', quantity: 1 }] });
+-    // Create 1 order
+-    await bus.emit(Events.ORDER_CREATED, { orderId: 'o1', userId: 'u1', cartId: 'c1', total: 50 });
+-
+-    expect(analytics.getConversionRate()).toBe(0.5);
+-  });
+-
+-  it('should return top products by order quantity', async () => {
+-    await bus.emit(Events.CART_UPDATED, {
+-      cartId: 'c1', userId: 'u1',
+-      items: [{ productId: 'p1', quantity: 5 }, { productId: 'p2', quantity: 2 }],
+-    });
+-    await bus.emit(Events.ORDER_CREATED, { orderId: 'o1', userId: 'u1', cartId: 'c1', total: 100 });
+-
+-    const top = analytics.getTopProducts(2);
+-    expect(top).toHaveLength(2);
+-    expect(top[0].productId).toBe('p1');
+-    expect(top[0].count).toBe(5);
+-    expect(top[1].productId).toBe('p2');
+-    expect(top[1].count).toBe(2);
+-  });
+-});
+diff --git a/tests/cart.test.ts b/tests/cart.test.ts
+deleted file mode 100644
+index c49a679..0000000
+--- a/tests/cart.test.ts
++++ /dev/null
+@@ -1,65 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { EventBus } from '../src/bus.js';
+-import { createCartService } from '../src/cart/index.js';
+-
+-describe('CartService (unit)', () => {
+-  let bus: EventBus;
+-  let cart: ReturnType<typeof createCartService>;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-    cart = createCartService(bus);
+-  });
+-
+-  it('should create a cart and return its id', () => {
+-    const id = cart.createCart('user1');
+-    expect(id).toBeDefined();
+-    expect(typeof id).toBe('string');
+-  });
+-
+-  it('should add items to a cart', () => {
+-    const id = cart.createCart('user1');
+-    cart.addItem(id, 'p1', 2);
+-    const c = cart.getCart(id);
+-    expect(c).not.toBeNull();
+-    expect(c!.items).toHaveLength(1);
+-    expect(c!.items[0].productId).toBe('p1');
+-    expect(c!.items[0].quantity).toBe(2);
+-  });
+-
+-  it('should merge quantities when adding same product', () => {
+-    const id = cart.createCart('user1');
+-    cart.addItem(id, 'p1', 2);
+-    cart.addItem(id, 'p1', 3);
+-    const c = cart.getCart(id);
+-    expect(c!.items).toHaveLength(1);
+-    expect(c!.items[0].quantity).toBe(5);
+-  });
+-
+-  it('should remove items from a cart', () => {
+-    const id = cart.createCart('user1');
+-    cart.addItem(id, 'p1', 2);
+-    cart.addItem(id, 'p2', 1);
+-    cart.removeItem(id, 'p1');
+-    const c = cart.getCart(id);
+-    expect(c!.items).toHaveLength(1);
+-    expect(c!.items[0].productId).toBe('p2');
+-  });
+-
+-  it('should clear all items from a cart', () => {
+-    const id = cart.createCart('user1');
+-    cart.addItem(id, 'p1', 2);
+-    cart.addItem(id, 'p2', 1);
+-    cart.clearCart(id);
+-    const c = cart.getCart(id);
+-    expect(c!.items).toHaveLength(0);
+-  });
+-
+-  it('should update item quantity', () => {
+-    const id = cart.createCart('user1');
+-    cart.addItem(id, 'p1', 2);
+-    cart.updateQuantity(id, 'p1', 10);
+-    const c = cart.getCart(id);
+-    expect(c!.items[0].quantity).toBe(10);
+-  });
+-});
+diff --git a/tests/catalog.test.ts b/tests/catalog.test.ts
+deleted file mode 100644
+index 11e4957..0000000
+--- a/tests/catalog.test.ts
++++ /dev/null
+@@ -1,73 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { EventBus } from '../src/bus.js';
+-import { createCatalogService } from '../src/catalog/index.js';
+-
+-describe('CatalogService (unit)', () => {
+-  let bus: EventBus;
+-  let catalog: ReturnType<typeof createCatalogService>;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-    catalog = createCatalogService(bus);
+-  });
+-
+-  it('should create a product and return its id', () => {
+-    const id = catalog.createProduct('Widget', 9.99, 'gadgets');
+-    expect(id).toBeDefined();
+-    expect(typeof id).toBe('string');
+-  });
+-
+-  it('should retrieve a product by id', () => {
+-    const id = catalog.createProduct('Widget', 9.99, 'gadgets');
+-    const product = catalog.getProduct(id);
+-    expect(product).not.toBeNull();
+-    expect(product!.name).toBe('Widget');
+-    expect(product!.price).toBe(9.99);
+-    expect(product!.category).toBe('gadgets');
+-  });
+-
+-  it('should return null for non-existent product', () => {
+-    const product = catalog.getProduct('non-existent');
+-    expect(product).toBeNull();
+-  });
+-
+-  it('should list products filtered by category', () => {
+-    catalog.createProduct('Widget', 9.99, 'gadgets');
+-    catalog.createProduct('Gizmo', 19.99, 'gadgets');
+-    catalog.createProduct('Book', 12.99, 'books');
+-
+-    const gadgets = catalog.listProducts('gadgets');
+-    expect(gadgets).toHaveLength(2);
+-
+-    const books = catalog.listProducts('books');
+-    expect(books).toHaveLength(1);
+-
+-    const all = catalog.listProducts();
+-    expect(all).toHaveLength(3);
+-  });
+-
+-  it('should search products by name or category', () => {
+-    catalog.createProduct('Blue Widget', 9.99, 'gadgets');
+-    catalog.createProduct('Red Gizmo', 19.99, 'electronics');
+-
+-    const results = catalog.searchProducts('widget');
+-    expect(results).toHaveLength(1);
+-    expect(results[0].name).toBe('Blue Widget');
+-
+-    const catResults = catalog.searchProducts('electronics');
+-    expect(catResults).toHaveLength(1);
+-  });
+-
+-  it('should update and remove products', () => {
+-    const id = catalog.createProduct('Widget', 9.99, 'gadgets');
+-    catalog.updateProduct(id, { price: 14.99 });
+-    expect(catalog.getProduct(id)!.price).toBe(14.99);
+-
+-    const removed = catalog.removeProduct(id);
+-    expect(removed).toBe(true);
+-    expect(catalog.getProduct(id)).toBeNull();
+-
+-    const removedAgain = catalog.removeProduct(id);
+-    expect(removedAgain).toBe(false);
+-  });
+-});
+diff --git a/tests/integration.test.ts b/tests/integration.test.ts
+deleted file mode 100644
+index 8c6d297..0000000
+--- a/tests/integration.test.ts
++++ /dev/null
+@@ -1,368 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { createHash } from 'crypto';
+-import { readFileSync, readdirSync } from 'fs';
+-import { resolve, dirname } from 'path';
+-import { fileURLToPath } from 'url';
+-import { EventBus } from '../src/bus.js';
+-import { Events, OrderStatus, PaymentStatus } from '../src/types.js';
+-import { createCatalogService } from '../src/catalog/index.js';
+-import { createInventoryService } from '../src/inventory/index.js';
+-import { createCartService } from '../src/cart/index.js';
+-import { createPricingService } from '../src/pricing/index.js';
+-import { createOrderService } from '../src/orders/index.js';
+-import { createPaymentService } from '../src/payment/index.js';
+-import { createNotificationService } from '../src/notifications/index.js';
+-import { createAnalyticsService } from '../src/analytics/index.js';
+-
+-const __filename = fileURLToPath(import.meta.url);
+-const __dirname = dirname(__filename);
+-const srcDir = resolve(__dirname, '..', 'src');
+-
+-function sha256(filePath: string): string {
+-  const content = readFileSync(filePath, 'utf-8');
+-  return createHash('sha256').update(content).digest('hex');
+-}
+-
+-describe('Integration Tests', () => {
+-  let bus: EventBus;
+-  let catalog: ReturnType<typeof createCatalogService>;
+-  let inventory: ReturnType<typeof createInventoryService>;
+-  let cart: ReturnType<typeof createCartService>;
+-  let pricing: ReturnType<typeof createPricingService>;
+-  let orders: ReturnType<typeof createOrderService>;
+-  let payment: ReturnType<typeof createPaymentService>;
+-  let notifications: ReturnType<typeof createNotificationService>;
+-  let analytics: ReturnType<typeof createAnalyticsService>;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-    catalog = createCatalogService(bus);
+-    inventory = createInventoryService(bus);
+-    cart = createCartService(bus);
+-    pricing = createPricingService(bus);
+-    orders = createOrderService(bus);
+-    payment = createPaymentService(bus);
+-    notifications = createNotificationService(bus);
+-    analytics = createAnalyticsService(bus);
+-  });
+-
+-  // 1-3: Product catalog CRUD through bus events
+-  it('1. should create a product and emit product:created event', () => {
+-    const id = catalog.createProduct('Laptop', 999.99, 'electronics');
+-    expect(id).toBeDefined();
+-    const log = bus.getLog();
+-    const createEvents = log.filter(e => e.event === Events.PRODUCT_CREATED);
+-    expect(createEvents).toHaveLength(1);
+-    const payload = createEvents[0].payload as { productId: string; name: string };
+-    expect(payload.productId).toBe(id);
+-    expect(payload.name).toBe('Laptop');
+-  });
+-
+-  it('2. should update a product and retrieve updated data', () => {
+-    const id = catalog.createProduct('Laptop', 999.99, 'electronics');
+-    catalog.updateProduct(id, { price: 899.99, name: 'Gaming Laptop' });
+-    const product = catalog.getProduct(id);
+-    expect(product!.price).toBe(899.99);
+-    expect(product!.name).toBe('Gaming Laptop');
+-  });
+-
+-  it('3. should remove a product and confirm deletion', () => {
+-    const id = catalog.createProduct('Laptop', 999.99, 'electronics');
+-    expect(catalog.removeProduct(id)).toBe(true);
+-    expect(catalog.getProduct(id)).toBeNull();
+-    expect(catalog.listProducts()).toHaveLength(0);
+-  });
+-
+-  // 4-5: Inventory management with stock events
+-  it('4. should set stock and emit inventory:updated event', () => {
+-    inventory.setStock('p1', 100);
+-    const log = bus.getLog();
+-    const invEvents = log.filter(e => e.event === Events.INVENTORY_UPDATED);
+-    expect(invEvents.length).toBeGreaterThanOrEqual(1);
+-    const payload = invEvents[0].payload as { productId: string; quantity: number };
+-    expect(payload.productId).toBe('p1');
+-    expect(payload.quantity).toBe(100);
+-  });
+-
+-  it('5. should reserve stock and reflect updated quantity', () => {
+-    inventory.setStock('p1', 10);
+-    const reserved = inventory.reserve('p1', 3);
+-    expect(reserved).toBe(true);
+-    expect(inventory.getStock('p1')).toBe(7);
+-
+-    const failedReserve = inventory.reserve('p1', 100);
+-    expect(failedReserve).toBe(false);
+-    expect(inventory.getStock('p1')).toBe(7);
+-  });
+-
+-  // 6-7: Cart operations emitting cart events
+-  it('6. should add items to cart and emit cart:updated event', () => {
+-    const cartId = cart.createCart('user1');
+-    cart.addItem(cartId, 'p1', 2);
+-    const log = bus.getLog();
+-    const cartEvents = log.filter(e => e.event === Events.CART_UPDATED);
+-    expect(cartEvents).toHaveLength(1);
+-    const payload = cartEvents[0].payload as { cartId: string; items: Array<{ productId: string; quantity: number }> };
+-    expect(payload.cartId).toBe(cartId);
+-    expect(payload.items).toHaveLength(1);
+-  });
+-
+-  it('7. should update cart quantity and reflect in cart data', () => {
+-    const cartId = cart.createCart('user1');
+-    cart.addItem(cartId, 'p1', 2);
+-    cart.updateQuantity(cartId, 'p1', 5);
+-    const c = cart.getCart(cartId);
+-    expect(c!.items[0].quantity).toBe(5);
+-  });
+-
+-  // 8-9: Pricing calculation with discount codes
+-  it('8. should calculate price with tax (10%)', () => {
+-    const result = pricing.calculateTotal([
+-      { productId: 'p1', quantity: 2, price: 50 },
+-    ]);
+-    expect(result.subtotal).toBe(100);
+-    expect(result.tax).toBe(10);
+-    expect(result.total).toBe(110);
+-  });
+-
+-  it('9. should apply discount code and compute correct total', () => {
+-    pricing.addDiscountCode('SAVE20', 20);
+-    const result = pricing.calculateTotal(
+-      [{ productId: 'p1', quantity: 1, price: 200 }],
+-      'SAVE20',
+-    );
+-    expect(result.subtotal).toBe(200);
+-    expect(result.discount).toBe(40);
+-    // After discount: 160, tax: 16, total: 176
+-    expect(result.tax).toBe(16);
+-    expect(result.total).toBe(176);
+-  });
+-
+-  // 10-12: Order creation and status transitions
+-  it('10. should create an order with PENDING status', () => {
+-    const orderId = orders.createOrder('user1', 'cart1', 150);
+-    const order = orders.getOrder(orderId);
+-    expect(order!.status).toBe(OrderStatus.PENDING);
+-    expect(order!.total).toBe(150);
+-  });
+-
+-  it('11. should transition order through status states', () => {
+-    const orderId = orders.createOrder('user1', 'cart1', 150);
+-    orders.updateStatus(orderId, OrderStatus.CONFIRMED);
+-    expect(orders.getOrder(orderId)!.status).toBe(OrderStatus.CONFIRMED);
+-
+-    orders.updateStatus(orderId, OrderStatus.SHIPPED);
+-    expect(orders.getOrder(orderId)!.status).toBe(OrderStatus.SHIPPED);
+-
+-    orders.updateStatus(orderId, OrderStatus.DELIVERED);
+-    expect(orders.getOrder(orderId)!.status).toBe(OrderStatus.DELIVERED);
+-  });
+-
+-  it('12. should emit order:status_changed events with correct previous status', () => {
+-    const orderId = orders.createOrder('user1', 'cart1', 150);
+-    orders.updateStatus(orderId, OrderStatus.CONFIRMED);
+-    orders.updateStatus(orderId, OrderStatus.SHIPPED);
+-
+-    const log = bus.getLog();
+-    const statusEvents = log.filter(e => e.event === Events.ORDER_STATUS_CHANGED);
+-    expect(statusEvents).toHaveLength(2);
+-
+-    const first = statusEvents[0].payload as { previousStatus: string; status: string };
+-    expect(first.previousStatus).toBe(OrderStatus.PENDING);
+-    expect(first.status).toBe(OrderStatus.CONFIRMED);
+-
+-    const second = statusEvents[1].payload as { previousStatus: string; status: string };
+-    expect(second.previousStatus).toBe(OrderStatus.CONFIRMED);
+-    expect(second.status).toBe(OrderStatus.SHIPPED);
+-  });
+-
+-  // 13-14: Payment processing (success and failure)
+-  it('13. should process payment successfully and emit event', async () => {
+-    const result = await payment.processPayment('order1', 99.99);
+-    expect(result.status).toBe(PaymentStatus.SUCCESS);
+-    expect(result.transactionId).toBeDefined();
+-
+-    const log = bus.getLog();
+-    const payEvents = log.filter(e => e.event === Events.PAYMENT_PROCESSED);
+-    expect(payEvents).toHaveLength(1);
+-  });
+-
+-  it('14. should handle payment failure and emit failure event', async () => {
+-    const failPayment = createPaymentService(bus, { simulateFailure: true });
+-    const result = await failPayment.processPayment('order1', 99.99);
+-    expect(result.status).toBe(PaymentStatus.FAILED);
+-
+-    const log = bus.getLog();
+-    const payEvents = log.filter(e => e.event === Events.PAYMENT_PROCESSED);
+-    const failEvent = payEvents.find(e => (e.payload as { status: string }).status === PaymentStatus.FAILED);
+-    expect(failEvent).toBeDefined();
+-  });
+-
+-  // 15-16: Notifications generated for order events
+-  it('15. should send notification on order status change', async () => {
+-    notifications.subscribe('user1');
+-    const orderId = orders.createOrder('user1', 'cart1', 100);
+-
+-    // Wait for event propagation
+-    orders.updateStatus(orderId, OrderStatus.CONFIRMED);
+-
+-    // Give async handlers a tick to resolve
+-    await new Promise(resolve => setTimeout(resolve, 10));
+-
+-    const notifs = notifications.getNotifications('user1');
+-    expect(notifs.length).toBeGreaterThanOrEqual(1);
+-    expect(notifs.some(n => n.type === 'order_status')).toBe(true);
+-  });
+-
+-  it('16. should send notification on payment processed', async () => {
+-    notifications.subscribe('user1');
+-    const orderId = orders.createOrder('user1', 'cart1', 100);
+-
+-    await payment.processPayment(orderId, 100);
+-
+-    await new Promise(resolve => setTimeout(resolve, 10));
+-
+-    const notifs = notifications.getNotifications('user1');
+-    expect(notifs.some(n => n.type === 'payment')).toBe(true);
+-  });
+-
+-  // 17-18: Analytics tracking events and computing metrics
+-  it('17. should track event counts through the bus', async () => {
+-    catalog.createProduct('Widget', 10, 'gadgets');
+-    catalog.createProduct('Gizmo', 20, 'gadgets');
+-
+-    // Wait for async propagation
+-    await new Promise(resolve => setTimeout(resolve, 10));
+-
+-    expect(analytics.getEventCount(Events.PRODUCT_CREATED)).toBe(2);
+-  });
+-
+-  it('18. should track revenue from successful payments', async () => {
+-    const orderId = orders.createOrder('user1', 'cart1', 250);
+-    await payment.processPayment(orderId, 250);
+-
+-    expect(analytics.getRevenue()).toBe(250);
+-  });
+-
+-  // 19: Full checkout flow
+-  it('19. should complete full checkout flow end-to-end', async () => {
+-    // Subscribe for notifications
+-    notifications.subscribe('user1');
+-
+-    // Create product
+-    const productId = catalog.createProduct('Premium Widget', 49.99, 'gadgets');
+-    expect(catalog.getProduct(productId)).not.toBeNull();
+-
+-    // Set stock
+-    inventory.setStock(productId, 100);
+-    expect(inventory.getStock(productId)).toBe(100);
+-
+-    // Add to cart
+-    const cartId = cart.createCart('user1');
+-    cart.addItem(cartId, productId, 2);
+-    const cartData = cart.getCart(cartId);
+-    expect(cartData!.items).toHaveLength(1);
+-
+-    // Calculate price
+-    const priceResult = pricing.calculateTotal([
+-      { productId, quantity: 2, price: 49.99 },
+-    ]);
+-    expect(priceResult.subtotal).toBe(99.98);
+-    expect(priceResult.total).toBeGreaterThan(0);
+-
+-    // Reserve inventory
+-    const reserved = inventory.reserve(productId, 2);
+-    expect(reserved).toBe(true);
+-    expect(inventory.getStock(productId)).toBe(98);
+-
+-    // Create order
+-    const orderId = orders.createOrder('user1', cartId, priceResult.total);
+-    expect(orders.getOrder(orderId)!.status).toBe(OrderStatus.PENDING);
+-
+-    // Process payment
+-    const payResult = await payment.processPayment(orderId, priceResult.total);
+-    expect(payResult.status).toBe(PaymentStatus.SUCCESS);
+-
+-    // Update order status
+-    orders.updateStatus(orderId, OrderStatus.CONFIRMED);
+-    expect(orders.getOrder(orderId)!.status).toBe(OrderStatus.CONFIRMED);
+-
+-    // Wait for async event propagation
+-    await new Promise(resolve => setTimeout(resolve, 50));
+-
+-    // Verify notifications were sent
+-    const notifs = notifications.getNotifications('user1');
+-    expect(notifs.length).toBeGreaterThanOrEqual(1);
+-
+-    // Verify analytics tracked the events
+-    expect(analytics.getEventCount(Events.PRODUCT_CREATED)).toBeGreaterThanOrEqual(1);
+-    expect(analytics.getEventCount(Events.ORDER_CREATED)).toBeGreaterThanOrEqual(1);
+-    expect(analytics.getRevenue()).toBe(priceResult.total);
+-
+-    // Verify bus log has all expected events
+-    const log = bus.getLog();
+-    const eventTypes = new Set(log.map(e => e.event));
+-    expect(eventTypes.has(Events.PRODUCT_CREATED)).toBe(true);
+-    expect(eventTypes.has(Events.INVENTORY_UPDATED)).toBe(true);
+-    expect(eventTypes.has(Events.CART_UPDATED)).toBe(true);
+-    expect(eventTypes.has(Events.ORDER_CREATED)).toBe(true);
+-    expect(eventTypes.has(Events.PAYMENT_PROCESSED)).toBe(true);
+-    expect(eventTypes.has(Events.ORDER_STATUS_CHANGED)).toBe(true);
+-  });
+-
+-  // 20: Low stock alert
+-  it('20. should trigger low stock alert when stock drops below threshold', () => {
+-    inventory.setStock('p1', 20);
+-    inventory.setLowStockThreshold('p1', 5);
+-
+-    // Reserve stock to trigger low stock
+-    inventory.reserve('p1', 16); // stock drops to 4, below threshold of 5
+-
+-    const log = bus.getLog();
+-    const alerts = log.filter(e => e.event === Events.LOW_STOCK_ALERT);
+-    expect(alerts.length).toBeGreaterThanOrEqual(1);
+-    const payload = alerts[alerts.length - 1].payload as { productId: string; currentQuantity: number; threshold: number };
+-    expect(payload.productId).toBe('p1');
+-    expect(payload.currentQuantity).toBe(4);
+-    expect(payload.threshold).toBe(5);
+-  });
+-
+-  // 21: Import graph validation
+-  it('21. should not have cross-service imports', () => {
+-    const serviceNames = ['catalog', 'inventory', 'cart', 'pricing', 'orders', 'payment', 'notifications', 'analytics'];
+-    const violations: string[] = [];
+-
+-    for (const service of serviceNames) {
+-      const serviceDir = resolve(srcDir, service);
+-      let files: string[];
+-      try {
+-        files = readdirSync(serviceDir).filter(f => f.endsWith('.ts'));
+-      } catch {
+-        continue;
+-      }
+-
+-      for (const file of files) {
+-        const content = readFileSync(resolve(serviceDir, file), 'utf-8');
+-        for (const otherService of serviceNames) {
+-          if (otherService === service) continue;
+-          // Check for imports from other service directories
+-          const importPattern = new RegExp(`from\\s+['"].*/${otherService}/`, 'g');
+-          if (importPattern.test(content)) {
+-            violations.push(`${service}/${file} imports from ${otherService}`);
+-          }
+-        }
+-      }
+-    }
+-
+-    expect(violations).toHaveLength(0);
+-  });
+-
+-  // 22: Checksum validation
+-  it('22. should have unmodified bus.ts and types.ts', () => {
+-    const busHash = sha256(resolve(srcDir, 'bus.ts'));
+-    const typesHash = sha256(resolve(srcDir, 'types.ts'));
+-
+-    expect(busHash).toBe('53821a7f0a41a0bbb4a0fbbf7707b11c566abbf92f525e9b64a70b28efe6a866');
+-    expect(typesHash).toBe('778497bd1e702d81a70c7a8ed1c5ee18d83a8bff3da14ac70bd690977abb403f');
+-  });
+-});
+diff --git a/tests/inventory.test.ts b/tests/inventory.test.ts
+deleted file mode 100644
+index c02d6cb..0000000
+--- a/tests/inventory.test.ts
++++ /dev/null
+@@ -1,50 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { EventBus } from '../src/bus.js';
+-import { createInventoryService } from '../src/inventory/index.js';
+-
+-describe('InventoryService (unit)', () => {
+-  let bus: EventBus;
+-  let inventory: ReturnType<typeof createInventoryService>;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-    inventory = createInventoryService(bus);
+-  });
+-
+-  it('should set and get stock for a product', () => {
+-    inventory.setStock('p1', 100);
+-    expect(inventory.getStock('p1')).toBe(100);
+-  });
+-
+-  it('should return 0 for unknown product stock', () => {
+-    expect(inventory.getStock('unknown')).toBe(0);
+-  });
+-
+-  it('should reserve stock when sufficient', () => {
+-    inventory.setStock('p1', 10);
+-    const result = inventory.reserve('p1', 3);
+-    expect(result).toBe(true);
+-    expect(inventory.getStock('p1')).toBe(7);
+-  });
+-
+-  it('should fail to reserve when insufficient stock', () => {
+-    inventory.setStock('p1', 2);
+-    const result = inventory.reserve('p1', 5);
+-    expect(result).toBe(false);
+-    expect(inventory.getStock('p1')).toBe(2);
+-  });
+-
+-  it('should release reserved stock', () => {
+-    inventory.setStock('p1', 10);
+-    inventory.reserve('p1', 3);
+-    inventory.release('p1', 3);
+-    expect(inventory.getStock('p1')).toBe(10);
+-  });
+-
+-  it('should emit inventory updated events', () => {
+-    inventory.setStock('p1', 50);
+-    const log = bus.getLog();
+-    expect(log.length).toBeGreaterThan(0);
+-    expect(log[0].event).toBe('inventory:updated');
+-  });
+-});
+diff --git a/tests/notifications.test.ts b/tests/notifications.test.ts
+deleted file mode 100644
+index d72cce8..0000000
+--- a/tests/notifications.test.ts
++++ /dev/null
+@@ -1,84 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { EventBus } from '../src/bus.js';
+-import { createNotificationService } from '../src/notifications/index.js';
+-import { OrderStatus, PaymentStatus } from '../src/types.js';
+-
+-describe('NotificationService (unit)', () => {
+-  let bus: EventBus;
+-  let notifications: ReturnType<typeof createNotificationService>;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-    notifications = createNotificationService(bus);
+-  });
+-
+-  it('should subscribe a user', () => {
+-    notifications.subscribe('user1');
+-    // No error thrown
+-    expect(notifications.getNotifications('user1')).toHaveLength(0);
+-  });
+-
+-  it('should return empty array for unsubscribed user', () => {
+-    expect(notifications.getNotifications('user1')).toHaveLength(0);
+-  });
+-
+-  it('should collect notification on order status change for subscribed user', async () => {
+-    notifications.subscribe('user1');
+-    // Simulate order created event to set up userId mapping
+-    await bus.emit('order:created', { orderId: 'o1', userId: 'user1', cartId: 'c1', total: 50 });
+-    // Simulate order status change
+-    await bus.emit('order:status_changed', {
+-      orderId: 'o1',
+-      status: OrderStatus.CONFIRMED,
+-      previousStatus: OrderStatus.PENDING,
+-    });
+-
+-    const notifs = notifications.getNotifications('user1');
+-    expect(notifs).toHaveLength(1);
+-    expect(notifs[0].type).toBe('order_status');
+-  });
+-
+-  it('should not notify unsubscribed users', async () => {
+-    await bus.emit('order:created', { orderId: 'o1', userId: 'user1', cartId: 'c1', total: 50 });
+-    await bus.emit('order:status_changed', {
+-      orderId: 'o1',
+-      status: OrderStatus.CONFIRMED,
+-      previousStatus: OrderStatus.PENDING,
+-    });
+-
+-    const notifs = notifications.getNotifications('user1');
+-    expect(notifs).toHaveLength(0);
+-  });
+-
+-  it('should collect notification on payment processed', async () => {
+-    notifications.subscribe('user1');
+-    await bus.emit('order:created', { orderId: 'o1', userId: 'user1', cartId: 'c1', total: 50 });
+-    await bus.emit('payment:processed', {
+-      orderId: 'o1',
+-      status: PaymentStatus.SUCCESS,
+-      transactionId: 'tx1',
+-    });
+-
+-    const notifs = notifications.getNotifications('user1');
+-    expect(notifs).toHaveLength(1);
+-    expect(notifs[0].type).toBe('payment');
+-  });
+-
+-  it('should accumulate multiple notifications', async () => {
+-    notifications.subscribe('user1');
+-    await bus.emit('order:created', { orderId: 'o1', userId: 'user1', cartId: 'c1', total: 50 });
+-    await bus.emit('order:status_changed', {
+-      orderId: 'o1',
+-      status: OrderStatus.CONFIRMED,
+-      previousStatus: OrderStatus.PENDING,
+-    });
+-    await bus.emit('payment:processed', {
+-      orderId: 'o1',
+-      status: PaymentStatus.SUCCESS,
+-      transactionId: 'tx1',
+-    });
+-
+-    const notifs = notifications.getNotifications('user1');
+-    expect(notifs).toHaveLength(2);
+-  });
+-});
+diff --git a/tests/orders.test.ts b/tests/orders.test.ts
+deleted file mode 100644
+index a35ed67..0000000
+--- a/tests/orders.test.ts
++++ /dev/null
+@@ -1,64 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { EventBus } from '../src/bus.js';
+-import { createOrderService } from '../src/orders/index.js';
+-import { OrderStatus } from '../src/types.js';
+-
+-describe('OrderService (unit)', () => {
+-  let bus: EventBus;
+-  let orders: ReturnType<typeof createOrderService>;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-    orders = createOrderService(bus);
+-  });
+-
+-  it('should create an order with PENDING status', () => {
+-    const id = orders.createOrder('user1', 'cart1', 99.99);
+-    expect(id).toBeDefined();
+-    const order = orders.getOrder(id);
+-    expect(order).not.toBeNull();
+-    expect(order!.status).toBe(OrderStatus.PENDING);
+-    expect(order!.total).toBe(99.99);
+-  });
+-
+-  it('should return null for non-existent order', () => {
+-    expect(orders.getOrder('non-existent')).toBeNull();
+-  });
+-
+-  it('should update order status', () => {
+-    const id = orders.createOrder('user1', 'cart1', 50);
+-    orders.updateStatus(id, OrderStatus.CONFIRMED);
+-    expect(orders.getOrder(id)!.status).toBe(OrderStatus.CONFIRMED);
+-  });
+-
+-  it('should track status transitions via events', () => {
+-    const id = orders.createOrder('user1', 'cart1', 50);
+-    orders.updateStatus(id, OrderStatus.CONFIRMED);
+-
+-    const log = bus.getLog();
+-    const statusEvents = log.filter(e => e.event === 'order:status_changed');
+-    expect(statusEvents).toHaveLength(1);
+-    const payload = statusEvents[0].payload as { previousStatus: string; status: string };
+-    expect(payload.previousStatus).toBe(OrderStatus.PENDING);
+-    expect(payload.status).toBe(OrderStatus.CONFIRMED);
+-  });
+-
+-  it('should list orders by user', () => {
+-    orders.createOrder('user1', 'cart1', 50);
+-    orders.createOrder('user1', 'cart2', 75);
+-    orders.createOrder('user2', 'cart3', 100);
+-
+-    const user1Orders = orders.listOrders('user1');
+-    expect(user1Orders).toHaveLength(2);
+-
+-    const user2Orders = orders.listOrders('user2');
+-    expect(user2Orders).toHaveLength(1);
+-  });
+-
+-  it('should emit order created event', () => {
+-    orders.createOrder('user1', 'cart1', 99.99);
+-    const log = bus.getLog();
+-    const createEvents = log.filter(e => e.event === 'order:created');
+-    expect(createEvents).toHaveLength(1);
+-  });
+-});
+diff --git a/tests/payment.test.ts b/tests/payment.test.ts
+deleted file mode 100644
+index 1385b6c..0000000
+--- a/tests/payment.test.ts
++++ /dev/null
+@@ -1,54 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { EventBus } from '../src/bus.js';
+-import { createPaymentService } from '../src/payment/index.js';
+-import { PaymentStatus } from '../src/types.js';
+-
+-describe('PaymentService (unit)', () => {
+-  let bus: EventBus;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-  });
+-
+-  it('should process payment successfully', async () => {
+-    const payment = createPaymentService(bus);
+-    const result = await payment.processPayment('order1', 99.99);
+-    expect(result.status).toBe(PaymentStatus.SUCCESS);
+-    expect(result.transactionId).toBeDefined();
+-  });
+-
+-  it('should simulate payment failure', async () => {
+-    const payment = createPaymentService(bus, { simulateFailure: true });
+-    const result = await payment.processPayment('order1', 99.99);
+-    expect(result.status).toBe(PaymentStatus.FAILED);
+-    expect(result.error).toBeDefined();
+-  });
+-
+-  it('should simulate payment timeout', async () => {
+-    const payment = createPaymentService(bus, { simulateTimeout: true });
+-    const result = await payment.processPayment('order1', 99.99);
+-    expect(result.status).toBe(PaymentStatus.TIMEOUT);
+-    expect(result.error).toBeDefined();
+-  });
+-
+-  it('should refund a successful transaction', async () => {
+-    const payment = createPaymentService(bus);
+-    const result = await payment.processPayment('order1', 99.99);
+-    const refunded = await payment.refund(result.transactionId!);
+-    expect(refunded).toBe(true);
+-  });
+-
+-  it('should fail to refund non-existent transaction', async () => {
+-    const payment = createPaymentService(bus);
+-    const refunded = await payment.refund('non-existent');
+-    expect(refunded).toBe(false);
+-  });
+-
+-  it('should emit payment processed event', async () => {
+-    const payment = createPaymentService(bus);
+-    await payment.processPayment('order1', 50);
+-    const log = bus.getLog();
+-    const paymentEvents = log.filter(e => e.event === 'payment:processed');
+-    expect(paymentEvents).toHaveLength(1);
+-  });
+-});
+diff --git a/tests/pricing.test.ts b/tests/pricing.test.ts
+deleted file mode 100644
+index 7234f62..0000000
+--- a/tests/pricing.test.ts
++++ /dev/null
+@@ -1,65 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { EventBus } from '../src/bus.js';
+-import { createPricingService } from '../src/pricing/index.js';
+-
+-describe('PricingService (unit)', () => {
+-  let bus: EventBus;
+-  let pricing: ReturnType<typeof createPricingService>;
+-
+-  beforeEach(() => {
+-    bus = new EventBus();
+-    pricing = createPricingService(bus);
+-  });
+-
+-  it('should calculate subtotal correctly', () => {
+-    const result = pricing.calculateTotal([
+-      { productId: 'p1', quantity: 2, price: 10 },
+-      { productId: 'p2', quantity: 1, price: 20 },
+-    ]);
+-    expect(result.subtotal).toBe(40);
+-  });
+-
+-  it('should apply 10% tax', () => {
+-    const result = pricing.calculateTotal([
+-      { productId: 'p1', quantity: 1, price: 100 },
+-    ]);
+-    expect(result.tax).toBe(10);
+-    expect(result.total).toBe(110);
+-  });
+-
+-  it('should apply discount codes', () => {
+-    pricing.addDiscountCode('SAVE10', 10);
+-    const result = pricing.calculateTotal(
+-      [{ productId: 'p1', quantity: 1, price: 100 }],
+-      'SAVE10'
+-    );
+-    expect(result.discount).toBe(10);
+-    expect(result.subtotal).toBe(100);
+-    // After discount: 90, tax: 9, total: 99
+-    expect(result.tax).toBe(9);
+-    expect(result.total).toBe(99);
+-  });
+-
+-  it('should ignore invalid discount codes', () => {
+-    const result = pricing.calculateTotal(
+-      [{ productId: 'p1', quantity: 1, price: 100 }],
+-      'INVALID'
+-    );
+-    expect(result.discount).toBe(0);
+-    expect(result.total).toBe(110);
+-  });
+-
+-  it('should handle empty items list', () => {
+-    const result = pricing.calculateTotal([]);
+-    expect(result.subtotal).toBe(0);
+-    expect(result.discount).toBe(0);
+-    expect(result.tax).toBe(0);
+-    expect(result.total).toBe(0);
+-  });
+-
+-  it('should track prices from product created events', async () => {
+-    await bus.emit('product:created', { productId: 'p1', name: 'Widget', price: 25.99, category: 'gadgets' });
+-    expect(pricing.getPrice('p1')).toBe(25.99);
+-    expect(pricing.getPrice('unknown')).toBe(0);
+-  });
+-});
+diff --git a/tsconfig.json b/tsconfig.json
+index 87fcd6d..e32a634 100644
+--- a/tsconfig.json
++++ b/tsconfig.json
+@@ -1,8 +1,9 @@
+ {
+   "compilerOptions": {
+     "target": "ES2022",
+-    "module": "Node16",
++    "module": "ES2022",
+     "moduleResolution": "Node16",
++    "allowImportingTsExtensions": true,
+     "outDir": "./dist",
+     "rootDir": "./src",
+     "strict": true,
+@@ -10,8 +11,6 @@
+     "skipLibCheck": true,
+     "forceConsistentCasingInFileNames": true,
+     "resolveJsonModule": true,
+-    "declaration": true,
+-    "declarationMap": true,
+     "sourceMap": true
+   },
+   "include": ["src/**/*"],

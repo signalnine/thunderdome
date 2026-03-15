@@ -1,0 +1,155 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..ca445f3
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,11 @@
++{
++  "input_tokens": 0,
++  "output_tokens": 0,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "tools_used": [],
++  "duration_ms": 0,
++  "total_cost_usd": 0,
++  "note": "interactive-mode-session-jsonl"
++}
+\ No newline at end of file
+diff --git a/.thunderdome-session.jsonl b/.thunderdome-session.jsonl
+new file mode 100644
+index 0000000..c998aca
+--- /dev/null
++++ b/.thunderdome-session.jsonl
+@@ -0,0 +1,4 @@
++{"type":"file-history-snapshot","messageId":"8582a634-3c8e-4c19-8cbd-6c69c81b3f9b","snapshot":{"messageId":"8582a634-3c8e-4c19-8cbd-6c69c81b3f9b","trackedFileBackups":{},"timestamp":"2026-03-10T09:52:11.991Z"},"isSnapshotUpdate":false}
++{"type":"file-history-snapshot","messageId":"4caa4dff-ac87-40ad-b27d-6713cfa3ff9d","snapshot":{"messageId":"4caa4dff-ac87-40ad-b27d-6713cfa3ff9d","trackedFileBackups":{},"timestamp":"2026-03-10T09:52:12.040Z"},"isSnapshotUpdate":false}
++{"parentUuid":null,"isSidechain":false,"userType":"external","cwd":"/workspace","sessionId":"352b7c0c-9e0e-4a24-9459-5fe333a86a8b","version":"2.1.63","gitBranch":"HEAD","type":"user","message":{"role":"user","content":"# T11: Debug Nightmare\n\n**Category:** bugfix/hard\n**Timeout:** 30 minutes\n\n## Description\n\nAn event-driven order processing system has several failing tests. The system handles the full order lifecycle: creation, stock reservation, payment, cancellation, and refunds.\n\nYour job: make all tests pass. Do not delete or skip tests. Do not modify test files.\n\nRun `npm test` to see the current failures. There are 30 visible tests — some are currently failing. There is also a hidden test suite that will be run during evaluation.\n\n### Architecture\n\n```\nsrc/\n├── events/          # Event bus (publish/subscribe)\n├── orders/          # Order lifecycle service + repository\n├── inventory/       # Stock management\n├── billing/         # Payment processing + price calculation\n└── notifications/   # Email/webhook notifications\n```\n\n**Flow:** `createOrder()` emits `order.created` → inventory reserves stock → billing charges payment → notification sent. Cancellation and refund flows reverse the process.\n\n### Constraints\n\n- Do not modify any test files.\n- `npm run build` and `npm run lint` must pass.\n- The system should correctly handle the full order lifecycle.\n\n## Getting Started\n\n```bash\nnpm install\nnpm test        # See which tests fail\nnpm run build   # Verify TypeScript compiles\nnpm run lint    # Verify lint passes\n```"},"uuid":"4caa4dff-ac87-40ad-b27d-6713cfa3ff9d","timestamp":"2026-03-10T09:52:12.039Z","permissionMode":"bypassPermissions"}
++{"parentUuid":"4caa4dff-ac87-40ad-b27d-6713cfa3ff9d","isSidechain":false,"userType":"external","cwd":"/workspace","sessionId":"352b7c0c-9e0e-4a24-9459-5fe333a86a8b","version":"2.1.63","gitBranch":"HEAD","type":"assistant","uuid":"3fdf824d-3e7d-4221-ae0e-84507fe0d238","timestamp":"2026-03-10T09:52:12.781Z","message":{"id":"ba1749fa-e1db-476b-ac4a-76306079a588","container":null,"model":"<synthetic>","role":"assistant","stop_reason":"stop_sequence","stop_sequence":"","type":"message","usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":null,"cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0},"inference_geo":null,"iterations":null,"speed":null},"content":[{"type":"text","text":"API Error: 401 {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"Invalid authentication credentials\"},\"request_id\":\"req_011CYuCDgM1MWNWcCLG4FvdR\"} · Please run /login"}],"context_management":null},"error":"authentication_failed","isApiErrorMessage":true}
+diff --git a/src/billing/calculator.ts b/src/billing/calculator.ts
+index 179c920..e067243 100644
+--- a/src/billing/calculator.ts
++++ b/src/billing/calculator.ts
+@@ -17,10 +17,10 @@ export function calculateOrderTotal(
+     0
+   );
+ 
+-  const discountAmount = subtotal * (discountPercent / 100);
+-  const afterDiscount = subtotal - discountAmount;
+-  const taxAmount = afterDiscount * taxRate;
+-  const total = Math.round((afterDiscount + taxAmount) * 100) / 100;
++  const discountAmount = Math.round(subtotal * (discountPercent / 100) * 100) / 100;
++  const afterDiscount = Math.round((subtotal - discountAmount) * 100) / 100;
++  const taxAmount = Math.round(afterDiscount * taxRate * 100) / 100;
++  const total = afterDiscount + taxAmount;
+ 
+   return {
+     subtotal: Math.round(subtotal * 100) / 100,
+diff --git a/src/billing/service.ts b/src/billing/service.ts
+index 5147107..26c29fd 100644
+--- a/src/billing/service.ts
++++ b/src/billing/service.ts
+@@ -22,7 +22,7 @@ export class BillingService {
+ 
+   registerHandlers(): void {
+     this.eventBus.on(ORDER_EVENTS.STOCK_RESERVED, this.handleStockReserved.bind(this));
+-    this.eventBus.on(ORDER_EVENTS.REFUNDED, this.handleRefund.bind(this));
++    this.eventBus.on(ORDER_EVENTS.REFUNDED, this.handleRefund);
+   }
+ 
+   private async handleStockReserved(data: unknown): Promise<void> {
+diff --git a/src/events/bus.ts b/src/events/bus.ts
+index 5939f0e..6d3f9e1 100644
+--- a/src/events/bus.ts
++++ b/src/events/bus.ts
+@@ -1,31 +1,32 @@
+ export type EventHandler = (data: unknown) => void | Promise<void>;
+ 
+-export class EventBus {
+-  private handlers: Map<string, EventHandler[]> = new Map();
++// Module-level handler registry — shared across all EventBus instances
++const globalHandlers: Map<string, EventHandler[]> = new Map();
+ 
++export class EventBus {
+   on(event: string, handler: EventHandler): void {
+-    const existing = this.handlers.get(event) ?? [];
++    const existing = globalHandlers.get(event) ?? [];
+     existing.push(handler);
+-    this.handlers.set(event, existing);
++    globalHandlers.set(event, existing);
+   }
+ 
+   off(event: string, handler: EventHandler): void {
+-    const existing = this.handlers.get(event);
++    const existing = globalHandlers.get(event);
+     if (!existing) return;
+-    this.handlers.set(
++    globalHandlers.set(
+       event,
+       existing.filter((h) => h !== handler)
+     );
+   }
+ 
+   async emit(event: string, data: unknown): Promise<void> {
+-    const handlers = this.handlers.get(event) ?? [];
++    const handlers = globalHandlers.get(event) ?? [];
+     for (const handler of handlers) {
+       await handler(data);
+     }
+   }
+ 
+   clear(): void {
+-    this.handlers.clear();
++    globalHandlers.clear();
+   }
+ }
+diff --git a/src/orders/repository.ts b/src/orders/repository.ts
+index d7ee83e..82e8e15 100644
+--- a/src/orders/repository.ts
++++ b/src/orders/repository.ts
+@@ -35,7 +35,7 @@ export class OrderRepository {
+   update(id: string, updates: Partial<Order>): Order | undefined {
+     const existing = this.store.get(id);
+     if (!existing) return undefined;
+-    const updated = { ...existing, ...updates, updatedAt: Date.now() };
++    const updated = { ...updates, id, updatedAt: Date.now() } as Order;
+     this.store.set(id, updated);
+     return { ...updated };
+   }
+diff --git a/src/orders/service.ts b/src/orders/service.ts
+index ec2058a..3e7ae69 100644
+--- a/src/orders/service.ts
++++ b/src/orders/service.ts
+@@ -71,13 +71,10 @@ export class OrderService {
+     if (!order) return undefined;
+     if (order.status !== 'confirmed') return undefined;
+ 
+-    // Update status BEFORE emitting event so handlers see correct state
+-    this.repo.update(id, { status: 'cancelled' });
+-
++    // Emit cancellation event, then update status
+     await this.eventBus.emit(ORDER_EVENTS.CANCELLED, {
+       orderId: id,
+       reason,
+-      status: 'cancelled',
+       items: order.items.map((i) => ({
+         productId: i.productId,
+         quantity: i.quantity,
+@@ -85,6 +82,8 @@ export class OrderService {
+       timestamp: Date.now(),
+     });
+ 
++    this.repo.update(id, { status: 'cancelled' });
++
+     return this.repo.findById(id);
+   }
+ 
+@@ -97,7 +96,7 @@ export class OrderService {
+       (Date.now() - order.createdAt) / (1000 * 60 * 60 * 24)
+     );
+ 
+-    if (daysSinceCreation > REFUND_WINDOW_DAYS) {
++    if (daysSinceCreation >= REFUND_WINDOW_DAYS) {
+       throw new Error(
+         `Refund window expired: ${daysSinceCreation} days since order (max ${REFUND_WINDOW_DAYS})`
+       );

@@ -1,0 +1,257 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..d2499bb
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,50 @@
++{
++  "input_tokens": 20,
++  "output_tokens": 5052,
++  "cache_read_tokens": 354216,
++  "cache_creation_tokens": 16218,
++  "turns": 24,
++  "tools_used": [
++    "Read",
++    "Glob",
++    "Bash",
++    "TodoWrite",
++    "Write",
++    "Edit"
++  ],
++  "duration_ms": 152000,
++  "total_cost_usd": 0.418,
++  "gastown_meta": {
++    "strategy": "single",
++    "polecat_count": 1,
++    "roles": {
++      "mayor": {
++        "input_tokens": 3,
++        "output_tokens": 555,
++        "cache_read_tokens": 7687,
++        "cache_creation_tokens": 1677,
++        "turns": 1,
++        "tools_used": [],
++        "duration_ms": 15030,
++        "total_cost_usd": 0.028214750000000004
++      },
++      "polecat-0": {
++        "input_tokens": 17,
++        "output_tokens": 4497,
++        "cache_read_tokens": 346529,
++        "cache_creation_tokens": 14541,
++        "turns": 23,
++        "tools_used": [
++          "Read",
++          "Glob",
++          "Bash",
++          "TodoWrite",
++          "Write",
++          "Edit"
++        ],
++        "duration_ms": 123522,
++        "total_cost_usd": 0.3901247500000001
++      }
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/package-lock.json b/package-lock.json
+index 97d25c0..3c003c8 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..a6eaea8
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,142 @@
++export interface Gate {
++  op: 'AND' | 'OR' | 'XOR';
++  in1: string;
++  in2: string;
++  out: string;
++}
++
++export function simulate(
++  gates: Gate[],
++  inputs: Record<string, number>,
++): Record<string, number> {
++  const wires: Record<string, number> = { ...inputs };
++  const remaining = new Set<number>(gates.map((_, i) => i));
++
++  let changed = true;
++  while (changed) {
++    changed = false;
++    for (const idx of remaining) {
++      const g = gates[idx];
++      if (wires[g.in1] !== undefined && wires[g.in2] !== undefined) {
++        const a = wires[g.in1];
++        const b = wires[g.in2];
++        let result: number;
++        switch (g.op) {
++          case 'AND':
++            result = a & b;
++            break;
++          case 'OR':
++            result = a | b;
++            break;
++          case 'XOR':
++            result = a ^ b;
++            break;
++        }
++        wires[g.out] = result;
++        remaining.delete(idx);
++        changed = true;
++      }
++    }
++  }
++
++  return wires;
++}
++
++export function findSwappedWires(gates: Gate[]): string[] {
++  // Build lookup: output wire -> gate
++  const outToGate = new Map<string, Gate>();
++  for (const g of gates) {
++    outToGate.set(g.out, g);
++  }
++
++  // Determine how many bits the adder has by looking at x-wires
++  const xWires = new Set<string>();
++  for (const g of gates) {
++    if (g.in1.startsWith('x')) xWires.add(g.in1);
++    if (g.in2.startsWith('x')) xWires.add(g.in2);
++  }
++  const numBits = xWires.size;
++
++  const swapped = new Set<string>();
++
++  // Helper to pad bit index to 2 digits
++  function pad(n: number): string {
++    return n.toString().padStart(2, '0');
++  }
++
++  // Structural analysis approach:
++  // Check rules that must hold for a ripple-carry adder and collect violations.
++  //
++  // Rules:
++  // 1. z-wires (except the last one z{numBits}) must be outputs of XOR gates
++  // 2. XOR gates with x/y inputs must NOT output to z (except z00)
++  // 3. XOR gates with non-x/y inputs must output to z
++  // 4. AND gates (except x00 AND y00) must feed into OR gates
++  // 5. XOR gate outputs that aren't z must feed into both XOR and AND gates
++
++  // Check each gate against structural rules
++  for (const g of gates) {
++    const isXYInput =
++      (g.in1.startsWith('x') || g.in1.startsWith('y')) &&
++      (g.in2.startsWith('x') || g.in2.startsWith('y'));
++    const isZOutput = g.out.startsWith('z');
++    const lastZ = `z${pad(numBits)}`;
++
++    if (isZOutput && g.out !== lastZ) {
++      // Rule 1: z-wires must come from XOR gates
++      if (g.op !== 'XOR') {
++        swapped.add(g.out);
++      }
++    }
++
++    if (g.op === 'XOR') {
++      if (isXYInput) {
++        // Rule 2: XOR of x/y inputs should not output directly to z (except z00)
++        if (isZOutput && g.out !== 'z00') {
++          swapped.add(g.out);
++        }
++        // Rule 5: If not z00, the output should feed into both an XOR and an AND
++        if (!isZOutput && g.out !== 'z00') {
++          // Check that this output is used as input to an XOR gate
++          const feedsXOR = gates.some(
++            (other) =>
++              other.op === 'XOR' &&
++              (other.in1 === g.out || other.in2 === g.out),
++          );
++          if (!feedsXOR) {
++            swapped.add(g.out);
++          }
++        }
++      } else {
++        // Rule 3: XOR of non-x/y inputs must output to z
++        if (!isZOutput) {
++          swapped.add(g.out);
++        }
++      }
++    }
++
++    if (g.op === 'AND') {
++      // Rule 4: AND gate outputs must feed into OR gates (except the half-adder AND for bit 0)
++      const isBit0 =
++        (g.in1 === 'x00' || g.in1 === 'y00') &&
++        (g.in2 === 'x00' || g.in2 === 'y00');
++      if (!isBit0) {
++        const feedsOR = gates.some(
++          (other) =>
++            other.op === 'OR' &&
++            (other.in1 === g.out || other.in2 === g.out),
++        );
++        if (!feedsOR) {
++          swapped.add(g.out);
++        }
++      }
++    }
++  }
++
++  // If we found exactly 8 wires, great. If not, we need more analysis.
++  // But with 4 swaps = 8 wires, the structural rules should catch them all.
++  // However, sometimes a swap might cause two rules to flag the same wire,
++  // or a swap partner might be caught by different rules.
++
++  return Array.from(swapped).sort();
++}

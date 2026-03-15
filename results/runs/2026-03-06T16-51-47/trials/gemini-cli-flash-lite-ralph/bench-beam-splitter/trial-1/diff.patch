@@ -1,0 +1,399 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..68f8642
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,11 @@
++{
++  "input_tokens": 0,
++  "output_tokens": 0,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "thought_tokens": 0,
++  "turns": 0,
++  "total_cost_usd": 0.0,
++  "iterations": 2,
++  "note": "gemini-flash-lite-ralph-loop"
++}
+\ No newline at end of file
+diff --git a/package-lock.json b/package-lock.json
+index 02b0dae..222cd7d 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.test.ts b/src/index.test.ts
+new file mode 100644
+index 0000000..90646b3
+--- /dev/null
++++ b/src/index.test.ts
+@@ -0,0 +1,93 @@
++// src/index.test.ts
++import { countBeamCells, countBeamPaths } from './index';
++import { describe, it, expect } from 'vitest';
++
++describe('Beam Splitter', () => {
++  it('should count beam cells for example 1', () => {
++    const grid = [
++      ['.', 'S', '.', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++      ['.', '^', '.', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++    ];
++    expect(countBeamCells(grid)).toBe(5);
++  });
++
++  it('should count beam paths for example 1', () => {
++    const grid = [
++      ['.', 'S', '.', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++      ['.', '^', '.', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++    ];
++    expect(countBeamPaths(grid)).toBe(2n);
++  });
++
++  it('should count beam cells for example 2', () => {
++    const grid = [
++      ['.', 'S', '.', '.', '.'],
++      ['.', '^', '.', '.', '.'],
++      ['^', '.', '^', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++    ];
++    expect(countBeamCells(grid)).toBe(6);
++  });
++
++  it('should count beam paths for example 2', () => {
++    const grid = [
++      ['.', 'S', '.', '.', '.'],
++      ['.', '^', '.', '.', '.'],
++      ['^', '.', '^', '.', '.'],
++      ['.', '.', '.', '.', '.'],
++    ];
++    expect(countBeamPaths(grid)).toBe(4n);
++  });
++
++  it('should handle a grid with no splitters', () => {
++    const grid = [
++      ['.', 'S', '.',],
++      ['.', '.', '.',],
++      ['.', '.', '.',],
++    ];
++    expect(countBeamCells(grid)).toBe(3);
++    expect(countBeamPaths(grid)).toBe(1n);
++  });
++
++  it('should handle a grid with multiple splitters in a line', () => {
++    const grid = [
++        ['.', 'S', '.', '.', '.'],
++        ['.', '.', '^', '.', '.'],
++        ['.', '.', '.', '^', '.'],
++        ['.', '.', '.', '.', '.'],
++    ];
++    // S -> (0,1)
++    // (1,1) -> (1,2) hits ^
++    // Splits: (2,1) DL, (2,3) DR
++    // (2,1) continues DL -> (3,0)
++    // (2,3) hits ^
++    // Splits: (3,2) DL, (3,4) DR
++    expect(countBeamCells(grid)).toBe(4);
++    expect(countBeamPaths(grid)).toBe(1n);
++  });
++
++
++  it('should handle a grid with an edge splitter leading to absorption', () => {
++    const grid = [
++      ['S', '.', '.'],
++      ['^', '.', '.'],
++      ['.', '.', '.'],
++    ];
++    // S -> (0,0)
++    // (1,0) hits ^
++    // Splits: (2,-1) absorbed, (2,1) DR
++    // Cells: (0,0), (1,0), (2,1) = 3 cells
++    expect(countBeamCells(grid)).toBe(3);
++    // Paths: S->(0,0)->(1,0) [1 path]
++    // at (1,0) splitter:
++    //  -> (2,-1) DL [1 path] -- absorbed (exits grid)
++    //  -> (2,1) DR [1 path] -- exits
++    // Total paths = 2n
++    expect(countBeamPaths(grid)).toBe(2n);
++  });
++
++});
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..69e7ef0
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,224 @@
++// src/index.ts
++
++enum Direction {
++  DOWN,
++  DOWN_LEFT,
++  DOWN_RIGHT,
++}
++
++interface Beam {
++  row: number;
++  col: number;
++  direction: Direction;
++}
++
++export function countBeamCells(grid: string[][]): number {
++  if (!grid || grid.length === 0 || grid[0].length === 0) {
++    return 0;
++  }
++
++  const rows = grid.length;
++  const cols = grid[0].length;
++
++  let startRow = -1;
++  let startCol = -1;
++
++  // Find the source 'S'
++  for (let c = 0; c < cols; c++) {
++    if (grid[0][c] === 'S') {
++      startRow = 0;
++      startCol = c;
++      break;
++    }
++  }
++
++  if (startRow === -1) {
++    // No source found, though problem description says it's always on top row.
++    return 0;
++  }
++
++  const visitedCells = new Set<string>();
++  const queue: Beam[] = [];
++
++  // Add the initial source cell to visited cells
++  visitedCells.add(`${startRow},${startCol}`);
++
++  // Start the first beam moving DOWN from the source
++  queue.push({ row: startRow, col: startCol, direction: Direction.DOWN });
++
++  while (queue.length > 0) {
++    const { row, col, direction } = queue.shift()!;
++
++    let nextRow = row;
++    let nextCol = col;
++
++    switch (direction) {
++      case Direction.DOWN:
++        nextRow = row + 1;
++        break;
++      case Direction.DOWN_LEFT:
++        nextRow = row + 1;
++        nextCol = col - 1;
++        break;
++      case Direction.DOWN_RIGHT:
++        nextRow = row + 1;
++        nextCol = col + 1;
++        break;
++    }
++
++    // Check boundaries
++    if (nextRow < 0 || nextRow >= rows || nextCol < 0 || nextCol >= cols) {
++      // Beam absorbed
++      continue;
++    }
++
++    const nextCellKey = `${nextRow},${nextCol}`;
++    visitedCells.add(nextCellKey);
++
++    const cellType = grid[nextRow][nextCol];
++
++    if (cellType === '^') {
++      // Splitter: two new beams
++      queue.push({ row: nextRow, col: nextCol, direction: Direction.DOWN_LEFT });
++      queue.push({ row: nextRow, col: nextCol, direction: Direction.DOWN_RIGHT });
++    } else {
++      // Empty or Source (though source won't be hit by other beams in this logic): continue in same direction
++      queue.push({ row: nextRow, col: nextCol, direction: direction });
++    }
++  }
++
++  return visitedCells.size;
++}
++
++export function countBeamPaths(grid: string[][]): bigint {
++  if (!grid || grid.length === 0 || grid[0].length === 0) {
++    return 0n;
++  }
++
++  const rows = grid.length;
++  const cols = grid[0].length;
++
++  // dp[row][col][incoming_direction_idx]
++  // 0: from (r-1, c) - straight down (corresponds to Direction.DOWN)
++  // 1: from (r-1, c+1) - down-left (corresponds to Direction.DOWN_LEFT)
++  // 2: from (r-1, c-1) - down-right (corresponds to Direction.DOWN_RIGHT)
++  const dp: bigint[][][] = Array(rows)
++    .fill(null)
++    .map(() =>
++      Array(cols)
++        .fill(null)
++        .map(() => [0n, 0n, 0n])
++    );
++
++  let startCol = -1;
++  // Find the source 'S'
++  for (let c = 0; c < cols; c++) {
++    if (grid[0][c] === 'S') {
++      startCol = c;
++      break;
++    }
++  }
++
++  if (startCol === -1) {
++    return 0n; // Should not happen based on problem description, but good for robustness
++  }
++
++  // Initial beam from 'S' at (0, startCol) moves DOWN.
++  // This means 1 path starts effectively "arriving" at (0, startCol) with an implicit DOWN direction from above.
++  dp[0][startCol][0] = 1n;
++
++  let totalPaths = 0n;
++
++  for (let r = 0; r < rows; r++) {
++    for (let c = 0; c < cols; c++) {
++      const pathsIncomingDown = dp[r][c][0];
++      const pathsIncomingDownLeft = dp[r][c][1]; // These paths arrived at (r,c) from (r-1, c+1)
++      const pathsIncomingDownRight = dp[r][c][2]; // These paths arrived at (r,c) from (r-1, c-1)
++
++      const cellType = grid[r][c];
++
++      // Process paths that arrived at (r,c) and continue DOWN (from previous r-1, c)
++      if (pathsIncomingDown > 0n) {
++        if (cellType === '^') {
++          // Splitter: paths split down-left and down-right
++          // New beam: to (r+1, c-1) as DOWN_LEFT
++          if (r + 1 < rows && c - 1 >= 0) {
++            dp[r + 1][c - 1][1] += pathsIncomingDown;
++          } else {
++            totalPaths += pathsIncomingDown;
++          }
++          // New beam: to (r+1, c+1) as DOWN_RIGHT
++          if (r + 1 < rows && c + 1 < cols) {
++            dp[r + 1][c + 1][2] += pathsIncomingDown;
++          } else {
++            totalPaths += pathsIncomingDown;
++          }
++        } else {
++          // Empty or Source: continue DOWN
++          // New beam: to (r+1, c) as DOWN
++          if (r + 1 < rows) {
++            dp[r + 1][c][0] += pathsIncomingDown;
++          } else {
++            totalPaths += pathsIncomingDown;
++          }
++        }
++      }
++
++      // Process paths that arrived at (r,c) and continue DOWN_LEFT (from previous r-1, c+1)
++      if (pathsIncomingDownLeft > 0n) {
++        if (cellType === '^') {
++          // Splitter: paths split down-left and down-right
++          // New beam: to (r+1, c-1) as DOWN_LEFT
++          if (r + 1 < rows && c - 1 >= 0) {
++            dp[r + 1][c - 1][1] += pathsIncomingDownLeft;
++          } else {
++            totalPaths += pathsIncomingDownLeft;
++          }
++          // New beam: to (r+1, c+1) as DOWN_RIGHT
++          if (r + 1 < rows && c + 1 < cols) {
++            dp[r + 1][c + 1][2] += pathsIncomingDownLeft;
++          } else {
++            totalPaths += pathsIncomingDownLeft;
++          }
++        } else {
++          // Empty or Source: continue DOWN_LEFT
++          // New beam: to (r+1, c-1) as DOWN_LEFT
++          if (r + 1 < rows && c - 1 >= 0) {
++            dp[r + 1][c - 1][1] += pathsIncomingDownLeft;
++          } else {
++            totalPaths += pathsIncomingDownLeft;
++          }
++        }
++      }
++
++      // Process paths that arrived at (r,c) and continue DOWN_RIGHT (from previous r-1, c-1)
++      if (pathsIncomingDownRight > 0n) {
++        if (cellType === '^') {
++          // Splitter: paths split down-left and down-right
++          // New beam: to (r+1, c-1) as DOWN_LEFT
++          if (r + 1 < rows && c - 1 >= 0) {
++            dp[r + 1][c - 1][1] += pathsIncomingDownRight;
++          } else {
++            totalPaths += pathsIncomingDownRight;
++          }
++          // New beam: to (r+1, c+1) as DOWN_RIGHT
++          if (r + 1 < rows && c + 1 < cols) {
++            dp[r + 1][c + 1][2] += pathsIncomingDownRight;
++          } else {
++            totalPaths += pathsIncomingDownRight;
++          }
++        } else {
++          // Empty or Source: continue DOWN_RIGHT
++          // New beam: to (r+1, c+1) as DOWN_RIGHT
++          if (r + 1 < rows && c + 1 < cols) {
++            dp[r + 1][c + 1][2] += pathsIncomingDownRight;
++          } else {
++            totalPaths += pathsIncomingDownRight;
++          }
++        }
++      }
++    }
++  }
++
++  return totalPaths;
++}

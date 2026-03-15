@@ -1,0 +1,1686 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..a3ef2d8
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,13 @@
++{
++  "input_tokens": 10,
++  "output_tokens": 965,
++  "cache_read_tokens": 59838,
++  "cache_creation_tokens": 0,
++  "thought_tokens": 0,
++  "turns": 0,
++  "total_cost_usd": 0.296918,
++  "worker_cost_usd": 0.0,
++  "supervisor_cost_usd": 0.296918,
++  "supervisor_model": "claude-opus-4-6",
++  "note": "flash-lite-supervisor-pipeline"
++}
+\ No newline at end of file
+diff --git a/TASK.md b/TASK.md
+index eddf5c5..efb5c2d 100644
+--- a/TASK.md
++++ b/TASK.md
+@@ -2,55 +2,58 @@
+ 
+ **Category:** greenfield/complex
+ **Timeout:** 30 minutes
+-**Tests:** 55 total (40 unit + 15 integration)
+ 
+ ## Objective
+ 
+-Build a plugin marketplace with 5 independent modules. Each module has its own directory, its own tests, and zero cross-module imports. A shared read-only `src/types.ts` defines all inter-module contracts. A thin integration layer `src/index.ts` composes the modules.
++Build a plugin marketplace system that lets developers register plugins, resolve version dependencies, execute plugin code safely, collect user reviews, and manage dependency graphs.
++
++The shared type definitions for all modules live in `src/types.ts` (read-only, do not modify). Your implementation must conform to these interfaces.
+ 
+ ## Modules
+ 
+-1. **Plugin Registry** (`src/registry/index.ts`) — CRUD for plugin metadata with SQLite (better-sqlite3). Stores plugin manifests with name+version as composite key. Search by name/description substring.
++You should build 5 capabilities:
++
++1. **Plugin Registry** -- A catalog of plugin manifests. Users can add plugins, look them up by name, browse all plugins, search through them, and remove specific versions. A single plugin can have multiple registered versions.
+ 
+-2. **Version Resolver** (`src/resolver/index.ts`) — Semver constraint resolution using the `semver` npm package. Resolves a set of version constraints against available versions. Pure logic, no database.
++2. **Version Resolver** -- Logic for resolving semver version constraints. Given a set of version constraints and the versions available in the registry, determine which concrete versions satisfy each constraint. Use the `semver` npm package (already in dependencies).
+ 
+-3. **Sandboxed Runner** (`src/runner/index.ts`) — Execute plugin code in isolated contexts using Node.js `vm` module. Supports timeout enforcement and memory tracking. Returns structured SandboxResult.
++3. **Sandboxed Runner** -- Execute arbitrary plugin code strings in an isolated environment using Node.js `vm` module. Support passing context variables into the sandbox. Enforce execution timeouts so runaway code doesn't hang the system. Return structured results including success/failure, output, timing, and memory info.
+ 
+-4. **Review System** (`src/reviews/index.ts`) — Ratings, comments, and moderation flags with SQLite. Computes average ratings (excluding flagged reviews). Supports querying by user, plugin, and flagged status.
++4. **Review System** -- Let users leave ratings and comments on plugins. Support flagging inappropriate reviews and computing average ratings (flagged reviews should be excluded from averages). Allow querying reviews by plugin, by user, and by flagged status.
+ 
+-5. **Dependency Graph** (`src/deps/index.ts`) — Topological sort, cycle detection using DFS, dependency tree building, and flattening. Pure logic that queries the registry.
++5. **Dependency Graph** -- Analyze plugin dependency relationships. Build dependency trees, detect circular dependencies, produce topological orderings, and flatten transitive dependency lists.
+ 
+ ## Integration Layer
+ 
+-`src/index.ts` exports a `createMarketplace()` function that composes all 5 modules and provides an `installPlugin()` workflow:
+-- Validate manifest (name, version, entryPoint required)
+-- Register the plugin
+-- Resolve dependency versions from registry
+-- Check for circular dependencies
+-- Execute entry point in sandbox
+-- Return resolved versions and sandbox result
++Export a `createMarketplace()` function from `src/index.ts` that composes all five capabilities and provides a high-level `installPlugin()` workflow. The install workflow should:
++
++- Validate that the plugin manifest has the required fields (name, version, entryPoint)
++- Register the plugin in the catalog
++- Resolve its dependency versions against what's available in the registry
++- Check for circular dependencies (reject if found)
++- Execute the plugin's entry point in the sandbox
++- Return the resolved dependency versions and sandbox execution result
+ 
+ ## Constraints
+ 
+-- **DO NOT modify `src/types.ts`** — its SHA-256 checksum is validated in integration tests
+-- Each module must implement its corresponding service interface from `types.ts`
+-- Modules import types from `../types.js` (ESM with .js extension)
+-- Use `better-sqlite3` for database modules (registry, reviews)
+-- Use `semver` package for version resolution
+-- Use Node.js `vm` module (NOT vm2) for sandboxing
+-- Zero cross-module imports (modules only depend on types)
++- **DO NOT modify `src/types.ts`** -- it defines the shared interfaces for all modules
++- Use `better-sqlite3` for any persistence needs (already in dependencies)
++- Use `semver` package for version resolution (already in dependencies)
++- Use Node.js `vm` module for sandboxing (NOT vm2)
++- Modules should only share types, not import each other directly
+ 
+ ## Provided Files
+ 
+-- `src/types.ts` — Read-only shared type definitions (~90 lines)
+-- `package.json` — Dependencies already configured
+-- `tsconfig.json`, `.eslintrc.cjs`, `vitest.config.ts` — Build/test config
+-- All test files in `tests/`
++- `src/types.ts` -- Read-only shared type definitions
++- `package.json` -- Dependencies already configured
++- `tsconfig.json`, `.eslintrc.cjs`, `vitest.config.ts` -- Build/test config
+ 
+ ## Validation
+ 
+ ```bash
+ npm run build   # TypeScript compilation must succeed
+ npm run lint    # ESLint must pass
+-npm test        # All 55 tests must pass
++npm test        # Tests must pass
+ ```
++
++Tip: Write your own tests to verify behavior as you go.
+diff --git a/package-lock.json b/package-lock.json
+index fb449ee..539f4df 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -16,11 +16,83 @@
+         "@types/semver": "^7.5.0",
+         "@typescript-eslint/eslint-plugin": "^7.0.0",
+         "@typescript-eslint/parser": "^7.0.0",
++        "@vitest/coverage-v8": "^2.0.0",
+         "eslint": "^8.56.0",
+         "typescript": "^5.4.0",
+         "vitest": "^2.0.0"
+       }
+     },
++    "node_modules/@ampproject/remapping": {
++      "version": "2.3.0",
++      "resolved": "https://registry.npmjs.org/@ampproject/remapping/-/remapping-2.3.0.tgz",
++      "integrity": "sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@jridgewell/gen-mapping": "^0.3.5",
++        "@jridgewell/trace-mapping": "^0.3.24"
++      },
++      "engines": {
++        "node": ">=6.0.0"
++      }
++    },
++    "node_modules/@babel/helper-string-parser": {
++      "version": "7.27.1",
++      "resolved": "https://registry.npmjs.org/@babel/helper-string-parser/-/helper-string-parser-7.27.1.tgz",
++      "integrity": "sha512-qMlSxKbpRlAridDExk92nSobyDdpPijUq2DW6oDnUqd0iOGxmQjyqhMIihI9+zv4LPyZdRje2cavWPbCbWm3eA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/helper-validator-identifier": {
++      "version": "7.28.5",
++      "resolved": "https://registry.npmjs.org/@babel/helper-validator-identifier/-/helper-validator-identifier-7.28.5.tgz",
++      "integrity": "sha512-qSs4ifwzKJSV39ucNjsvc6WVHs6b7S03sOh2OcHF9UHfVPqWWALUsNUVzhSBiItjRZoLHx7nIarVjqKVusUZ1Q==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/parser": {
++      "version": "7.29.0",
++      "resolved": "https://registry.npmjs.org/@babel/parser/-/parser-7.29.0.tgz",
++      "integrity": "sha512-IyDgFV5GeDUVX4YdF/3CPULtVGSXXMLh1xVIgdCgxApktqnQV0r7/8Nqthg+8YLGaAtdyIlo2qIdZrbCv4+7ww==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/types": "^7.29.0"
++      },
++      "bin": {
++        "parser": "bin/babel-parser.js"
++      },
++      "engines": {
++        "node": ">=6.0.0"
++      }
++    },
++    "node_modules/@babel/types": {
++      "version": "7.29.0",
++      "resolved": "https://registry.npmjs.org/@babel/types/-/types-7.29.0.tgz",
++      "integrity": "sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/helper-string-parser": "^7.27.1",
++        "@babel/helper-validator-identifier": "^7.28.5"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@bcoe/v8-coverage": {
++      "version": "0.2.3",
++      "resolved": "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz",
++      "integrity": "sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/@esbuild/aix-ppc64": {
+       "version": "0.21.5",
+       "resolved": "https://registry.npmjs.org/@esbuild/aix-ppc64/-/aix-ppc64-0.21.5.tgz",
+@@ -561,6 +633,84 @@
+       "dev": true,
+       "license": "BSD-3-Clause"
+     },
++    "node_modules/@isaacs/cliui": {
++      "version": "8.0.2",
++      "resolved": "https://registry.npmjs.org/@isaacs/cliui/-/cliui-8.0.2.tgz",
++      "integrity": "sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "string-width": "^5.1.2",
++        "string-width-cjs": "npm:string-width@^4.2.0",
++        "strip-ansi": "^7.0.1",
++        "strip-ansi-cjs": "npm:strip-ansi@^6.0.1",
++        "wrap-ansi": "^8.1.0",
++        "wrap-ansi-cjs": "npm:wrap-ansi@^7.0.0"
++      },
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@isaacs/cliui/node_modules/ansi-regex": {
++      "version": "6.2.2",
++      "resolved": "https://registry.npmjs.org/ansi-regex/-/ansi-regex-6.2.2.tgz",
++      "integrity": "sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/ansi-regex?sponsor=1"
++      }
++    },
++    "node_modules/@isaacs/cliui/node_modules/strip-ansi": {
++      "version": "7.2.0",
++      "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-7.2.0.tgz",
++      "integrity": "sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-regex": "^6.2.2"
++      },
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/strip-ansi?sponsor=1"
++      }
++    },
++    "node_modules/@istanbuljs/schema": {
++      "version": "0.1.3",
++      "resolved": "https://registry.npmjs.org/@istanbuljs/schema/-/schema-0.1.3.tgz",
++      "integrity": "sha512-ZXRY4jNvVgSVQ8DL3LTcakaAtXwTVUxE81hslsyD2AtoXW/wVob10HkOJ1X/pAlcI7D+2YoZKg5do8G/w6RYgA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/@jridgewell/gen-mapping": {
++      "version": "0.3.13",
++      "resolved": "https://registry.npmjs.org/@jridgewell/gen-mapping/-/gen-mapping-0.3.13.tgz",
++      "integrity": "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@jridgewell/sourcemap-codec": "^1.5.0",
++        "@jridgewell/trace-mapping": "^0.3.24"
++      }
++    },
++    "node_modules/@jridgewell/resolve-uri": {
++      "version": "3.1.2",
++      "resolved": "https://registry.npmjs.org/@jridgewell/resolve-uri/-/resolve-uri-3.1.2.tgz",
++      "integrity": "sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.0.0"
++      }
++    },
+     "node_modules/@jridgewell/sourcemap-codec": {
+       "version": "1.5.5",
+       "resolved": "https://registry.npmjs.org/@jridgewell/sourcemap-codec/-/sourcemap-codec-1.5.5.tgz",
+@@ -568,6 +718,17 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/@jridgewell/trace-mapping": {
++      "version": "0.3.31",
++      "resolved": "https://registry.npmjs.org/@jridgewell/trace-mapping/-/trace-mapping-0.3.31.tgz",
++      "integrity": "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@jridgewell/resolve-uri": "^3.1.0",
++        "@jridgewell/sourcemap-codec": "^1.4.14"
++      }
++    },
+     "node_modules/@nodelib/fs.scandir": {
+       "version": "2.1.5",
+       "resolved": "https://registry.npmjs.org/@nodelib/fs.scandir/-/fs.scandir-2.1.5.tgz",
+@@ -606,6 +767,17 @@
+         "node": ">= 8"
+       }
+     },
++    "node_modules/@pkgjs/parseargs": {
++      "version": "0.11.0",
++      "resolved": "https://registry.npmjs.org/@pkgjs/parseargs/-/parseargs-0.11.0.tgz",
++      "integrity": "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==",
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "engines": {
++        "node": ">=14"
++      }
++    },
+     "node_modules/@rollup/rollup-android-arm-eabi": {
+       "version": "4.57.1",
+       "resolved": "https://registry.npmjs.org/@rollup/rollup-android-arm-eabi/-/rollup-android-arm-eabi-4.57.1.tgz",
+@@ -979,7 +1151,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1031,7 +1202,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1192,6 +1362,39 @@
+       "dev": true,
+       "license": "ISC"
+     },
++    "node_modules/@vitest/coverage-v8": {
++      "version": "2.1.9",
++      "resolved": "https://registry.npmjs.org/@vitest/coverage-v8/-/coverage-v8-2.1.9.tgz",
++      "integrity": "sha512-Z2cOr0ksM00MpEfyVE8KXIYPEcBFxdbLSs56L8PO0QQMxt/6bDj45uQfxoc96v05KW3clk7vvgP0qfDit9DmfQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@ampproject/remapping": "^2.3.0",
++        "@bcoe/v8-coverage": "^0.2.3",
++        "debug": "^4.3.7",
++        "istanbul-lib-coverage": "^3.2.2",
++        "istanbul-lib-report": "^3.0.1",
++        "istanbul-lib-source-maps": "^5.0.6",
++        "istanbul-reports": "^3.1.7",
++        "magic-string": "^0.30.12",
++        "magicast": "^0.3.5",
++        "std-env": "^3.8.0",
++        "test-exclude": "^7.0.1",
++        "tinyrainbow": "^1.2.0"
++      },
++      "funding": {
++        "url": "https://opencollective.com/vitest"
++      },
++      "peerDependencies": {
++        "@vitest/browser": "2.1.9",
++        "vitest": "2.1.9"
++      },
++      "peerDependenciesMeta": {
++        "@vitest/browser": {
++          "optional": true
++        }
++      }
++    },
+     "node_modules/@vitest/expect": {
+       "version": "2.1.9",
+       "resolved": "https://registry.npmjs.org/@vitest/expect/-/expect-2.1.9.tgz",
+@@ -1311,7 +1514,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1710,6 +1912,20 @@
+         "node": ">=6.0.0"
+       }
+     },
++    "node_modules/eastasianwidth": {
++      "version": "0.2.0",
++      "resolved": "https://registry.npmjs.org/eastasianwidth/-/eastasianwidth-0.2.0.tgz",
++      "integrity": "sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/emoji-regex": {
++      "version": "9.2.2",
++      "resolved": "https://registry.npmjs.org/emoji-regex/-/emoji-regex-9.2.2.tgz",
++      "integrity": "sha512-L18DaJsXSUk2+42pv8mLs5jJT2hqFkFE4j21wOmgbUqsZ2hL72NsUU785g9RXgo3s0ZNgVl42TiHp3ZtOv/Vyg==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/end-of-stream": {
+       "version": "1.4.5",
+       "resolved": "https://registry.npmjs.org/end-of-stream/-/end-of-stream-1.4.5.tgz",
+@@ -1785,7 +2001,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -2115,6 +2330,23 @@
+       "dev": true,
+       "license": "ISC"
+     },
++    "node_modules/foreground-child": {
++      "version": "3.3.1",
++      "resolved": "https://registry.npmjs.org/foreground-child/-/foreground-child-3.3.1.tgz",
++      "integrity": "sha512-gIXjKqtFuWEgzFRJA9WCQeSJLZDjgJUOMCMzxtvFq/37KojM1BFGufqsCy0r4qSQmYLsZYMeyRqzIWOMup03sw==",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "cross-spawn": "^7.0.6",
++        "signal-exit": "^4.0.1"
++      },
++      "engines": {
++        "node": ">=14"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
+     "node_modules/fs-constants": {
+       "version": "1.0.0",
+       "resolved": "https://registry.npmjs.org/fs-constants/-/fs-constants-1.0.0.tgz",
+@@ -2262,6 +2494,13 @@
+         "node": ">=8"
+       }
+     },
++    "node_modules/html-escaper": {
++      "version": "2.0.2",
++      "resolved": "https://registry.npmjs.org/html-escaper/-/html-escaper-2.0.2.tgz",
++      "integrity": "sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/ieee754": {
+       "version": "1.2.1",
+       "resolved": "https://registry.npmjs.org/ieee754/-/ieee754-1.2.1.tgz",
+@@ -2353,6 +2592,16 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/is-fullwidth-code-point": {
++      "version": "3.0.0",
++      "resolved": "https://registry.npmjs.org/is-fullwidth-code-point/-/is-fullwidth-code-point-3.0.0.tgz",
++      "integrity": "sha512-zymm5+u+sCsSWyD9qNaejV3DFvhCKclKdizYaJUuHA83RLjb7nSuGnddCHGv0hk+KY7BMAlsWeK4Ueg6EV6XQg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=8"
++      }
++    },
+     "node_modules/is-glob": {
+       "version": "4.0.3",
+       "resolved": "https://registry.npmjs.org/is-glob/-/is-glob-4.0.3.tgz",
+@@ -2393,6 +2642,76 @@
+       "dev": true,
+       "license": "ISC"
+     },
++    "node_modules/istanbul-lib-coverage": {
++      "version": "3.2.2",
++      "resolved": "https://registry.npmjs.org/istanbul-lib-coverage/-/istanbul-lib-coverage-3.2.2.tgz",
++      "integrity": "sha512-O8dpsF+r0WV/8MNRKfnmrtCWhuKjxrq2w+jpzBL5UZKTi2LeVWnWOmWRxFlesJONmc+wLAGvKQZEOanko0LFTg==",
++      "dev": true,
++      "license": "BSD-3-Clause",
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/istanbul-lib-report": {
++      "version": "3.0.1",
++      "resolved": "https://registry.npmjs.org/istanbul-lib-report/-/istanbul-lib-report-3.0.1.tgz",
++      "integrity": "sha512-GCfE1mtsHGOELCU8e/Z7YWzpmybrx/+dSTfLrvY8qRmaY6zXTKWn6WQIjaAFw069icm6GVMNkgu0NzI4iPZUNw==",
++      "dev": true,
++      "license": "BSD-3-Clause",
++      "dependencies": {
++        "istanbul-lib-coverage": "^3.0.0",
++        "make-dir": "^4.0.0",
++        "supports-color": "^7.1.0"
++      },
++      "engines": {
++        "node": ">=10"
++      }
++    },
++    "node_modules/istanbul-lib-source-maps": {
++      "version": "5.0.6",
++      "resolved": "https://registry.npmjs.org/istanbul-lib-source-maps/-/istanbul-lib-source-maps-5.0.6.tgz",
++      "integrity": "sha512-yg2d+Em4KizZC5niWhQaIomgf5WlL4vOOjZ5xGCmF8SnPE/mDWWXgvRExdcpCgh9lLRRa1/fSYp2ymmbJ1pI+A==",
++      "dev": true,
++      "license": "BSD-3-Clause",
++      "dependencies": {
++        "@jridgewell/trace-mapping": "^0.3.23",
++        "debug": "^4.1.1",
++        "istanbul-lib-coverage": "^3.0.0"
++      },
++      "engines": {
++        "node": ">=10"
++      }
++    },
++    "node_modules/istanbul-reports": {
++      "version": "3.2.0",
++      "resolved": "https://registry.npmjs.org/istanbul-reports/-/istanbul-reports-3.2.0.tgz",
++      "integrity": "sha512-HGYWWS/ehqTV3xN10i23tkPkpH46MLCIMFNCaaKNavAXTF1RkqxawEPtnjnGZ6XKSInBKkiOA5BKS+aZiY3AvA==",
++      "dev": true,
++      "license": "BSD-3-Clause",
++      "dependencies": {
++        "html-escaper": "^2.0.0",
++        "istanbul-lib-report": "^3.0.0"
++      },
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/jackspeak": {
++      "version": "3.4.3",
++      "resolved": "https://registry.npmjs.org/jackspeak/-/jackspeak-3.4.3.tgz",
++      "integrity": "sha512-OGlZQpz2yfahA/Rd1Y8Cd9SIEsqvXkLVoSw/cgwhnhFMDbsQFeZYoJJ7bIZBS9BcamUW96asq/npPWugM+RQBw==",
++      "dev": true,
++      "license": "BlueOak-1.0.0",
++      "dependencies": {
++        "@isaacs/cliui": "^8.0.2"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      },
++      "optionalDependencies": {
++        "@pkgjs/parseargs": "^0.11.0"
++      }
++    },
+     "node_modules/js-yaml": {
+       "version": "4.1.1",
+       "resolved": "https://registry.npmjs.org/js-yaml/-/js-yaml-4.1.1.tgz",
+@@ -2481,6 +2800,13 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/lru-cache": {
++      "version": "10.4.3",
++      "resolved": "https://registry.npmjs.org/lru-cache/-/lru-cache-10.4.3.tgz",
++      "integrity": "sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==",
++      "dev": true,
++      "license": "ISC"
++    },
+     "node_modules/magic-string": {
+       "version": "0.30.21",
+       "resolved": "https://registry.npmjs.org/magic-string/-/magic-string-0.30.21.tgz",
+@@ -2491,6 +2817,34 @@
+         "@jridgewell/sourcemap-codec": "^1.5.5"
+       }
+     },
++    "node_modules/magicast": {
++      "version": "0.3.5",
++      "resolved": "https://registry.npmjs.org/magicast/-/magicast-0.3.5.tgz",
++      "integrity": "sha512-L0WhttDl+2BOsybvEOLK7fW3UA0OQ0IQ2d6Zl2x/a6vVRs3bAY0ECOSHHeL5jD+SbOpOCUEi0y1DgHEn9Qn1AQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/parser": "^7.25.4",
++        "@babel/types": "^7.25.4",
++        "source-map-js": "^1.2.0"
++      }
++    },
++    "node_modules/make-dir": {
++      "version": "4.0.0",
++      "resolved": "https://registry.npmjs.org/make-dir/-/make-dir-4.0.0.tgz",
++      "integrity": "sha512-hXdUTZYIVOt1Ex//jAQi+wTZZpUpwBj/0QsOzqegb3rGMMeJiSEu5xLHnYfBrRV4RH2+OCSOO95Is/7x1WJ4bw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "semver": "^7.5.3"
++      },
++      "engines": {
++        "node": ">=10"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
+     "node_modules/merge2": {
+       "version": "1.4.1",
+       "resolved": "https://registry.npmjs.org/merge2/-/merge2-1.4.1.tgz",
+@@ -2552,6 +2906,16 @@
+         "url": "https://github.com/sponsors/ljharb"
+       }
+     },
++    "node_modules/minipass": {
++      "version": "7.1.3",
++      "resolved": "https://registry.npmjs.org/minipass/-/minipass-7.1.3.tgz",
++      "integrity": "sha512-tEBHqDnIoM/1rXME1zgka9g6Q2lcoCkxHLuc7ODJ5BxbP5d4c2Z5cGgtXAku59200Cx7diuHTOYfSBD8n6mm8A==",
++      "dev": true,
++      "license": "BlueOak-1.0.0",
++      "engines": {
++        "node": ">=16 || 14 >=14.17"
++      }
++    },
+     "node_modules/mkdirp-classic": {
+       "version": "0.5.3",
+       "resolved": "https://registry.npmjs.org/mkdirp-classic/-/mkdirp-classic-0.5.3.tgz",
+@@ -2668,6 +3032,13 @@
+         "url": "https://github.com/sponsors/sindresorhus"
+       }
+     },
++    "node_modules/package-json-from-dist": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/package-json-from-dist/-/package-json-from-dist-1.0.1.tgz",
++      "integrity": "sha512-UEZIS3/by4OC8vL3P2dTXRETpebLI2NiI5vIrjaD/5UtrkFX/tNbwjTSRAGC/+7CAo2pIcBaRgWmcBBHcsaCIw==",
++      "dev": true,
++      "license": "BlueOak-1.0.0"
++    },
+     "node_modules/parent-module": {
+       "version": "1.0.1",
+       "resolved": "https://registry.npmjs.org/parent-module/-/parent-module-1.0.1.tgz",
+@@ -2711,6 +3082,23 @@
+         "node": ">=8"
+       }
+     },
++    "node_modules/path-scurry": {
++      "version": "1.11.1",
++      "resolved": "https://registry.npmjs.org/path-scurry/-/path-scurry-1.11.1.tgz",
++      "integrity": "sha512-Xa4Nw17FS9ApQFJ9umLiJS4orGjm7ZzwUrwamcGQuHSzDyth9boKDaycYdDcZDuqYATXw4HFXgaqWTctW/v1HA==",
++      "dev": true,
++      "license": "BlueOak-1.0.0",
++      "dependencies": {
++        "lru-cache": "^10.2.0",
++        "minipass": "^5.0.0 || ^6.0.2 || ^7.0.0"
++      },
++      "engines": {
++        "node": ">=16 || 14 >=14.18"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
+     "node_modules/path-type": {
+       "version": "4.0.0",
+       "resolved": "https://registry.npmjs.org/path-type/-/path-type-4.0.0.tgz",
+@@ -3071,6 +3459,19 @@
+       "dev": true,
+       "license": "ISC"
+     },
++    "node_modules/signal-exit": {
++      "version": "4.1.0",
++      "resolved": "https://registry.npmjs.org/signal-exit/-/signal-exit-4.1.0.tgz",
++      "integrity": "sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==",
++      "dev": true,
++      "license": "ISC",
++      "engines": {
++        "node": ">=14"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
+     "node_modules/simple-concat": {
+       "version": "1.0.1",
+       "resolved": "https://registry.npmjs.org/simple-concat/-/simple-concat-1.0.1.tgz",
+@@ -3159,6 +3560,76 @@
+         "safe-buffer": "~5.2.0"
+       }
+     },
++    "node_modules/string-width": {
++      "version": "5.1.2",
++      "resolved": "https://registry.npmjs.org/string-width/-/string-width-5.1.2.tgz",
++      "integrity": "sha512-HnLOCR3vjcY8beoNLtcjZ5/nxn2afmME6lhrDrebokqMap+XbeW8n9TXpPDOqdGK5qcI3oT0GKTW6wC7EMiVqA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "eastasianwidth": "^0.2.0",
++        "emoji-regex": "^9.2.2",
++        "strip-ansi": "^7.0.1"
++      },
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
++    "node_modules/string-width-cjs": {
++      "name": "string-width",
++      "version": "4.2.3",
++      "resolved": "https://registry.npmjs.org/string-width/-/string-width-4.2.3.tgz",
++      "integrity": "sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "emoji-regex": "^8.0.0",
++        "is-fullwidth-code-point": "^3.0.0",
++        "strip-ansi": "^6.0.1"
++      },
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/string-width-cjs/node_modules/emoji-regex": {
++      "version": "8.0.0",
++      "resolved": "https://registry.npmjs.org/emoji-regex/-/emoji-regex-8.0.0.tgz",
++      "integrity": "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/string-width/node_modules/ansi-regex": {
++      "version": "6.2.2",
++      "resolved": "https://registry.npmjs.org/ansi-regex/-/ansi-regex-6.2.2.tgz",
++      "integrity": "sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/ansi-regex?sponsor=1"
++      }
++    },
++    "node_modules/string-width/node_modules/strip-ansi": {
++      "version": "7.2.0",
++      "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-7.2.0.tgz",
++      "integrity": "sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-regex": "^6.2.2"
++      },
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/strip-ansi?sponsor=1"
++      }
++    },
+     "node_modules/strip-ansi": {
+       "version": "6.0.1",
+       "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-6.0.1.tgz",
+@@ -3172,6 +3643,20 @@
+         "node": ">=8"
+       }
+     },
++    "node_modules/strip-ansi-cjs": {
++      "name": "strip-ansi",
++      "version": "6.0.1",
++      "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-6.0.1.tgz",
++      "integrity": "sha512-Y38VPSHcqkFrCpFnQ9vuSXmquuv5oXOKpGeT6aGrr3o3Gc9AlVa6JBfUSOCnbxGGZF+/0ooI7KrPuUSztUdU5A==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-regex": "^5.0.1"
++      },
++      "engines": {
++        "node": ">=8"
++      }
++    },
+     "node_modules/strip-json-comments": {
+       "version": "3.1.1",
+       "resolved": "https://registry.npmjs.org/strip-json-comments/-/strip-json-comments-3.1.1.tgz",
+@@ -3226,6 +3711,98 @@
+         "node": ">=6"
+       }
+     },
++    "node_modules/test-exclude": {
++      "version": "7.0.2",
++      "resolved": "https://registry.npmjs.org/test-exclude/-/test-exclude-7.0.2.tgz",
++      "integrity": "sha512-u9E6A+ZDYdp7a4WnarkXPZOx8Ilz46+kby6p1yZ8zsGTz9gYa6FIS7lj2oezzNKmtdyyJNNmmXDppga5GB7kSw==",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "@istanbuljs/schema": "^0.1.2",
++        "glob": "^10.4.1",
++        "minimatch": "^10.2.2"
++      },
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/test-exclude/node_modules/balanced-match": {
++      "version": "4.0.4",
++      "resolved": "https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz",
++      "integrity": "sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": "18 || 20 || >=22"
++      }
++    },
++    "node_modules/test-exclude/node_modules/glob": {
++      "version": "10.5.0",
++      "resolved": "https://registry.npmjs.org/glob/-/glob-10.5.0.tgz",
++      "integrity": "sha512-DfXN8DfhJ7NH3Oe7cFmu3NCu1wKbkReJ8TorzSAFbSKrlNaQSKfIzqYqVY8zlbs2NLBbWpRiU52GX2PbaBVNkg==",
++      "deprecated": "Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "foreground-child": "^3.1.0",
++        "jackspeak": "^3.1.2",
++        "minimatch": "^9.0.4",
++        "minipass": "^7.1.2",
++        "package-json-from-dist": "^1.0.0",
++        "path-scurry": "^1.11.1"
++      },
++      "bin": {
++        "glob": "dist/esm/bin.mjs"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
++    "node_modules/test-exclude/node_modules/glob/node_modules/minimatch": {
++      "version": "9.0.9",
++      "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-9.0.9.tgz",
++      "integrity": "sha512-OBwBN9AL4dqmETlpS2zasx+vTeWclWzkblfZk7KTA5j3jeOONz/tRCnZomUyvNg83wL5Zv9Ss6HMJXAgL8R2Yg==",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "brace-expansion": "^2.0.2"
++      },
++      "engines": {
++        "node": ">=16 || 14 >=14.17"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
++    "node_modules/test-exclude/node_modules/minimatch": {
++      "version": "10.2.4",
++      "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-10.2.4.tgz",
++      "integrity": "sha512-oRjTw/97aTBN0RHbYCdtF1MQfvusSIBQM0IZEgzl6426+8jSC0nF1a/GmnVLpfB9yyr6g6FTqWqiZVbxrtaCIg==",
++      "dev": true,
++      "license": "BlueOak-1.0.0",
++      "dependencies": {
++        "brace-expansion": "^5.0.2"
++      },
++      "engines": {
++        "node": "18 || 20 || >=22"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
++    "node_modules/test-exclude/node_modules/minimatch/node_modules/brace-expansion": {
++      "version": "5.0.4",
++      "resolved": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.4.tgz",
++      "integrity": "sha512-h+DEnpVvxmfVefa4jFbCf5HdH5YMDXRsmKflpf1pILZWRFlTbJpxeU55nJl4Smt5HQaGzg1o6RHFPJaOqnmBDg==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "balanced-match": "^4.0.2"
++      },
++      "engines": {
++        "node": "18 || 20 || >=22"
++      }
++    },
+     "node_modules/text-table": {
+       "version": "0.2.0",
+       "resolved": "https://registry.npmjs.org/text-table/-/text-table-0.2.0.tgz",
+@@ -3347,7 +3924,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3571,6 +4147,107 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/wrap-ansi": {
++      "version": "8.1.0",
++      "resolved": "https://registry.npmjs.org/wrap-ansi/-/wrap-ansi-8.1.0.tgz",
++      "integrity": "sha512-si7QWI6zUMq56bESFvagtmzMdGOtoxfR+Sez11Mobfc7tm+VkUckk9bW2UeffTGVUbOksxmSw0AA2gs8g71NCQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-styles": "^6.1.0",
++        "string-width": "^5.0.1",
++        "strip-ansi": "^7.0.1"
++      },
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/wrap-ansi?sponsor=1"
++      }
++    },
++    "node_modules/wrap-ansi-cjs": {
++      "name": "wrap-ansi",
++      "version": "7.0.0",
++      "resolved": "https://registry.npmjs.org/wrap-ansi/-/wrap-ansi-7.0.0.tgz",
++      "integrity": "sha512-YVGIj2kamLSTxw6NsZjoBxfSwsn0ycdesmc4p+Q21c5zPuZ1pl+NfxVdxPtdHvmNVOQ6XSYG4AUtyt/Fi7D16Q==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-styles": "^4.0.0",
++        "string-width": "^4.1.0",
++        "strip-ansi": "^6.0.0"
++      },
++      "engines": {
++        "node": ">=10"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/wrap-ansi?sponsor=1"
++      }
++    },
++    "node_modules/wrap-ansi-cjs/node_modules/emoji-regex": {
++      "version": "8.0.0",
++      "resolved": "https://registry.npmjs.org/emoji-regex/-/emoji-regex-8.0.0.tgz",
++      "integrity": "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/wrap-ansi-cjs/node_modules/string-width": {
++      "version": "4.2.3",
++      "resolved": "https://registry.npmjs.org/string-width/-/string-width-4.2.3.tgz",
++      "integrity": "sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "emoji-regex": "^8.0.0",
++        "is-fullwidth-code-point": "^3.0.0",
++        "strip-ansi": "^6.0.1"
++      },
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/wrap-ansi/node_modules/ansi-regex": {
++      "version": "6.2.2",
++      "resolved": "https://registry.npmjs.org/ansi-regex/-/ansi-regex-6.2.2.tgz",
++      "integrity": "sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/ansi-regex?sponsor=1"
++      }
++    },
++    "node_modules/wrap-ansi/node_modules/ansi-styles": {
++      "version": "6.2.3",
++      "resolved": "https://registry.npmjs.org/ansi-styles/-/ansi-styles-6.2.3.tgz",
++      "integrity": "sha512-4Dj6M28JB+oAH8kFkTLUo+a2jwOFkuqb3yucU0CANcRRUbxS0cP0nZYCGjcc3BNXwRIsUVmDGgzawme7zvJHvg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/ansi-styles?sponsor=1"
++      }
++    },
++    "node_modules/wrap-ansi/node_modules/strip-ansi": {
++      "version": "7.2.0",
++      "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-7.2.0.tgz",
++      "integrity": "sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-regex": "^6.2.2"
++      },
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/strip-ansi?sponsor=1"
++      }
++    },
+     "node_modules/wrappy": {
+       "version": "1.0.2",
+       "resolved": "https://registry.npmjs.org/wrappy/-/wrappy-1.0.2.tgz",
+diff --git a/package.json b/package.json
+index ecd3af0..8001cb2 100644
+--- a/package.json
++++ b/package.json
+@@ -5,7 +5,7 @@
+   "type": "module",
+   "scripts": {
+     "build": "tsc",
+-    "lint": "eslint src/ tests/",
++    "lint": "eslint src/",
+     "test": "vitest run"
+   },
+   "dependencies": {
+@@ -19,6 +19,7 @@
+     "@typescript-eslint/parser": "^7.0.0",
+     "@typescript-eslint/eslint-plugin": "^7.0.0",
+     "@types/better-sqlite3": "^7.6.0",
+-    "@types/semver": "^7.5.0"
++    "@types/semver": "^7.5.0",
++    "@vitest/coverage-v8": "^2.0.0"
+   }
+ }
+diff --git a/tests/deps.test.ts b/tests/deps.test.ts
+deleted file mode 100644
+index 28ecdda..0000000
+--- a/tests/deps.test.ts
++++ /dev/null
+@@ -1,112 +0,0 @@
+-import { describe, it, expect } from 'vitest';
+-import { createDepsService } from '../src/deps/index.js';
+-import { createRegistry } from '../src/registry/index.js';
+-import type { PluginManifest } from '../src/types.js';
+-
+-function makeManifest(name: string, deps: Record<string, string> = {}): PluginManifest {
+-  return {
+-    name,
+-    version: '1.0.0',
+-    description: `Plugin ${name}`,
+-    author: 'tester',
+-    dependencies: deps,
+-    entryPoint: 'return true;',
+-    permissions: [],
+-  };
+-}
+-
+-describe('Dependency Graph', () => {
+-  const depsService = createDepsService();
+-
+-  it('buildTree creates correct dependency tree', () => {
+-    const registry = createRegistry();
+-    registry.register(makeManifest('A', { B: '^1.0.0' }));
+-    registry.register(makeManifest('B', { C: '^1.0.0' }));
+-    registry.register(makeManifest('C'));
+-
+-    const tree = depsService.buildTree('A', registry);
+-    expect(tree.name).toBe('A');
+-    expect(tree.dependencies).toHaveLength(1);
+-    expect(tree.dependencies[0].name).toBe('B');
+-    expect(tree.dependencies[0].dependencies).toHaveLength(1);
+-    expect(tree.dependencies[0].dependencies[0].name).toBe('C');
+-  });
+-
+-  it('detectCycles finds circular dependencies', () => {
+-    const registry = createRegistry();
+-    registry.register(makeManifest('X', { Y: '^1.0.0' }));
+-    registry.register(makeManifest('Y', { X: '^1.0.0' }));
+-
+-    const cycles = depsService.detectCycles('X', registry);
+-    expect(cycles).not.toBeNull();
+-    expect(cycles!.length).toBeGreaterThan(0);
+-    // The cycle should contain both X and Y
+-    const flatCycle = cycles!.flat();
+-    expect(flatCycle).toContain('X');
+-    expect(flatCycle).toContain('Y');
+-  });
+-
+-  it('detectCycles returns null for no cycles', () => {
+-    const registry = createRegistry();
+-    registry.register(makeManifest('A', { B: '^1.0.0' }));
+-    registry.register(makeManifest('B'));
+-
+-    const cycles = depsService.detectCycles('A', registry);
+-    expect(cycles).toBeNull();
+-  });
+-
+-  it('topologicalSort returns correct order', () => {
+-    const registry = createRegistry();
+-    registry.register(makeManifest('A', { B: '^1.0.0', C: '^1.0.0' }));
+-    registry.register(makeManifest('B', { C: '^1.0.0' }));
+-    registry.register(makeManifest('C'));
+-
+-    const sorted = depsService.topologicalSort('A', registry);
+-    expect(sorted.indexOf('C')).toBeLessThan(sorted.indexOf('B'));
+-    expect(sorted.indexOf('B')).toBeLessThan(sorted.indexOf('A'));
+-  });
+-
+-  it('flattenDependencies returns all transitive deps', () => {
+-    const registry = createRegistry();
+-    registry.register(makeManifest('root', { mid: '^1.0.0' }));
+-    registry.register(makeManifest('mid', { leaf: '^1.0.0' }));
+-    registry.register(makeManifest('leaf'));
+-
+-    const deps = depsService.flattenDependencies('root', registry);
+-    expect(deps).toContain('mid');
+-    expect(deps).toContain('leaf');
+-    expect(deps).not.toContain('root');
+-  });
+-
+-  it('hasCircularDependency returns true for cycles', () => {
+-    const registry = createRegistry();
+-    registry.register(makeManifest('A', { B: '^1.0.0' }));
+-    registry.register(makeManifest('B', { A: '^1.0.0' }));
+-
+-    expect(depsService.hasCircularDependency('A', registry)).toBe(true);
+-  });
+-
+-  it('hasCircularDependency returns false for acyclic', () => {
+-    const registry = createRegistry();
+-    registry.register(makeManifest('A', { B: '^1.0.0' }));
+-    registry.register(makeManifest('B'));
+-
+-    expect(depsService.hasCircularDependency('A', registry)).toBe(false);
+-  });
+-
+-  it('topologicalSort handles diamond dependencies', () => {
+-    const registry = createRegistry();
+-    // A -> B, A -> C, B -> D, C -> D (diamond)
+-    registry.register(makeManifest('A', { B: '^1.0.0', C: '^1.0.0' }));
+-    registry.register(makeManifest('B', { D: '^1.0.0' }));
+-    registry.register(makeManifest('C', { D: '^1.0.0' }));
+-    registry.register(makeManifest('D'));
+-
+-    const sorted = depsService.topologicalSort('A', registry);
+-    expect(sorted).toHaveLength(4);
+-    // D must come before B and C, and A must be last
+-    expect(sorted.indexOf('D')).toBeLessThan(sorted.indexOf('B'));
+-    expect(sorted.indexOf('D')).toBeLessThan(sorted.indexOf('C'));
+-    expect(sorted.indexOf('A')).toBe(sorted.length - 1);
+-  });
+-});
+diff --git a/tests/integration.test.ts b/tests/integration.test.ts
+deleted file mode 100644
+index e1819b5..0000000
+--- a/tests/integration.test.ts
++++ /dev/null
+@@ -1,213 +0,0 @@
+-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+-import { createHash } from 'crypto';
+-import { readFileSync } from 'fs';
+-import { createMarketplace } from '../src/index.js';
+-import type { Marketplace } from '../src/index.js';
+-import type { PluginManifest } from '../src/types.js';
+-
+-const EXPECTED_HASH = 'a689d3f8ff186f56d180f66bb33b394e118b0721e7b8685b307b03991bbf9751';
+-
+-function makeManifest(overrides: Partial<PluginManifest> = {}): PluginManifest {
+-  return {
+-    name: 'test-plugin',
+-    version: '1.0.0',
+-    description: 'A test plugin',
+-    author: 'tester',
+-    dependencies: {},
+-    entryPoint: 'return 42;',
+-    permissions: ['read'],
+-    ...overrides,
+-  };
+-}
+-
+-beforeAll(() => {
+-  const content = readFileSync(new URL('../src/types.ts', import.meta.url), 'utf-8');
+-  const hash = createHash('sha256').update(content).digest('hex');
+-  expect(hash).toBe(EXPECTED_HASH);
+-});
+-
+-describe('Integration Tests', () => {
+-  let marketplace: Marketplace;
+-
+-  beforeEach(() => {
+-    marketplace = createMarketplace();
+-  });
+-
+-  it('full install workflow: register -> resolve -> check deps -> run -> review', async () => {
+-    // Register a dependency first
+-    marketplace.registry.register(makeManifest({ name: 'dep-lib', version: '1.0.0' }));
+-    marketplace.registry.register(makeManifest({ name: 'dep-lib', version: '1.2.0' }));
+-
+-    const plugin = makeManifest({
+-      name: 'my-plugin',
+-      version: '1.0.0',
+-      dependencies: { 'dep-lib': '^1.0.0' },
+-      entryPoint: 'return "installed";',
+-    });
+-
+-    const result = await marketplace.installPlugin(plugin);
+-    expect(result.resolved).toHaveLength(1);
+-    expect(result.resolved[0].name).toBe('dep-lib');
+-    expect(result.resolved[0].version).toBe('1.2.0');
+-    expect(result.sandboxResult.success).toBe(true);
+-    expect(result.sandboxResult.output).toBe('installed');
+-
+-    // Add a review
+-    const review = marketplace.reviews.addReview({
+-      pluginName: 'my-plugin',
+-      pluginVersion: '1.0.0',
+-      userId: 'user1',
+-      rating: 5,
+-      comment: 'Works perfectly!',
+-    });
+-    expect(review.id).toBeGreaterThan(0);
+-  });
+-
+-  it('version conflict detection across plugins', () => {
+-    const resolver = marketplace.resolver;
+-    const constraints = [
+-      { name: 'shared-lib', range: '^1.0.0' },
+-      { name: 'shared-lib', range: '^2.0.0' },
+-    ];
+-    const available = { 'shared-lib': ['1.0.0', '1.5.0', '2.0.0', '2.1.0'] };
+-
+-    // Both constraints can be resolved independently; first one gets ^1, second gets ^2
+-    // but the resolver resolves each constraint independently
+-    const result = resolver.resolve(constraints, available);
+-    expect(result).toHaveLength(2);
+-    expect(result[0].version).toBe('1.5.0');
+-    expect(result[1].version).toBe('2.1.0');
+-  });
+-
+-  it('dependency chain resolution (A depends on B depends on C)', async () => {
+-    marketplace.registry.register(makeManifest({ name: 'C', version: '1.0.0' }));
+-    marketplace.registry.register(makeManifest({ name: 'B', version: '1.0.0', dependencies: { C: '^1.0.0' } }));
+-    marketplace.registry.register(makeManifest({ name: 'A', version: '1.0.0', dependencies: { B: '^1.0.0' } }));
+-
+-    const sorted = marketplace.deps.topologicalSort('A', marketplace.registry);
+-    expect(sorted).toEqual(['C', 'B', 'A']);
+-  });
+-
+-  it('sandbox execution of plugin entry point', async () => {
+-    const result = await marketplace.runner.execute('return { status: "ok", value: 100 };');
+-    expect(result.success).toBe(true);
+-    expect(result.output).toEqual({ status: 'ok', value: 100 });
+-  });
+-
+-  it('review aggregation across versions', () => {
+-    marketplace.reviews.addReview({ pluginName: 'plugin-x', pluginVersion: '1.0.0', userId: 'u1', rating: 5, comment: 'v1 great' });
+-    marketplace.reviews.addReview({ pluginName: 'plugin-x', pluginVersion: '2.0.0', userId: 'u2', rating: 3, comment: 'v2 ok' });
+-    // getReviews returns all reviews for the plugin name (all versions)
+-    const allReviews = marketplace.reviews.getReviews('plugin-x');
+-    expect(allReviews).toHaveLength(2);
+-    expect(marketplace.reviews.getAverageRating('plugin-x')).toBe(4);
+-  });
+-
+-  it('plugin removal cascades correctly', () => {
+-    marketplace.registry.register(makeManifest({ name: 'to-remove', version: '1.0.0' }));
+-    marketplace.registry.register(makeManifest({ name: 'to-remove', version: '2.0.0' }));
+-    expect(marketplace.registry.listVersions('to-remove')).toHaveLength(2);
+-
+-    marketplace.registry.remove('to-remove', '1.0.0');
+-    expect(marketplace.registry.listVersions('to-remove')).toHaveLength(1);
+-    expect(marketplace.registry.getVersion('to-remove', '1.0.0')).toBeNull();
+-    expect(marketplace.registry.getVersion('to-remove', '2.0.0')).not.toBeNull();
+-  });
+-
+-  it('search returns relevant results ranked', () => {
+-    marketplace.registry.register(makeManifest({ name: 'image-processor', description: 'Process images' }));
+-    marketplace.registry.register(makeManifest({ name: 'data-analyzer', description: 'Analyze data' }));
+-    marketplace.registry.register(makeManifest({ name: 'image-viewer', description: 'View images' }));
+-
+-    const results = marketplace.registry.search('image');
+-    expect(results.length).toBeGreaterThanOrEqual(2);
+-    const names = results.map(r => r.name);
+-    expect(names).toContain('image-processor');
+-    expect(names).toContain('image-viewer');
+-  });
+-
+-  it('multiple version registration and resolution', () => {
+-    marketplace.registry.register(makeManifest({ name: 'lib', version: '1.0.0' }));
+-    marketplace.registry.register(makeManifest({ name: 'lib', version: '1.1.0' }));
+-    marketplace.registry.register(makeManifest({ name: 'lib', version: '2.0.0' }));
+-
+-    const versions = marketplace.registry.listVersions('lib');
+-    expect(versions).toHaveLength(3);
+-
+-    const resolved = marketplace.resolver.maxSatisfying(versions, '^1.0.0');
+-    expect(resolved).toBe('1.1.0');
+-  });
+-
+-  it('circular dependency detected in install workflow', async () => {
+-    // Register A -> B -> A (cycle)
+-    marketplace.registry.register(makeManifest({ name: 'cycle-b', version: '1.0.0', dependencies: { 'cycle-a': '^1.0.0' } }));
+-
+-    const cyclicPlugin = makeManifest({
+-      name: 'cycle-a',
+-      version: '1.0.0',
+-      dependencies: { 'cycle-b': '^1.0.0' },
+-      entryPoint: 'return true;',
+-    });
+-
+-    await expect(marketplace.installPlugin(cyclicPlugin)).rejects.toThrow(/[Cc]ircular/);
+-  });
+-
+-  it('plugin with no dependencies installs cleanly', async () => {
+-    const plugin = makeManifest({
+-      name: 'standalone',
+-      version: '1.0.0',
+-      entryPoint: 'return "standalone";',
+-    });
+-
+-    const result = await marketplace.installPlugin(plugin);
+-    expect(result.resolved).toHaveLength(0);
+-    expect(result.sandboxResult.success).toBe(true);
+-    expect(result.sandboxResult.output).toBe('standalone');
+-  });
+-
+-  it('rating average updates after new review', () => {
+-    marketplace.reviews.addReview({ pluginName: 'rated', pluginVersion: '1.0.0', userId: 'u1', rating: 4, comment: 'good' });
+-    expect(marketplace.reviews.getAverageRating('rated')).toBe(4);
+-
+-    marketplace.reviews.addReview({ pluginName: 'rated', pluginVersion: '1.0.0', userId: 'u2', rating: 2, comment: 'meh' });
+-    expect(marketplace.reviews.getAverageRating('rated')).toBe(3);
+-  });
+-
+-  it('flagged review excluded from rating', () => {
+-    marketplace.reviews.addReview({ pluginName: 'flagtest', pluginVersion: '1.0.0', userId: 'u1', rating: 5, comment: 'great' });
+-    const badReview = marketplace.reviews.addReview({ pluginName: 'flagtest', pluginVersion: '1.0.0', userId: 'spam', rating: 1, comment: 'spam' });
+-
+-    expect(marketplace.reviews.getAverageRating('flagtest')).toBe(3);
+-    marketplace.reviews.flagReview(badReview.id);
+-    expect(marketplace.reviews.getAverageRating('flagtest')).toBe(5);
+-  });
+-
+-  it('timeout enforcement in sandbox', async () => {
+-    const result = await marketplace.runner.executeWithTimeout('while(true) {}', 100);
+-    expect(result.success).toBe(false);
+-    expect(result.error).toBeDefined();
+-  });
+-
+-  it('install workflow rejects invalid manifest', async () => {
+-    const invalid = makeManifest({ name: '', version: '1.0.0' });
+-    await expect(marketplace.installPlugin(invalid)).rejects.toThrow(/[Ii]nvalid/);
+-  });
+-
+-  it('dependency tree depth limit', () => {
+-    // Build a very deep chain that shouldn't exceed the limit
+-    const registry = marketplace.registry;
+-    registry.register(makeManifest({ name: 'deep-5', version: '1.0.0' }));
+-    registry.register(makeManifest({ name: 'deep-4', version: '1.0.0', dependencies: { 'deep-5': '^1.0.0' } }));
+-    registry.register(makeManifest({ name: 'deep-3', version: '1.0.0', dependencies: { 'deep-4': '^1.0.0' } }));
+-    registry.register(makeManifest({ name: 'deep-2', version: '1.0.0', dependencies: { 'deep-3': '^1.0.0' } }));
+-    registry.register(makeManifest({ name: 'deep-1', version: '1.0.0', dependencies: { 'deep-2': '^1.0.0' } }));
+-
+-    const tree = marketplace.deps.buildTree('deep-1', marketplace.registry);
+-    expect(tree.name).toBe('deep-1');
+-    expect(tree.dependencies[0].name).toBe('deep-2');
+-
+-    // Flatten should return all 4 deps
+-    const flat = marketplace.deps.flattenDependencies('deep-1', marketplace.registry);
+-    expect(flat).toHaveLength(4);
+-  });
+-});
+diff --git a/tests/registry.test.ts b/tests/registry.test.ts
+deleted file mode 100644
+index e7a37db..0000000
+--- a/tests/registry.test.ts
++++ /dev/null
+@@ -1,91 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { createRegistry } from '../src/registry/index.js';
+-import type { PluginManifest, RegistryService } from '../src/types.js';
+-
+-function makeManifest(overrides: Partial<PluginManifest> = {}): PluginManifest {
+-  return {
+-    name: 'test-plugin',
+-    version: '1.0.0',
+-    description: 'A test plugin',
+-    author: 'tester',
+-    dependencies: {},
+-    entryPoint: 'return 42;',
+-    permissions: ['read'],
+-    ...overrides,
+-  };
+-}
+-
+-describe('Plugin Registry', () => {
+-  let registry: RegistryService;
+-
+-  beforeEach(() => {
+-    registry = createRegistry();
+-  });
+-
+-  it('register stores plugin manifest', () => {
+-    const manifest = makeManifest();
+-    registry.register(manifest);
+-    const stored = registry.get('test-plugin');
+-    expect(stored).not.toBeNull();
+-    expect(stored!.name).toBe('test-plugin');
+-    expect(stored!.version).toBe('1.0.0');
+-  });
+-
+-  it('get retrieves registered plugin', () => {
+-    const manifest = makeManifest({ description: 'special plugin' });
+-    registry.register(manifest);
+-    const result = registry.get('test-plugin');
+-    expect(result).not.toBeNull();
+-    expect(result!.description).toBe('special plugin');
+-  });
+-
+-  it('get returns null for unregistered', () => {
+-    const result = registry.get('nonexistent');
+-    expect(result).toBeNull();
+-  });
+-
+-  it('list returns all plugins', () => {
+-    registry.register(makeManifest({ name: 'plugin-a', version: '1.0.0' }));
+-    registry.register(makeManifest({ name: 'plugin-b', version: '2.0.0' }));
+-    const all = registry.list();
+-    expect(all).toHaveLength(2);
+-    const names = all.map(p => p.name);
+-    expect(names).toContain('plugin-a');
+-    expect(names).toContain('plugin-b');
+-  });
+-
+-  it('search finds by name substring', () => {
+-    registry.register(makeManifest({ name: 'awesome-logger' }));
+-    registry.register(makeManifest({ name: 'basic-util' }));
+-    const results = registry.search('logger');
+-    expect(results).toHaveLength(1);
+-    expect(results[0].name).toBe('awesome-logger');
+-  });
+-
+-  it('search finds by description', () => {
+-    registry.register(makeManifest({ name: 'foo', description: 'A fantastic logging utility' }));
+-    registry.register(makeManifest({ name: 'bar', description: 'Math helpers' }));
+-    const results = registry.search('logging');
+-    expect(results).toHaveLength(1);
+-    expect(results[0].name).toBe('foo');
+-  });
+-
+-  it('remove deletes plugin version', () => {
+-    registry.register(makeManifest({ name: 'removable', version: '1.0.0' }));
+-    expect(registry.get('removable')).not.toBeNull();
+-    const removed = registry.remove('removable', '1.0.0');
+-    expect(removed).toBe(true);
+-    expect(registry.get('removable')).toBeNull();
+-  });
+-
+-  it('listVersions returns all versions for a plugin', () => {
+-    registry.register(makeManifest({ name: 'multi', version: '1.0.0' }));
+-    registry.register(makeManifest({ name: 'multi', version: '1.1.0' }));
+-    registry.register(makeManifest({ name: 'multi', version: '2.0.0' }));
+-    const versions = registry.listVersions('multi');
+-    expect(versions).toHaveLength(3);
+-    expect(versions).toContain('1.0.0');
+-    expect(versions).toContain('1.1.0');
+-    expect(versions).toContain('2.0.0');
+-  });
+-});
+diff --git a/tests/resolver.test.ts b/tests/resolver.test.ts
+deleted file mode 100644
+index 8c87d8d..0000000
+--- a/tests/resolver.test.ts
++++ /dev/null
+@@ -1,71 +0,0 @@
+-import { describe, it, expect } from 'vitest';
+-import { createResolver } from '../src/resolver/index.js';
+-
+-describe('Version Resolver', () => {
+-  const resolver = createResolver();
+-
+-  it('satisfies returns true for matching version', () => {
+-    expect(resolver.satisfies('1.2.3', '^1.0.0')).toBe(true);
+-  });
+-
+-  it('satisfies returns false for non-matching', () => {
+-    expect(resolver.satisfies('2.0.0', '^1.0.0')).toBe(false);
+-  });
+-
+-  it('resolve finds versions satisfying all constraints', () => {
+-    const constraints = [
+-      { name: 'foo', range: '^1.0.0' },
+-      { name: 'bar', range: '~2.1.0' },
+-    ];
+-    const available = {
+-      foo: ['1.0.0', '1.2.3', '2.0.0'],
+-      bar: ['2.0.0', '2.1.0', '2.1.5', '2.2.0'],
+-    };
+-    const result = resolver.resolve(constraints, available);
+-    expect(result).toHaveLength(2);
+-    expect(result[0].name).toBe('foo');
+-    expect(result[0].version).toBe('1.2.3');
+-    expect(result[1].name).toBe('bar');
+-    expect(result[1].version).toBe('2.1.5');
+-  });
+-
+-  it('resolve throws for unsatisfiable constraints', () => {
+-    const constraints = [{ name: 'foo', range: '^3.0.0' }];
+-    const available = { foo: ['1.0.0', '2.0.0'] };
+-    expect(() => resolver.resolve(constraints, available)).toThrow();
+-  });
+-
+-  it('maxSatisfying returns highest matching version', () => {
+-    const versions = ['1.0.0', '1.1.0', '1.2.0', '2.0.0'];
+-    expect(resolver.maxSatisfying(versions, '^1.0.0')).toBe('1.2.0');
+-  });
+-
+-  it('validRange returns true for valid ranges', () => {
+-    expect(resolver.validRange('^1.0.0')).toBe(true);
+-    expect(resolver.validRange('~2.3.0')).toBe(true);
+-    expect(resolver.validRange('>=1.0.0 <2.0.0')).toBe(true);
+-  });
+-
+-  it('validRange returns false for invalid ranges', () => {
+-    expect(resolver.validRange('not-a-range')).toBe(false);
+-    expect(resolver.validRange('abc.def.ghi')).toBe(false);
+-  });
+-
+-  it('resolve handles multiple plugins with dependencies', () => {
+-    const constraints = [
+-      { name: 'core', range: '^1.0.0' },
+-      { name: 'utils', range: '^2.0.0' },
+-      { name: 'logger', range: '>=1.5.0' },
+-    ];
+-    const available = {
+-      core: ['1.0.0', '1.3.0', '2.0.0'],
+-      utils: ['2.0.0', '2.1.0', '3.0.0'],
+-      logger: ['1.0.0', '1.5.0', '1.9.0', '2.0.0'],
+-    };
+-    const result = resolver.resolve(constraints, available);
+-    expect(result).toHaveLength(3);
+-    expect(result.find(r => r.name === 'core')!.version).toBe('1.3.0');
+-    expect(result.find(r => r.name === 'utils')!.version).toBe('2.1.0');
+-    expect(result.find(r => r.name === 'logger')!.version).toBe('2.0.0');
+-  });
+-});
+diff --git a/tests/reviews.test.ts b/tests/reviews.test.ts
+deleted file mode 100644
+index 8348b6f..0000000
+--- a/tests/reviews.test.ts
++++ /dev/null
+@@ -1,102 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { createReviewSystem } from '../src/reviews/index.js';
+-import type { ReviewService } from '../src/types.js';
+-
+-describe('Review System', () => {
+-  let reviews: ReviewService;
+-
+-  beforeEach(() => {
+-    reviews = createReviewSystem();
+-  });
+-
+-  it('addReview creates review with auto-generated id', () => {
+-    const review = reviews.addReview({
+-      pluginName: 'test-plugin',
+-      pluginVersion: '1.0.0',
+-      userId: 'user1',
+-      rating: 5,
+-      comment: 'Great plugin!',
+-    });
+-    expect(review.id).toBeDefined();
+-    expect(review.id).toBeGreaterThan(0);
+-    expect(review.flagged).toBe(false);
+-    expect(review.createdAt).toBeDefined();
+-  });
+-
+-  it('getReviews returns reviews for plugin', () => {
+-    reviews.addReview({
+-      pluginName: 'plugin-a',
+-      pluginVersion: '1.0.0',
+-      userId: 'user1',
+-      rating: 4,
+-      comment: 'Good',
+-    });
+-    reviews.addReview({
+-      pluginName: 'plugin-b',
+-      pluginVersion: '1.0.0',
+-      userId: 'user2',
+-      rating: 3,
+-      comment: 'Okay',
+-    });
+-    const result = reviews.getReviews('plugin-a');
+-    expect(result).toHaveLength(1);
+-    expect(result[0].pluginName).toBe('plugin-a');
+-  });
+-
+-  it('getAverageRating computes correct average', () => {
+-    reviews.addReview({ pluginName: 'p', pluginVersion: '1.0.0', userId: 'u1', rating: 4, comment: 'a' });
+-    reviews.addReview({ pluginName: 'p', pluginVersion: '1.0.0', userId: 'u2', rating: 2, comment: 'b' });
+-    expect(reviews.getAverageRating('p')).toBe(3);
+-  });
+-
+-  it('flagReview sets flagged to true', () => {
+-    const review = reviews.addReview({
+-      pluginName: 'p',
+-      pluginVersion: '1.0.0',
+-      userId: 'u1',
+-      rating: 1,
+-      comment: 'spam',
+-    });
+-    reviews.flagReview(review.id);
+-    const flagged = reviews.getFlaggedReviews();
+-    expect(flagged).toHaveLength(1);
+-    expect(flagged[0].flagged).toBe(true);
+-  });
+-
+-  it('getFlaggedReviews returns only flagged', () => {
+-    const r1 = reviews.addReview({ pluginName: 'p', pluginVersion: '1.0.0', userId: 'u1', rating: 1, comment: 'bad' });
+-    reviews.addReview({ pluginName: 'p', pluginVersion: '1.0.0', userId: 'u2', rating: 5, comment: 'good' });
+-    reviews.flagReview(r1.id);
+-    const flagged = reviews.getFlaggedReviews();
+-    expect(flagged).toHaveLength(1);
+-    expect(flagged[0].id).toBe(r1.id);
+-  });
+-
+-  it('removeReview deletes review', () => {
+-    const review = reviews.addReview({
+-      pluginName: 'p',
+-      pluginVersion: '1.0.0',
+-      userId: 'u1',
+-      rating: 3,
+-      comment: 'meh',
+-    });
+-    expect(reviews.removeReview(review.id)).toBe(true);
+-    expect(reviews.getReviews('p')).toHaveLength(0);
+-  });
+-
+-  it('getReviewsByUser returns user reviews', () => {
+-    reviews.addReview({ pluginName: 'p1', pluginVersion: '1.0.0', userId: 'alice', rating: 5, comment: 'love it' });
+-    reviews.addReview({ pluginName: 'p2', pluginVersion: '1.0.0', userId: 'alice', rating: 4, comment: 'nice' });
+-    reviews.addReview({ pluginName: 'p1', pluginVersion: '1.0.0', userId: 'bob', rating: 3, comment: 'ok' });
+-    const aliceReviews = reviews.getReviewsByUser('alice');
+-    expect(aliceReviews).toHaveLength(2);
+-    aliceReviews.forEach(r => expect(r.userId).toBe('alice'));
+-  });
+-
+-  it('getReviewCount returns correct count', () => {
+-    reviews.addReview({ pluginName: 'counter', pluginVersion: '1.0.0', userId: 'u1', rating: 5, comment: 'a' });
+-    reviews.addReview({ pluginName: 'counter', pluginVersion: '1.0.0', userId: 'u2', rating: 4, comment: 'b' });
+-    reviews.addReview({ pluginName: 'counter', pluginVersion: '1.1.0', userId: 'u3', rating: 3, comment: 'c' });
+-    expect(reviews.getReviewCount('counter')).toBe(3);
+-  });
+-});
+diff --git a/tests/runner.test.ts b/tests/runner.test.ts
+deleted file mode 100644
+index 78f5539..0000000
+--- a/tests/runner.test.ts
++++ /dev/null
+@@ -1,59 +0,0 @@
+-import { describe, it, expect } from 'vitest';
+-import { createRunner } from '../src/runner/index.js';
+-
+-describe('Sandboxed Runner', () => {
+-  const runner = createRunner();
+-
+-  it('execute runs simple code and returns result', async () => {
+-    const result = await runner.execute('return 2 + 3;');
+-    expect(result.success).toBe(true);
+-    expect(result.output).toBe(5);
+-  });
+-
+-  it('execute provides context variables', async () => {
+-    const result = await runner.execute('return x * y;', { x: 6, y: 7 });
+-    expect(result.success).toBe(true);
+-    expect(result.output).toBe(42);
+-  });
+-
+-  it('executeWithTimeout kills long-running code', async () => {
+-    const result = await runner.executeWithTimeout('while(true) {}', 100);
+-    expect(result.success).toBe(false);
+-    expect(result.error).toBeDefined();
+-  });
+-
+-  it('execute captures output in result', async () => {
+-    const result = await runner.execute('return { message: "hello" };');
+-    expect(result.success).toBe(true);
+-    expect(result.output).toEqual({ message: 'hello' });
+-  });
+-
+-  it('execute reports duration', async () => {
+-    const result = await runner.execute('return 1;');
+-    expect(result.duration).toBeGreaterThanOrEqual(0);
+-    expect(typeof result.duration).toBe('number');
+-  });
+-
+-  it('execute catches runtime errors', async () => {
+-    const result = await runner.execute('throw new Error("boom");');
+-    expect(result.success).toBe(false);
+-    expect(result.error).toContain('boom');
+-  });
+-
+-  it('execute isolates between runs (no shared state)', async () => {
+-    await runner.execute('var leaked = 42;');
+-    const result = await runner.execute('return typeof leaked;');
+-    expect(result.success).toBe(true);
+-    expect(result.output).toBe('undefined');
+-  });
+-
+-  it('executeWithTimeout returns error on timeout', async () => {
+-    const result = await runner.executeWithTimeout(
+-      'var i = 0; while(true) { i++; }',
+-      50
+-    );
+-    expect(result.success).toBe(false);
+-    expect(result.error).toBeDefined();
+-    expect(result.duration).toBeGreaterThan(0);
+-  });
+-});

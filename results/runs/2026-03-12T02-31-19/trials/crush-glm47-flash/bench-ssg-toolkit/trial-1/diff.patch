@@ -1,0 +1,583 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..23f4155
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 919861,
++  "output_tokens": 7491,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.13087802
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..47f16dd
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1 @@
++I'll analyze the codebase structure and build all 8 plugins for the SSG toolkit. Let me start by exploring the existing files.
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..217e45e
+--- /dev/null
++++ b/.thunderdome-stderr.log
+@@ -0,0 +1,6 @@
++          
++   ERROR  
++          
++  Agent processing failed: failed to start agent processing stream: bad gateway: <html> <head><title>502 Bad          
++  Gateway</title></head> <body> <center><h1>502 Bad Gateway</h1></center> <hr><center>nginx</center> </body> </html> .
++
+diff --git a/package-lock.json b/package-lock.json
+index 1ad5780..9aa4811 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1098,7 +1098,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1391,7 +1390,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1917,7 +1915,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3765,7 +3762,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3814,7 +3810,6 @@
+       "integrity": "sha512-o5a9xKjbtuhY6Bi5S3+HvbRERmouabWbyUcpXXUA1u+GNUKoROi9byOJ8M0nHbHYHkYICiMlqxkg1KkYmm25Sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "esbuild": "^0.21.3",
+         "postcss": "^8.4.43",
+diff --git a/src/plugins/asset-pipeline.ts b/src/plugins/asset-pipeline.ts
+new file mode 100644
+index 0000000..3b0fed9
+--- /dev/null
++++ b/src/plugins/asset-pipeline.ts
+@@ -0,0 +1,48 @@
++export function createAssetPipelinePlugin() {
++  function packManifest(manifest: Map<string, string[]>) {
++    const assets: string[] = [];
++    const assetSet = new Set<string>();
++    
++    manifest.forEach((entries, path) => {
++      entries.forEach((entry) => {
++        assetSet.add(`${path}/${entry}`);
++      });
++    });
++    
++    return Array.from(assetSet).sort();
++  }
++
++  function rewriteAssetUrls(content: string, baseUrl: string) {
++    return content.replace(
++      /<(img|link)[^>]+src=["'](?!(?:https:)?\/\/)[.]?([^"']+)["']/gi,
++      (match, tag, path) => {
++        const assetPath = path.startsWith('/') ? path : `/${path}`;
++        return `${tag} src="${baseUrl}${assetPath}"`;
++      }
++    );
++  }
++
++  const plugin = {
++    name: 'asset-pipeline',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      transformContent: async (file, ctx) => {
++        const config = ctx.config;
++        const rewritten = rewriteAssetUrls(file.content, config.baseUrl);
++        const path = `/${config.outputDir}/assets`;
++        const manifest = ctx.data.get('asset-manifest') as Map<string, string[]>;
++        if (!manifest) {
++          ctx.data.set('asset-manifest', new Map());
++        }
++        const currentManifest = ctx.data.get('asset-manifest') as Map<string, string[]>;
++        const assets = currentManifest.get(path) || [];
++        assets.push(file.slug);
++        currentManifest.set(path, assets);
++        return { ...file, content: rewritten };
++      },
++    },
++  };
++
++  return plugin;
++}
+\ No newline at end of file
+diff --git a/src/plugins/dev-server.ts b/src/plugins/dev-server.ts
+new file mode 100644
+index 0000000..7b68d78
+--- /dev/null
++++ b/src/plugins/dev-server.ts
+@@ -0,0 +1,64 @@
++export interface DevServerConfig {
++  port: number;
++  routes: Array<{ path: string; handler: 'static' | 'asset' | 'api' }>;
++  assetPaths: string[];
++  searchIndexPath: string;
++}
++
++export function createDevServerPlugin() {
++  const defaultPort = 3000;
++
++  function buildDevServerConfig(output, data) {
++    const config: DevServerConfig = {
++      port: defaultPort,
++      routes: [],
++      assetPaths: [],
++      searchIndexPath: '/search-index.json',
++    };
++
++    const outputPaths = new Set(output.keys());
++    
++    outputPaths.forEach((path) => {
++      if (path.endsWith('.html') || path.endsWith('/')) {
++        config.routes.push({
++          path: '/' + path,
++          handler: 'static',
++        });
++      }
++    });
++
++    const assetManifest = data.get('asset-manifest') as Map<string, string[]>;
++    if (assetManifest) {
++      assetManifest.forEach((assets, assetPath) => {
++        assets.forEach((asset) => {
++          config.routes.push({
++            path: '/' + assetPath + '/' + asset,
++            handler: 'asset',
++          });
++          config.assetPaths.push(asset);
++        });
++      });
++    }
++
++    const searchIndex = output.get('search-index.json');
++    if (searchIndex) {
++      config.searchIndexPath = '/search-index.json';
++    }
++
++    return config;
++  }
++
++  const plugin = {
++    name: 'dev-server',
++    version: '1.0.0',
++    dependencies: ['asset-pipeline', 'search-index'],
++    hooks: {
++      afterBuild: async (ctx) => {
++        const devServerConfig = buildDevServerConfig(ctx.output, ctx.data);
++        ctx.data.set('dev-server-config', devServerConfig);
++      },
++    },
++  };
++
++  return plugin;
++}
+\ No newline at end of file
+diff --git a/src/plugins/markdown-ext.ts b/src/plugins/markdown-ext.ts
+new file mode 100644
+index 0000000..e256974
+--- /dev/null
++++ b/src/plugins/markdown-ext.ts
+@@ -0,0 +1,62 @@
++import { BuildContext, ContentFile } from '../core/types.js';
++
++export function createMarkdownExtPlugin() {
++  const FOOTNOTE_ID_PREFIX = 'fn-';
++  
++  function createFootnoteSection(numbering: number[]) {
++    const items = numbering
++      .filter((n, i) => i > 0)
++      .map((num) => {
++        const id = `${FOOTNOTE_ID_PREFIX}${num}`;
++        const newIndex = numbering.findIndex((n, i) => i > 0 && n === num);
++        return `  <li id="${id}"><a href="#fnref-${num}">${num}</a>: Footnote content.</li>`;
++      })
++      .join('\n');
++    
++    return `\n\n<section class="footnotes">\n  <hr>\n${items}\n</section>`;
++  }
++
++  function createAdmonition(content: string, type: 'note' | 'warning' | 'tip') {
++    return `<div class="admonition admonition-${type}">\n  <div class="admonition-title">${type.toUpperCase()}</div>\n  ${content}\n</div>`;
++  }
++
++  function extractAdmonitions(content: string) {
++    const admonitionRegex = /:::([a-z]+)\n([\s\S]*?):::/g;
++    const admonitions: { type: string; content: string }[] = [];
++    let match;
++    
++    while ((match = admonitionRegex.exec(content)) !== null) {
++      admonitions.push({ type: match[1], content: match[2] });
++    }
++    
++    return admonitions;
++  }
++
++  function transformContent(content: string): string {
++    let transformed = content;
++    const admonitions = extractAdmonitions(content);
++    
++    admonitions.forEach((admonition) => {
++      const div = createAdmonition(admonition.content, admonition.type as 'note' | 'warning' | 'tip');
++      transformed = transformed.replace(/:::([a-z]+)\n([\s\S]*?):::/g, div);
++    });
++    
++    transformed = transformed.replace(/<!-- (.*?) -->/g, '<!-- $1 -->');
++    
++    return transformed;
++  }
++
++  const plugin = {
++    name: 'markdown-ext',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      transformContent: async (file, ctx) => {
++        const transformed = transformContent(file.content);
++        return { ...file, content: transformed };
++      },
++    },
++  };
++
++  return plugin;
++}
+\ No newline at end of file
+diff --git a/src/plugins/rss-feed.ts b/src/plugins/rss-feed.ts
+new file mode 100644
+index 0000000..fcd6414
+--- /dev/null
++++ b/src/plugins/rss-feed.ts
+@@ -0,0 +1,67 @@
++import { BuildContext, ContentFile, SiteConfig } from '../core/types.js';
++
++export function createRssFeedPlugin() {
++  function generateRssXml(config: SiteConfig, files: ContentFile[], data: Map<string, unknown>) {
++    const title = config.title;
++    const baseUrl = config.baseUrl;
++    const tagMap = data.get('taxonomy-tags') as Map<string, ContentFile[]>;
++
++    const sortedFiles = [...files].sort((a, b) => {
++      const dateA = a.date || Date.now().toString();
++      const dateB = b.date || Date.now().toString();
++      return new Date(dateB).getTime() - new Date(dateA).getTime();
++    });
++
++    const itemEntries = sortedFiles
++      .filter((f) => f.date)
++        .map((file) => {
++          const pubDate = new Date(file.date!).toUTCString();
++          let categories = '';
++          if (tagMap && file.tags) {
++            file.tags.forEach((tag) => {
++              const normalizedTag = tag.toLowerCase();
++              const taggedFile = tagMap.get(normalizedTag);
++              if (taggedFile && taggedFile[0] === file) {
++                categories += `<category>${tag}</category>`;
++              }
++            });
++          }
++          return `<item>\n    <title>${escapeXml(file.title)}</title>\n    <link>${baseUrl}/${file.slug}.html</link>\n    <description><![CDATA[${file.content}]]></description>\n    <pubDate>${pubDate}</pubDate>\n${categories}</item>`;
++        }
++      )
++      .join('\n');
++
++    return `<?xml version="1.0" encoding="UTF-8"?>
++<rss version="2.0">
++  <channel>
++    <title>${escapeXml(title)}</title>
++    <link>${baseUrl}</link>
++    <description>Site feed</description>
++    ${itemEntries}
++  </channel>
++</rss>`;
++  }
++
++  function escapeXml(unsafe: string) {
++    return unsafe
++      .replace(/&/g, '&amp;')
++      .replace(/</g, '&lt;')
++      .replace(/>/g, '&gt;')
++      .replace(/"/g, '&quot;')
++      .replace(/'/g, '&apos;');
++  }
++
++  const plugin = {
++    name: 'rss-feed',
++    version: '1.0.0',
++    dependencies: ['markdown-ext', 'taxonomy'],
++    hooks: {
++      afterBuild: async (ctx) => {
++        const feedXml = generateRssXml(ctx.config, ctx.files, ctx.data);
++        ctx.output.set('feed.xml', feedXml);
++      },
++    },
++  };
++
++  return plugin;
++}
+\ No newline at end of file
+diff --git a/src/plugins/search-index.ts b/src/plugins/search-index.ts
+new file mode 100644
+index 0000000..31196f1
+--- /dev/null
++++ b/src/plugins/search-index.ts
+@@ -0,0 +1,38 @@
++export function createSearchIndexPlugin() {
++  function stripHtml(html: string) {
++    return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
++  }
++
++  function generateSearchIndex(files, ctx) {
++    const index: Record<string, { title: string; slug: string; content: string; tags?: string[] }> = [];
++    
++    files.forEach((file) => {
++      const content = stripHtml(file.content);
++      const indexEntry: Record<string, { title: string; slug: string; content: string; tags?: string[] }> = {
++        title: file.title || '',
++        slug: file.slug,
++        content,
++      };
++      if (file.tags) {
++        indexEntry.tags = file.tags;
++      }
++      index.push(indexEntry);
++    });
++
++    return JSON.stringify(index);
++  }
++
++  const plugin = {
++    name: 'search-index',
++    version: '1.0.0',
++    dependencies: ['markdown-ext', 'syntax-highlight'],
++    hooks: {
++      afterBuild: async (ctx) => {
++        const searchIndex = generateSearchIndex(ctx.files, ctx);
++        ctx.output.set('search-index.json', searchIndex);
++      },
++    },
++  };
++
++  return plugin;
++}
+\ No newline at end of file
+diff --git a/src/plugins/sitemap.ts b/src/plugins/sitemap.ts
+new file mode 100644
+index 0000000..a71b5ad
+--- /dev/null
++++ b/src/plugins/sitemap.ts
+@@ -0,0 +1,65 @@
++export function createSitemapPlugin() {
++  const BASE_URL_REGEX = /https?:\/\/[^\s]+/g;
++
++  function extractBaseUrl(content: string): string {
++    const match = content.match(BASE_URL_REGEX);
++    return match ? match[0] : '';
++  }
++
++  function generateSitemap(output, data, config) {
++    const baseUrl = config.baseUrl;
++    const tagMap = data.get('taxonomy-tags') as Map<string, ContentFile[]>;
++    const outputUrls = new Set<string>();
++    const emptyTags = [];
++
++    output.forEach((content, path) => {
++      const url = `${baseUrl}/${path}`;
++      outputUrls.add(url);
++    });
++
++    if (tagMap) {
++      tagMap.forEach((_, tag) => {
++        const tagPath = `${baseUrl}/tags/${tag}.html`;
++        outputUrls.add(tagPath);
++      });
++    }
++
++    const missingFeedXml = output.get('feed.xml');
++    if (missingFeedXml) {
++      outputUrls.add(`${baseUrl}/feed.xml`);
++    }
++
++    const urls = Array.from(outputUrls).map(
++      (url) => `<url>
++    <loc>${escapeXml(url)}</loc>
++  </url>`
++    ).join('\n');
++
++    return `<?xml version="1.0" encoding="UTF-8"?>
++<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
++${urls}
++</urlset>`;
++  }
++
++  function escapeXml(unsafe: string) {
++    return unsafe
++      .replace(/&/g, '&amp;')
++      .replace(/</g, '&lt;')
++      .replace(/>/g, '&gt;')
++      .replace(/"/g, '&quot;');
++  }
++
++  const plugin = {
++    name: 'sitemap',
++    version: '1.0.0',
++    dependencies: ['taxonomy', 'rss-feed'],
++    hooks: {
++      afterBuild: async (ctx) => {
++        const sitemapXml = generateSitemap(ctx.output, ctx.data, ctx.config);
++        ctx.output.set('sitemap.xml', sitemapXml);
++      },
++    },
++  };
++
++  return plugin;
++}
+\ No newline at end of file
+diff --git a/src/plugins/syntax-highlight.ts b/src/plugins/syntax-highlight.ts
+new file mode 100644
+index 0000000..4b51ba3
+--- /dev/null
++++ b/src/plugins/syntax-highlight.ts
+@@ -0,0 +1,36 @@
++export function createSyntaxHighlightPlugin() {
++  function addLanguageClasses(content: string) {
++    const highlightedBlocks: number[] = [];
++    let markdownified = content.replace(
++      /<pre>\s*<code\s+class=["']language-([^"']+)["']>([\s\S]*?)<\/code>\s*<\/pre>/gi,
++      (match, lang, code) => {
++        highlightedBlocks.push(parseInt(lang.replace(/\D/g, '')));
++        return `<pre><code class="language-${lang} highlighted" data-language="${lang}">${code}</code></pre>`;
++      }
++    );
++
++    const matchingRegex = /<pre>\s*<code\s+class=["']language-([^"']+)["']>\s*<\/code>\s*<\/pre>/gi;
++    if (matchingRegex.test(markdownified)) {
++      markdownified = markdownified.replace(matchingRegex, (match, lang) => {
++        highlightedBlocks.push(parseInt(lang.replace(/\D/g, '')));
++        return `<pre><code class="language-${lang} highlighted" data-language="${lang}"></code></pre>`;
++      });
++    }
++
++    return { content: markdownified, highlightedBlocks };
++  }
++
++  const plugin = {
++    name: 'syntax-highlight',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      transformContent: async (file, ctx) => {
++        const { content } = addLanguageClasses(file.content);
++        return { ...file, content };
++      },
++    },
++  };
++
++  return plugin;
++}
+\ No newline at end of file
+diff --git a/src/plugins/taxonomy.ts b/src/plugins/taxonomy.ts
+new file mode 100644
+index 0000000..8e51447
+--- /dev/null
++++ b/src/plugins/taxonomy.ts
+@@ -0,0 +1,70 @@
++export function createTaxonomyPlugin() {
++  const TAG_PATH = '/tags';
++
++  function buildTagMap(files: ContentFile[]) {
++    const tagMap = new Map<string, ContentFile[]>();
++    
++    files.forEach((file) => {
++      const tags = file.tags || [];
++      tags.forEach((tag) => {
++        const normalizedTag = tag.toLowerCase();
++        if (!tagMap.has(normalizedTag)) {
++          tagMap.set(normalizedTag, []);
++        }
++        tagMap.get(normalizedTag)!.push(file);
++      });
++    });
++    
++    return tagMap;
++  }
++
++  function generateTagPageContent(tag: string, taggedFiles: ContentFile[], config, baseUrl) {
++    const entries = taggedFiles
++      .map(
++        (f) =>
++          `<li>
++            <a href="${baseUrl}/${f.slug}.html">${f.title || f.slug}</a>
++          </li>`
++      )
++      .join('\n');
++
++    return `<!DOCTYPE html>
++<html>
++<head>
++  <title>${config.title} - Tag: ${tag}</title>
++</head>
++<body>
++  <h1>${config.title} - ${tag}</h1>
++  <ul>
++${entries}
++  </ul>
++</body>
++</html>`;
++  }
++
++  const plugin = {
++    name: 'taxonomy',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      beforeBuild: async (ctx, file) => {
++        const tagMap = buildTagMap(ctx.files);
++        ctx.data.set('taxonomy-tags', tagMap);
++      },
++      afterBuild: async (ctx) => {
++        const tagMap = ctx.data.get('taxonomy-tags') as Map<string, ContentFile[]>;
++        if (!tagMap) return;
++
++        const config = ctx.config;
++        const baseUrl = config.baseUrl;
++
++        tagMap.forEach((taggedFiles, tag) => {
++          const content = generateTagPageContent(tag, taggedFiles, config, baseUrl);
++          ctx.output.set(`${TAG_PATH}/${tag}.html`, content);
++        });
++      },
++    },
++  };
++
++  return plugin;
++}
+\ No newline at end of file

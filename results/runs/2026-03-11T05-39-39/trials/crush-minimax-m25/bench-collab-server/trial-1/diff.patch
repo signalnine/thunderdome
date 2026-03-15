@@ -1,0 +1,1896 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..6055b65
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 293374,
++  "output_tokens": 7253,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.1977834
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..4434d3e
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,5 @@
++<invoke name="grep">
++<parameter name="path">/workspace/src</parameter>
++<parameter name="pattern">uuidv4</parameter>
++</invoke>
++</minimax:tool_call>
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/TASK.md b/TASK.md
+index 8045d7d..0420f90 100644
+--- a/TASK.md
++++ b/TASK.md
+@@ -1,4 +1,4 @@
+-# T2: Real-Time Markdown Collab Server
++# T2: Real-Time Collaborative Document Editor
+ 
+ ## Category
+ greenfield/complex
+@@ -7,59 +7,48 @@ greenfield/complex
+ 30 minutes
+ 
+ ## Description
+-Build a WebSocket-based collaborative Markdown editing system with:
+-1. HTTP/WebSocket server managing documents and broadcasting edits
+-2. OT (Operational Transform) based conflict resolution so simultaneous edits converge
+-3. REST API for document CRUD with SQLite persistence via better-sqlite3
+-4. Version history - every edit stored, any past version retrievable
+-5. Must handle 10 concurrent clients without corruption
+-
+-## Starting State
+-- All configuration files provided (package.json, tsconfig.json, .eslintrc.cjs, vitest.config.ts)
+-- Database schema provided (schema.sql)
+-- Test file provided (tests/collab.test.ts) with 45 tests
+-- Empty src/ directory with .gitkeep
+-
+-## Requirements
+-
+-### Source Files to Implement
+-
+-**src/db.ts** - Database setup using schema.sql, connection factory
+-
+-**src/models.ts** - TypeScript interfaces for Document, Version, Operation (insert/delete with position)
+-
+-**src/ot.ts** - Operational Transform logic:
+-- `applyOperation(content, op)`: Apply an operation to document content
+-- `transformOperation(op1, op2)`: Transform op1 against op2
+-- `validateOperation(op, contentLength)`: Validate operation bounds
+-- Operations: `{ type: 'insert', position: number, text: string }` and `{ type: 'delete', position: number, count: number }`
+-- Transform rules: adjust positions based on prior operations
+-
+-**src/routes.ts** - Express REST routes:
+-- POST /docs - Create document
+-- GET /docs - List documents
+-- GET /docs/:id - Get document
+-- PUT /docs/:id - Update document
+-- DELETE /docs/:id - Delete document
+-- GET /docs/:id/versions - List version history
+-- GET /docs/:id/versions/:version - Get specific version
+-
+-**src/ws.ts** - WebSocket server:
+-- Manages rooms (one per document)
+-- On connect: validate document exists, send current state as `{ type: 'sync', content, version }`
+-- On operation: validate, apply, transform against concurrent ops, broadcast to room
+-- Track document version for OT
+-- Messages: `{ type: 'operation'|'ack'|'sync'|'error', ... }`
+-
+-**src/server.ts** - Combines Express + WebSocket server:
+-- Exports `createApp(dbPath?)` returning `{ app, server, wss, db, start, stop }`
+-- HTTP and WS on the same port
+-- `start(port?)` returns actual port (use port 0 for random)
+-- `stop()` cleanly shuts down all connections
+-
+-## Validation
+-```bash
+-npm run build   # TypeScript compiles
+-npm run lint    # ESLint passes
+-npm test        # All 45 tests pass
+-```
++
++Build a collaborative real-time document editing server. Multiple users should be able to open the same document and make edits simultaneously, with changes appearing in real time for everyone. Think Google Docs, but simplified.
++
++The system needs:
++
++1. **REST API for document management** -- Users need to create, read, update, list, and delete documents. Each document should have a title and content. Documents also need version history so users can see how a document evolved over time.
++
++2. **WebSocket-based real-time collaboration** -- When a user opens a document, they connect via WebSocket and receive the current document state. As they type, their edits are sent as operations (insertions and deletions) and broadcast to other connected users viewing the same document.
++
++3. **Conflict resolution** -- When two users edit simultaneously, their changes must not corrupt the document. Use Operational Transform (OT) or CRDTs to ensure all clients converge to the same document state. Both insertions must be preserved; nothing should be silently dropped.
++
++4. **Persistence** -- Use SQLite (via better-sqlite3) to persist documents and their version history. Data should survive server restarts.
++
++5. **Robustness** -- Handle at least 10 concurrent clients on the same document without corruption. Reject malformed or invalid operations gracefully (send error messages back, don't crash).
++
++## Structural Requirement
++
++Your server entry point must export a `createApp` factory function from `src/server.ts` (or `src/index.ts`). This function should accept an optional database file path and return an object with at least:
++
++- `app` -- the HTTP server/application (e.g., Express app)
++- `start(port?)` -- starts listening, returns the port number (use port 0 for a random available port)
++- `stop()` -- cleanly shuts down the server and all connections
++
++## Tech Stack
++
++- TypeScript (the project is already configured with tsconfig.json)
++- Express for HTTP
++- ws for WebSocket
++- better-sqlite3 for SQLite
++- All dependencies are pre-installed
++
++## What Success Looks Like
++
++- `npm run build` compiles without errors
++- `npm run lint` passes
++- The server handles the full lifecycle: create doc via REST, connect via WebSocket, send edits, receive broadcasts, verify convergence via REST
++- Documents persist across server restarts
++- Concurrent edits from multiple clients converge to consistent state
++
++## Tips
++
++- The WebSocket connection path should include the document ID so the server knows which document the client wants to collaborate on
++- Send a sync message with the current document content when a client first connects
++- Track document versions so you can transform concurrent operations correctly
++- Write tests for your implementation -- they'll help you catch edge cases
+diff --git a/package.json b/package.json
+index 12e13f3..def915c 100644
+--- a/package.json
++++ b/package.json
+@@ -5,7 +5,7 @@
+   "type": "module",
+   "scripts": {
+     "build": "tsc",
+-    "lint": "eslint src/ tests/",
++    "lint": "eslint src/",
+     "test": "vitest run"
+   },
+   "dependencies": {
+@@ -16,6 +16,7 @@
+   "devDependencies": {
+     "typescript": "^5.4.0",
+     "vitest": "^2.0.0",
++    "@vitest/coverage-v8": "^2.0.0",
+     "eslint": "^8.56.0",
+     "@typescript-eslint/parser": "^7.0.0",
+     "@typescript-eslint/eslint-plugin": "^7.0.0",
+diff --git a/src/db.ts b/src/db.ts
+new file mode 100644
+index 0000000..8539706
+--- /dev/null
++++ b/src/db.ts
+@@ -0,0 +1,172 @@
++import Database from 'better-sqlite3';
++import { Document, Version, ActiveConnection } from './types.js';
++
++export interface Database {
++  getDocument(id: string): Document | undefined;
++  createDocument(id: string, title: string, content?: string): Document;
++  updateDocument(id: string, title?: string, content?: string): Document | undefined;
++  deleteDocument(id: string): boolean;
++  listDocuments(): Document[];
++  
++  addVersion(documentId: string, version: number, content: string, operation: unknown): Version;
++  getVersion(documentId: string, version: number): Version | undefined;
++  getVersions(documentId: string): Version[];
++  getLatestVersion(documentId: string): Version | undefined;
++  
++  addConnection(connectionId: string, documentId: string): void;
++  removeConnection(connectionId: string): void;
++  getConnections(documentId: string): ActiveConnection[];
++}
++
++export function createDatabase(dbPath: string = ':memory:'): Database {
++  const db = new Database(dbPath);
++  
++  // Enable foreign keys
++  db.pragma('foreign_keys = ON');
++  
++  // Initialize schema
++  db.exec(`
++    CREATE TABLE IF NOT EXISTS documents (
++      id TEXT PRIMARY KEY,
++      title TEXT NOT NULL,
++      content TEXT NOT NULL DEFAULT '',
++      created_at TEXT NOT NULL DEFAULT (datetime('now')),
++      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
++    );
++    
++    CREATE TABLE IF NOT EXISTS versions (
++      id INTEGER PRIMARY KEY AUTOINCREMENT,
++      document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
++      version INTEGER NOT NULL,
++      content TEXT NOT NULL,
++      operation TEXT,
++      created_at TEXT NOT NULL DEFAULT (datetime('now')),
++      UNIQUE(document_id, version)
++    );
++    
++    CREATE TABLE IF NOT EXISTS active_connections (
++      id TEXT PRIMARY KEY,
++      document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
++      connected_at TEXT NOT NULL DEFAULT (datetime('now'))
++    );
++    
++    CREATE INDEX IF NOT EXISTS idx_versions_document ON versions(document_id);
++    CREATE INDEX IF NOT EXISTS idx_connections_document ON active_connections(document_id);
++  `);
++  
++  return {
++    getDocument(id: string): Document | undefined {
++      const stmt = db.prepare('SELECT * FROM documents WHERE id = ?');
++      return stmt.get(id) as Document | undefined;
++    },
++    
++    createDocument(id: string, title: string, content: string = ''): Document {
++      const stmt = db.prepare(`
++        INSERT INTO documents (id, title, content)
++        VALUES (?, ?, ?)
++      `);
++      stmt.run(id, title, content);
++      
++      const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(id) as Document;
++      
++      // Create initial version
++      if (content) {
++        this.addVersion(id, 1, content, null);
++      }
++      
++      return doc;
++    },
++    
++    updateDocument(id: string, title?: string, content?: string): Document | undefined {
++      const updates: string[] = [];
++      const values: (string | number)[] = [];
++      
++      if (title !== undefined) {
++        updates.push('title = ?');
++        values.push(title);
++      }
++      if (content !== undefined) {
++        updates.push('content = ?');
++        values.push(content);
++      }
++      updates.push("updated_at = datetime('now')");
++      
++      if (updates.length === 1) {
++        return this.getDocument(id);
++      }
++      
++      values.push(id);
++      const stmt = db.prepare(`UPDATE documents SET ${updates.join(', ')} WHERE id = ?`);
++      stmt.run(...values);
++      
++      return this.getDocument(id);
++    },
++    
++    deleteDocument(id: string): boolean {
++      const stmt = db.prepare('DELETE FROM documents WHERE id = ?');
++      const result = stmt.run(id);
++      return result.changes > 0;
++    },
++    
++    listDocuments(): Document[] {
++      const stmt = db.prepare('SELECT * FROM documents ORDER BY updated_at DESC');
++      return stmt.all() as Document[];
++    },
++    
++    addVersion(documentId: string, version: number, content: string, operation: unknown): Version {
++      const stmt = db.prepare(`
++        INSERT INTO versions (document_id, version, content, operation)
++        VALUES (?, ?, ?, ?)
++      `);
++      stmt.run(documentId, version, content, operation ? JSON.stringify(operation) : null);
++      return this.getVersion(documentId, version)!;
++    },
++    
++    getVersion(documentId: string, version: number): Version | undefined {
++      const stmt = db.prepare('SELECT * FROM versions WHERE document_id = ? AND version = ?');
++      const row = stmt.get(documentId, version) as (Version & { operation: string | null }) | undefined;
++      if (!row) return undefined;
++      return {
++        ...row,
++        operation: row.operation ? JSON.parse(row.operation) : null
++      };
++    },
++    
++    getVersions(documentId: string): Version[] {
++      const stmt = db.prepare('SELECT * FROM versions WHERE document_id = ? ORDER BY version');
++      const rows = stmt.all(documentId) as (Version & { operation: string | null })[];
++      return rows.map(row => ({
++        ...row,
++        operation: row.operation ? JSON.parse(row.operation) : null
++      }));
++    },
++    
++    getLatestVersion(documentId: string): Version | undefined {
++      const stmt = db.prepare('SELECT * FROM versions WHERE document_id = ? ORDER BY version DESC LIMIT 1');
++      const row = stmt.get(documentId) as (Version & { operation: string | null }) | undefined;
++      if (!row) return undefined;
++      return {
++        ...row,
++        operation: row.operation ? JSON.parse(row.operation) : null
++      };
++    },
++    
++    addConnection(connectionId: string, documentId: string): void {
++      const stmt = db.prepare(`
++        INSERT INTO active_connections (id, document_id)
++        VALUES (?, ?)
++      `);
++      stmt.run(connectionId, documentId);
++    },
++    
++    removeConnection(connectionId: string): void {
++      const stmt = db.prepare('DELETE FROM active_connections WHERE id = ?');
++      stmt.run(connectionId);
++    },
++    
++    getConnections(documentId: string): ActiveConnection[] {
++      const stmt = db.prepare('SELECT * FROM active_connections WHERE document_id = ?');
++      return stmt.all(documentId) as ActiveConnection[];
++    }
++  };
++}
+\ No newline at end of file
+diff --git a/src/ot.ts b/src/ot.ts
+new file mode 100644
+index 0000000..4221d80
+--- /dev/null
++++ b/src/ot.ts
+@@ -0,0 +1,177 @@
++import { TextOperation, Operation } from './types.js';
++
++/**
++ * Operational Transform implementation for text editing.
++ * Uses a simplified OT approach suitable for real-time collaboration.
++ * 
++ * Key concepts:
++ * - Operations are transformed against each other to maintain consistency
++ * - When two clients send operations at the same base version, we transform
++ *   the second operation so it can be applied after the first
++ */
++
++/**
++ * Apply an operation to a document string
++ */
++export function applyOperation(content: string, op: TextOperation): string {
++  switch (op.type) {
++    case 'insert':
++      return (
++        content.slice(0, op.position) +
++        (op.text || '') +
++        content.slice(op.position)
++      );
++    
++    case 'delete':
++      return (
++        content.slice(0, op.position) +
++        content.slice(op.position + (op.length || 0))
++      );
++    
++    case 'retain':
++      return content;
++    
++    default:
++      return content;
++  }
++}
++
++/**
++ * Transform operation A against operation B.
++ * Returns the transformed operation A' that can be applied after B.
++ * 
++ * This handles the case where two clients simultaneously make changes:
++ * - Client A inserts at position X
++ * - Client B inserts at position Y
++ * 
++ * We need to transform so both operations can be applied correctly.
++ */
++export function transformOperation(opA: TextOperation, opB: TextOperation): TextOperation {
++  // If operations are the same type and same position, adjust
++  const a = { ...opA };
++  const b = { ...opB };
++  
++  // Both insert at same position - offset second insert
++  if (a.type === 'insert' && b.type === 'insert' && a.position === b.position) {
++    // Shift the position of the second insert
++    return { ...a, position: a.position + (b.text?.length || 0) };
++  }
++  
++  // Insert vs Delete transformation
++  if (a.type === 'insert' && b.type === 'delete') {
++    if (a.position <= b.position) {
++      // Insert before delete - no change needed
++      return a;
++    } else if (a.position >= b.position + (b.length || 0)) {
++      // Insert after delete - adjust position
++      return { ...a, position: a.position - (b.length || 0) };
++    } else {
++      // Insert within deleted range - move to delete position
++      return { ...a, position: b.position };
++    }
++  }
++  
++  if (a.type === 'delete' && b.type === 'insert') {
++    if (a.position >= b.position) {
++      // Delete after insert - adjust position
++      return { ...a, position: a.position + (b.text?.length || 0) };
++    } else if (a.position + (a.length || 0) <= b.position) {
++      // Delete before insert - no change needed
++      return a;
++    } else {
++      // Delete spans insert position - split delete
++      // This is complex, so we just adjust to insert position
++      return { ...a, length: b.position - a.position };
++    }
++  }
++  
++  // Delete vs Delete transformation
++  if (a.type === 'delete' && b.type === 'delete') {
++    const aEnd = a.position + (a.length || 0);
++    const bEnd = b.position + (b.length || 0);
++    
++    if (a.position >= bEnd) {
++      // Delete A is entirely after Delete B
++      return { ...a, position: a.position - (b.length || 0) };
++    } else if (aEnd <= b.position) {
++      // Delete A is entirely before Delete B
++      return a;
++    } else if (a.position >= b.position && aEnd <= bEnd) {
++      // Delete A is entirely within Delete B - becomes no-op
++      return { ...a, length: 0 };
++    } else if (a.position < b.position && aEnd > bEnd) {
++      // Delete A completely spans Delete B
++      return { ...a, length: a.length! - (b.length || 0) };
++    } else if (a.position < b.position) {
++      // Overlap at end of A
++      return { ...a, length: b.position - a.position };
++    } else {
++      // Overlap at start of A
++      return { ...a, position: b.position, length: aEnd - bEnd };
++    }
++  }
++  
++  // Retain operations don't affect others
++  return a;
++}
++
++/**
++ * Compose two consecutive operations into one
++ */
++export function composeOperations(opA: TextOperation, opB: TextOperation): TextOperation | null {
++  // If either is retain, just return the other
++  if (opA.type === 'retain') return opB;
++  if (opB.type === 'retain') return opA;
++  
++  // Two inserts at same position can be merged
++  if (opA.type === 'insert' && opB.type === 'insert') {
++    if (opA.position + (opA.text?.length || 0) === opB.position) {
++      return {
++        type: 'insert',
++        position: opA.position,
++        text: (opA.text || '') + (opB.text || '')
++      };
++    }
++  }
++  
++  // Two deletes at same position can be merged
++  if (opA.type === 'delete' && opB.type === 'delete') {
++    if (opA.position === opB.position) {
++      return {
++        type: 'delete',
++        position: opA.position,
++        length: (opA.length || 0) + (opB.length || 0)
++      };
++    }
++  }
++  
++  // Cannot compose - return null
++  return null;
++}
++
++/**
++ * Create an insert operation
++ */
++export function createInsert(position: number, text: string): TextOperation {
++  return { type: 'insert', position, text };
++}
++
++/**
++ * Create a delete operation
++ */
++export function createDelete(position: number, length: number): TextOperation {
++  return { type: 'delete', position, length };
++}
++
++/**
++ * Validate an operation
++ */
++export function isValidOperation(op: unknown): op is TextOperation {
++  if (!op || typeof op !== 'object') return false;
++  const o = op as TextOperation;
++  if (o.type !== 'insert' && o.type !== 'delete' && o.type !== 'retain') return false;
++  if (typeof o.position !== 'number' || o.position < 0) return false;
++  if (o.type === 'insert' && typeof o.text !== 'string') return false;
++  if (o.type === 'delete' && typeof o.length !== 'number') return false;
++  return true;
++}
+\ No newline at end of file
+diff --git a/src/server.ts b/src/server.ts
+new file mode 100644
+index 0000000..81cf44f
+--- /dev/null
++++ b/src/server.ts
+@@ -0,0 +1,348 @@
++import express, { Express, Request, Response, NextFunction } from 'express';
++import { WebSocket, WebSocketServer } from 'ws';
++import http from 'http';
++import { createDatabase, Database } from './db.js';
++import {
++  Document,
++  Version,
++  WSMessage,
++  SyncPayload,
++  OperationPayload,
++  ErrorPayload,
++  TextOperation,
++  Operation
++} from './types.js';
++import { applyOperation, transformOperation, isValidOperation, createInsert, createDelete } from './ot.js';
++
++interface Client {
++  id: string;
++  ws: WebSocket;
++  documentId: string;
++}
++
++interface DocumentState {
++  content: string;
++  version: number;
++  clients: Map<string, Client>;
++  pendingOps: Map<string, { op: TextOperation; version: number }>;
++}
++
++export interface App {
++  app: Express;
++  start: (port?: number) => Promise<number>;
++  stop: () => Promise<void>;
++}
++
++export function createApp(dbPath: string = ':memory:'): App {
++  const db: Database = createDatabase(dbPath);
++  const expressApp = express();
++  const server = http.createServer(expressApp);
++  
++  // Body parsing
++  expressApp.use(express.json());
++  
++  // Document state management
++  const documentStates = new Map<string, DocumentState>();
++  
++  // Active WebSocket clients
++  const clients = new Map<string, Client>();
++  
++  // Get or create document state
++  function getDocumentState(documentId: string): DocumentState {
++    let state = documentStates.get(documentId);
++    if (!state) {
++      const doc = db.getDocument(documentId);
++      const latestVersion = db.getLatestVersion(documentId);
++      state = {
++        content: doc?.content || '',
++        version: latestVersion?.version || 0,
++        clients: new Map(),
++        pendingOps: new Map()
++      };
++      documentStates.set(documentId, state);
++    }
++    return state;
++  }
++  
++  // WebSocket server
++  const wss = new WebSocketServer({ server, path: '/ws' });
++  
++  wss.on('connection', (ws, req) => {
++    const url = new URL(req.url || '', `http://${req.headers.host}`);
++    const documentId = url.searchParams.get('documentId');
++    const clientId = url.searchParams.get('clientId') || crypto.randomUUID();
++    
++    if (!documentId) {
++      ws.send(JSON.stringify({ type: 'error', payload: { message: 'Document ID required' } }));
++      ws.close();
++      return;
++    }
++    
++    const doc = db.getDocument(documentId);
++    if (!doc) {
++      ws.send(JSON.stringify({ type: 'error', payload: { message: 'Document not found' } }));
++      ws.close();
++      return;
++    }
++    
++    const state = getDocumentState(documentId);
++    const client: Client = { id: clientId, ws, documentId };
++    state.clients.set(clientId, client);
++    clients.set(clientId, client);
++    db.addConnection(clientId, documentId);
++    
++    // Send sync message
++    const syncPayload: SyncPayload = {
++      documentId,
++      content: state.content,
++      version: state.version
++    };
++    ws.send(JSON.stringify({ type: 'sync', payload: syncPayload, clientId }));
++    
++    // Broadcast client join
++    broadcastToDocument(documentId, {
++      type: 'client-join',
++      payload: { clientId },
++      clientId
++    }, clientId);
++    
++    ws.on('message', (data) => {
++      try {
++        const message = JSON.parse(data.toString()) as WSMessage;
++        handleWSMessage(client, message);
++      } catch (e) {
++        ws.send(JSON.stringify({ type: 'error', payload: { message: 'Invalid message format' } }));
++      }
++    });
++    
++    ws.on('close', () => {
++      state.clients.delete(clientId);
++      clients.delete(clientId);
++      db.removeConnection(clientId);
++      
++      // Broadcast client leave
++      broadcastToDocument(documentId, {
++        type: 'client-leave',
++        payload: { clientId },
++        clientId
++      }, clientId);
++      
++      // Clean up document state if no clients
++      if (state.clients.size === 0) {
++        documentStates.delete(documentId);
++      }
++    });
++    
++    ws.on('error', (error) => {
++      console.error('WebSocket error:', error);
++    });
++  });
++  
++  function handleWSMessage(client: Client, message: WSMessage) {
++    const { type, payload } = message;
++    const state = getDocumentState(client.documentId);
++    
++    switch (type) {
++      case 'operation': {
++        const opPayload = payload as OperationPayload;
++        const operation = opPayload.operation as TextOperation;
++        const clientVersion = opPayload.version;
++        
++        // Validate operation
++        if (!isValidOperation(operation)) {
++          client.ws.send(JSON.stringify({
++            type: 'error',
++            payload: { message: 'Invalid operation' } as ErrorPayload,
++            clientId: client.id
++          }));
++          return;
++        }
++        
++        // Transform against any operations that happened since client's version
++        let transformedOp = operation;
++        let transformVersion = clientVersion;
++        
++        // Apply all operations from client's version to current version
++        const versions = db.getVersions(client.documentId);
++        for (const v of versions) {
++          if (v.version > clientVersion && v.operation) {
++            transformedOp = transformOperation(transformedOp, v.operation as TextOperation);
++            transformVersion = v.version;
++          }
++        }
++        
++        // Apply the transformed operation
++        const newContent = applyOperation(state.content, transformedOp);
++        state.content = newContent;
++        state.version++;
++        
++        // Save to database
++        db.updateDocument(client.documentId, undefined, newContent);
++        db.addVersion(client.documentId, state.version, newContent, transformedOp);
++        
++        // Acknowledge to sender
++        client.ws.send(JSON.stringify({
++          type: 'ack',
++          payload: { version: state.version },
++          clientId: client.id
++        }));
++        
++        // Broadcast to other clients
++        broadcastToDocument(client.documentId, {
++          type: 'operation',
++          payload: {
++            operation: transformedOp,
++            version: state.version,
++            clientId: client.id
++          } as OperationPayload,
++          clientId: client.id
++        }, client.id);
++        
++        break;
++      }
++      
++      case 'cursor': {
++        // Broadcast cursor position to other clients
++        broadcastToDocument(client.documentId, {
++          type: 'cursor',
++          payload: { clientId: client.id, position: (payload as { position: number }).position },
++          clientId: client.id
++        }, client.id);
++        break;
++      }
++      
++      default:
++        client.ws.send(JSON.stringify({
++          type: 'error',
++          payload: { message: `Unknown message type: ${type}` } as ErrorPayload,
++          clientId: client.id
++        }));
++    }
++  }
++  
++  function broadcastToDocument(documentId: string, message: WSMessage, excludeClientId?: string) {
++    const state = documentStates.get(documentId);
++    if (!state) return;
++    
++    const messageStr = JSON.stringify(message);
++    state.clients.forEach((client, id) => {
++      if (id !== excludeClientId && client.ws.readyState === WebSocket.OPEN) {
++        client.ws.send(messageStr);
++      }
++    });
++  }
++  
++  // REST API
++  
++  // Create document
++  expressApp.post('/documents', (req: Request, res: Response) => {
++    const { title, content = '' } = req.body;
++    if (!title) {
++      res.status(400).json({ error: 'Title is required' });
++      return;
++    }
++    
++    const id = uuidv4();
++    const doc = db.createDocument(id, title, content);
++    res.status(201).json(doc);
++  });
++  
++  // List documents
++  expressApp.get('/documents', (_req: Request, res: Response) => {
++    const docs = db.listDocuments();
++    res.json(docs);
++  });
++  
++  // Get document by ID
++  expressApp.get('/documents/:id', (req: Request, res: Response) => {
++    const doc = db.getDocument(req.params.id);
++    if (!doc) {
++      res.status(404).json({ error: 'Document not found' });
++      return;
++    }
++    res.json(doc);
++  });
++  
++  // Update document
++  expressApp.put('/documents/:id', (req: Request, res: Response) => {
++    const { title, content } = req.body;
++    const doc = db.updateDocument(req.params.id, title, content);
++    if (!doc) {
++      res.status(404).json({ error: 'Document not found' });
++      return;
++    }
++    res.json(doc);
++  });
++  
++  // Delete document
++  expressApp.delete('/documents/:id', (req: Request, res: Response) => {
++    const deleted = db.deleteDocument(req.params.id);
++    if (!deleted) {
++      res.status(404).json({ error: 'Document not found' });
++      return;
++    }
++    res.status(204).send();
++  });
++  
++  // Get document versions
++  expressApp.get('/documents/:id/versions', (req: Request, res: Response) => {
++    const doc = db.getDocument(req.params.id);
++    if (!doc) {
++      res.status(404).json({ error: 'Document not found' });
++      return;
++    }
++    const versions = db.getVersions(req.params.id);
++    res.json(versions);
++  });
++  
++  // Get specific version
++  expressApp.get('/documents/:id/versions/:version', (req: Request, res: Response) => {
++    const version = db.getVersion(req.params.id, parseInt(req.params.version));
++    if (!version) {
++      res.status(404).json({ error: 'Version not found' });
++      return;
++    }
++    res.json(version);
++  });
++  
++  // Error handling middleware
++  expressApp.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
++    console.error('Server error:', err);
++    res.status(500).json({ error: 'Internal server error' });
++  });
++  
++  let serverInstance: http.Server | null = null;
++  
++  return {
++    app: expressApp,
++    
++    async start(port: number = 0): Promise<number> {
++      return new Promise((resolve) => {
++        serverInstance = server.listen(port, () => {
++          const addr = serverInstance!.address();
++          const actualPort = typeof addr === 'object' ? addr?.port || 0 : 0;
++          resolve(actualPort);
++        });
++      });
++    },
++    
++    async stop(): Promise<void> {
++      return new Promise((resolve) => {
++        // Close all WebSocket connections
++        clients.forEach((client) => {
++          if (client.ws.readyState === WebSocket.OPEN) {
++            client.ws.close();
++          }
++        });
++        
++        if (serverInstance) {
++          serverInstance.close(() => {
++            resolve();
++          });
++        } else {
++          resolve();
++        }
++      });
++    }
++  };
++}
+\ No newline at end of file
+diff --git a/src/types.ts b/src/types.ts
+new file mode 100644
+index 0000000..85de1de
+--- /dev/null
++++ b/src/types.ts
+@@ -0,0 +1,70 @@
++export interface Document {
++  id: string;
++  title: string;
++  content: string;
++  created_at: string;
++  updated_at: string;
++}
++
++export interface Version {
++  id: number;
++  document_id: string;
++  version: number;
++  content: string;
++  operation: Operation | null;
++  created_at: string;
++}
++
++export interface ActiveConnection {
++  id: string;
++  document_id: string;
++  connected_at: string;
++}
++
++// OT Operations
++export type Operation = TextOperation;
++
++export interface TextOperation {
++  type: 'insert' | 'delete' | 'retain';
++  position: number;
++  text?: string;      // for insert
++  length?: number;    // for delete/retain
++}
++
++// WebSocket message types
++export type WSMessageType = 
++  | 'sync'
++  | 'operation'
++  | 'ack'
++  | 'error'
++  | 'client-join'
++  | 'client-leave'
++  | 'cursor';
++
++export interface WSMessage {
++  type: WSMessageType;
++  payload: unknown;
++  clientId?: string;
++}
++
++export interface SyncPayload {
++  documentId: string;
++  content: string;
++  version: number;
++}
++
++export interface OperationPayload {
++  operation: Operation;
++  version: number;
++  clientId: string;
++}
++
++export interface ErrorPayload {
++  message: string;
++  code?: string;
++}
++
++export interface CursorPayload {
++  clientId: string;
++  position: number;
++}
+\ No newline at end of file
+diff --git a/tests/collab.test.ts b/tests/collab.test.ts
+deleted file mode 100644
+index bf52d13..0000000
+--- a/tests/collab.test.ts
++++ /dev/null
+@@ -1,931 +0,0 @@
+-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+-import request from 'supertest';
+-import WebSocket from 'ws';
+-import { createApp, type AppInstance } from '../src/server.js';
+-
+-// ============================================================
+-// Test Helpers
+-// ============================================================
+-
+-interface WsClient {
+-  ws: WebSocket;
+-  messages: Record<string, unknown>[];
+-}
+-
+-function createWsClient(port: number, docId: string): Promise<WsClient> {
+-  return new Promise((resolve, reject) => {
+-    const ws = new WebSocket(`ws://localhost:${port}/${docId}`);
+-    const messages: Record<string, unknown>[] = [];
+-    ws.on('message', (data) => {
+-      messages.push(JSON.parse(data.toString()));
+-    });
+-    ws.on('open', () => resolve({ ws, messages }));
+-    ws.on('error', reject);
+-  });
+-}
+-
+-/** Wait for the messages array to have at least `idx + 1` entries, then return messages[idx]. */
+-function waitForMsg(client: WsClient, idx: number, timeout = 3000): Promise<Record<string, unknown>> {
+-  return new Promise((resolve, reject) => {
+-    if (client.messages.length > idx) {
+-      resolve(client.messages[idx]);
+-      return;
+-    }
+-    const timer = setTimeout(
+-      () => reject(new Error(`Timed out waiting for message at index ${idx} (have ${client.messages.length})`)),
+-      timeout
+-    );
+-    const interval = setInterval(() => {
+-      if (client.messages.length > idx) {
+-        clearTimeout(timer);
+-        clearInterval(interval);
+-        resolve(client.messages[idx]);
+-      }
+-    }, 5);
+-  });
+-}
+-
+-
+-function delay(ms: number): Promise<void> {
+-  return new Promise((resolve) => setTimeout(resolve, ms));
+-}
+-
+-function sendOp(client: WsClient, operation: Record<string, unknown>, version?: number) {
+-  const msg: Record<string, unknown> = { type: 'operation', operation };
+-  if (version !== undefined) msg.version = version;
+-  client.ws.send(JSON.stringify(msg));
+-}
+-
+-function closeClient(client: WsClient): Promise<void> {
+-  return new Promise((resolve) => {
+-    if (client.ws.readyState === WebSocket.CLOSED || client.ws.readyState === WebSocket.CLOSING) {
+-      resolve();
+-      return;
+-    }
+-    client.ws.on('close', () => resolve());
+-    client.ws.close();
+-  });
+-}
+-
+-// ============================================================
+-// REST CRUD Tests
+-// ============================================================
+-
+-describe('REST CRUD', () => {
+-  let app: AppInstance;
+-
+-  beforeAll(async () => {
+-    app = createApp();
+-    await app.start(0);
+-  });
+-
+-  afterAll(async () => {
+-    await app.stop();
+-  });
+-
+-  it('POST /docs creates document with title', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'Test Doc' });
+-    expect(res.status).toBe(201);
+-    expect(res.body.title).toBe('Test Doc');
+-  });
+-
+-  it('POST /docs returns id, title, content, timestamps', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'Full Doc' });
+-    expect(res.body).toHaveProperty('id');
+-    expect(res.body).toHaveProperty('title');
+-    expect(res.body).toHaveProperty('content');
+-    expect(res.body).toHaveProperty('created_at');
+-    expect(res.body).toHaveProperty('updated_at');
+-  });
+-
+-  it('GET /docs lists all documents', async () => {
+-    const res = await request(app.app).get('/docs');
+-    expect(res.status).toBe(200);
+-    expect(Array.isArray(res.body)).toBe(true);
+-    expect(res.body.length).toBeGreaterThanOrEqual(2);
+-  });
+-
+-  it('GET /docs/:id returns specific document', async () => {
+-    const created = await request(app.app).post('/docs').send({ title: 'Specific' });
+-    const res = await request(app.app).get(`/docs/${created.body.id}`);
+-    expect(res.status).toBe(200);
+-    expect(res.body.title).toBe('Specific');
+-  });
+-
+-  it('GET /docs/:id returns 404 for non-existent', async () => {
+-    const res = await request(app.app).get('/docs/nonexistent-id');
+-    expect(res.status).toBe(404);
+-  });
+-
+-  it('PUT /docs/:id updates title', async () => {
+-    const created = await request(app.app).post('/docs').send({ title: 'Old Title' });
+-    const res = await request(app.app).put(`/docs/${created.body.id}`).send({ title: 'New Title' });
+-    expect(res.status).toBe(200);
+-    expect(res.body.title).toBe('New Title');
+-  });
+-
+-  it('DELETE /docs/:id removes document', async () => {
+-    const created = await request(app.app).post('/docs').send({ title: 'To Delete' });
+-    const res = await request(app.app).delete(`/docs/${created.body.id}`);
+-    expect(res.status).toBe(204);
+-    const check = await request(app.app).get(`/docs/${created.body.id}`);
+-    expect(check.status).toBe(404);
+-  });
+-
+-  it('DELETE /docs/:id returns 404 for non-existent', async () => {
+-    const res = await request(app.app).delete('/docs/nonexistent-id');
+-    expect(res.status).toBe(404);
+-  });
+-
+-  it('GET /docs/:id/versions lists version history', async () => {
+-    const created = await request(app.app).post('/docs').send({ title: 'Versioned' });
+-    const res = await request(app.app).get(`/docs/${created.body.id}/versions`);
+-    expect(res.status).toBe(200);
+-    expect(Array.isArray(res.body)).toBe(true);
+-    expect(res.body.length).toBeGreaterThanOrEqual(1);
+-    expect(res.body[0].version).toBe(0);
+-  });
+-
+-  it('GET /docs/:id/versions/:version returns specific version content', async () => {
+-    const created = await request(app.app).post('/docs').send({ title: 'Versioned2' });
+-    const res = await request(app.app).get(`/docs/${created.body.id}/versions/0`);
+-    expect(res.status).toBe(200);
+-    expect(res.body).toHaveProperty('content');
+-    expect(res.body.version).toBe(0);
+-  });
+-});
+-
+-// ============================================================
+-// WebSocket Lifecycle Tests
+-// ============================================================
+-
+-describe('WebSocket Lifecycle', () => {
+-  let app: AppInstance;
+-  let port: number;
+-  let docId: string;
+-
+-  beforeAll(async () => {
+-    app = createApp();
+-    port = await app.start(0);
+-    const res = await request(app.app).post('/docs').send({ title: 'WS Doc' });
+-    docId = res.body.id;
+-  });
+-
+-  afterAll(async () => {
+-    await app.stop();
+-  });
+-
+-  it('Client connects to ws://.../:docId', async () => {
+-    const client = await createWsClient(port, docId);
+-    expect(client.ws.readyState).toBe(WebSocket.OPEN);
+-    await waitForMsg(client, 0);
+-    await closeClient(client);
+-  });
+-
+-  it('Client receives current document content on connect', async () => {
+-    const client = await createWsClient(port, docId);
+-    const msg = await waitForMsg(client, 0);
+-    expect(msg.type).toBe('sync');
+-    expect(msg).toHaveProperty('content');
+-    expect(msg).toHaveProperty('version');
+-    await closeClient(client);
+-  });
+-
+-  it('Client sends edit operation and receives acknowledgment', async () => {
+-    const client = await createWsClient(port, docId);
+-    await waitForMsg(client, 0); // sync
+-    sendOp(client, { type: 'insert', position: 0, text: 'Hello' });
+-    const ack = await waitForMsg(client, 1);
+-    expect(ack.type).toBe('ack');
+-    expect(ack).toHaveProperty('version');
+-    await closeClient(client);
+-  });
+-
+-  it('Server broadcasts operation to other clients in same document', async () => {
+-    const c1 = await createWsClient(port, docId);
+-    await waitForMsg(c1, 0); // sync
+-    const c2 = await createWsClient(port, docId);
+-    await waitForMsg(c2, 0); // sync
+-
+-    sendOp(c1, { type: 'insert', position: 0, text: 'Broadcast' });
+-    await waitForMsg(c1, 1); // ack for c1
+-
+-    const broadcast = await waitForMsg(c2, 1); // broadcast for c2
+-    expect(broadcast.type).toBe('operation');
+-    expect(broadcast).toHaveProperty('operation');
+-
+-    await closeClient(c1);
+-    await closeClient(c2);
+-  });
+-
+-  it('Client does not receive own operations back as broadcast', async () => {
+-    const client = await createWsClient(port, docId);
+-    await waitForMsg(client, 0); // sync
+-
+-    sendOp(client, { type: 'insert', position: 0, text: 'Self' });
+-    const msg = await waitForMsg(client, 1);
+-    // Should get ack, not operation broadcast
+-    expect(msg.type).toBe('ack');
+-
+-    await closeClient(client);
+-  });
+-
+-  it('Client disconnects cleanly', async () => {
+-    const client = await createWsClient(port, docId);
+-    await waitForMsg(client, 0); // sync
+-    await closeClient(client);
+-    expect(client.ws.readyState).toBe(WebSocket.CLOSED);
+-  });
+-
+-  it('Multiple clients can join same document', async () => {
+-    const clients: WsClient[] = [];
+-    for (let i = 0; i < 3; i++) {
+-      const c = await createWsClient(port, docId);
+-      await waitForMsg(c, 0); // sync
+-      clients.push(c);
+-    }
+-    expect(clients.length).toBe(3);
+-    for (const c of clients) {
+-      expect(c.ws.readyState).toBe(WebSocket.OPEN);
+-      await closeClient(c);
+-    }
+-  });
+-
+-  it('Client joining different document does not receive other doc edits', async () => {
+-    const res2 = await request(app.app).post('/docs').send({ title: 'Other Doc' });
+-    const otherDocId = res2.body.id;
+-
+-    const c1 = await createWsClient(port, docId);
+-    await waitForMsg(c1, 0); // sync
+-    const c2 = await createWsClient(port, otherDocId);
+-    await waitForMsg(c2, 0); // sync
+-
+-    sendOp(c1, { type: 'insert', position: 0, text: 'Private' });
+-    await waitForMsg(c1, 1); // ack
+-
+-    // Give time for potential unwanted messages
+-    await delay(200);
+-
+-    // c2 should only have the sync message (index 0), nothing else
+-    expect(c2.messages.length).toBe(1);
+-
+-    await closeClient(c1);
+-    await closeClient(c2);
+-  });
+-});
+-
+-// ============================================================
+-// Single Client Editing Tests
+-// ============================================================
+-
+-describe('Single Client Editing', () => {
+-  let app: AppInstance;
+-  let port: number;
+-
+-  beforeAll(async () => {
+-    app = createApp();
+-    port = await app.start(0);
+-  });
+-
+-  afterAll(async () => {
+-    await app.stop();
+-  });
+-
+-  it('Insert at beginning of document', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'Begin', content: 'World' });
+-    const docId = res.body.id;
+-    const client = await createWsClient(port, docId);
+-    await waitForMsg(client, 0); // sync
+-
+-    sendOp(client, { type: 'insert', position: 0, text: 'Hello ' });
+-    await waitForMsg(client, 1); // ack
+-
+-    const doc = await request(app.app).get(`/docs/${docId}`);
+-    expect(doc.body.content).toBe('Hello World');
+-
+-    await closeClient(client);
+-  });
+-
+-  it('Insert at end of document', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'End', content: 'Hello' });
+-    const docId = res.body.id;
+-    const client = await createWsClient(port, docId);
+-    await waitForMsg(client, 0); // sync
+-
+-    sendOp(client, { type: 'insert', position: 5, text: ' World' });
+-    await waitForMsg(client, 1); // ack
+-
+-    const doc = await request(app.app).get(`/docs/${docId}`);
+-    expect(doc.body.content).toBe('Hello World');
+-
+-    await closeClient(client);
+-  });
+-
+-  it('Insert in middle of document', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'Mid', content: 'Helo World' });
+-    const docId = res.body.id;
+-    const client = await createWsClient(port, docId);
+-    await waitForMsg(client, 0); // sync
+-
+-    sendOp(client, { type: 'insert', position: 3, text: 'l' });
+-    await waitForMsg(client, 1); // ack
+-
+-    const doc = await request(app.app).get(`/docs/${docId}`);
+-    expect(doc.body.content).toBe('Hello World');
+-
+-    await closeClient(client);
+-  });
+-
+-  it('Delete range from document', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'Del', content: 'Hello Cruel World' });
+-    const docId = res.body.id;
+-    const client = await createWsClient(port, docId);
+-    await waitForMsg(client, 0); // sync
+-
+-    sendOp(client, { type: 'delete', position: 5, count: 6 });
+-    await waitForMsg(client, 1); // ack
+-
+-    const doc = await request(app.app).get(`/docs/${docId}`);
+-    expect(doc.body.content).toBe('Hello World');
+-
+-    await closeClient(client);
+-  });
+-
+-  it('Multiple sequential edits build up content correctly', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'Sequential' });
+-    const docId = res.body.id;
+-    const client = await createWsClient(port, docId);
+-    await waitForMsg(client, 0); // sync (msg 0)
+-
+-    sendOp(client, { type: 'insert', position: 0, text: 'A' });
+-    await waitForMsg(client, 1); // ack (msg 1)
+-    sendOp(client, { type: 'insert', position: 1, text: 'B' });
+-    await waitForMsg(client, 2); // ack (msg 2)
+-    sendOp(client, { type: 'insert', position: 2, text: 'C' });
+-    await waitForMsg(client, 3); // ack (msg 3)
+-
+-    const doc = await request(app.app).get(`/docs/${docId}`);
+-    expect(doc.body.content).toBe('ABC');
+-
+-    await closeClient(client);
+-  });
+-
+-  it('Version is incremented after each edit', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'Version' });
+-    const docId = res.body.id;
+-    const client = await createWsClient(port, docId);
+-    await waitForMsg(client, 0); // sync
+-
+-    sendOp(client, { type: 'insert', position: 0, text: 'A' });
+-    const ack1 = await waitForMsg(client, 1);
+-    sendOp(client, { type: 'insert', position: 1, text: 'B' });
+-    const ack2 = await waitForMsg(client, 2);
+-
+-    expect((ack2 as { version: number }).version).toBeGreaterThan(
+-      (ack1 as { version: number }).version
+-    );
+-
+-    await closeClient(client);
+-  });
+-});
+-
+-// ============================================================
+-// Two-Client Convergence Tests
+-// ============================================================
+-
+-describe('Two-Client Convergence', () => {
+-  let app: AppInstance;
+-  let port: number;
+-
+-  beforeAll(async () => {
+-    app = createApp();
+-    port = await app.start(0);
+-  });
+-
+-  afterAll(async () => {
+-    await app.stop();
+-  });
+-
+-  it('Two clients editing different positions converge to same content', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'Converge', content: 'ABCDEF' });
+-    const docId = res.body.id;
+-
+-    const c1 = await createWsClient(port, docId);
+-    const sync1 = await waitForMsg(c1, 0);
+-    const c2 = await createWsClient(port, docId);
+-    await waitForMsg(c2, 0);
+-
+-    const version = (sync1 as { version: number }).version;
+-
+-    // Client 1 inserts at position 0
+-    sendOp(c1, { type: 'insert', position: 0, text: 'X' }, version);
+-    await waitForMsg(c1, 1); // ack
+-    await waitForMsg(c2, 1); // broadcast
+-
+-    // Client 2 inserts at position 7 (after "X" was added, "XABCDEF" is 7 chars, insert at end)
+-    sendOp(c2, { type: 'insert', position: 7, text: 'Y' }, version + 1);
+-    await waitForMsg(c2, 2); // ack
+-
+-    await delay(100);
+-    const doc = await request(app.app).get(`/docs/${docId}`);
+-    expect(doc.body.content).toBe('XABCDEFY');
+-
+-    await closeClient(c1);
+-    await closeClient(c2);
+-  });
+-
+-  it('Two clients inserting at same position both insertions preserved', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'SamePos', content: '' });
+-    const docId = res.body.id;
+-
+-    const c1 = await createWsClient(port, docId);
+-    const sync1 = await waitForMsg(c1, 0);
+-    const c2 = await createWsClient(port, docId);
+-    await waitForMsg(c2, 0);
+-    const version = (sync1 as { version: number }).version;
+-
+-    // Both insert at position 0
+-    sendOp(c1, { type: 'insert', position: 0, text: 'A' }, version);
+-    await waitForMsg(c1, 1); // ack
+-    await waitForMsg(c2, 1); // broadcast
+-
+-    sendOp(c2, { type: 'insert', position: 0, text: 'B' }, version);
+-    await waitForMsg(c2, 2); // ack
+-
+-    await delay(100);
+-    const doc = await request(app.app).get(`/docs/${docId}`);
+-    expect(doc.body.content).toContain('A');
+-    expect(doc.body.content).toContain('B');
+-    expect(doc.body.content.length).toBe(2);
+-
+-    await closeClient(c1);
+-    await closeClient(c2);
+-  });
+-
+-  it('Client A inserts, Client B deletes: both changes applied', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'InsertDelete', content: 'Hello World' });
+-    const docId = res.body.id;
+-
+-    const c1 = await createWsClient(port, docId);
+-    const sync1 = await waitForMsg(c1, 0);
+-    const c2 = await createWsClient(port, docId);
+-    await waitForMsg(c2, 0);
+-    const version = (sync1 as { version: number }).version;
+-
+-    // Client 1 inserts at beginning
+-    sendOp(c1, { type: 'insert', position: 0, text: 'Hey ' }, version);
+-    await waitForMsg(c1, 1); // ack
+-    await waitForMsg(c2, 1); // broadcast
+-
+-    // Client 2 deletes "World" (now at position 10 because "Hey " shifted it; "Hey Hello World")
+-    // After transform: "Hey Hello World" - delete at pos 10 count 5 = "Hey Hello "
+-    sendOp(c2, { type: 'delete', position: 10, count: 5 }, version + 1);
+-    await waitForMsg(c2, 2); // ack
+-
+-    await delay(100);
+-    const doc = await request(app.app).get(`/docs/${docId}`);
+-    expect(doc.body.content).toContain('Hey');
+-    expect(doc.body.content).not.toContain('World');
+-
+-    await closeClient(c1);
+-    await closeClient(c2);
+-  });
+-
+-  it('Rapid alternating edits from two clients converge', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'Rapid', content: '' });
+-    const docId = res.body.id;
+-
+-    const c1 = await createWsClient(port, docId);
+-    await waitForMsg(c1, 0); // sync
+-    const c2 = await createWsClient(port, docId);
+-    await waitForMsg(c2, 0); // sync
+-
+-    // Alternating edits - each appends a char
+-    for (let i = 0; i < 5; i++) {
+-      sendOp(c1, { type: 'insert', position: i * 2, text: 'A' });
+-      await delay(50);
+-      sendOp(c2, { type: 'insert', position: i * 2 + 1, text: 'B' });
+-      await delay(50);
+-    }
+-
+-    await delay(500);
+-    const doc = await request(app.app).get(`/docs/${docId}`);
+-    // All 10 characters should be present
+-    expect(doc.body.content.length).toBe(10);
+-
+-    await closeClient(c1);
+-    await closeClient(c2);
+-  });
+-
+-  it('Both clients can fetch document and see identical content after sync', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'Identical', content: 'Start' });
+-    const docId = res.body.id;
+-
+-    const c1 = await createWsClient(port, docId);
+-    await waitForMsg(c1, 0);
+-    const c2 = await createWsClient(port, docId);
+-    await waitForMsg(c2, 0);
+-
+-    sendOp(c1, { type: 'insert', position: 5, text: ' End' });
+-    await waitForMsg(c1, 1); // ack
+-    await waitForMsg(c2, 1); // broadcast
+-
+-    await delay(100);
+-    const doc1 = await request(app.app).get(`/docs/${docId}`);
+-    const doc2 = await request(app.app).get(`/docs/${docId}`);
+-    expect(doc1.body.content).toBe(doc2.body.content);
+-    expect(doc1.body.content).toBe('Start End');
+-
+-    await closeClient(c1);
+-    await closeClient(c2);
+-  });
+-
+-  it('Version history contains all operations in order', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'History', content: '' });
+-    const docId = res.body.id;
+-
+-    const client = await createWsClient(port, docId);
+-    await waitForMsg(client, 0); // sync
+-
+-    sendOp(client, { type: 'insert', position: 0, text: 'A' });
+-    await waitForMsg(client, 1);
+-    sendOp(client, { type: 'insert', position: 1, text: 'B' });
+-    await waitForMsg(client, 2);
+-    sendOp(client, { type: 'insert', position: 2, text: 'C' });
+-    await waitForMsg(client, 3);
+-
+-    const versions = await request(app.app).get(`/docs/${docId}/versions`);
+-    expect(versions.body.length).toBeGreaterThanOrEqual(4); // version 0 + 3 edits
+-    for (let i = 1; i < versions.body.length; i++) {
+-      expect(versions.body[i].version).toBeGreaterThan(versions.body[i - 1].version);
+-    }
+-
+-    await closeClient(client);
+-  });
+-
+-  it('Concurrent edits do not lose data', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'NoLoss', content: '' });
+-    const docId = res.body.id;
+-
+-    const c1 = await createWsClient(port, docId);
+-    const sync1 = await waitForMsg(c1, 0);
+-    const c2 = await createWsClient(port, docId);
+-    await waitForMsg(c2, 0);
+-    const version = (sync1 as { version: number }).version;
+-
+-    // Both send edits based on same initial version
+-    sendOp(c1, { type: 'insert', position: 0, text: 'FIRST' }, version);
+-    sendOp(c2, { type: 'insert', position: 0, text: 'SECOND' }, version);
+-
+-    // Wait for messages to settle
+-    await delay(500);
+-
+-    const doc = await request(app.app).get(`/docs/${docId}`);
+-    expect(doc.body.content).toContain('FIRST');
+-    expect(doc.body.content).toContain('SECOND');
+-
+-    await closeClient(c1);
+-    await closeClient(c2);
+-  });
+-
+-  it('Edit at end of document while other edits beginning', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'EndBegin', content: 'MIDDLE' });
+-    const docId = res.body.id;
+-
+-    const c1 = await createWsClient(port, docId);
+-    const sync1 = await waitForMsg(c1, 0);
+-    const c2 = await createWsClient(port, docId);
+-    await waitForMsg(c2, 0);
+-    const version = (sync1 as { version: number }).version;
+-
+-    sendOp(c1, { type: 'insert', position: 0, text: 'START' }, version);
+-    await waitForMsg(c1, 1); // ack
+-    await waitForMsg(c2, 1); // broadcast
+-
+-    // After c1's edit, doc is "STARTMIDDLE" (11 chars)
+-    sendOp(c2, { type: 'insert', position: 11, text: 'END' }, version + 1);
+-    await waitForMsg(c2, 2); // ack
+-
+-    await delay(100);
+-    const doc = await request(app.app).get(`/docs/${docId}`);
+-    expect(doc.body.content).toBe('STARTMIDDLEEND');
+-
+-    await closeClient(c1);
+-    await closeClient(c2);
+-  });
+-});
+-
+-// ============================================================
+-// Stress Tests
+-// ============================================================
+-
+-describe('Stress Test', () => {
+-  let app: AppInstance;
+-  let port: number;
+-
+-  beforeAll(async () => {
+-    app = createApp();
+-    port = await app.start(0);
+-  });
+-
+-  afterAll(async () => {
+-    await app.stop();
+-  });
+-
+-  it('10 clients connect to same document simultaneously', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'Stress' });
+-    const docId = res.body.id;
+-
+-    const clients: WsClient[] = [];
+-    for (let i = 0; i < 10; i++) {
+-      const c = await createWsClient(port, docId);
+-      await waitForMsg(c, 0); // sync
+-      clients.push(c);
+-    }
+-
+-    expect(clients.length).toBe(10);
+-    for (const c of clients) {
+-      expect(c.ws.readyState).toBe(WebSocket.OPEN);
+-    }
+-
+-    for (const c of clients) await closeClient(c);
+-  });
+-
+-  it('10 clients each send an edit, all edits present in final document', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'StressEdit', content: '' });
+-    const docId = res.body.id;
+-
+-    const clients: WsClient[] = [];
+-    for (let i = 0; i < 10; i++) {
+-      const c = await createWsClient(port, docId);
+-      await waitForMsg(c, 0); // sync
+-      clients.push(c);
+-    }
+-
+-    // Each client sends a unique character sequentially
+-    for (let i = 0; i < 10; i++) {
+-      sendOp(clients[i], { type: 'insert', position: 0, text: String(i) });
+-      await delay(30);
+-    }
+-
+-    await delay(1000);
+-    const doc = await request(app.app).get(`/docs/${docId}`);
+-
+-    for (let i = 0; i < 10; i++) {
+-      expect(doc.body.content).toContain(String(i));
+-    }
+-
+-    for (const c of clients) await closeClient(c);
+-  });
+-
+-  it('Document content identical across all 10 clients after sync', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'Sync10', content: '' });
+-    const docId = res.body.id;
+-
+-    const clients: WsClient[] = [];
+-    for (let i = 0; i < 10; i++) {
+-      const c = await createWsClient(port, docId);
+-      await waitForMsg(c, 0); // sync
+-      clients.push(c);
+-    }
+-
+-    // One client makes an edit
+-    sendOp(clients[0], { type: 'insert', position: 0, text: 'SHARED' });
+-    await delay(500);
+-
+-    for (const c of clients) await closeClient(c);
+-    await delay(100);
+-
+-    // All clients reconnect to get fresh state
+-    const contents: string[] = [];
+-    for (let i = 0; i < 10; i++) {
+-      const c = await createWsClient(port, docId);
+-      const sync = await waitForMsg(c, 0);
+-      contents.push((sync as { content: string }).content);
+-      await closeClient(c);
+-    }
+-
+-    for (const ct of contents) {
+-      expect(ct).toBe(contents[0]);
+-    }
+-    expect(contents[0]).toContain('SHARED');
+-  });
+-
+-  it('Server handles rapid-fire edits without crashing', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'RapidFire', content: '' });
+-    const docId = res.body.id;
+-
+-    const client = await createWsClient(port, docId);
+-    await waitForMsg(client, 0); // sync
+-
+-    // Send 50 rapid edits
+-    for (let i = 0; i < 50; i++) {
+-      sendOp(client, { type: 'insert', position: i, text: 'x' });
+-    }
+-
+-    await delay(2000);
+-    const doc = await request(app.app).get(`/docs/${docId}`);
+-    expect(doc.body.content.length).toBe(50);
+-
+-    await closeClient(client);
+-  });
+-
+-  it('All clients can disconnect without error', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'Disconnect' });
+-    const docId = res.body.id;
+-
+-    const clients: WsClient[] = [];
+-    for (let i = 0; i < 10; i++) {
+-      const c = await createWsClient(port, docId);
+-      await waitForMsg(c, 0);
+-      clients.push(c);
+-    }
+-
+-    // Disconnect all at once
+-    await Promise.all(clients.map((c) => closeClient(c)));
+-
+-    // Server should still be healthy
+-    const check = await request(app.app).get('/docs');
+-    expect(check.status).toBe(200);
+-  });
+-});
+-
+-// ============================================================
+-// Error Handling Tests
+-// ============================================================
+-
+-describe('Error Handling', () => {
+-  let app: AppInstance;
+-  let port: number;
+-
+-  beforeAll(async () => {
+-    app = createApp();
+-    port = await app.start(0);
+-  });
+-
+-  afterAll(async () => {
+-    await app.stop();
+-  });
+-
+-  it('Connecting to non-existent document returns error', async () => {
+-    const ws = new WebSocket(`ws://localhost:${port}/nonexistent-doc-id`);
+-    const messages: Record<string, unknown>[] = [];
+-    ws.on('message', (data) => messages.push(JSON.parse(data.toString())));
+-    await new Promise<void>((resolve) => ws.on('open', resolve));
+-
+-    // Wait for the error message
+-    await new Promise<void>((resolve) => {
+-      const interval = setInterval(() => {
+-        if (messages.length > 0) {
+-          clearInterval(interval);
+-          resolve();
+-        }
+-      }, 10);
+-      setTimeout(() => { clearInterval(interval); resolve(); }, 2000);
+-    });
+-
+-    expect(messages.length).toBeGreaterThan(0);
+-    expect(messages[0].type).toBe('error');
+-    expect(String(messages[0].message)).toContain('not found');
+-    await delay(100);
+-  });
+-
+-  it('Malformed operation JSON rejected', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'ErrDoc' });
+-    const docId = res.body.id;
+-
+-    const client = await createWsClient(port, docId);
+-    await waitForMsg(client, 0); // sync
+-
+-    client.ws.send('not valid json{{{');
+-    const errMsg = await waitForMsg(client, 1);
+-    expect(errMsg.type).toBe('error');
+-
+-    await closeClient(client);
+-  });
+-
+-  it('Invalid operation type rejected', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'ErrType' });
+-    const docId = res.body.id;
+-
+-    const client = await createWsClient(port, docId);
+-    await waitForMsg(client, 0); // sync
+-
+-    client.ws.send(JSON.stringify({ type: 'operation', operation: { type: 'replace', position: 0, text: 'x' } }));
+-    const errMsg = await waitForMsg(client, 1);
+-    expect(errMsg.type).toBe('error');
+-
+-    await closeClient(client);
+-  });
+-
+-  it('Operation with out-of-bounds position rejected', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'ErrBounds', content: 'Hi' });
+-    const docId = res.body.id;
+-
+-    const client = await createWsClient(port, docId);
+-    await waitForMsg(client, 0); // sync
+-
+-    client.ws.send(JSON.stringify({ type: 'operation', operation: { type: 'delete', position: 0, count: 100 } }));
+-    const errMsg = await waitForMsg(client, 1);
+-    expect(errMsg.type).toBe('error');
+-
+-    await closeClient(client);
+-  });
+-
+-  it('Server remains stable after malformed input', async () => {
+-    const res = await request(app.app).post('/docs').send({ title: 'Stable' });
+-    const docId = res.body.id;
+-
+-    const client = await createWsClient(port, docId);
+-    await waitForMsg(client, 0); // sync
+-
+-    // Send garbage
+-    client.ws.send('garbage');
+-    const errMsg = await waitForMsg(client, 1);
+-    expect(errMsg.type).toBe('error');
+-
+-    // Server should still work
+-    const check = await request(app.app).get('/docs');
+-    expect(check.status).toBe(200);
+-
+-    // WS should still work
+-    sendOp(client, { type: 'insert', position: 0, text: 'OK' });
+-    const ack = await waitForMsg(client, 2);
+-    expect(ack.type).toBe('ack');
+-
+-    await closeClient(client);
+-  });
+-});
+-
+-// ============================================================
+-// Persistence Tests
+-// ============================================================
+-
+-describe('Persistence', () => {
+-  const dbPath = '/tmp/test-collab-persist-' + Date.now() + '.db';
+-
+-  it('Document survives server restart', async () => {
+-    const app1 = createApp(dbPath);
+-    await app1.start(0);
+-
+-    await request(app1.app).post('/docs').send({ title: 'Persistent', content: 'data' });
+-    const docs1 = await request(app1.app).get('/docs');
+-    expect(docs1.body.length).toBe(1);
+-
+-    await app1.stop();
+-
+-    const app2 = createApp(dbPath);
+-    await app2.start(0);
+-
+-    const docs2 = await request(app2.app).get('/docs');
+-    expect(docs2.body.length).toBe(1);
+-    expect(docs2.body[0].title).toBe('Persistent');
+-    expect(docs2.body[0].content).toBe('data');
+-
+-    await app2.stop();
+-  });
+-
+-  it('Edit history survives server restart', async () => {
+-    const app1 = createApp(dbPath);
+-    await app1.start(0);
+-
+-    const docs = await request(app1.app).get('/docs');
+-    const docId = docs.body[0].id;
+-    const versions1 = await request(app1.app).get(`/docs/${docId}/versions`);
+-
+-    await app1.stop();
+-
+-    const app2 = createApp(dbPath);
+-    await app2.start(0);
+-
+-    const versions2 = await request(app2.app).get(`/docs/${docId}/versions`);
+-    expect(versions2.body.length).toBe(versions1.body.length);
+-
+-    await app2.stop();
+-  });
+-
+-  it('Active connections cleared on restart', async () => {
+-    const app1 = createApp(dbPath);
+-    const port1 = await app1.start(0);
+-
+-    const docs = await request(app1.app).get('/docs');
+-    const docId = docs.body[0].id;
+-
+-    const client = await createWsClient(port1, docId);
+-    await waitForMsg(client, 0);
+-
+-    const connsBefore = app1.db.prepare('SELECT COUNT(*) as cnt FROM active_connections').get() as { cnt: number };
+-    expect(connsBefore.cnt).toBeGreaterThan(0);
+-
+-    await closeClient(client);
+-    await app1.stop();
+-
+-    const app2 = createApp(dbPath);
+-    await app2.start(0);
+-
+-    const connsAfter = app2.db.prepare('SELECT COUNT(*) as cnt FROM active_connections').get() as { cnt: number };
+-    expect(connsAfter.cnt).toBe(0);
+-
+-    await app2.stop();
+-  });
+-});

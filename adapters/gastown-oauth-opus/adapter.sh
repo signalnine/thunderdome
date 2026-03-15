@@ -533,6 +533,7 @@ echo "=== Gas Town: Aggregating metrics ==="
 WALL_CLOCK_END=$(date +%s)
 WALL_CLOCK_DURATION=$(( (WALL_CLOCK_END - WALL_CLOCK_START) * 1000 ))
 
+set +e
 node -e '
 const fs = require("fs");
 const path = require("path");
@@ -557,14 +558,14 @@ function parseJsonlMetrics(filepath) {
         const msg = JSON.parse(line);
         if (msg.type === "result") {
           if (msg.usage) {
-            m.input_tokens = msg.usage.input_tokens || 0;
-            m.output_tokens = msg.usage.output_tokens || 0;
-            m.cache_read_tokens = msg.usage.cache_read_input_tokens || 0;
-            m.cache_creation_tokens = msg.usage.cache_creation_input_tokens || 0;
+            m.input_tokens += (msg.usage.input_tokens || 0);
+            m.output_tokens += (msg.usage.output_tokens || 0);
+            m.cache_read_tokens += (msg.usage.cache_read_input_tokens || 0);
+            m.cache_creation_tokens += (msg.usage.cache_creation_input_tokens || 0);
           }
-          m.turns = msg.num_turns || 0;
-          m.duration_ms = msg.duration_ms || 0;
-          m.total_cost_usd = msg.total_cost_usd || 0;
+          m.turns += (msg.num_turns || 0);
+          m.duration_ms += (msg.duration_ms || 0);
+          m.total_cost_usd += (msg.total_cost_usd || 0);
         }
         if (msg.type === "assistant" && msg.message && Array.isArray(msg.message.content)) {
           for (const block of msg.message.content) {
@@ -576,7 +577,9 @@ function parseJsonlMetrics(filepath) {
         }
       } catch(e) {}
     }
-  } catch(e) {}
+  } catch(e) {
+    console.error("WARN: Failed to read " + filepath + ": " + e.message);
+  }
   return m;
 }
 
@@ -586,7 +589,13 @@ const allTools = new Set();
 let totalInput = 0, totalOutput = 0, totalCacheRead = 0, totalCacheCreate = 0;
 let totalTurns = 0, totalCost = 0;
 
-const files = fs.readdirSync(metricsDir).filter(f => f.endsWith(".jsonl"));
+let files = [];
+try {
+  files = fs.readdirSync(metricsDir).filter(f => f.endsWith(".jsonl"));
+} catch(e) {
+  console.error("WARN: Cannot read metrics dir: " + e.message);
+}
+
 for (const f of files) {
   const m = parseJsonlMetrics(path.join(metricsDir, f));
   const role = f.replace(".jsonl", "");
@@ -624,7 +633,30 @@ console.error("Metrics: " + JSON.stringify({
   turns: totalTurns,
   wall_clock_s: Math.round(wallClockMs / 1000)
 }));
-' "$METRICS_DIR" "$WALL_CLOCK_DURATION" "$STRATEGY" "$POLECAT_COUNT" || true
+' "$METRICS_DIR" "$WALL_CLOCK_DURATION" "$STRATEGY" "$POLECAT_COUNT"
+NODE_EXIT=$?
+set -e
+
+# Fallback: if node script failed, write minimal metrics from bash
+if [ $NODE_EXIT -ne 0 ] || [ ! -f /workspace/.thunderdome-metrics.json ]; then
+  echo "WARN: Node metrics aggregation failed (exit $NODE_EXIT), writing fallback metrics"
+  cat > /workspace/.thunderdome-metrics.json << FALLBACK_EOF
+{
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "cache_read_tokens": 0,
+  "cache_creation_tokens": 0,
+  "turns": 0,
+  "duration_ms": $WALL_CLOCK_DURATION,
+  "total_cost_usd": 0.001,
+  "gastown_meta": {
+    "strategy": "$STRATEGY",
+    "polecat_count": $POLECAT_COUNT,
+    "metrics_fallback": true
+  }
+}
+FALLBACK_EOF
+fi
 
 cd /workspace
 echo "=== Gas Town adapter complete ==="

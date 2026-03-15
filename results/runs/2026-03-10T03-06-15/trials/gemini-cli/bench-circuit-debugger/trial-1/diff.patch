@@ -1,0 +1,343 @@
+diff --git a/.gemini-output.json b/.gemini-output.json
+new file mode 100644
+index 0000000..d722533
+--- /dev/null
++++ b/.gemini-output.json
+@@ -0,0 +1,150 @@
++{
++  "session_id": "506b3060-2369-4611-9dcb-81c2b346de7c",
++  "response": "I've implemented the `Gate` interface and both `simulate` and `findSwappedWires` functions in `src/index.ts`. I used structural rules of a ripple-carry adder to find swapped output wires, which is efficient and well within the performance requirements.\n\n```typescript\nexport interface Gate {\n  op: 'AND' | 'OR' | 'XOR';\n  in1: string;\n  in2: string;\n  out: string;\n}\n\nexport function simulate(gates: Gate[], inputs: Record<string, number>): Record<string, number> {\n  const wires: Record<string, number> = { ...inputs };\n  const pendingGates = [...gates];\n  let progress = true;\n\n  while (progress) {\n    progress = false;\n    for (let i = 0; i < pendingGates.length; i++) {\n      const gate = pendingGates[i];\n      if (wires[gate.in1] !== undefined && wires[gate.in2] !== undefined) {\n        const v1 = wires[gate.in1];\n        const v2 = wires[gate.in2];\n        let res: number;\n        switch (gate.op) {\n          case 'AND':\n            res = v1 & v2;\n            break;\n          case 'OR':\n            res = v1 | v2;\n            break;\n          case 'XOR':\n            res = v1 ^ v2;\n            break;\n        }\n        wires[gate.out] = res;\n        pendingGates.splice(i, 1);\n        i--;\n        progress = true;\n      }\n    }\n  }\n\n  return wires;\n}\n\nexport function findSwappedWires(gates: Gate[]): string[] {\n  const swapped = new Set<string>();\n  const maxZ = gates\n    .filter(g => g.out.startsWith('z'))\n    .reduce((max, g) => Math.max(max, parseInt(g.out.slice(1))), 0);\n  const lastZ = `z${maxZ.toString().padStart(2, '0')}`;\n\n  for (const gate of gates) {\n    // Rule 1: Output is zNN, but op is not XOR (except for the last z)\n    if (gate.out.startsWith('z') && gate.out !== lastZ && gate.op !== 'XOR') {\n      swapped.add(gate.out);\n    }\n\n    // Rule 2: Output is not zNN, and inputs are not xNN/yNN, but op is XOR\n    if (\n      !gate.out.startsWith('z') &&\n      !(gate.in1.startsWith('x') || gate.in1.startsWith('y')) &&\n      !(gate.in2.startsWith('x') || gate.in2.startsWith('y')) &&\n      gate.op === 'XOR'\n    ) {\n      swapped.add(gate.out);\n    }\n\n    // Rule 3: XOR with xNN/yNN (except 00) must feed into another XOR\n    if (\n      gate.op === 'XOR' &&\n      (gate.in1.startsWith('x') || gate.in1.startsWith('y')) &&\n      (gate.in2.startsWith('x') || gate.in2.startsWith('y')) &&\n      gate.in1 !== 'x00' && gate.in2 !== 'x00' &&\n      gate.in1 !== 'y00' && gate.in2 !== 'y00'\n    ) {\n      const feedsXor = gates.some(g => g.op === 'XOR' && (g.in1 === gate.out || g.in2 === gate.out));\n      if (!feedsXor) {\n        swapped.add(gate.out);\n      }\n    }\n\n    // Rule 4: AND gates (except x00 AND y00) must feed into an OR\n    if (gate.op === 'AND') {\n      const isBit0 = (gate.in1 === 'x00' && gate.in2 === 'y00') || (gate.in1 === 'y00' && gate.in2 === 'x00');\n      if (!isBit0) {\n        const feedsOr = gates.some(g => g.op === 'OR' && (g.in1 === gate.out || g.in2 === gate.out));\n        if (!feedsOr) {\n          swapped.add(gate.out);\n        }\n      }\n    }\n\n    // Rule 5: OR gates must not feed into another OR\n    if (gate.op === 'OR') {\n      const feedsOr = gates.some(g => g.op === 'OR' && (g.in1 === gate.out || g.in2 === gate.out));\n      if (feedsOr) {\n        swapped.add(gate.out);\n      }\n    }\n  }\n\n  return Array.from(swapped).sort();\n}\n```",
++  "stats": {
++    "models": {
++      "gemini-2.5-flash-lite": {
++        "api": {
++          "totalRequests": 1,
++          "totalErrors": 0,
++          "totalLatencyMs": 2674
++        },
++        "tokens": {
++          "input": 2005,
++          "prompt": 2005,
++          "candidates": 115,
++          "total": 2471,
++          "cached": 0,
++          "thoughts": 351,
++          "tool": 0
++        },
++        "roles": {
++          "utility_router": {
++            "totalRequests": 1,
++            "totalErrors": 0,
++            "totalLatencyMs": 2674,
++            "tokens": {
++              "input": 2005,
++              "prompt": 2005,
++              "candidates": 115,
++              "total": 2471,
++              "cached": 0,
++              "thoughts": 351,
++              "tool": 0
++            }
++          }
++        }
++      },
++      "gemini-3-flash-preview": {
++        "api": {
++          "totalRequests": 17,
++          "totalErrors": 0,
++          "totalLatencyMs": 137831
++        },
++        "tokens": {
++          "input": 45361,
++          "prompt": 212957,
++          "candidates": 5887,
++          "total": 233579,
++          "cached": 167596,
++          "thoughts": 14735,
++          "tool": 0
++        },
++        "roles": {
++          "main": {
++            "totalRequests": 17,
++            "totalErrors": 0,
++            "totalLatencyMs": 137831,
++            "tokens": {
++              "input": 45361,
++              "prompt": 212957,
++              "candidates": 5887,
++              "total": 233579,
++              "cached": 167596,
++              "thoughts": 14735,
++              "tool": 0
++            }
++          }
++        }
++      }
++    },
++    "tools": {
++      "totalCalls": 16,
++      "totalSuccess": 15,
++      "totalFail": 1,
++      "totalDurationMs": 15581,
++      "totalDecisions": {
++        "accept": 16,
++        "reject": 0,
++        "modify": 0,
++        "auto_accept": 0
++      },
++      "byName": {
++        "read_file": {
++          "count": 1,
++          "success": 1,
++          "fail": 0,
++          "durationMs": 7,
++          "decisions": {
++            "accept": 1,
++            "reject": 0,
++            "modify": 0,
++            "auto_accept": 0
++          }
++        },
++        "write_file": {
++          "count": 2,
++          "success": 2,
++          "fail": 0,
++          "durationMs": 9,
++          "decisions": {
++            "accept": 2,
++            "reject": 0,
++            "modify": 0,
++            "auto_accept": 0
++          }
++        },
++        "list_directory": {
++          "count": 2,
++          "success": 1,
++          "fail": 1,
++          "durationMs": 5,
++          "decisions": {
++            "accept": 2,
++            "reject": 0,
++            "modify": 0,
++            "auto_accept": 0
++          }
++        },
++        "run_shell_command": {
++          "count": 9,
++          "success": 9,
++          "fail": 0,
++          "durationMs": 15549,
++          "decisions": {
++            "accept": 9,
++            "reject": 0,
++            "modify": 0,
++            "auto_accept": 0
++          }
++        },
++        "replace": {
++          "count": 2,
++          "success": 2,
++          "fail": 0,
++          "durationMs": 11,
++          "decisions": {
++            "accept": 2,
++            "reject": 0,
++            "modify": 0,
++            "auto_accept": 0
++          }
++        }
++      }
++    },
++    "files": {
++      "totalLinesAdded": 210,
++      "totalLinesRemoved": 11
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..e373317
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,10 @@
++{
++  "input_tokens": 47366,
++  "output_tokens": 6002,
++  "cache_read_tokens": 167596,
++  "cache_creation_tokens": 0,
++  "thought_tokens": 15086,
++  "turns": 16,
++  "total_cost_usd": 0.095327,
++  "note": "google-one-oauth-no-actual-cost"
++}
+\ No newline at end of file
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..52b52bb
+--- /dev/null
++++ b/.thunderdome-stderr.log
+@@ -0,0 +1,4 @@
++YOLO mode is enabled. All tool calls will be automatically approved.
++Loaded cached credentials.
++YOLO mode is enabled. All tool calls will be automatically approved.
++Error executing tool list_directory: Error: Failed to list directory.
+diff --git a/package-lock.json b/package-lock.json
+index 97d25c0..3c003c8 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..8f170bf
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,101 @@
++export interface Gate {
++  op: 'AND' | 'OR' | 'XOR';
++  in1: string;
++  in2: string;
++  out: string;
++}
++
++export function simulate(gates: Gate[], inputs: Record<string, number>): Record<string, number> {
++  const wires: Record<string, number> = { ...inputs };
++  const pendingGates = [...gates];
++  let progress = true;
++
++  while (progress) {
++    progress = false;
++    for (let i = 0; i < pendingGates.length; i++) {
++      const gate = pendingGates[i];
++      if (wires[gate.in1] !== undefined && wires[gate.in2] !== undefined) {
++        const v1 = wires[gate.in1];
++        const v2 = wires[gate.in2];
++        let res: number;
++        switch (gate.op) {
++          case 'AND':
++            res = v1 & v2;
++            break;
++          case 'OR':
++            res = v1 | v2;
++            break;
++          case 'XOR':
++            res = v1 ^ v2;
++            break;
++        }
++        wires[gate.out] = res;
++        pendingGates.splice(i, 1);
++        i--;
++        progress = true;
++      }
++    }
++  }
++
++  return wires;
++}
++
++export function findSwappedWires(gates: Gate[]): string[] {
++  const swapped = new Set<string>();
++  const maxZ = gates
++    .filter(g => g.out.startsWith('z'))
++    .reduce((max, g) => Math.max(max, parseInt(g.out.slice(1))), 0);
++  const lastZ = `z${maxZ.toString().padStart(2, '0')}`;
++
++  for (const gate of gates) {
++    // Rule 1: Output is zNN, but op is not XOR (except for the last z)
++    if (gate.out.startsWith('z') && gate.out !== lastZ && gate.op !== 'XOR') {
++      swapped.add(gate.out);
++    }
++
++    // Rule 2: Output is not zNN, and inputs are not xNN/yNN, but op is XOR
++    if (
++      !gate.out.startsWith('z') &&
++      !(gate.in1.startsWith('x') || gate.in1.startsWith('y')) &&
++      !(gate.in2.startsWith('x') || gate.in2.startsWith('y')) &&
++      gate.op === 'XOR'
++    ) {
++      swapped.add(gate.out);
++    }
++
++    // Rule 3: XOR with xNN/yNN (except 00) must feed into another XOR
++    if (
++      gate.op === 'XOR' &&
++      (gate.in1.startsWith('x') || gate.in1.startsWith('y')) &&
++      (gate.in2.startsWith('x') || gate.in2.startsWith('y')) &&
++      gate.in1 !== 'x00' && gate.in2 !== 'x00' &&
++      gate.in1 !== 'y00' && gate.in2 !== 'y00'
++    ) {
++      const feedsXor = gates.some(g => g.op === 'XOR' && (g.in1 === gate.out || g.in2 === gate.out));
++      if (!feedsXor) {
++        swapped.add(gate.out);
++      }
++    }
++
++    // Rule 4: AND gates (except x00 AND y00) must feed into an OR
++    if (gate.op === 'AND') {
++      const isBit0 = (gate.in1 === 'x00' && gate.in2 === 'y00') || (gate.in1 === 'y00' && gate.in2 === 'x00');
++      if (!isBit0) {
++        const feedsOr = gates.some(g => g.op === 'OR' && (g.in1 === gate.out || g.in2 === gate.out));
++        if (!feedsOr) {
++          swapped.add(gate.out);
++        }
++      }
++    }
++
++    // Rule 5: OR gates must not feed into another OR
++    if (gate.op === 'OR') {
++      const feedsOr = gates.some(g => g.op === 'OR' && (g.in1 === gate.out || g.in2 === gate.out));
++      if (feedsOr) {
++        swapped.add(gate.out);
++      }
++    }
++  }
++
++  return Array.from(swapped).sort();
++}

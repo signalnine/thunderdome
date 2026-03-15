@@ -1,0 +1,253 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..18356fc
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 1505081,
++  "output_tokens": 13652,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.9440046
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..9735ff2
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,34 @@
++Let me implement the FTS5 table and triggers in `db.ts`:         I see the issue. The manual FTS population after seeding is causing corruption because the triggers already populated the FTS table during the transaction. Let me fix this.  I see the issue - the FTS5 triggers need to use `rowid` instead of `id` for the virtual table. Let me fix the triggers:   I need to fix two issues:
++1. Move search routes before `/notes/:id` to avoid route shadowing
++2. Fix the FTS5 table structure (the `id` column shouldn't be included)             All 35 tests pass. Here's what I implemented:
++
++## Changes Made
++
++### 1. `src/db.ts` - FTS5 Table and Triggers
++- Created FTS5 virtual table `notes_fts(title, body)` for full-text search
++- Added triggers to keep FTS index in sync:
++  - `notes_fts_insert`: Inserts new rows into FTS on note creation
++  - `notes_fts_update`: Updates FTS row on note update
++  - `notes_fts_delete`: Deletes from FTS on note deletion
++
++### 2. `src/routes.ts` - Search Endpoints
++Added two new endpoints **before** `/notes/:id` to avoid route conflicts:
++
++**`GET /notes/search?q=<query>`**
++- Full-text search using FTS5 `MATCH` operator
++- BM25 ranking (lower = more relevant)
++- Snippet highlighting with `<mark>` tags via `snippet()` function
++- Quoted phrase support (FTS5 handles natively)
++- Pagination: 20 results per page via `?page=N`
++- Returns 400 if `q` is missing/empty
++- Gracefully handles FTS5 syntax errors (returns empty results)
++
++**`GET /notes/search/suggest?q=<prefix>`**
++- Prefix search using FTS5 `*` wildcard
++- Returns up to 5 matching note titles
++- Returns 400 if `q` is missing/empty
++
++### Key Implementation Details
++- FTS5 table uses `rowid` to map to `notes.id`
++- Store content directly in FTS table (not external content) to avoid corruption issues
++- Routes must be defined before `/notes/:id` in Express to prevent path collision
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index a3ad476..a7ecd82 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1131,7 +1131,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1247,7 +1246,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1540,7 +1538,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2301,7 +2298,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -4604,7 +4600,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/db.ts b/src/db.ts
+index 810e0fd..6f9a69d 100644
+--- a/src/db.ts
++++ b/src/db.ts
+@@ -18,6 +18,35 @@ export function createDatabase(path?: string): Database.Database {
+     )
+   `);
+ 
++  // Create FTS5 virtual table for full-text search
++  // Store content directly in FTS table (no external content table)
++  db.exec(`
++    CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
++      title,
++      body
++    )
++  `);
++
++  // Create triggers to keep FTS index in sync
++  // Note: rowid in FTS table maps to notes.id
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_fts_insert AFTER INSERT ON notes BEGIN
++      INSERT INTO notes_fts (rowid, title, body) VALUES (new.id, new.title, new.body);
++    END
++  `);
++
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_fts_update AFTER UPDATE ON notes BEGIN
++      UPDATE notes_fts SET title = new.title, body = new.body WHERE rowid = old.id;
++    END
++  `);
++
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_fts_delete AFTER DELETE ON notes BEGIN
++      DELETE FROM notes_fts WHERE rowid = old.id;
++    END
++  `);
++
+   return db;
+ }
+ 
+@@ -35,6 +64,7 @@ export function seedDatabase(db: Database.Database): void {
+   });
+ 
+   insertMany(notes);
++  // Triggers automatically populate the FTS index
+ }
+ 
+ function getSeedNotes(): { title: string; body: string; tags: string }[] {
+diff --git a/src/routes.ts b/src/routes.ts
+index 013b2dc..b8587c1 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -1,11 +1,98 @@
+ import { Router, Request, Response, NextFunction } from 'express';
+ import Database from 'better-sqlite3';
+-import { Note, NoteInput } from './models.js';
++import { Note, NoteInput, SearchResult, SuggestResult } from './models.js';
+ import { NotFoundError, ValidationError } from './errors.js';
+ 
+ export function createRoutes(db: Database.Database): Router {
+   const router = Router();
+ 
++  // GET /notes/search - Full-text search (must be before /notes/:id)
++  router.get('/notes/search', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const query = req.query.q as string;
++
++      if (!query || query.trim() === '') {
++        throw new ValidationError('Query parameter q is required');
++      }
++
++      const page = Math.max(1, parseInt(req.query.page as string) || 1);
++      const perPage = 20;
++      const offset = (page - 1) * perPage;
++
++      try {
++        // Get total count
++        const countStmt = db.prepare(`
++          SELECT COUNT(*) as total FROM notes_fts WHERE notes_fts MATCH ?
++        `);
++        const { total } = countStmt.get(query) as { total: number };
++
++        // Get search results with BM25 ranking and snippet highlighting
++        const searchStmt = db.prepare(`
++          SELECT
++            n.id,
++            n.title,
++            snippet(notes_fts, 1, '<mark>', '</mark>', '...', 32) as snippet,
++            bm25(notes_fts) as rank
++          FROM notes_fts
++          JOIN notes n ON n.id = notes_fts.rowid
++          WHERE notes_fts MATCH ?
++          ORDER BY rank
++          LIMIT ? OFFSET ?
++        `);
++
++        const results = searchStmt.all(query, perPage, offset) as SearchResult[];
++
++        res.json({
++          results,
++          total,
++          page,
++          perPage,
++        });
++      } catch (dbErr) {
++        // Handle FTS5 syntax errors gracefully - return empty results
++        const error = dbErr as { code?: string; message?: string };
++        if (error.code === 'SQLITE_ERROR' && error.message?.includes('fts5')) {
++          res.json({
++            results: [],
++            total: 0,
++            page,
++            perPage,
++          });
++          return;
++        }
++        throw dbErr;
++      }
++    } catch (err) {
++      next(err);
++    }
++  });
++
++  // GET /notes/search/suggest - Autocomplete suggestions (must be before /notes/:id)
++  router.get('/notes/search/suggest', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const query = req.query.q as string;
++
++      if (!query || query.trim() === '') {
++        throw new ValidationError('Query parameter q is required');
++      }
++
++      // Search for prefix matches in title or body using FTS5 prefix search
++      const suggestStmt = db.prepare(`
++        SELECT DISTINCT n.id, n.title
++        FROM notes_fts
++        JOIN notes n ON n.id = notes_fts.rowid
++        WHERE notes_fts MATCH ? || '*'
++        LIMIT 5
++      `);
++
++      const results = suggestStmt.all(query) as SuggestResult[];
++
++      res.json({ results });
++    } catch (err) {
++      next(err);
++    }
++  });
++
+   // GET /notes - List all notes (with optional tag filter)
+   router.get('/notes', (req: Request, res: Response, next: NextFunction) => {
+     try {

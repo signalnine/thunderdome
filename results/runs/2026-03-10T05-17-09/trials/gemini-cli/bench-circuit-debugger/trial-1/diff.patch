@@ -1,0 +1,373 @@
+diff --git a/.gemini-output.json b/.gemini-output.json
+new file mode 100644
+index 0000000..ef380b5
+--- /dev/null
++++ b/.gemini-output.json
+@@ -0,0 +1,138 @@
++{
++  "session_id": "d9ce928e-92ad-4ae7-8ad6-3dafa565b3fc",
++  "response": "The task is complete. I have implemented both the `simulate` and `findSwappedWires` functions in `src/index.ts`. The `simulate` function accurately models a logic gate circuit, and the `findSwappedWires` function uses a comprehensive set of structural heuristics to identify eight swapped output wires in a ripple-carry adder circuit. The solution has been verified through building, linting, and unit testing, and is optimized to handle circuits with up to 45 input bits within the specified time constraints.\n\n```typescript\nexport interface Gate {\n  op: 'AND' | 'OR' | 'XOR';\n  in1: string;\n  in2: string;\n  out: string;\n}\n\nexport function simulate(gates: Gate[], inputs: Record<string, number>): Record<string, number> {\n  const wires = { ...inputs };\n  const remainingGates = [...gates];\n\n  let changed = true;\n  while (changed && remainingGates.length > 0) {\n    changed = false;\n    for (let i = 0; i < remainingGates.length; i++) {\n      const gate = remainingGates[i];\n      if (gate.in1 in wires && gate.in2 in wires) {\n        const val1 = wires[gate.in1];\n        const val2 = wires[gate.in2];\n        let res: number;\n        switch (gate.op) {\n          case 'AND':\n            res = val1 & val2;\n            break;\n          case 'OR':\n            res = val1 | val2;\n            break;\n          case 'XOR':\n            res = val1 ^ val2;\n            break;\n        }\n        wires[gate.out] = res;\n        remainingGates.splice(i, 1);\n        i--;\n        changed = true;\n      }\n    }\n  }\n\n  return wires;\n}\n\nexport function findSwappedWires(gates: Gate[]): string[] {\n  const swapped = new Set<string>();\n\n  let maxZ = -1;\n  for (const gate of gates) {\n    if (gate.out.startsWith('z')) {\n      const idx = parseInt(gate.out.slice(1));\n      if (idx > maxZ) maxZ = idx;\n    }\n  }\n\n  const lastZ = `z${maxZ.toString().padStart(2, '0')}`;\n\n  for (const gate of gates) {\n    // 1. z-outputs (except the last one) must come from XOR gates\n    if (gate.out.startsWith('z')) {\n      if (gate.out !== lastZ) {\n        if (gate.op !== 'XOR') {\n          swapped.add(gate.out);\n        }\n      } else if (gate.op === 'XOR') {\n        swapped.add(gate.out);\n      }\n    }\n\n    // 2. XOR gates that don't output to z and don't take x,y as inputs are suspicious\n    if (gate.op === 'XOR' && !gate.out.startsWith('z')) {\n      const isInputGate = (gate.in1.startsWith('x') && gate.in2.startsWith('y')) || \n                        (gate.in1.startsWith('y') && gate.in2.startsWith('x'));\n      if (!isInputGate) {\n        swapped.add(gate.out);\n      }\n    }\n\n    // 3. XOR gates taking x,y (except x00, y00) must feed into an XOR gate and an AND gate\n    if (gate.op === 'XOR' && \n        ((gate.in1.startsWith('x') && gate.in2.startsWith('y')) || \n         (gate.in1.startsWith('y') && gate.in2.startsWith('x')))) {\n      if (gate.in1 !== 'x00' && gate.in1 !== 'y00') {\n        const usedByXor = gates.some(g => (g.in1 === gate.out || g.in2 === gate.out) && g.op === 'XOR');\n        const usedByAnd = gates.some(g => (g.in1 === gate.out || g.in2 === gate.out) && g.op === 'AND');\n        if (!usedByXor || !usedByAnd) {\n          swapped.add(gate.out);\n        }\n      }\n    }\n\n    // 4. AND gates must feed into an OR gate (except bit 00)\n    if (gate.op === 'AND') {\n      const isBit0 = (gate.in1 === 'x00' && gate.in2 === 'y00') || (gate.in1 === 'y00' && gate.in2 === 'x00');\n      if (!isBit0) {\n        const usedByOr = gates.some(g => (g.in1 === gate.out || g.in2 === gate.out) && g.op === 'OR');\n        if (!usedByOr) {\n          swapped.add(gate.out);\n        }\n      } else {\n        const usedByXor = gates.some(g => (g.in1 === gate.out || g.in2 === gate.out) && g.op === 'XOR');\n        const usedByAnd = gates.some(g => (g.in1 === gate.out || g.in2 === gate.out) && g.op === 'AND');\n        if (!usedByXor || !usedByAnd) {\n          swapped.add(gate.out);\n        }\n      }\n    }\n\n    // 5. OR gates (except the last z) must feed into XOR and AND\n    if (gate.op === 'OR' && gate.out !== lastZ) {\n      const usedByXor = gates.some(g => (g.in1 === gate.out || g.in2 === gate.out) && g.op === 'XOR');\n      const usedByAnd = gates.some(g => (g.in1 === gate.out || g.in2 === gate.out) && g.op === 'AND');\n      if (!usedByXor || !usedByAnd) {\n        swapped.add(gate.out);\n      }\n    }\n\n    // 6. z-outputs (except z00 and lastZ) must have one input from xNN XOR yNN\n    if (gate.out.startsWith('z') && gate.out !== 'z00' && gate.out !== lastZ) {\n      if (gate.op === 'XOR') {\n        const bitStr = gate.out.slice(1);\n        const expectedX = `x${bitStr}`;\n        const expectedY = `y${bitStr}`;\n        const inputXor = gates.find(g => \n          g.op === 'XOR' && \n          ((g.in1 === expectedX && g.in2 === expectedY) || (g.in1 === expectedY && g.in2 === expectedX))\n        );\n        if (inputXor && gate.in1 !== inputXor.out && gate.in2 !== inputXor.out) {\n          swapped.add(gate.out);\n        }\n      }\n    }\n  }\n\n  return Array.from(swapped).sort();\n}\n```",
++  "stats": {
++    "models": {
++      "gemini-2.5-flash-lite": {
++        "api": {
++          "totalRequests": 1,
++          "totalErrors": 0,
++          "totalLatencyMs": 1822
++        },
++        "tokens": {
++          "input": 2005,
++          "prompt": 2005,
++          "candidates": 115,
++          "total": 2471,
++          "cached": 0,
++          "thoughts": 351,
++          "tool": 0
++        },
++        "roles": {
++          "utility_router": {
++            "totalRequests": 1,
++            "totalErrors": 0,
++            "totalLatencyMs": 1822,
++            "tokens": {
++              "input": 2005,
++              "prompt": 2005,
++              "candidates": 115,
++              "total": 2471,
++              "cached": 0,
++              "thoughts": 351,
++              "tool": 0
++            }
++          }
++        }
++      },
++      "gemini-3-flash-preview": {
++        "api": {
++          "totalRequests": 21,
++          "totalErrors": 0,
++          "totalLatencyMs": 160046
++        },
++        "tokens": {
++          "input": 123838,
++          "prompt": 500958,
++          "candidates": 8213,
++          "total": 524775,
++          "cached": 377120,
++          "thoughts": 15604,
++          "tool": 0
++        },
++        "roles": {
++          "main": {
++            "totalRequests": 21,
++            "totalErrors": 0,
++            "totalLatencyMs": 160046,
++            "tokens": {
++              "input": 123838,
++              "prompt": 500958,
++              "candidates": 8213,
++              "total": 524775,
++              "cached": 377120,
++              "thoughts": 15604,
++              "tool": 0
++            }
++          }
++        }
++      }
++    },
++    "tools": {
++      "totalCalls": 20,
++      "totalSuccess": 20,
++      "totalFail": 0,
++      "totalDurationMs": 15687,
++      "totalDecisions": {
++        "accept": 20,
++        "reject": 0,
++        "modify": 0,
++        "auto_accept": 0
++      },
++      "byName": {
++        "write_file": {
++          "count": 2,
++          "success": 2,
++          "fail": 0,
++          "durationMs": 11,
++          "decisions": {
++            "accept": 2,
++            "reject": 0,
++            "modify": 0,
++            "auto_accept": 0
++          }
++        },
++        "run_shell_command": {
++          "count": 10,
++          "success": 10,
++          "fail": 0,
++          "durationMs": 15641,
++          "decisions": {
++            "accept": 10,
++            "reject": 0,
++            "modify": 0,
++            "auto_accept": 0
++          }
++        },
++        "read_file": {
++          "count": 2,
++          "success": 2,
++          "fail": 0,
++          "durationMs": 3,
++          "decisions": {
++            "accept": 2,
++            "reject": 0,
++            "modify": 0,
++            "auto_accept": 0
++          }
++        },
++        "replace": {
++          "count": 6,
++          "success": 6,
++          "fail": 0,
++          "durationMs": 32,
++          "decisions": {
++            "accept": 6,
++            "reject": 0,
++            "modify": 0,
++            "auto_accept": 0
++          }
++        }
++      }
++    },
++    "files": {
++      "totalLinesAdded": 202,
++      "totalLinesRemoved": 25
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..5d77946
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,10 @@
++{
++  "input_tokens": 125843,
++  "output_tokens": 8328,
++  "cache_read_tokens": 377120,
++  "cache_creation_tokens": 0,
++  "thought_tokens": 15955,
++  "turns": 20,
++  "total_cost_usd": 0.154627,
++  "note": "google-one-oauth-no-actual-cost"
++}
+\ No newline at end of file
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..f946a19
+--- /dev/null
++++ b/.thunderdome-stderr.log
+@@ -0,0 +1,3 @@
++YOLO mode is enabled. All tool calls will be automatically approved.
++Loaded cached credentials.
++YOLO mode is enabled. All tool calls will be automatically approved.
+diff --git a/package-lock.json b/package-lock.json
+index 97d25c0..3c003c8 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..39b6c78
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,144 @@
++export interface Gate {
++  op: 'AND' | 'OR' | 'XOR';
++  in1: string;
++  in2: string;
++  out: string;
++}
++
++export function simulate(gates: Gate[], inputs: Record<string, number>): Record<string, number> {
++  const wires = { ...inputs };
++  const remainingGates = [...gates];
++
++  let changed = true;
++  while (changed && remainingGates.length > 0) {
++    changed = false;
++    for (let i = 0; i < remainingGates.length; i++) {
++      const gate = remainingGates[i];
++      if (gate.in1 in wires && gate.in2 in wires) {
++        const val1 = wires[gate.in1];
++        const val2 = wires[gate.in2];
++        let res: number;
++        switch (gate.op) {
++          case 'AND':
++            res = val1 & val2;
++            break;
++          case 'OR':
++            res = val1 | val2;
++            break;
++          case 'XOR':
++            res = val1 ^ val2;
++            break;
++        }
++        wires[gate.out] = res;
++        remainingGates.splice(i, 1);
++        i--;
++        changed = true;
++      }
++    }
++  }
++
++  return wires;
++}
++
++export function findSwappedWires(gates: Gate[]): string[] {
++  const swapped = new Set<string>();
++
++  // Find max z index to know which is the last carry
++  let maxZ = -1;
++  for (const gate of gates) {
++    if (gate.out.startsWith('z')) {
++      const idx = parseInt(gate.out.slice(1));
++      if (idx > maxZ) maxZ = idx;
++    }
++  }
++
++  const lastZ = `z${maxZ.toString().padStart(2, '0')}`;
++
++  for (const gate of gates) {
++    // 1. z-outputs (except the last one) must come from XOR gates
++    if (gate.out.startsWith('z')) {
++      if (gate.out !== lastZ) {
++        if (gate.op !== 'XOR') {
++          swapped.add(gate.out);
++        }
++      } else {
++        // Last z bit (carry-out) should NOT be from an XOR gate (it's from an OR gate)
++        if (gate.op === 'XOR') {
++          swapped.add(gate.out);
++        }
++      }
++    }
++
++    // 2. XOR gates that don't output to z and don't take x,y as inputs are suspicious
++    if (gate.op === 'XOR' && !gate.out.startsWith('z')) {
++      const isInputGate = (gate.in1.startsWith('x') && gate.in2.startsWith('y')) || 
++                        (gate.in1.startsWith('y') && gate.in2.startsWith('x'));
++      if (!isInputGate) {
++        swapped.add(gate.out);
++      }
++    }
++
++    // 3. XOR gates taking x,y (except x00, y00) must feed into an XOR gate (to produce z)
++    // and an AND gate (to propagate carry)
++    if (gate.op === 'XOR' && 
++        ((gate.in1.startsWith('x') && gate.in2.startsWith('y')) || 
++         (gate.in1.startsWith('y') && gate.in2.startsWith('x')))) {
++      if (gate.in1 !== 'x00' && gate.in1 !== 'y00') {
++        const usedByXor = gates.some(g => (g.in1 === gate.out || g.in2 === gate.out) && g.op === 'XOR');
++        const usedByAnd = gates.some(g => (g.in1 === gate.out || g.in2 === gate.out) && g.op === 'AND');
++        if (!usedByXor || !usedByAnd) {
++          swapped.add(gate.out);
++        }
++      }
++    }
++
++    // 4. AND gates must feed into an OR gate
++    // Exception: x00 AND y00 feeds into the next bit's XOR and AND
++    if (gate.op === 'AND') {
++      const isBit0 = (gate.in1 === 'x00' && gate.in2 === 'y00') || (gate.in1 === 'y00' && gate.in2 === 'x00');
++      if (!isBit0) {
++        const usedByOr = gates.some(g => (g.in1 === gate.out || g.in2 === gate.out) && g.op === 'OR');
++        if (!usedByOr) {
++          swapped.add(gate.out);
++        }
++      } else {
++        // x00 AND y00 should feed into XOR and AND (for z01 and carry propagation)
++        const usedByXor = gates.some(g => (g.in1 === gate.out || g.in2 === gate.out) && g.op === 'XOR');
++        const usedByAnd = gates.some(g => (g.in1 === gate.out || g.in2 === gate.out) && g.op === 'AND');
++        if (!usedByXor || !usedByAnd) {
++          // Note: in a 1-bit adder this might be different, but we have 45 bits
++          swapped.add(gate.out);
++        }
++      }
++    }
++
++    // 5. OR gates (except the last z) must feed into XOR and AND
++    if (gate.op === 'OR' && gate.out !== lastZ) {
++      const usedByXor = gates.some(g => (g.in1 === gate.out || g.in2 === gate.out) && g.op === 'XOR');
++      const usedByAnd = gates.some(g => (g.in1 === gate.out || g.in2 === gate.out) && g.op === 'AND');
++      if (!usedByXor || !usedByAnd) {
++        swapped.add(gate.out);
++      }
++    }
++
++    // 6. z-outputs (except z00 and lastZ) must have one input from xNN XOR yNN
++    if (gate.out.startsWith('z') && gate.out !== 'z00' && gate.out !== lastZ) {
++      if (gate.op === 'XOR') {
++        const bitStr = gate.out.slice(1);
++        const expectedX = `x${bitStr}`;
++        const expectedY = `y${bitStr}`;
++        const inputXor = gates.find(g => 
++          g.op === 'XOR' && 
++          ((g.in1 === expectedX && g.in2 === expectedY) || (g.in1 === expectedY && g.in2 === expectedX))
++        );
++        if (inputXor) {
++          if (gate.in1 !== inputXor.out && gate.in2 !== inputXor.out) {
++            swapped.add(gate.out);
++          }
++        }
++      }
++    }
++  }
++
++  return Array.from(swapped).sort();
++}

@@ -1,0 +1,441 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..8a2edcb
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 225155,
++  "output_tokens": 4365,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.148188
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..be6240a
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,5 @@
++<invoke name="multiedit">
++<parameter name="file_path">/workspace/src/index.ts</parameter>
++<parameter name="edits">[{"new_string": "      if (pressCount < bestPressCount ||\n          (pressCount === bestPressCount && pressedIndices < bestLexicographic!)) {\n        bestPressCount = pressCount;\n        bestLexicographic = pressedIndices;\n      }", "old_string": "      if (pressCount < bestPressCount ||\n          (pressCount === bestPressCount && pressedIndices < bestLexicographic!)) {\n        bestPressCount = pressCount;\n        bestSolution = [...testSol];\n        bestLexicographic = pressedIndices;\n      }"}, {"new_string": "    return solution;\n  }", "old_string": "    const totalPresses = solution.reduce((a, b) => a + b, 0);\n    return solution;\n  }"}]</parameter>
++</invoke>
++</minimax:tool_call>
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index 07657bf..1a9db02 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..17a30e7
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,354 @@
++export interface Machine {
++  target: boolean[];
++  buttons: number[][];
++}
++
++function solveToggle(machine: Machine): number[] | null {
++  const { target, buttons } = machine;
++  const n = target.length;
++  const m = buttons.length;
++
++  if (m === 0) {
++    return target.every(t => !t) ? [] : null;
++  }
++
++  // Build augmented matrix [A | b] over GF(2)
++  // A[i][j] = 1 if button j affects light i
++  // b[i] = target[i] (since lights start at 0)
++  const matrix: number[][] = [];
++  const b: number[] = target.map(t => t ? 1 : 0);
++
++  for (let i = 0; i < n; i++) {
++    const row: number[] = [];
++    for (let j = 0; j < m; j++) {
++      row.push(buttons[j].includes(i) ? 1 : 0);
++    }
++    row.push(b[i]);
++    matrix.push(row);
++  }
++
++  // Gaussian elimination over GF(2)
++  let pivotRow = 0;
++  for (let col = 0; col < m && pivotRow < n; col++) {
++    // Find pivot in column col
++    let foundPivot = -1;
++    for (let row = pivotRow; row < n; row++) {
++      if (matrix[row][col] === 1) {
++        foundPivot = row;
++        break;
++      }
++    }
++
++    if (foundPivot === -1) {
++      continue; // No pivot in this column
++    }
++
++    // Swap rows
++    [matrix[pivotRow], matrix[foundPivot]] = [matrix[foundPivot], matrix[pivotRow]];
++
++    // Eliminate in other rows
++    for (let row = 0; row < n; row++) {
++      if (row !== pivotRow && matrix[row][col] === 1) {
++        for (let k = col; k <= m; k++) {
++          matrix[row][k] ^= matrix[pivotRow][k];
++        }
++      }
++    }
++
++    pivotRow++;
++  }
++
++  // Check for inconsistency
++  for (let row = pivotRow; row < n; row++) {
++    if (matrix[row][m] === 1) {
++      // All zeros in coefficient part but 1 in augmented part
++      let allZero = true;
++      for (let col = 0; col < m; col++) {
++        if (matrix[row][col] === 1) {
++          allZero = false;
++          break;
++        }
++      }
++      if (allZero) {
++        return null;
++      }
++    }
++  }
++
++  // Extract solution from RREF
++  const solution: number[] = new Array(m).fill(0);
++  const pivotCols: number[] = [];
++
++  for (let row = 0; row < n; row++) {
++    let pivotCol = -1;
++    for (let col = 0; col < m; col++) {
++      if (matrix[row][col] === 1) {
++        pivotCol = col;
++        break;
++      }
++    }
++    if (pivotCol !== -1) {
++      solution[pivotCol] = matrix[row][m];
++      pivotCols.push(pivotCol);
++    }
++  }
++
++  // We need to find the optimal solution among all solutions
++  // First, find the null space (free variables)
++  const freeVars: number[] = [];
++  for (let col = 0; col < m; col++) {
++    if (!pivotCols.includes(col)) {
++      freeVars.push(col);
++    }
++  }
++
++  if (freeVars.length === 0) {
++    // Unique solution - verify and return
++    const pressed = solution.map((v, i) => v === 1 ? i : -1).filter(i => i >= 0);
++    return pressed.length > 0 ? pressed : [];
++  }
++
++  // We have free variables - need to find optimal solution
++  // Try all combinations of free variables (2^freeVars possibilities)
++  // and find the best one according to our criteria
++
++  const numFree = freeVars.length;
++  let bestSolution: number[] | null = null;
++  let bestPressCount = Infinity;
++  let bestLexicographic: number[] | null = null;
++
++  // If too many free vars, we need a smarter approach
++  // For small number of free vars, brute force is fine
++  if (numFree <= 20) {
++    for (let mask = 0; mask < (1 << numFree); mask++) {
++      const testSol = [...solution];
++      for (let i = 0; i < numFree; i++) {
++        testSol[freeVars[i]] = (mask & (1 << i)) ? 1 : 0;
++      }
++
++      // Verify this solution
++      let valid = true;
++      for (let row = 0; row < n; row++) {
++        let sum = 0;
++        for (let col = 0; col < m; col++) {
++          if (matrix[row][col] === 1) {
++            sum ^= testSol[col];
++          }
++        }
++        if (sum !== b[row]) {
++          valid = false;
++          break;
++        }
++      }
++
++      if (!valid) continue;
++
++      const pressedIndices = testSol.map((v, i) => v === 1 ? i : -1).filter(i => i >= 0);
++      const pressCount = pressedIndices.length;
++
++      if (pressCount < bestPressCount ||
++          (pressCount === bestPressCount && pressedIndices < bestLexicographic!)) {
++        bestPressCount = pressCount;
++        bestSolution = [...testSol];
++        bestLexicographic = pressedIndices;
++      }
++    }
++  } else {
++    // Too many free vars - need optimization
++    // Use the solution with minimal number of 1s from the basic solution
++    // Then try to improve lexicographically
++
++    // Start with basic solution and optimize
++    const pressedIndices = solution.map((v, i) => v === 1 ? i : -1).filter(i => i >= 0);
++    return pressedIndices;
++  }
++
++  return bestLexicographic;
++}
++
++function solveCounter(
++  lights: number[],
++  buttons: number[][],
++  modulus: number
++): number[] | null {
++  const n = lights.length;
++  const m = buttons.length;
++
++  if (m === 0) {
++    return lights.every(l => l === 0) ? [] : null;
++  }
++
++  // Build augmented matrix [A | b] over GF(modulus)
++  const matrix: number[][] = [];
++  const b: number[] = [...lights];
++
++  for (let i = 0; i < n; i++) {
++    const row: number[] = [];
++    for (let j = 0; j < m; j++) {
++      row.push(buttons[j].includes(i) ? 1 % modulus : 0);
++    }
++    row.push(b[i]);
++    matrix.push(row);
++  }
++
++  // Gaussian elimination over GF(modulus) where modulus is prime
++  // We can use modular multiplicative inverse
++  const inv = (a: number): number => {
++    let t = 0, newT = 1;
++    let r = modulus, newR = a % modulus;
++    while (newR !== 0) {
++      const q = Math.floor(r / newR);
++      const tmp = t - q * newT;
++      t = newT;
++      newT = tmp;
++      const tmpR = r - q * newR;
++      r = newR;
++      newR = tmpR;
++    }
++    if (r > 1) return -1; // No inverse
++    if (t < 0) t += modulus;
++    return t;
++  };
++
++  let pivotRow = 0;
++  for (let col = 0; col < m && pivotRow < n; col++) {
++    // Find pivot in column col
++    let foundPivot = -1;
++    for (let row = pivotRow; row < n; row++) {
++      if (matrix[row][col] !== 0) {
++        foundPivot = row;
++        break;
++      }
++    }
++
++    if (foundPivot === -1) {
++      continue;
++    }
++
++    // Swap rows
++    [matrix[pivotRow], matrix[foundPivot]] = [matrix[foundPivot], matrix[pivotRow]];
++
++    // Scale pivot row to make pivot = 1
++    const pivotVal = matrix[pivotRow][col];
++    const pivotInv = inv(pivotVal);
++    if (pivotInv === -1) {
++      return null; // Should not happen for prime modulus
++    }
++
++    for (let k = col; k <= m; k++) {
++      matrix[pivotRow][k] = (matrix[pivotRow][k] * pivotInv) % modulus;
++    }
++
++    // Eliminate in other rows
++    for (let row = 0; row < n; row++) {
++      if (row !== pivotRow && matrix[row][col] !== 0) {
++        const factor = matrix[row][col];
++        for (let k = col; k <= m; k++) {
++          matrix[row][k] = (matrix[row][k] - factor * matrix[pivotRow][k]) % modulus;
++          if (matrix[row][k] < 0) matrix[row][k] += modulus;
++        }
++      }
++    }
++
++    pivotRow++;
++  }
++
++  // Check for inconsistency
++  for (let row = pivotRow; row < n; row++) {
++    if (matrix[row][m] !== 0) {
++      let allZero = true;
++      for (let col = 0; col < m; col++) {
++        if (matrix[row][col] !== 0) {
++          allZero = false;
++          break;
++        }
++      }
++      if (allZero) {
++        return null;
++      }
++    }
++  }
++
++  // Extract solution
++  const solution: number[] = new Array(m).fill(0);
++  const pivotCols: number[] = [];
++
++  for (let row = 0; row < n; row++) {
++    let pivotCol = -1;
++    for (let col = 0; col < m; col++) {
++      if (matrix[row][col] !== 0) {
++        pivotCol = col;
++        break;
++      }
++    }
++    if (pivotCol !== -1) {
++      solution[pivotCol] = matrix[row][m];
++      pivotCols.push(pivotCol);
++    }
++  }
++
++  // Find free variables
++  const freeVars: number[] = [];
++  for (let col = 0; col < m; col++) {
++    if (!pivotCols.includes(col)) {
++      freeVars.push(col);
++    }
++  }
++
++  if (freeVars.length === 0) {
++    const totalPresses = solution.reduce((a, b) => a + b, 0);
++    return solution;
++  }
++
++  // Have free vars - find optimal solution
++  // This is like finding solution to Ax = b with minimal sum
++  // Since modulus is prime, we can use brute force for small number of free vars
++  const numFree = freeVars.length;
++
++  if (numFree <= 15) {
++    let bestSolution: number[] | null = null;
++    let bestSum = Infinity;
++    let bestLexicographic: number[] | null = null;
++
++    for (let mask = 0; mask < Math.pow(modulus, numFree); mask++) {
++      const testSol = [...solution];
++      let temp = mask;
++      for (let i = 0; i < numFree; i++) {
++        testSol[freeVars[i]] = temp % modulus;
++        temp = Math.floor(temp / modulus);
++      }
++
++      // Verify
++      let valid = true;
++      for (let row = 0; row < n; row++) {
++        let sum = 0;
++        for (let col = 0; col < m; col++) {
++          if (buttons[col].includes(row)) {
++            sum = (sum + testSol[col]) % modulus;
++          }
++        }
++        if (sum !== lights[row]) {
++          valid = false;
++          break;
++        }
++      }
++
++      if (!valid) continue;
++
++      const sum = testSol.reduce((a, b) => a + b, 0);
++
++      if (sum < bestSum || (sum === bestSum && testSol < bestLexicographic!)) {
++        bestSum = sum;
++        bestSolution = testSol;
++        bestLexicographic = testSol;
++      }
++    }
++
++    return bestSolution;
++  } else {
++    // Too many free vars - return basic solution
++    return solution;
++  }
++}
++
++export { solveToggle, solveCounter };
+\ No newline at end of file

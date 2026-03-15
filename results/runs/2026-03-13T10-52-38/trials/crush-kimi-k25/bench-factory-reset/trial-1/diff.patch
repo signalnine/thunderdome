@@ -1,0 +1,548 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..d3a937c
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 424656,
++  "output_tokens": 17467,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.3071946
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..b11e081
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1 @@
++Let me create the implementation with both puzzle solvers. I'll use Gaussian elimination over GF(2) for the toggle puzzle and over the prime field for the counter puzzle.     Let me verify the implementation with some manual tests: I see issues with my MITM implementation for the counter puzzle. Let me fix the algorithms:  Let me debug the test failures:    I found the bug! In my MITM approach, I'm storing `particular + combo` in the first half map, but I should be storing just `combo` (the contribution from null space vectors). Let me fix this: 
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index 07657bf..1a9db02 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..b42bab2
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,466 @@
++export interface Machine {
++  target: boolean[];
++  buttons: number[][];
++}
++
++// Solve toggle puzzle using Gaussian elimination over GF(2)
++// Returns minimum weight solution (fewest buttons), breaking ties lexicographically
++export function solveToggle(machine: Machine): number[] | null {
++  const nLights = machine.target.length;
++  const nButtons = machine.buttons.length;
++
++  if (nLights === 0) {
++    return [];
++  }
++
++  // Build matrix: rows = lights, cols = buttons
++  const matrix: number[][] = Array(nLights)
++    .fill(0)
++    .map(() => Array(nButtons).fill(0));
++
++  for (let b = 0; b < nButtons; b++) {
++    for (const light of machine.buttons[b]) {
++      if (light >= 0 && light < nLights) {
++        matrix[light][b] = 1;
++      }
++    }
++  }
++
++  const target = machine.target.map(t => (t ? 1 : 0));
++
++  return solveToggleMITM(matrix, target);
++}
++
++function solveToggleMITM(matrix: number[][], target: number[]): number[] | null {
++  const nLights = matrix.length;
++  const nButtons = matrix[0]?.length || 0;
++
++  // Create augmented matrix and reduce to RREF
++  const aug: number[][] = matrix.map((row, i) => [...row, target[i]]);
++  const pivotCol: number[] = [];
++  const pivotRow: number[] = [];
++  let row = 0;
++
++  for (let col = 0; col < nButtons && row < nLights; col++) {
++    let pivot = -1;
++    for (let i = row; i < nLights; i++) {
++      if (aug[i][col] === 1) {
++        pivot = i;
++        break;
++      }
++    }
++
++    if (pivot === -1) continue;
++
++    [aug[row], aug[pivot]] = [aug[pivot], aug[row]];
++    pivotCol.push(col);
++    pivotRow.push(row);
++
++    for (let i = 0; i < nLights; i++) {
++      if (i !== row && aug[i][col] === 1) {
++        for (let j = col; j <= nButtons; j++) {
++          aug[i][j] ^= aug[row][j];
++        }
++      }
++    }
++    row++;
++  }
++
++  // Check inconsistency
++  for (let i = row; i < nLights; i++) {
++    if (aug[i][nButtons] === 1) return null;
++  }
++
++  // Find free variables
++  const isPivot = new Set(pivotCol);
++  const freeVars: number[] = [];
++  for (let j = 0; j < nButtons; j++) {
++    if (!isPivot.has(j)) freeVars.push(j);
++  }
++
++  // Particular solution
++  const particular = new Array(nButtons).fill(0);
++  for (let i = 0; i < pivotCol.length; i++) {
++    particular[pivotCol[i]] = aug[pivotRow[i]][nButtons];
++  }
++
++  // Build null space basis vectors (full vectors showing effect of each free var)
++  const nullSpace: number[][] = [];
++  for (const f of freeVars) {
++    const vec = new Array(nButtons).fill(0);
++    vec[f] = 1;
++    for (let i = 0; i < pivotCol.length; i++) {
++      if (aug[pivotRow[i]][f] === 1) {
++        vec[pivotCol[i]] = 1;
++      }
++    }
++    nullSpace.push(vec);
++  }
++
++  const k = freeVars.length;
++
++  if (k === 0) {
++    const result: number[] = [];
++    for (let i = 0; i < nButtons; i++) {
++      if (particular[i] === 1) result.push(i);
++    }
++    return result;
++  }
++
++  // Meet-in-the-middle
++  const k1 = Math.floor(k / 2);
++  const k2 = k - k1;
++
++  // Enumerate first half: map from resulting vector to (weight, lex indices)
++  type Entry = { weight: number; indices: number[]; vec: number[] };
++  const map1 = new Map<string, Entry>();
++
++  for (let mask = 0; mask < 1 << k1; mask++) {
++    const vec = [...particular];
++    const indices: number[] = [];
++
++    for (let i = 0; i < k1; i++) {
++      if (mask & (1 << i)) {
++        indices.push(freeVars[i]);
++        for (let j = 0; j < nButtons; j++) {
++          vec[j] ^= nullSpace[i][j];
++        }
++      }
++    }
++
++    const weight = vec.reduce((a, b) => a + b, 0);
++    const key = vec.join(',');
++
++    if (!map1.has(key) || weight < map1.get(key)!.weight) {
++      map1.set(key, { weight, indices: [...indices], vec: [...vec] });
++    }
++  }
++
++  // Enumerate second half
++  let bestWeight = Infinity;
++  let bestIndices: number[] | null = null;
++
++  for (let mask = 0; mask < 1 << k2; mask++) {
++    const vec = new Array(nButtons).fill(0);
++    const indices2: number[] = [];
++
++    for (let i = 0; i < k2; i++) {
++      if (mask & (1 << i)) {
++        indices2.push(freeVars[k1 + i]);
++        for (let j = 0; j < nButtons; j++) {
++          vec[j] ^= nullSpace[k1 + i][j];
++        }
++      }
++    }
++
++    // We need: particular + first_half + second_half = target solution
++    // So: first_half = particular + second_half + desired
++    // Actually we need the combined vector to match
++    // Looking for: particular + first + second = result
++    // So if we fix second, we need first such that particular + first = result + second
++    // Or: key1 = particular XOR vec (what we need from first half)
++
++    const needed = vec.map((v, i) => particular[i] ^ v);
++    const key = needed.join(',');
++
++    if (map1.has(key)) {
++      const entry1 = map1.get(key)!;
++      const combinedVec = entry1.vec.map((v, i) => v ^ vec[i]);
++      const combinedIndices = [...entry1.indices, ...indices2].sort((a, b) => a - b);
++      const weight = combinedVec.reduce((a, b) => a + b, 0);
++
++      if (weight < bestWeight ||
++          (weight === bestWeight && isLexSmaller(combinedIndices, bestIndices))) {
++        bestWeight = weight;
++        bestIndices = combinedIndices;
++      }
++    }
++  }
++
++  return bestIndices;
++}
++
++function isLexSmaller(a: number[], b: number[] | null): boolean {
++  if (b === null) return true;
++  const minLen = Math.min(a.length, b.length);
++  for (let i = 0; i < minLen; i++) {
++    if (a[i] < b[i]) return true;
++    if (a[i] > b[i]) return false;
++  }
++  return a.length < b.length;
++}
++
++// Counter puzzle solver using Gaussian elimination over prime field
++export function solveCounter(
++  lights: number[],
++  buttons: number[][],
++  modulus: number
++): number[] | null {
++  const nLights = lights.length;
++  const nButtons = buttons.length;
++
++  if (nLights === 0) {
++    return Array(nButtons).fill(0);
++  }
++
++  // Build matrix
++  const matrix: number[][] = Array(nLights)
++    .fill(0)
++    .map(() => Array(nButtons).fill(0));
++
++  for (let b = 0; b < nButtons; b++) {
++    for (const light of buttons[b]) {
++      if (light >= 0 && light < nLights) {
++        matrix[light][b] = (matrix[light][b] + 1) % modulus;
++      }
++    }
++  }
++
++  const target = lights.map(x => ((x % modulus) + modulus) % modulus);
++
++  // Gaussian elimination over prime field
++  const aug: number[][] = matrix.map((row, i) => [...row, target[i]]);
++  const pivotCol: number[] = [];
++  const pivotRow: number[] = [];
++  let row = 0;
++
++  for (let col = 0; col < nButtons && row < nLights; col++) {
++    let pivot = -1;
++    for (let i = row; i < nLights; i++) {
++      if (aug[i][col] !== 0) {
++        pivot = i;
++        break;
++      }
++    }
++
++    if (pivot === -1) continue;
++
++    [aug[row], aug[pivot]] = [aug[pivot], aug[row]];
++    pivotCol.push(col);
++    pivotRow.push(row);
++
++    // Normalize pivot row
++    const pivotVal = aug[row][col];
++    const inv = modInverse(pivotVal, modulus);
++    for (let j = col; j <= nButtons; j++) {
++      aug[row][j] = (aug[row][j] * inv) % modulus;
++    }
++
++    // Eliminate
++    for (let i = 0; i < nLights; i++) {
++      if (i !== row && aug[i][col] !== 0) {
++        const factor = aug[i][col];
++        for (let j = col; j <= nButtons; j++) {
++          aug[i][j] = (aug[i][j] - factor * aug[row][j]) % modulus;
++          if (aug[i][j] < 0) aug[i][j] += modulus;
++        }
++      }
++    }
++    row++;
++  }
++
++  // Check inconsistency
++  for (let i = row; i < nLights; i++) {
++    if (aug[i][nButtons] !== 0) return null;
++  }
++
++  // Find free variables
++  const isPivot = new Set(pivotCol);
++  const freeVars: number[] = [];
++  for (let j = 0; j < nButtons; j++) {
++    if (!isPivot.has(j)) freeVars.push(j);
++  }
++
++  // Particular solution
++  const particular = new Array(nButtons).fill(0);
++  for (let i = 0; i < pivotCol.length; i++) {
++    particular[pivotCol[i]] = aug[pivotRow[i]][nButtons];
++  }
++
++  // Build null space basis
++  const nullSpace: number[][] = [];
++  for (const f of freeVars) {
++    const vec = new Array(nButtons).fill(0);
++    vec[f] = 1;
++    for (let i = 0; i < pivotCol.length; i++) {
++      const val = aug[pivotRow[i]][f];
++      if (val !== 0) {
++        vec[pivotCol[i]] = (modulus - val) % modulus;
++      }
++    }
++    nullSpace.push(vec);
++  }
++
++  const k = freeVars.length;
++
++  // For small nullity, use enumeration; for larger, use a different strategy
++  if (k <= 10) {
++    return solveCounterEnumerate(nButtons, particular, nullSpace, modulus, freeVars);
++  } else {
++    // For large nullity with small modulus, use meet-in-the-middle
++    return solveCounterLargeNullity(nButtons, particular, nullSpace, modulus, freeVars);
++  }
++}
++
++function solveCounterEnumerate(
++  nButtons: number,
++  particular: number[],
++  nullSpace: number[][],
++  modulus: number,
++  freeVars: number[]
++): number[] | null {
++  const k = freeVars.length;
++  let bestWeight = Infinity;
++  let bestResult: number[] | null = null;
++
++  // Enumerate all combinations
++  const total = Math.pow(modulus, k);
++  for (let mask = 0; mask < total; mask++) {
++    let temp = mask;
++    const coeffs: number[] = [];
++    for (let i = 0; i < k; i++) {
++      coeffs.push(temp % modulus);
++      temp = Math.floor(temp / modulus);
++    }
++
++    const vec = [...particular];
++    let weight = 0;
++    for (let i = 0; i < k; i++) {
++      if (coeffs[i] !== 0) {
++        for (let j = 0; j < nButtons; j++) {
++          vec[j] = (vec[j] + coeffs[i] * nullSpace[i][j]) % modulus;
++        }
++        weight += coeffs[i];
++      }
++    }
++
++    if (weight < bestWeight || (weight === bestWeight && isLexSmallerVec(vec, bestResult))) {
++      bestWeight = weight;
++      bestResult = vec;
++    }
++  }
++
++  return bestResult;
++}
++
++function solveCounterLargeNullity(
++  nButtons: number,
++  particular: number[],
++  nullSpace: number[][],
++  modulus: number,
++  freeVars: number[]
++): number[] | null {
++  const k = freeVars.length;
++  const k1 = Math.floor(k / 2);
++  const k2 = k - k1;
++
++  // Enumerate first half
++  type Entry = { weight: number; vec: number[] };
++  const map1 = new Map<string, Entry>();
++
++  const total1 = Math.pow(modulus, k1);
++  for (let mask = 0; mask < total1; mask++) {
++    let temp = mask;
++    const coeffs: number[] = [];
++    for (let i = 0; i < k1; i++) {
++      coeffs.push(temp % modulus);
++      temp = Math.floor(temp / modulus);
++    }
++
++    const vec = [...particular];
++    let weight = 0;
++    for (let i = 0; i < k1; i++) {
++      if (coeffs[i] !== 0) {
++        for (let j = 0; j < nButtons; j++) {
++          vec[j] = (vec[j] + coeffs[i] * nullSpace[i][j]) % modulus;
++        }
++        weight += coeffs[i];
++      }
++    }
++
++    const key = vec.join(',');
++    if (!map1.has(key) || weight < map1.get(key)!.weight) {
++      map1.set(key, { weight, vec: [...vec] });
++    }
++  }
++
++  // Enumerate second half
++  let bestWeight = Infinity;
++  let bestResult: number[] | null = null;
++
++  const total2 = Math.pow(modulus, k2);
++  for (let mask = 0; mask < total2; mask++) {
++    let temp = mask;
++    const coeffs: number[] = [];
++    for (let i = 0; i < k2; i++) {
++      coeffs.push(temp % modulus);
++      temp = Math.floor(temp / modulus);
++    }
++
++    // Compute the negative of what second half contributes
++    const negVec = new Array(nButtons).fill(0);
++    let weight = 0;
++    for (let i = 0; i < k2; i++) {
++      if (coeffs[i] !== 0) {
++        for (let j = 0; j < nButtons; j++) {
++          negVec[j] = (negVec[j] + (modulus - coeffs[i]) * nullSpace[k1 + i][j]) % modulus;
++        }
++        weight += coeffs[i];
++      }
++    }
++
++    // Look for matching first half
++    // We want: particular + c1*ns1 + c2*ns2 = result
++    // If second half gives us vec2, we need first half to give particular + vec2
++    const needed = negVec.map((v, i) => (particular[i] + v) % modulus);
++    const key = needed.join(',');
++
++    if (map1.has(key)) {
++      const entry1 = map1.get(key)!;
++      const totalWeight = entry1.weight + weight;
++
++      // Reconstruct full solution
++      const fullVec = [...entry1.vec];
++      for (let i = 0; i < k2; i++) {
++        if (coeffs[i] !== 0) {
++          for (let j = 0; j < nButtons; j++) {
++            fullVec[j] = (fullVec[j] + coeffs[i] * nullSpace[k1 + i][j]) % modulus;
++          }
++        }
++      }
++
++      if (totalWeight < bestWeight ||
++          (totalWeight === bestWeight && isLexSmallerVec(fullVec, bestResult))) {
++        bestWeight = totalWeight;
++        bestResult = fullVec;
++      }
++    }
++  }
++
++  return bestResult;
++}
++
++function isLexSmallerVec(a: number[], b: number[] | null): boolean {
++  if (b === null) return true;
++  for (let i = 0; i < a.length; i++) {
++    if (a[i] < b[i]) return true;
++    if (a[i] > b[i]) return false;
++  }
++  return false;
++}
++
++function modInverse(a: number, mod: number): number {
++  return modPow(a, mod - 2, mod);
++}
++
++function modPow(base: number, exp: number, mod: number): number {
++  let result = 1;
++  let b = ((base % mod) + mod) % mod;
++  let e = exp;
++  while (e > 0) {
++    if (e & 1) result = (result * b) % mod;
++    b = (b * b) % mod;
++    e >>= 1;
++  }
++  return result;
++}

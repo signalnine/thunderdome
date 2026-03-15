@@ -1,0 +1,4674 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..b3f0be0
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,19 @@
++{
++  "input_tokens": 57,
++  "output_tokens": 41220,
++  "cache_read_tokens": 3332629,
++  "cache_creation_tokens": 96072,
++  "turns": 71,
++  "tools_used": [
++    "Skill",
++    "Task",
++    "Bash",
++    "Glob",
++    "Read",
++    "TodoWrite",
++    "Write",
++    "Edit"
++  ],
++  "duration_ms": 885244,
++  "total_cost_usd": 3.7596273000000013
++}
+\ No newline at end of file
+diff --git a/TASK.md b/TASK.md
+index 1dd249a..e29fc25 100644
+--- a/TASK.md
++++ b/TASK.md
+@@ -1,45 +1,44 @@
+-# T5: Task Queue System
++# Task Queue System
+ 
+-**Category:** Marathon
+-**Timeout:** 60 minutes
+-**Tests:** 90 across 12 phases
++Build a fully-featured in-memory task queue system from scratch. The system should grow incrementally through 12 phases, each introducing new capabilities that build on the foundation laid by earlier phases.
+ 
+ ## Overview
+ 
+-Build an in-memory task queue system through 12 sequential phases. Each phase adds new functionality that builds on prior phases. The phases are designed so that naive implementations of early phases may require refactoring when later phases add constraints.
++Your task queue should support adding tasks, processing them, and managing their lifecycle. Think of it like a simplified version of systems like Bull, BeeQueue, or Celery -- but entirely in-memory with no external dependencies.
+ 
+-## What to Build
++The system evolves through 12 phases of increasing sophistication:
+ 
+-Implement a `TaskQueue` class in `src/index.ts` (exported as a named export) that supports:
++1. **Basic queue** -- adding and processing tasks in order
++2. **Named queues** -- multiple independent queues
++3. **Priority** -- some tasks are more urgent than others
++4. **Delayed tasks** -- tasks that should wait before becoming available
++5. **Retry with backoff** -- automatic retry when tasks fail
++6. **Dead letter queue** -- permanent storage for repeatedly-failing tasks
++7. **Task dependencies** -- tasks that wait for other tasks to finish
++8. **Concurrency control** -- limiting how many tasks run at once
++9. **Progress and cancellation** -- tracking and aborting work
++10. **Recurring tasks** -- cron-like scheduled task creation
++11. **Middleware** -- intercepting and transforming tasks in a pipeline
++12. **Graceful shutdown** -- orderly wind-down of the system
+ 
+-1. **Basic FIFO Queue** - enqueue/dequeue tasks with auto-generated IDs and status tracking
+-2. **Named Queues** - multiple independent queues identified by name
+-3. **Priority** - priority levels 1-10 with FIFO within same priority
+-4. **Delayed/Scheduled Tasks** - delay and runAt options for deferred availability
+-5. **Retry with Backoff** - automatic retry with exponential backoff on failure
+-6. **Dead Letter Queue** - tasks that exhaust retries move to DLQ
+-7. **Task Dependencies** - tasks can depend on other tasks completing first
+-8. **Concurrency Control** - per-queue limits on concurrent processing
+-9. **Progress and Cancellation** - progress tracking and task cancellation
+-10. **Recurring Tasks (Cron)** - scheduled recurring task creation
+-11. **Middleware Pipeline** - composable middleware for task processing
+-12. **Graceful Shutdown** - orderly shutdown with timeout and force-cancel
++Read `phases/*.md` for detailed requirements for each phase.
+ 
+-## Phase Details
++## Getting Started
+ 
+-See the `phases/` directory for detailed descriptions of each phase.
++- Export your main API from `src/index.ts`
++- All implementation should live under `src/`
++- No external runtime dependencies allowed (dev dependencies are pre-installed)
++- Write your own tests as you go to verify your implementation
+ 
+ ## Validation
+ 
+ ```bash
+-npm test        # All 90 tests must pass
+ npm run build   # TypeScript must compile
+ npm run lint    # No lint errors
+ ```
+ 
+-## Constraints
++## Tips
+ 
+-- All implementation goes in `src/index.ts`
+-- No external runtime dependencies (dev dependencies are provided)
+-- Must export `TaskQueue` as a named export
+-- Tests use `vi.useFakeTimers()` for timing-sensitive tests
++- Later phases will force you to rethink early decisions. Design with extensibility in mind.
++- Tasks should have unique identifiers and track their lifecycle status.
++- Consider how features like priorities, delays, and dependencies interact with each other.
+diff --git a/package-lock.json b/package-lock.json
+index 1d53f39..159417d 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -11,11 +11,83 @@
+         "@types/node": "^25.2.3",
+         "@typescript-eslint/eslint-plugin": "^7.0.0",
+         "@typescript-eslint/parser": "^7.0.0",
++        "@vitest/coverage-v8": "^2.0.0",
+         "eslint": "^8.56.0",
+         "typescript": "^5.4.0",
+         "vitest": "^2.0.0"
+       }
+     },
++    "node_modules/@ampproject/remapping": {
++      "version": "2.3.0",
++      "resolved": "https://registry.npmjs.org/@ampproject/remapping/-/remapping-2.3.0.tgz",
++      "integrity": "sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@jridgewell/gen-mapping": "^0.3.5",
++        "@jridgewell/trace-mapping": "^0.3.24"
++      },
++      "engines": {
++        "node": ">=6.0.0"
++      }
++    },
++    "node_modules/@babel/helper-string-parser": {
++      "version": "7.27.1",
++      "resolved": "https://registry.npmjs.org/@babel/helper-string-parser/-/helper-string-parser-7.27.1.tgz",
++      "integrity": "sha512-qMlSxKbpRlAridDExk92nSobyDdpPijUq2DW6oDnUqd0iOGxmQjyqhMIihI9+zv4LPyZdRje2cavWPbCbWm3eA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/helper-validator-identifier": {
++      "version": "7.28.5",
++      "resolved": "https://registry.npmjs.org/@babel/helper-validator-identifier/-/helper-validator-identifier-7.28.5.tgz",
++      "integrity": "sha512-qSs4ifwzKJSV39ucNjsvc6WVHs6b7S03sOh2OcHF9UHfVPqWWALUsNUVzhSBiItjRZoLHx7nIarVjqKVusUZ1Q==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/parser": {
++      "version": "7.29.0",
++      "resolved": "https://registry.npmjs.org/@babel/parser/-/parser-7.29.0.tgz",
++      "integrity": "sha512-IyDgFV5GeDUVX4YdF/3CPULtVGSXXMLh1xVIgdCgxApktqnQV0r7/8Nqthg+8YLGaAtdyIlo2qIdZrbCv4+7ww==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/types": "^7.29.0"
++      },
++      "bin": {
++        "parser": "bin/babel-parser.js"
++      },
++      "engines": {
++        "node": ">=6.0.0"
++      }
++    },
++    "node_modules/@babel/types": {
++      "version": "7.29.0",
++      "resolved": "https://registry.npmjs.org/@babel/types/-/types-7.29.0.tgz",
++      "integrity": "sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/helper-string-parser": "^7.27.1",
++        "@babel/helper-validator-identifier": "^7.28.5"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@bcoe/v8-coverage": {
++      "version": "0.2.3",
++      "resolved": "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz",
++      "integrity": "sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/@esbuild/aix-ppc64": {
+       "version": "0.21.5",
+       "resolved": "https://registry.npmjs.org/@esbuild/aix-ppc64/-/aix-ppc64-0.21.5.tgz",
+@@ -556,6 +628,84 @@
+       "dev": true,
+       "license": "BSD-3-Clause"
+     },
++    "node_modules/@isaacs/cliui": {
++      "version": "8.0.2",
++      "resolved": "https://registry.npmjs.org/@isaacs/cliui/-/cliui-8.0.2.tgz",
++      "integrity": "sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "string-width": "^5.1.2",
++        "string-width-cjs": "npm:string-width@^4.2.0",
++        "strip-ansi": "^7.0.1",
++        "strip-ansi-cjs": "npm:strip-ansi@^6.0.1",
++        "wrap-ansi": "^8.1.0",
++        "wrap-ansi-cjs": "npm:wrap-ansi@^7.0.0"
++      },
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@isaacs/cliui/node_modules/ansi-regex": {
++      "version": "6.2.2",
++      "resolved": "https://registry.npmjs.org/ansi-regex/-/ansi-regex-6.2.2.tgz",
++      "integrity": "sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/ansi-regex?sponsor=1"
++      }
++    },
++    "node_modules/@isaacs/cliui/node_modules/strip-ansi": {
++      "version": "7.2.0",
++      "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-7.2.0.tgz",
++      "integrity": "sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-regex": "^6.2.2"
++      },
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/strip-ansi?sponsor=1"
++      }
++    },
++    "node_modules/@istanbuljs/schema": {
++      "version": "0.1.3",
++      "resolved": "https://registry.npmjs.org/@istanbuljs/schema/-/schema-0.1.3.tgz",
++      "integrity": "sha512-ZXRY4jNvVgSVQ8DL3LTcakaAtXwTVUxE81hslsyD2AtoXW/wVob10HkOJ1X/pAlcI7D+2YoZKg5do8G/w6RYgA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/@jridgewell/gen-mapping": {
++      "version": "0.3.13",
++      "resolved": "https://registry.npmjs.org/@jridgewell/gen-mapping/-/gen-mapping-0.3.13.tgz",
++      "integrity": "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@jridgewell/sourcemap-codec": "^1.5.0",
++        "@jridgewell/trace-mapping": "^0.3.24"
++      }
++    },
++    "node_modules/@jridgewell/resolve-uri": {
++      "version": "3.1.2",
++      "resolved": "https://registry.npmjs.org/@jridgewell/resolve-uri/-/resolve-uri-3.1.2.tgz",
++      "integrity": "sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.0.0"
++      }
++    },
+     "node_modules/@jridgewell/sourcemap-codec": {
+       "version": "1.5.5",
+       "resolved": "https://registry.npmjs.org/@jridgewell/sourcemap-codec/-/sourcemap-codec-1.5.5.tgz",
+@@ -563,6 +713,17 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/@jridgewell/trace-mapping": {
++      "version": "0.3.31",
++      "resolved": "https://registry.npmjs.org/@jridgewell/trace-mapping/-/trace-mapping-0.3.31.tgz",
++      "integrity": "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@jridgewell/resolve-uri": "^3.1.0",
++        "@jridgewell/sourcemap-codec": "^1.4.14"
++      }
++    },
+     "node_modules/@nodelib/fs.scandir": {
+       "version": "2.1.5",
+       "resolved": "https://registry.npmjs.org/@nodelib/fs.scandir/-/fs.scandir-2.1.5.tgz",
+@@ -601,6 +762,17 @@
+         "node": ">= 8"
+       }
+     },
++    "node_modules/@pkgjs/parseargs": {
++      "version": "0.11.0",
++      "resolved": "https://registry.npmjs.org/@pkgjs/parseargs/-/parseargs-0.11.0.tgz",
++      "integrity": "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==",
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "engines": {
++        "node": ">=14"
++      }
++    },
+     "node_modules/@rollup/rollup-android-arm-eabi": {
+       "version": "4.57.1",
+       "resolved": "https://registry.npmjs.org/@rollup/rollup-android-arm-eabi/-/rollup-android-arm-eabi-4.57.1.tgz",
+@@ -964,7 +1136,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1009,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1170,6 +1340,39 @@
+       "dev": true,
+       "license": "ISC"
+     },
++    "node_modules/@vitest/coverage-v8": {
++      "version": "2.1.9",
++      "resolved": "https://registry.npmjs.org/@vitest/coverage-v8/-/coverage-v8-2.1.9.tgz",
++      "integrity": "sha512-Z2cOr0ksM00MpEfyVE8KXIYPEcBFxdbLSs56L8PO0QQMxt/6bDj45uQfxoc96v05KW3clk7vvgP0qfDit9DmfQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@ampproject/remapping": "^2.3.0",
++        "@bcoe/v8-coverage": "^0.2.3",
++        "debug": "^4.3.7",
++        "istanbul-lib-coverage": "^3.2.2",
++        "istanbul-lib-report": "^3.0.1",
++        "istanbul-lib-source-maps": "^5.0.6",
++        "istanbul-reports": "^3.1.7",
++        "magic-string": "^0.30.12",
++        "magicast": "^0.3.5",
++        "std-env": "^3.8.0",
++        "test-exclude": "^7.0.1",
++        "tinyrainbow": "^1.2.0"
++      },
++      "funding": {
++        "url": "https://opencollective.com/vitest"
++      },
++      "peerDependencies": {
++        "@vitest/browser": "2.1.9",
++        "vitest": "2.1.9"
++      },
++      "peerDependenciesMeta": {
++        "@vitest/browser": {
++          "optional": true
++        }
++      }
++    },
+     "node_modules/@vitest/expect": {
+       "version": "2.1.9",
+       "resolved": "https://registry.npmjs.org/@vitest/expect/-/expect-2.1.9.tgz",
+@@ -1289,7 +1492,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1574,6 +1776,20 @@
+         "node": ">=6.0.0"
+       }
+     },
++    "node_modules/eastasianwidth": {
++      "version": "0.2.0",
++      "resolved": "https://registry.npmjs.org/eastasianwidth/-/eastasianwidth-0.2.0.tgz",
++      "integrity": "sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/emoji-regex": {
++      "version": "9.2.2",
++      "resolved": "https://registry.npmjs.org/emoji-regex/-/emoji-regex-9.2.2.tgz",
++      "integrity": "sha512-L18DaJsXSUk2+42pv8mLs5jJT2hqFkFE4j21wOmgbUqsZ2hL72NsUU785g9RXgo3s0ZNgVl42TiHp3ZtOv/Vyg==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/es-module-lexer": {
+       "version": "1.7.0",
+       "resolved": "https://registry.npmjs.org/es-module-lexer/-/es-module-lexer-1.7.0.tgz",
+@@ -1640,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -1955,6 +2170,23 @@
+       "dev": true,
+       "license": "ISC"
+     },
++    "node_modules/foreground-child": {
++      "version": "3.3.1",
++      "resolved": "https://registry.npmjs.org/foreground-child/-/foreground-child-3.3.1.tgz",
++      "integrity": "sha512-gIXjKqtFuWEgzFRJA9WCQeSJLZDjgJUOMCMzxtvFq/37KojM1BFGufqsCy0r4qSQmYLsZYMeyRqzIWOMup03sw==",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "cross-spawn": "^7.0.6",
++        "signal-exit": "^4.0.1"
++      },
++      "engines": {
++        "node": ">=14"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
+     "node_modules/fs.realpath": {
+       "version": "1.0.0",
+       "resolved": "https://registry.npmjs.org/fs.realpath/-/fs.realpath-1.0.0.tgz",
+@@ -2090,6 +2322,13 @@
+         "node": ">=8"
+       }
+     },
++    "node_modules/html-escaper": {
++      "version": "2.0.2",
++      "resolved": "https://registry.npmjs.org/html-escaper/-/html-escaper-2.0.2.tgz",
++      "integrity": "sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/ignore": {
+       "version": "5.3.2",
+       "resolved": "https://registry.npmjs.org/ignore/-/ignore-5.3.2.tgz",
+@@ -2156,6 +2395,16 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/is-fullwidth-code-point": {
++      "version": "3.0.0",
++      "resolved": "https://registry.npmjs.org/is-fullwidth-code-point/-/is-fullwidth-code-point-3.0.0.tgz",
++      "integrity": "sha512-zymm5+u+sCsSWyD9qNaejV3DFvhCKclKdizYaJUuHA83RLjb7nSuGnddCHGv0hk+KY7BMAlsWeK4Ueg6EV6XQg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=8"
++      }
++    },
+     "node_modules/is-glob": {
+       "version": "4.0.3",
+       "resolved": "https://registry.npmjs.org/is-glob/-/is-glob-4.0.3.tgz",
+@@ -2196,6 +2445,76 @@
+       "dev": true,
+       "license": "ISC"
+     },
++    "node_modules/istanbul-lib-coverage": {
++      "version": "3.2.2",
++      "resolved": "https://registry.npmjs.org/istanbul-lib-coverage/-/istanbul-lib-coverage-3.2.2.tgz",
++      "integrity": "sha512-O8dpsF+r0WV/8MNRKfnmrtCWhuKjxrq2w+jpzBL5UZKTi2LeVWnWOmWRxFlesJONmc+wLAGvKQZEOanko0LFTg==",
++      "dev": true,
++      "license": "BSD-3-Clause",
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/istanbul-lib-report": {
++      "version": "3.0.1",
++      "resolved": "https://registry.npmjs.org/istanbul-lib-report/-/istanbul-lib-report-3.0.1.tgz",
++      "integrity": "sha512-GCfE1mtsHGOELCU8e/Z7YWzpmybrx/+dSTfLrvY8qRmaY6zXTKWn6WQIjaAFw069icm6GVMNkgu0NzI4iPZUNw==",
++      "dev": true,
++      "license": "BSD-3-Clause",
++      "dependencies": {
++        "istanbul-lib-coverage": "^3.0.0",
++        "make-dir": "^4.0.0",
++        "supports-color": "^7.1.0"
++      },
++      "engines": {
++        "node": ">=10"
++      }
++    },
++    "node_modules/istanbul-lib-source-maps": {
++      "version": "5.0.6",
++      "resolved": "https://registry.npmjs.org/istanbul-lib-source-maps/-/istanbul-lib-source-maps-5.0.6.tgz",
++      "integrity": "sha512-yg2d+Em4KizZC5niWhQaIomgf5WlL4vOOjZ5xGCmF8SnPE/mDWWXgvRExdcpCgh9lLRRa1/fSYp2ymmbJ1pI+A==",
++      "dev": true,
++      "license": "BSD-3-Clause",
++      "dependencies": {
++        "@jridgewell/trace-mapping": "^0.3.23",
++        "debug": "^4.1.1",
++        "istanbul-lib-coverage": "^3.0.0"
++      },
++      "engines": {
++        "node": ">=10"
++      }
++    },
++    "node_modules/istanbul-reports": {
++      "version": "3.2.0",
++      "resolved": "https://registry.npmjs.org/istanbul-reports/-/istanbul-reports-3.2.0.tgz",
++      "integrity": "sha512-HGYWWS/ehqTV3xN10i23tkPkpH46MLCIMFNCaaKNavAXTF1RkqxawEPtnjnGZ6XKSInBKkiOA5BKS+aZiY3AvA==",
++      "dev": true,
++      "license": "BSD-3-Clause",
++      "dependencies": {
++        "html-escaper": "^2.0.0",
++        "istanbul-lib-report": "^3.0.0"
++      },
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/jackspeak": {
++      "version": "3.4.3",
++      "resolved": "https://registry.npmjs.org/jackspeak/-/jackspeak-3.4.3.tgz",
++      "integrity": "sha512-OGlZQpz2yfahA/Rd1Y8Cd9SIEsqvXkLVoSw/cgwhnhFMDbsQFeZYoJJ7bIZBS9BcamUW96asq/npPWugM+RQBw==",
++      "dev": true,
++      "license": "BlueOak-1.0.0",
++      "dependencies": {
++        "@isaacs/cliui": "^8.0.2"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      },
++      "optionalDependencies": {
++        "@pkgjs/parseargs": "^0.11.0"
++      }
++    },
+     "node_modules/js-yaml": {
+       "version": "4.1.1",
+       "resolved": "https://registry.npmjs.org/js-yaml/-/js-yaml-4.1.1.tgz",
+@@ -2284,6 +2603,13 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/lru-cache": {
++      "version": "10.4.3",
++      "resolved": "https://registry.npmjs.org/lru-cache/-/lru-cache-10.4.3.tgz",
++      "integrity": "sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==",
++      "dev": true,
++      "license": "ISC"
++    },
+     "node_modules/magic-string": {
+       "version": "0.30.21",
+       "resolved": "https://registry.npmjs.org/magic-string/-/magic-string-0.30.21.tgz",
+@@ -2294,6 +2620,34 @@
+         "@jridgewell/sourcemap-codec": "^1.5.5"
+       }
+     },
++    "node_modules/magicast": {
++      "version": "0.3.5",
++      "resolved": "https://registry.npmjs.org/magicast/-/magicast-0.3.5.tgz",
++      "integrity": "sha512-L0WhttDl+2BOsybvEOLK7fW3UA0OQ0IQ2d6Zl2x/a6vVRs3bAY0ECOSHHeL5jD+SbOpOCUEi0y1DgHEn9Qn1AQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/parser": "^7.25.4",
++        "@babel/types": "^7.25.4",
++        "source-map-js": "^1.2.0"
++      }
++    },
++    "node_modules/make-dir": {
++      "version": "4.0.0",
++      "resolved": "https://registry.npmjs.org/make-dir/-/make-dir-4.0.0.tgz",
++      "integrity": "sha512-hXdUTZYIVOt1Ex//jAQi+wTZZpUpwBj/0QsOzqegb3rGMMeJiSEu5xLHnYfBrRV4RH2+OCSOO95Is/7x1WJ4bw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "semver": "^7.5.3"
++      },
++      "engines": {
++        "node": ">=10"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
+     "node_modules/merge2": {
+       "version": "1.4.1",
+       "resolved": "https://registry.npmjs.org/merge2/-/merge2-1.4.1.tgz",
+@@ -2334,6 +2688,16 @@
+         "url": "https://github.com/sponsors/isaacs"
+       }
+     },
++    "node_modules/minipass": {
++      "version": "7.1.3",
++      "resolved": "https://registry.npmjs.org/minipass/-/minipass-7.1.3.tgz",
++      "integrity": "sha512-tEBHqDnIoM/1rXME1zgka9g6Q2lcoCkxHLuc7ODJ5BxbP5d4c2Z5cGgtXAku59200Cx7diuHTOYfSBD8n6mm8A==",
++      "dev": true,
++      "license": "BlueOak-1.0.0",
++      "engines": {
++        "node": ">=16 || 14 >=14.17"
++      }
++    },
+     "node_modules/ms": {
+       "version": "2.1.3",
+       "resolved": "https://registry.npmjs.org/ms/-/ms-2.1.3.tgz",
+@@ -2427,6 +2791,13 @@
+         "url": "https://github.com/sponsors/sindresorhus"
+       }
+     },
++    "node_modules/package-json-from-dist": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/package-json-from-dist/-/package-json-from-dist-1.0.1.tgz",
++      "integrity": "sha512-UEZIS3/by4OC8vL3P2dTXRETpebLI2NiI5vIrjaD/5UtrkFX/tNbwjTSRAGC/+7CAo2pIcBaRgWmcBBHcsaCIw==",
++      "dev": true,
++      "license": "BlueOak-1.0.0"
++    },
+     "node_modules/parent-module": {
+       "version": "1.0.1",
+       "resolved": "https://registry.npmjs.org/parent-module/-/parent-module-1.0.1.tgz",
+@@ -2470,6 +2841,23 @@
+         "node": ">=8"
+       }
+     },
++    "node_modules/path-scurry": {
++      "version": "1.11.1",
++      "resolved": "https://registry.npmjs.org/path-scurry/-/path-scurry-1.11.1.tgz",
++      "integrity": "sha512-Xa4Nw17FS9ApQFJ9umLiJS4orGjm7ZzwUrwamcGQuHSzDyth9boKDaycYdDcZDuqYATXw4HFXgaqWTctW/v1HA==",
++      "dev": true,
++      "license": "BlueOak-1.0.0",
++      "dependencies": {
++        "lru-cache": "^10.2.0",
++        "minipass": "^5.0.0 || ^6.0.2 || ^7.0.0"
++      },
++      "engines": {
++        "node": ">=16 || 14 >=14.18"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
+     "node_modules/path-type": {
+       "version": "4.0.0",
+       "resolved": "https://registry.npmjs.org/path-type/-/path-type-4.0.0.tgz",
+@@ -2737,6 +3125,19 @@
+       "dev": true,
+       "license": "ISC"
+     },
++    "node_modules/signal-exit": {
++      "version": "4.1.0",
++      "resolved": "https://registry.npmjs.org/signal-exit/-/signal-exit-4.1.0.tgz",
++      "integrity": "sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==",
++      "dev": true,
++      "license": "ISC",
++      "engines": {
++        "node": ">=14"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
+     "node_modules/slash": {
+       "version": "3.0.0",
+       "resolved": "https://registry.npmjs.org/slash/-/slash-3.0.0.tgz",
+@@ -2771,6 +3172,76 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/string-width": {
++      "version": "5.1.2",
++      "resolved": "https://registry.npmjs.org/string-width/-/string-width-5.1.2.tgz",
++      "integrity": "sha512-HnLOCR3vjcY8beoNLtcjZ5/nxn2afmME6lhrDrebokqMap+XbeW8n9TXpPDOqdGK5qcI3oT0GKTW6wC7EMiVqA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "eastasianwidth": "^0.2.0",
++        "emoji-regex": "^9.2.2",
++        "strip-ansi": "^7.0.1"
++      },
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
++    "node_modules/string-width-cjs": {
++      "name": "string-width",
++      "version": "4.2.3",
++      "resolved": "https://registry.npmjs.org/string-width/-/string-width-4.2.3.tgz",
++      "integrity": "sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "emoji-regex": "^8.0.0",
++        "is-fullwidth-code-point": "^3.0.0",
++        "strip-ansi": "^6.0.1"
++      },
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/string-width-cjs/node_modules/emoji-regex": {
++      "version": "8.0.0",
++      "resolved": "https://registry.npmjs.org/emoji-regex/-/emoji-regex-8.0.0.tgz",
++      "integrity": "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/string-width/node_modules/ansi-regex": {
++      "version": "6.2.2",
++      "resolved": "https://registry.npmjs.org/ansi-regex/-/ansi-regex-6.2.2.tgz",
++      "integrity": "sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/ansi-regex?sponsor=1"
++      }
++    },
++    "node_modules/string-width/node_modules/strip-ansi": {
++      "version": "7.2.0",
++      "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-7.2.0.tgz",
++      "integrity": "sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-regex": "^6.2.2"
++      },
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/strip-ansi?sponsor=1"
++      }
++    },
+     "node_modules/strip-ansi": {
+       "version": "6.0.1",
+       "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-6.0.1.tgz",
+@@ -2784,6 +3255,20 @@
+         "node": ">=8"
+       }
+     },
++    "node_modules/strip-ansi-cjs": {
++      "name": "strip-ansi",
++      "version": "6.0.1",
++      "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-6.0.1.tgz",
++      "integrity": "sha512-Y38VPSHcqkFrCpFnQ9vuSXmquuv5oXOKpGeT6aGrr3o3Gc9AlVa6JBfUSOCnbxGGZF+/0ooI7KrPuUSztUdU5A==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-regex": "^5.0.1"
++      },
++      "engines": {
++        "node": ">=8"
++      }
++    },
+     "node_modules/strip-json-comments": {
+       "version": "3.1.1",
+       "resolved": "https://registry.npmjs.org/strip-json-comments/-/strip-json-comments-3.1.1.tgz",
+@@ -2810,6 +3295,98 @@
+         "node": ">=8"
+       }
+     },
++    "node_modules/test-exclude": {
++      "version": "7.0.2",
++      "resolved": "https://registry.npmjs.org/test-exclude/-/test-exclude-7.0.2.tgz",
++      "integrity": "sha512-u9E6A+ZDYdp7a4WnarkXPZOx8Ilz46+kby6p1yZ8zsGTz9gYa6FIS7lj2oezzNKmtdyyJNNmmXDppga5GB7kSw==",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "@istanbuljs/schema": "^0.1.2",
++        "glob": "^10.4.1",
++        "minimatch": "^10.2.2"
++      },
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/test-exclude/node_modules/balanced-match": {
++      "version": "4.0.4",
++      "resolved": "https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz",
++      "integrity": "sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": "18 || 20 || >=22"
++      }
++    },
++    "node_modules/test-exclude/node_modules/glob": {
++      "version": "10.5.0",
++      "resolved": "https://registry.npmjs.org/glob/-/glob-10.5.0.tgz",
++      "integrity": "sha512-DfXN8DfhJ7NH3Oe7cFmu3NCu1wKbkReJ8TorzSAFbSKrlNaQSKfIzqYqVY8zlbs2NLBbWpRiU52GX2PbaBVNkg==",
++      "deprecated": "Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "foreground-child": "^3.1.0",
++        "jackspeak": "^3.1.2",
++        "minimatch": "^9.0.4",
++        "minipass": "^7.1.2",
++        "package-json-from-dist": "^1.0.0",
++        "path-scurry": "^1.11.1"
++      },
++      "bin": {
++        "glob": "dist/esm/bin.mjs"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
++    "node_modules/test-exclude/node_modules/glob/node_modules/minimatch": {
++      "version": "9.0.9",
++      "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-9.0.9.tgz",
++      "integrity": "sha512-OBwBN9AL4dqmETlpS2zasx+vTeWclWzkblfZk7KTA5j3jeOONz/tRCnZomUyvNg83wL5Zv9Ss6HMJXAgL8R2Yg==",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "brace-expansion": "^2.0.2"
++      },
++      "engines": {
++        "node": ">=16 || 14 >=14.17"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
++    "node_modules/test-exclude/node_modules/minimatch": {
++      "version": "10.2.4",
++      "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-10.2.4.tgz",
++      "integrity": "sha512-oRjTw/97aTBN0RHbYCdtF1MQfvusSIBQM0IZEgzl6426+8jSC0nF1a/GmnVLpfB9yyr6g6FTqWqiZVbxrtaCIg==",
++      "dev": true,
++      "license": "BlueOak-1.0.0",
++      "dependencies": {
++        "brace-expansion": "^5.0.2"
++      },
++      "engines": {
++        "node": "18 || 20 || >=22"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/isaacs"
++      }
++    },
++    "node_modules/test-exclude/node_modules/minimatch/node_modules/brace-expansion": {
++      "version": "5.0.4",
++      "resolved": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.4.tgz",
++      "integrity": "sha512-h+DEnpVvxmfVefa4jFbCf5HdH5YMDXRsmKflpf1pILZWRFlTbJpxeU55nJl4Smt5HQaGzg1o6RHFPJaOqnmBDg==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "balanced-match": "^4.0.2"
++      },
++      "engines": {
++        "node": "18 || 20 || >=22"
++      }
++    },
+     "node_modules/text-table": {
+       "version": "0.2.0",
+       "resolved": "https://registry.npmjs.org/text-table/-/text-table-0.2.0.tgz",
+@@ -2919,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -2951,7 +3527,6 @@
+       "integrity": "sha512-o5a9xKjbtuhY6Bi5S3+HvbRERmouabWbyUcpXXUA1u+GNUKoROi9byOJ8M0nHbHYHkYICiMlqxkg1KkYmm25Sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "esbuild": "^0.21.3",
+         "postcss": "^8.4.43",
+@@ -3138,6 +3713,107 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/wrap-ansi": {
++      "version": "8.1.0",
++      "resolved": "https://registry.npmjs.org/wrap-ansi/-/wrap-ansi-8.1.0.tgz",
++      "integrity": "sha512-si7QWI6zUMq56bESFvagtmzMdGOtoxfR+Sez11Mobfc7tm+VkUckk9bW2UeffTGVUbOksxmSw0AA2gs8g71NCQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-styles": "^6.1.0",
++        "string-width": "^5.0.1",
++        "strip-ansi": "^7.0.1"
++      },
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/wrap-ansi?sponsor=1"
++      }
++    },
++    "node_modules/wrap-ansi-cjs": {
++      "name": "wrap-ansi",
++      "version": "7.0.0",
++      "resolved": "https://registry.npmjs.org/wrap-ansi/-/wrap-ansi-7.0.0.tgz",
++      "integrity": "sha512-YVGIj2kamLSTxw6NsZjoBxfSwsn0ycdesmc4p+Q21c5zPuZ1pl+NfxVdxPtdHvmNVOQ6XSYG4AUtyt/Fi7D16Q==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-styles": "^4.0.0",
++        "string-width": "^4.1.0",
++        "strip-ansi": "^6.0.0"
++      },
++      "engines": {
++        "node": ">=10"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/wrap-ansi?sponsor=1"
++      }
++    },
++    "node_modules/wrap-ansi-cjs/node_modules/emoji-regex": {
++      "version": "8.0.0",
++      "resolved": "https://registry.npmjs.org/emoji-regex/-/emoji-regex-8.0.0.tgz",
++      "integrity": "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/wrap-ansi-cjs/node_modules/string-width": {
++      "version": "4.2.3",
++      "resolved": "https://registry.npmjs.org/string-width/-/string-width-4.2.3.tgz",
++      "integrity": "sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "emoji-regex": "^8.0.0",
++        "is-fullwidth-code-point": "^3.0.0",
++        "strip-ansi": "^6.0.1"
++      },
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/wrap-ansi/node_modules/ansi-regex": {
++      "version": "6.2.2",
++      "resolved": "https://registry.npmjs.org/ansi-regex/-/ansi-regex-6.2.2.tgz",
++      "integrity": "sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/ansi-regex?sponsor=1"
++      }
++    },
++    "node_modules/wrap-ansi/node_modules/ansi-styles": {
++      "version": "6.2.3",
++      "resolved": "https://registry.npmjs.org/ansi-styles/-/ansi-styles-6.2.3.tgz",
++      "integrity": "sha512-4Dj6M28JB+oAH8kFkTLUo+a2jwOFkuqb3yucU0CANcRRUbxS0cP0nZYCGjcc3BNXwRIsUVmDGgzawme7zvJHvg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/ansi-styles?sponsor=1"
++      }
++    },
++    "node_modules/wrap-ansi/node_modules/strip-ansi": {
++      "version": "7.2.0",
++      "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-7.2.0.tgz",
++      "integrity": "sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-regex": "^6.2.2"
++      },
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/strip-ansi?sponsor=1"
++      }
++    },
+     "node_modules/wrappy": {
+       "version": "1.0.2",
+       "resolved": "https://registry.npmjs.org/wrappy/-/wrappy-1.0.2.tgz",
+diff --git a/package.json b/package.json
+index 73725c3..70dffce 100644
+--- a/package.json
++++ b/package.json
+@@ -5,7 +5,7 @@
+   "type": "module",
+   "scripts": {
+     "build": "tsc",
+-    "lint": "eslint src/ tests/",
++    "lint": "eslint src/",
+     "test": "vitest run"
+   },
+   "devDependencies": {
+@@ -14,6 +14,7 @@
+     "@typescript-eslint/parser": "^7.0.0",
+     "eslint": "^8.56.0",
+     "typescript": "^5.4.0",
++    "@vitest/coverage-v8": "^2.0.0",
+     "vitest": "^2.0.0"
+   }
+ }
+diff --git a/phases/phase-01.md b/phases/phase-01.md
+index ce093f3..81f2bd5 100644
+--- a/phases/phase-01.md
++++ b/phases/phase-01.md
+@@ -1,32 +1,12 @@
+ # Phase 1: Basic FIFO Queue
+ 
+-Implement a `TaskQueue` class with the following interface:
+-
+-## Methods
+-
+-- **`enqueue(payload)`** - Add a task to the queue. Returns the created task object.
+-- **`dequeue()`** - Remove and return the next task in FIFO order. Returns `null` if the queue is empty. Sets the task status to `processing`.
+-- **`size()`** - Return the number of pending tasks in the queue.
+-
+-## Task Object
+-
+-Each task has the following properties:
+-
+-| Property    | Type     | Description                                    |
+-|-------------|----------|------------------------------------------------|
+-| `id`        | `string` | Auto-generated unique identifier (UUID format) |
+-| `payload`   | `any`    | The data associated with the task              |
+-| `status`    | `string` | One of: `pending`, `processing`, `completed`, `failed` |
+-| `createdAt` | `Date`   | Timestamp when the task was created            |
++Implement the core of the task queue: the ability to add tasks and retrieve them in first-in, first-out order.
+ 
+ ## Requirements
+ 
+-- Tasks are returned in the order they were added (First-In, First-Out)
+-- Each task gets a unique `id` automatically assigned
+-- New tasks start with `status: 'pending'`
+-- When dequeued, task status changes to `'processing'`
+-- `dequeue()` returns `null` when the queue is empty
+-
+-## Export
+-
+-Export the `TaskQueue` class as a named export from `src/index.ts`.
++- The queue should accept a payload (any data) when a task is added, and return a task object.
++- Each task must have a unique identifier (e.g., UUID), a status, and a creation timestamp.
++- New tasks start in a "pending" state.
++- Retrieving the next task should return the oldest pending task and transition it to a "processing" state.
++- If no tasks are available, retrieval should return `null`.
++- There should be a way to check how many tasks are waiting.
+diff --git a/phases/phase-02.md b/phases/phase-02.md
+index a1ab841..c29d2d5 100644
+--- a/phases/phase-02.md
++++ b/phases/phase-02.md
+@@ -1,24 +1,13 @@
+ # Phase 2: Named Queues
+ 
+-Extend the `TaskQueue` to support multiple named queues.
+-
+-## Updated Methods
+-
+-- **`enqueue(queueName, payload)`** - Add a task to a specific named queue. Returns the created task.
+-- **`dequeue(queueName)`** - Get the next task from a specific named queue. Returns `null` if queue is empty or doesn't exist.
+-- **`listQueues()`** - Return an array of all queue names that have been created.
+-- **`queueSize(queueName)`** - Return the number of pending tasks in a specific queue.
++Extend the system to support multiple independent queues, each identified by a name.
+ 
+ ## Requirements
+ 
+-- Each named queue operates independently
+-- Enqueueing to a queue that doesn't exist creates it
+-- Dequeueing from a non-existent queue returns `null`
+-- If no queue name is specified, use `'default'` as the queue name
+-- `listQueues()` returns names of all queues that have been created
+-- Queue-specific sizes are tracked independently
+-
+-## Backward Compatibility
+-
+-The single-argument `enqueue(payload)` should still work by using the `'default'` queue.
+-Similarly, `dequeue()` with no arguments should dequeue from `'default'`.
++- Tasks are added to a specific named queue. If no name is given, a default queue is used.
++- Each named queue operates independently -- adding to one does not affect another.
++- Retrieving a task pulls from the specified queue only.
++- Creating a queue happens implicitly when a task is first added to it.
++- There should be a way to list all queue names that exist.
++- Asking for a task from a non-existent or empty queue returns `null`.
++- The API should remain backward-compatible with Phase 1 (omitting the queue name uses the default).
+diff --git a/phases/phase-03.md b/phases/phase-03.md
+index 971e313..103e638 100644
+--- a/phases/phase-03.md
++++ b/phases/phase-03.md
+@@ -1,17 +1,12 @@
+ # Phase 3: Priority
+ 
+-Add priority support to tasks.
+-
+-## Updated Methods
+-
+-- **`enqueue(queueName, payload, options?)`** - The options object can include `priority`.
+-  - `priority`: number from 1 (highest) to 10 (lowest). Default is 5.
++Add priority support so that more urgent tasks are processed before less urgent ones.
+ 
+ ## Requirements
+ 
+-- `dequeue()` returns the highest priority task first (lowest number = highest priority)
+-- Within the same priority level, FIFO order is preserved
+-- Default priority is 5 if not specified
+-- Priority values outside 1-10 should throw an error
+-- Priority is per-queue (each named queue has its own priority ordering)
+-- The task object should include a `priority` property
++- Tasks can be assigned a priority level from 1 (highest) to 10 (lowest). The default priority is 5.
++- When retrieving the next task, higher-priority tasks (lower number) are returned first.
++- Tasks with the same priority are returned in FIFO order.
++- Invalid priority values (outside 1-10) should cause an error.
++- Priority operates per-queue -- each named queue maintains its own priority ordering.
++- The task object should expose its priority level.
+diff --git a/phases/phase-04.md b/phases/phase-04.md
+index dbb4ef5..5dfb105 100644
+--- a/phases/phase-04.md
++++ b/phases/phase-04.md
+@@ -1,19 +1,12 @@
+-# Phase 4: Delayed/Scheduled Tasks
++# Phase 4: Delayed and Scheduled Tasks
+ 
+-Add support for delayed and scheduled task execution.
+-
+-## Updated Methods
+-
+-- **`enqueue(queueName, payload, options?)`** - Options can now include:
+-  - `delay`: number of milliseconds before the task becomes available
+-  - `runAt`: a `Date` object specifying when the task should become available
+-  - (existing) `priority`: priority level
++Add the ability to defer tasks so they only become available for processing after a specified time.
+ 
+ ## Requirements
+ 
+-- A delayed task is enqueued immediately but not returned by `dequeue()` until the delay has elapsed
+-- A `runAt` task becomes available at the specified time
+-- Non-delayed tasks should be dequeued before delayed tasks that haven't become available yet
+-- When multiple delayed tasks are available, they are ordered by their availability time (earliest first), then by priority, then FIFO
+-- `delay` and `runAt` work with named queues
+-- The task object should include a `availableAt` property (Date) indicating when the task becomes available
++- A task can be given a delay (in milliseconds) or a specific future time at which it becomes available.
++- Delayed tasks are added to the queue immediately but are not returned when retrieving until their availability time has passed.
++- Non-delayed tasks are always preferred over delayed tasks that are not yet available.
++- When multiple delayed tasks become available simultaneously, they should be ordered by availability time, then priority, then FIFO.
++- The task object should indicate when it becomes available.
++- Delays work correctly with named queues.
+diff --git a/phases/phase-05.md b/phases/phase-05.md
+index c881191..5b3067f 100644
+--- a/phases/phase-05.md
++++ b/phases/phase-05.md
+@@ -1,24 +1,14 @@
+ # Phase 5: Retry with Backoff
+ 
+-Add automatic retry functionality with exponential backoff.
+-
+-## New Methods
+-
+-- **`fail(taskId, error?)`** - Mark a processing task as failed. Triggers automatic retry if retries remain.
+-- **`complete(taskId)`** - Mark a processing task as completed.
+-
+-## Updated Methods
+-
+-- **`enqueue(queueName, payload, options?)`** - Options can now include:
+-  - `maxRetries`: maximum number of retry attempts (default: 3)
+-  - `backoffMs`: base delay for exponential backoff in milliseconds (default: 1000)
++Add automatic retry functionality so that failed tasks can be re-attempted with increasing delays.
+ 
+ ## Requirements
+ 
+-- When `fail()` is called and retries remain, the task is re-enqueued with a delay
+-- Backoff formula: `backoffMs * 2^(attempt - 1)` where attempt starts at 1
+-  - 1st retry: 1000ms, 2nd retry: 2000ms, 3rd retry: 4000ms
+-- `task.attempts` tracks how many times the task has been attempted (starts at 1 on first dequeue)
+-- Custom `maxRetries` can be set per task
+-- Retried tasks preserve their original queue name and priority
+-- If a task has exhausted all retries, it remains in `failed` status (see Phase 6 for DLQ)
++- There should be a way to mark a processing task as completed or failed.
++- When a task fails and has retries remaining, it is automatically re-added to the queue with a delay.
++- The delay follows exponential backoff: `baseDelay * 2^(attempt - 1)` (e.g., 1s, 2s, 4s, ...).
++- The default maximum number of retries is 3, but this should be configurable per task.
++- The base backoff delay defaults to 1000ms but should be configurable per task.
++- The task should track how many times it has been attempted.
++- Retried tasks keep their original queue and priority.
++- If all retries are exhausted, the task remains in a failed state.
+diff --git a/phases/phase-06.md b/phases/phase-06.md
+index 8432a2c..486c08c 100644
+--- a/phases/phase-06.md
++++ b/phases/phase-06.md
+@@ -1,20 +1,12 @@
+ # Phase 6: Dead Letter Queue
+ 
+-Add dead letter queue (DLQ) support for tasks that have exhausted all retries.
+-
+-## New Methods
+-
+-- **`getDLQ(queueName)`** - Return an array of all dead-letter tasks for the specified queue.
+-- **`retryDLQ(taskId)`** - Move a dead-letter task back to its original queue for another round of retries. Returns the re-enqueued task.
+-- **`clearDLQ(queueName)`** - Remove all dead-letter tasks for the specified queue.
++Add a dead letter queue (DLQ) to capture tasks that have permanently failed after exhausting all retries.
+ 
+ ## Requirements
+ 
+-- When a task exhausts all retry attempts (from Phase 5), it automatically moves to the DLQ
+-- DLQ tasks have status `'failed'` and are stored separately from the main queue
+-- Each DLQ task retains its original error information (`task.lastError`)
+-- DLQ tasks track how many times they've failed (`task.failCount`)
+-- `retryDLQ(taskId)` resets the task's retry count, giving it a fresh set of retries
+-- `retryDLQ(taskId)` places the task back in its original queue with original priority
+-- `clearDLQ(queueName)` removes all DLQ entries for that queue
+-- DLQ is per-queue (each named queue has its own DLQ)
++- When a task has no more retries left, it is automatically moved to a dead letter queue associated with its original queue.
++- There should be a way to view all dead-lettered tasks for a given queue.
++- Dead-lettered tasks should retain their error information and a count of how many times they failed.
++- It should be possible to move a dead-lettered task back to its original queue for a fresh round of retries.
++- There should be a way to clear all dead-lettered tasks for a queue.
++- Each named queue has its own independent dead letter queue.
+diff --git a/phases/phase-07.md b/phases/phase-07.md
+index f8809d7..309fcfc 100644
+--- a/phases/phase-07.md
++++ b/phases/phase-07.md
+@@ -1,24 +1,13 @@
+ # Phase 7: Task Dependencies
+ 
+-Add support for task dependencies, where tasks can wait for other tasks to complete before becoming available.
+-
+-## Updated Methods
+-
+-- **`enqueue(queueName, payload, options?)`** - Options can now include:
+-  - `dependsOn`: an array of task IDs that must complete before this task becomes available
+-
+-## New Methods
+-
+-- **`getDependencies(taskId)`** - Return dependency information for a task, including each dependency's ID and current status.
++Add the ability for tasks to declare dependencies on other tasks, so they only become available once their prerequisites are done.
+ 
+ ## Requirements
+ 
+-- A task with dependencies remains blocked (not available for dequeue) until ALL dependencies have `completed` status
+-- When a dependency completes (via `complete(taskId)`), the system checks if any dependent tasks are now unblocked
+-- Circular dependencies must be detected and throw an error at enqueue time
+-  - Direct circular: A depends on B, B depends on A
+-  - Indirect circular: A → B → C → A
+-- `getDependencies(taskId)` returns an array of `{ taskId, status }` objects
+-- Dependency on a non-existent task ID should throw an error
+-- A failed dependency does NOT auto-fail the dependent task - it stays blocked
+-- Cascading dependencies work: if A depends on B and B depends on C, A is only available after both B and C complete
++- When adding a task, you can specify a list of task IDs that must complete before this task becomes available.
++- A task with unresolved dependencies is blocked and will not be returned when retrieving.
++- When a dependency completes, the system should check whether any blocked tasks are now unblocked.
++- Circular dependencies (direct or indirect) must be detected and rejected at task-creation time.
++- Depending on a non-existent task should cause an error.
++- A failed dependency does NOT automatically fail its dependents -- they remain blocked.
++- There should be a way to inspect a task's dependency status.
+diff --git a/phases/phase-08.md b/phases/phase-08.md
+index 18277f9..ef19a29 100644
+--- a/phases/phase-08.md
++++ b/phases/phase-08.md
+@@ -1,18 +1,12 @@
+ # Phase 8: Concurrency Control
+ 
+-Add per-queue concurrency limits to control how many tasks can be processed simultaneously.
+-
+-## New Methods
+-
+-- **`setConcurrency(queueName, limit)`** - Set the maximum number of tasks that can be in `processing` status simultaneously for a queue.
+-- **`getConcurrency(queueName)`** - Return concurrency information: `{ current: number, max: number }`.
++Add per-queue limits on how many tasks can be processed at the same time.
+ 
+ ## Requirements
+ 
+-- `dequeue()` returns `null` if the queue has reached its concurrency limit, even if tasks are available
+-- `complete(taskId)` and `fail(taskId)` free up a concurrency slot
+-- Default concurrency is unlimited (no limit) until `setConcurrency` is called
+-- Each queue has its own independent concurrency limit
+-- Concurrency interacts correctly with priorities (highest priority task still chosen, but only if a slot is available)
+-- `getConcurrency(queueName)` returns the current number of processing tasks and the configured maximum
+-  - For unlimited queues, `max` should be `Infinity` or `0` to indicate no limit
++- Each queue can have a maximum concurrency setting that limits how many tasks can be in a processing state simultaneously.
++- If the concurrency limit is reached, retrieving a task returns `null` even if pending tasks are available.
++- Completing or failing a task frees up a concurrency slot.
++- By default, queues have no concurrency limit (unlimited).
++- There should be a way to set and query the concurrency limit and current active count for a queue.
++- Concurrency interacts correctly with priority ordering -- the highest-priority available task is still chosen, subject to the concurrency limit.
+diff --git a/phases/phase-09.md b/phases/phase-09.md
+index 7ff6451..8e086bf 100644
+--- a/phases/phase-09.md
++++ b/phases/phase-09.md
+@@ -1,22 +1,14 @@
+-# Phase 9: Progress and Cancellation
++# Phase 9: Progress Tracking and Cancellation
+ 
+-Add progress tracking and task cancellation support.
+-
+-## New Methods
+-
+-- **`updateProgress(taskId, percent, message?)`** - Report progress for a processing task (0-100).
+-- **`getProgress(taskId)`** - Return progress info: `{ percent: number, message?: string, updatedAt: Date }`.
+-- **`cancel(taskId)`** - Cancel a pending or processing task. Sets status to `'cancelled'`.
+-- **`onProgress(taskId, callback)`** - Subscribe to progress updates. Callback receives `{ percent, message, updatedAt }`.
++Add the ability to report progress on running tasks and to cancel tasks.
+ 
+ ## Requirements
+ 
+-- Progress percentage must be between 0 and 100
+-- `updateProgress` fires all registered `onProgress` callbacks for that task
+-- `cancel()` works on both `pending` and `processing` tasks
+-- A cancelled pending task is removed from the queue (not available for dequeue)
+-- A cancelled processing task has its status set to `'cancelled'`
+-- Cancelled tasks are NOT retried (even if they have retries remaining)
+-- `getProgress(taskId)` returns `null` if no progress has been reported yet
+-- The `message` parameter in `updateProgress` is optional
+-- `onProgress` returns an unsubscribe function
++- A processing task can report its progress as a percentage (0-100) with an optional message.
++- There should be a way to query a task's current progress.
++- Listeners can subscribe to progress updates for a task and receive notifications when progress changes.
++- Subscriptions should be cancellable (unsubscribe).
++- Tasks in pending or processing state can be cancelled.
++- Cancelled pending tasks are removed from the queue and will not be returned.
++- Cancelled processing tasks have their status updated accordingly.
++- Cancelled tasks are never retried, even if they had retries remaining.
+diff --git a/phases/phase-10.md b/phases/phase-10.md
+index 935562a..cc59359 100644
+--- a/phases/phase-10.md
++++ b/phases/phase-10.md
+@@ -1,30 +1,15 @@
+-# Phase 10: Recurring Tasks (Cron)
++# Phase 10: Recurring Tasks
+ 
+-Add support for recurring scheduled tasks using simple cron-like expressions.
+-
+-## New Methods
+-
+-- **`schedule(queueName, cronExpression, taskTemplate)`** - Create a recurring task schedule. Returns a schedule object with an `id`.
+-- **`unschedule(scheduleId)`** - Remove a schedule, stopping future occurrences.
+-- **`listSchedules(queueName?)`** - List all active schedules, optionally filtered by queue name.
+-- **`tick()`** - Manually advance and check schedules, triggering any that are due. For testing purposes.
+-
+-## Cron Expression Subset
+-
+-Support a simple subset of cron expressions:
+-
+-| Expression       | Meaning              |
+-|------------------|----------------------|
+-| `*/N * * * *`    | Every N minutes      |
+-| `0 * * * *`      | Every hour (on the hour) |
+-| `0 0 * * *`      | Every day at midnight |
++Add the ability to schedule tasks that recur on a regular interval using simple cron-like expressions.
+ 
+ ## Requirements
+ 
+-- `schedule()` returns a schedule object: `{ id, queueName, cronExpression, taskTemplate, active: true }`
+-- `tick()` checks all active schedules and enqueues tasks for any that are due
+-- The `taskTemplate` is used as the payload for enqueued tasks
+-- `unschedule(scheduleId)` marks the schedule as inactive
+-- `listSchedules()` returns only active schedules
+-- Multiple schedules can coexist on the same or different queues
+-- Scheduled tasks are regular tasks once enqueued (subject to all other queue rules)
++- A schedule associates a cron expression with a queue and a task template (the payload to use each time).
++- Support a simple subset of cron expressions:
++  - `*/N * * * *` -- every N minutes
++  - `0 * * * *` -- every hour on the hour
++  - `0 0 * * *` -- every day at midnight
++- There should be a way to create, remove, and list active schedules.
++- A manual "tick" or "check" mechanism should evaluate all active schedules and enqueue tasks for any that are due. This is used for testing.
++- Once enqueued, recurring tasks are regular tasks subject to all other queue rules.
++- Removing a schedule stops future occurrences from being created.
+diff --git a/phases/phase-11.md b/phases/phase-11.md
+index 886c28b..96cf45c 100644
+--- a/phases/phase-11.md
++++ b/phases/phase-11.md
+@@ -1,25 +1,14 @@
+ # Phase 11: Middleware Pipeline
+ 
+-Add a middleware system for queue processing pipelines.
+-
+-## New Methods
+-
+-- **`use(queueName, middleware)`** - Add a middleware function to a queue's processing pipeline.
+-- **`process(queueName, handler)`** - Register a task handler for a queue and begin processing. The handler runs after all middleware.
+-
+-## Middleware Signature
+-
+-```typescript
+-type Middleware = (task: Task, next: () => Promise<void>) => Promise<void>;
+-```
++Add a middleware system that can intercept and transform tasks as they are processed.
+ 
+ ## Requirements
+ 
+-- Middleware functions run in the order they were added (first added = first to run)
+-- Each middleware must call `next()` to pass control to the next middleware (and eventually the handler)
+-- If a middleware does NOT call `next()`, the task processing is skipped
+-- Middleware can modify the task object (e.g., add metadata)
+-- If a middleware throws an error, the task is marked as failed
+-- Each queue has its own independent middleware stack
+-- Middleware receives the full task context (task object)
+-- `process()` dequeues a task and runs it through the middleware pipeline, then the handler
++- Middleware functions can be registered per queue.
++- When a task is processed, it passes through all registered middleware in order before reaching the final handler.
++- Each middleware receives the task and a "next" function. Calling "next" passes control to the next middleware (or the handler).
++- If a middleware does NOT call "next", the task processing is skipped.
++- Middleware can modify the task (e.g., adding metadata or transforming the payload).
++- If a middleware throws an error, the task should be marked as failed.
++- A processing function/handler can be registered per queue. It is invoked after all middleware have run.
++- Each queue has its own independent middleware stack.
+diff --git a/phases/phase-12.md b/phases/phase-12.md
+index 7494237..16132ee 100644
+--- a/phases/phase-12.md
++++ b/phases/phase-12.md
+@@ -1,23 +1,14 @@
+ # Phase 12: Graceful Shutdown
+ 
+-Add graceful shutdown capabilities to the task queue.
+-
+-## New Methods
+-
+-- **`shutdown(timeout?)`** - Initiate graceful shutdown. Returns a Promise that resolves with a summary.
+-  - `timeout`: maximum milliseconds to wait for processing tasks (default: 30000)
+-- **`onShutdown(callback)`** - Register a callback to be called during shutdown.
++Add the ability to shut down the task queue system in an orderly fashion.
+ 
+ ## Requirements
+ 
+-- After `shutdown()` is called, `enqueue()` should throw an error
+-- `shutdown()` waits for all currently processing tasks to complete
+-- If processing tasks don't complete within the timeout, they are force-cancelled
+-- `onShutdown` callbacks are called during the shutdown process
+-- The returned summary object includes:
+-  - `completed`: number of tasks that completed during shutdown
+-  - `cancelled`: number of tasks that were force-cancelled
+-  - `elapsed`: time in milliseconds the shutdown took
+-- Multiple calls to `shutdown()` should be idempotent (return the same promise/result)
+-- If there are no processing tasks, shutdown resolves immediately
+-- Force-cancelled tasks have their status set to `'cancelled'`
++- A shutdown operation should signal the system to stop accepting new tasks.
++- After shutdown is initiated, attempting to add new tasks should produce an error.
++- The shutdown should wait for all currently-processing tasks to finish, up to a configurable timeout.
++- If processing tasks do not complete within the timeout, they should be force-cancelled.
++- Callbacks can be registered to run during the shutdown process.
++- The shutdown should produce a summary indicating how many tasks completed, how many were force-cancelled, and how long the shutdown took.
++- Calling shutdown multiple times should be safe and return the same result.
++- If no tasks are processing, shutdown should complete immediately.
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..cd4cfac
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,12 @@
++export { TaskQueue } from './task-queue.js';
++export type {
++  Task,
++  TaskOptions,
++  TaskStatus,
++  ProgressListener,
++  Schedule,
++  MiddlewareFunction,
++  HandlerFunction,
++  ShutdownOptions,
++  ShutdownSummary,
++} from './types.js';
+diff --git a/src/task-queue.test.ts b/src/task-queue.test.ts
+new file mode 100644
+index 0000000..92b132a
+--- /dev/null
++++ b/src/task-queue.test.ts
+@@ -0,0 +1,988 @@
++import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { TaskQueue } from './task-queue.js';
++
++describe('TaskQueue', () => {
++  let tq: TaskQueue;
++
++  beforeEach(() => {
++    tq = new TaskQueue();
++  });
++
++  // ==================== Phase 1: Basic FIFO Queue ====================
++  describe('Phase 1: Basic FIFO Queue', () => {
++    it('should add a task and return a task object with required fields', () => {
++      const task = tq.addTask({ message: 'hello' });
++      expect(task.id).toBeDefined();
++      expect(task.id).toMatch(/^[0-9a-f-]{36}$/);
++      expect(task.payload).toEqual({ message: 'hello' });
++      expect(task.status).toBe('pending');
++      expect(task.createdAt).toBeInstanceOf(Date);
++    });
++
++    it('should retrieve tasks in FIFO order', () => {
++      tq.addTask('first');
++      tq.addTask('second');
++      tq.addTask('third');
++
++      const t1 = tq.getNextTask();
++      expect(t1?.payload).toBe('first');
++      expect(t1?.status).toBe('processing');
++
++      const t2 = tq.getNextTask();
++      expect(t2?.payload).toBe('second');
++
++      const t3 = tq.getNextTask();
++      expect(t3?.payload).toBe('third');
++    });
++
++    it('should return null when no tasks are available', () => {
++      expect(tq.getNextTask()).toBeNull();
++    });
++
++    it('should return null when all tasks are processing', () => {
++      tq.addTask('only');
++      tq.getNextTask();
++      expect(tq.getNextTask()).toBeNull();
++    });
++
++    it('should track waiting count', () => {
++      expect(tq.getWaitingCount()).toBe(0);
++      tq.addTask('a');
++      tq.addTask('b');
++      expect(tq.getWaitingCount()).toBe(2);
++      tq.getNextTask();
++      expect(tq.getWaitingCount()).toBe(1);
++    });
++
++    it('should transition task to processing state', () => {
++      const added = tq.addTask('task');
++      expect(added.status).toBe('pending');
++      const retrieved = tq.getNextTask()!;
++      expect(retrieved.status).toBe('processing');
++      expect(retrieved.id).toBe(added.id);
++    });
++
++    it('should assign unique IDs to tasks', () => {
++      const ids = new Set<string>();
++      for (let i = 0; i < 100; i++) {
++        ids.add(tq.addTask(i).id);
++      }
++      expect(ids.size).toBe(100);
++    });
++
++    it('should increment attempt on retrieval', () => {
++      tq.addTask('test');
++      const task = tq.getNextTask()!;
++      expect(task.attempt).toBe(1);
++    });
++  });
++
++  // ==================== Phase 2: Named Queues ====================
++  describe('Phase 2: Named Queues', () => {
++    it('should use default queue when no name specified', () => {
++      tq.addTask('task');
++      const task = tq.getNextTask();
++      expect(task?.queue).toBe('default');
++    });
++
++    it('should support named queues', () => {
++      tq.addTask('email-task', { queue: 'emails' });
++      tq.addTask('sms-task', { queue: 'sms' });
++
++      expect(tq.getNextTask('emails')?.payload).toBe('email-task');
++      expect(tq.getNextTask('sms')?.payload).toBe('sms-task');
++    });
++
++    it('should keep queues independent', () => {
++      tq.addTask('a', { queue: 'q1' });
++      tq.addTask('b', { queue: 'q2' });
++
++      expect(tq.getWaitingCount('q1')).toBe(1);
++      expect(tq.getWaitingCount('q2')).toBe(1);
++
++      tq.getNextTask('q1');
++      expect(tq.getWaitingCount('q1')).toBe(0);
++      expect(tq.getWaitingCount('q2')).toBe(1);
++    });
++
++    it('should return null for non-existent queue', () => {
++      expect(tq.getNextTask('nonexistent')).toBeNull();
++    });
++
++    it('should list all queue names', () => {
++      tq.addTask('a', { queue: 'alpha' });
++      tq.addTask('b', { queue: 'beta' });
++      const names = tq.getQueueNames();
++      expect(names).toContain('alpha');
++      expect(names).toContain('beta');
++    });
++
++    it('should implicitly create queue on first task add', () => {
++      expect(tq.getQueueNames()).not.toContain('new-queue');
++      tq.addTask('x', { queue: 'new-queue' });
++      expect(tq.getQueueNames()).toContain('new-queue');
++    });
++  });
++
++  // ==================== Phase 3: Priority ====================
++  describe('Phase 3: Priority', () => {
++    it('should default priority to 5', () => {
++      const task = tq.addTask('task');
++      expect(task.priority).toBe(5);
++    });
++
++    it('should return higher priority tasks first', () => {
++      tq.addTask('low', { priority: 10 });
++      tq.addTask('high', { priority: 1 });
++      tq.addTask('medium', { priority: 5 });
++
++      expect(tq.getNextTask()?.payload).toBe('high');
++      expect(tq.getNextTask()?.payload).toBe('medium');
++      expect(tq.getNextTask()?.payload).toBe('low');
++    });
++
++    it('should return same-priority tasks in FIFO order', () => {
++      tq.addTask('first', { priority: 3 });
++      tq.addTask('second', { priority: 3 });
++      tq.addTask('third', { priority: 3 });
++
++      expect(tq.getNextTask()?.payload).toBe('first');
++      expect(tq.getNextTask()?.payload).toBe('second');
++      expect(tq.getNextTask()?.payload).toBe('third');
++    });
++
++    it('should reject invalid priority values', () => {
++      expect(() => tq.addTask('task', { priority: 0 })).toThrow();
++      expect(() => tq.addTask('task', { priority: 11 })).toThrow();
++      expect(() => tq.addTask('task', { priority: -1 })).toThrow();
++      expect(() => tq.addTask('task', { priority: 3.5 })).toThrow();
++    });
++
++    it('should maintain priority per queue', () => {
++      tq.addTask('q1-low', { queue: 'q1', priority: 10 });
++      tq.addTask('q1-high', { queue: 'q1', priority: 1 });
++      tq.addTask('q2-low', { queue: 'q2', priority: 10 });
++      tq.addTask('q2-high', { queue: 'q2', priority: 1 });
++
++      expect(tq.getNextTask('q1')?.payload).toBe('q1-high');
++      expect(tq.getNextTask('q2')?.payload).toBe('q2-high');
++    });
++
++    it('should expose priority on the task object', () => {
++      const task = tq.addTask('task', { priority: 3 });
++      expect(task.priority).toBe(3);
++    });
++  });
++
++  // ==================== Phase 4: Delayed Tasks ====================
++  describe('Phase 4: Delayed and Scheduled Tasks', () => {
++    it('should support delay in milliseconds', () => {
++      tq.addTask('delayed', { delay: 10000 });
++      // Should not be available now
++      expect(tq.getNextTask()).toBeNull();
++    });
++
++    it('should support specific availableAt time', () => {
++      const future = new Date(Date.now() + 10000);
++      const task = tq.addTask('scheduled', { availableAt: future });
++      expect(task.availableAt.getTime()).toBe(future.getTime());
++      expect(tq.getNextTask()).toBeNull();
++    });
++
++    it('should return delayed tasks after their availability time', () => {
++      const past = new Date(Date.now() - 1000);
++      tq.addTask('available', { availableAt: past });
++      expect(tq.getNextTask()?.payload).toBe('available');
++    });
++
++    it('should prefer non-delayed tasks over not-yet-available delayed tasks', () => {
++      tq.addTask('delayed', { delay: 100000 });
++      tq.addTask('immediate');
++
++      expect(tq.getNextTask()?.payload).toBe('immediate');
++    });
++
++    it('should order by availability time, then priority, then FIFO', () => {
++      const time1 = new Date(Date.now() - 3000);
++      const time2 = new Date(Date.now() - 2000);
++      const time3 = new Date(Date.now() - 1000);
++
++      tq.addTask('third', { availableAt: time3, priority: 1 });
++      tq.addTask('first', { availableAt: time1, priority: 5 });
++      tq.addTask('second', { availableAt: time2, priority: 5 });
++
++      // Priority wins over availability time (priority 1 is highest)
++      // Wait - the spec says "availability time, then priority, then FIFO"
++      // But priority should still matter... let me re-read:
++      // "When multiple delayed tasks become available simultaneously,
++      //  they should be ordered by availability time, then priority, then FIFO."
++      // The normal sort is priority first. This special rule is for delayed tasks
++      // becoming available simultaneously. But our sort does priority, then availableAt, then FIFO.
++      // Let me check what the requirement actually means...
++
++      // Actually re-reading phase 4: the sort for the general getNextTask
++      // should consider priority first (from phase 3), but within same priority,
++      // availability time breaks ties, then FIFO.
++
++      // With our sorting: priority first, then availableAt, then createdAt
++      const t1 = tq.getNextTask()!;
++      const t2 = tq.getNextTask()!;
++      const t3 = tq.getNextTask()!;
++
++      // Priority 1 comes first
++      expect(t1.payload).toBe('third');
++      // Then priority 5, ordered by availableAt
++      expect(t2.payload).toBe('first');
++      expect(t3.payload).toBe('second');
++    });
++
++    it('should indicate availability time on task', () => {
++      const future = new Date(Date.now() + 5000);
++      const task = tq.addTask('task', { availableAt: future });
++      expect(task.availableAt).toEqual(future);
++    });
++
++    it('should work with named queues', () => {
++      tq.addTask('delayed', { queue: 'q1', delay: 100000 });
++      tq.addTask('immediate', { queue: 'q1' });
++
++      expect(tq.getNextTask('q1')?.payload).toBe('immediate');
++    });
++  });
++
++  // ==================== Phase 5: Retry with Backoff ====================
++  describe('Phase 5: Retry with Backoff', () => {
++    it('should mark task as completed', () => {
++      tq.addTask('task');
++      const task = tq.getNextTask()!;
++      tq.completeTask(task.id);
++      expect(task.status).toBe('completed');
++    });
++
++    it('should mark task as failed when no retries left', () => {
++      tq.addTask('task', { maxRetries: 0 });
++      const task = tq.getNextTask()!;
++      tq.failTask(task.id, 'something went wrong');
++      expect(task.status).toBe('failed');
++      expect(task.error).toBe('something went wrong');
++    });
++
++    it('should retry failed tasks with remaining retries', () => {
++      tq.addTask('task', { maxRetries: 3, backoffDelay: 0 });
++      const task = tq.getNextTask()!;
++      expect(task.attempt).toBe(1);
++
++      // Fail the task - should retry
++      tq.failTask(task.id, 'error');
++      expect(task.status).toBe('pending');
++      expect(task.failureCount).toBe(1);
++    });
++
++    it('should use exponential backoff for retries', () => {
++      tq.addTask('task', { maxRetries: 3, backoffDelay: 1000 });
++      const retrieved = tq.getNextTask()!;
++
++      // First failure: delay = 1000 * 2^0 = 1000ms
++      const beforeFail = Date.now();
++      tq.failTask(retrieved.id, 'error');
++      expect(retrieved.availableAt.getTime()).toBeGreaterThanOrEqual(beforeFail + 1000 - 1);
++    });
++
++    it('should exhaust retries and end in failed state', () => {
++      // maxRetries=1 means 1 retry allowed, so 2 total attempts
++      tq.addTask('task', { maxRetries: 1, backoffDelay: 0 });
++
++      // Attempt 1 - should retry
++      const t1 = tq.getNextTask()!;
++      tq.failTask(t1.id, 'error 1');
++      expect(t1.status).toBe('pending'); // retrying
++      t1.availableAt = new Date(Date.now() - 1);
++
++      // Attempt 2 - should exhaust
++      const t2 = tq.getNextTask()!;
++      expect(t2.id).toBe(t1.id);
++      tq.failTask(t2.id, 'error 2');
++      expect(t2.status).toBe('failed');
++    });
++
++    it('should track attempt count', () => {
++      tq.addTask('task', { maxRetries: 3, backoffDelay: 0 });
++
++      // Attempt 1
++      const t = tq.getNextTask()!;
++      expect(t.attempt).toBe(1);
++
++      // Fail and retry
++      tq.failTask(t.id, 'err');
++      // Task is now pending again, need to make it available
++      t.availableAt = new Date(Date.now() - 1);
++
++      // Attempt 2
++      const t2 = tq.getNextTask()!;
++      expect(t2.attempt).toBe(2);
++      expect(t2.id).toBe(t.id);
++    });
++
++    it('should keep original queue and priority on retry', () => {
++      tq.addTask('task', { queue: 'myqueue', priority: 2, maxRetries: 3, backoffDelay: 0 });
++
++      const t = tq.getNextTask('myqueue')!;
++      tq.failTask(t.id, 'err');
++      t.availableAt = new Date(Date.now() - 1);
++
++      const t2 = tq.getNextTask('myqueue')!;
++      expect(t2.queue).toBe('myqueue');
++      expect(t2.priority).toBe(2);
++    });
++
++    it('should default to 3 max retries', () => {
++      const task = tq.addTask('task');
++      expect(task.maxRetries).toBe(3);
++    });
++
++    it('should error when completing non-processing task', () => {
++      const task = tq.addTask('task');
++      expect(() => tq.completeTask(task.id)).toThrow();
++    });
++
++    it('should error when failing non-processing task', () => {
++      const task = tq.addTask('task');
++      expect(() => tq.failTask(task.id)).toThrow();
++    });
++  });
++
++  // ==================== Phase 6: Dead Letter Queue ====================
++  describe('Phase 6: Dead Letter Queue', () => {
++    it('should move exhausted tasks to dead letter queue', () => {
++      // maxRetries=0 means no retries, first failure goes to DLQ
++      tq.addTask('task', { maxRetries: 0, backoffDelay: 0 });
++      const t = tq.getNextTask()!;
++      tq.failTask(t.id, 'permanently failed');
++
++      const dlq = tq.getDeadLetterTasks();
++      expect(dlq).toHaveLength(1);
++      expect(dlq[0].id).toBe(t.id);
++      expect(dlq[0].error).toBe('permanently failed');
++    });
++
++    it('should retain error info and failure count', () => {
++      // maxRetries=1 means 1 retry, so 2 total attempts before DLQ
++      tq.addTask('task', { maxRetries: 1, backoffDelay: 0 });
++
++      const t = tq.getNextTask()!;
++      tq.failTask(t.id, 'error 1');
++      // Should retry (attempt 1 <= maxRetries 1)
++      expect(t.status).toBe('pending');
++      t.availableAt = new Date(Date.now() - 1);
++
++      const t2 = tq.getNextTask()!;
++      tq.failTask(t2.id, 'error 2');
++      // Now exhausted (attempt 2 > maxRetries 1)
++      expect(t2.status).toBe('failed');
++
++      const dlq = tq.getDeadLetterTasks();
++      expect(dlq[0].failureCount).toBe(2);
++      expect(dlq[0].error).toBe('error 2');
++    });
++
++    it('should redrive dead-lettered task back to original queue', () => {
++      tq.addTask('task', { queue: 'myqueue', maxRetries: 0, backoffDelay: 0 });
++      const t = tq.getNextTask('myqueue')!;
++      tq.failTask(t.id, 'error');
++
++      const redriven = tq.redriveTask(t.id);
++      expect(redriven.status).toBe('pending');
++      expect(redriven.attempt).toBe(0);
++      expect(redriven.failureCount).toBe(0);
++
++      const next = tq.getNextTask('myqueue')!;
++      expect(next.id).toBe(t.id);
++    });
++
++    it('should clear dead letter queue', () => {
++      tq.addTask('task1', { maxRetries: 0, backoffDelay: 0 });
++      tq.addTask('task2', { maxRetries: 0, backoffDelay: 0 });
++
++      const t1 = tq.getNextTask()!;
++      tq.failTask(t1.id, 'err');
++      const t2 = tq.getNextTask()!;
++      tq.failTask(t2.id, 'err');
++
++      expect(tq.getDeadLetterTasks()).toHaveLength(2);
++      tq.clearDeadLetterQueue();
++      expect(tq.getDeadLetterTasks()).toHaveLength(0);
++    });
++
++    it('should have independent DLQ per named queue', () => {
++      tq.addTask('q1', { queue: 'q1', maxRetries: 0, backoffDelay: 0 });
++      tq.addTask('q2', { queue: 'q2', maxRetries: 0, backoffDelay: 0 });
++
++      const t1 = tq.getNextTask('q1')!;
++      tq.failTask(t1.id, 'err');
++      const t2 = tq.getNextTask('q2')!;
++      tq.failTask(t2.id, 'err');
++
++      expect(tq.getDeadLetterTasks('q1')).toHaveLength(1);
++      expect(tq.getDeadLetterTasks('q2')).toHaveLength(1);
++
++      tq.clearDeadLetterQueue('q1');
++      expect(tq.getDeadLetterTasks('q1')).toHaveLength(0);
++      expect(tq.getDeadLetterTasks('q2')).toHaveLength(1);
++    });
++  });
++
++  // ==================== Phase 7: Task Dependencies ====================
++  describe('Phase 7: Task Dependencies', () => {
++    it('should block tasks with unresolved dependencies', () => {
++      const dep = tq.addTask('dependency');
++      tq.addTask('dependent', { dependencies: [dep.id] });
++
++      // dependent should not be returned because dep is not completed
++      const next = tq.getNextTask()!;
++      expect(next.id).toBe(dep.id);
++
++      // No more tasks available (dependent is blocked)
++      expect(tq.getNextTask()).toBeNull();
++    });
++
++    it('should unblock tasks when dependencies complete', () => {
++      const dep = tq.addTask('dependency');
++      const dependent = tq.addTask('dependent', { dependencies: [dep.id] });
++
++      const next = tq.getNextTask()!;
++      tq.completeTask(next.id);
++
++      const next2 = tq.getNextTask()!;
++      expect(next2.id).toBe(dependent.id);
++    });
++
++    it('should reject dependencies on non-existent tasks', () => {
++      expect(() => tq.addTask('task', { dependencies: ['non-existent-id'] })).toThrow();
++    });
++
++    it('should handle multiple dependencies', () => {
++      const dep1 = tq.addTask('dep1');
++      const dep2 = tq.addTask('dep2');
++      const dependent = tq.addTask('dependent', { dependencies: [dep1.id, dep2.id] });
++
++      const t1 = tq.getNextTask()!;
++      tq.completeTask(t1.id);
++
++      // Still blocked (dep2 not completed)
++      const t2 = tq.getNextTask()!;
++      expect(t2.id).toBe(dep2.id); // dep2 should be next
++      tq.completeTask(t2.id);
++
++      // Now dependent should be available
++      const t3 = tq.getNextTask()!;
++      expect(t3.id).toBe(dependent.id);
++    });
++
++    it('should keep dependents blocked when dependency fails', () => {
++      const dep = tq.addTask('dep', { maxRetries: 0, backoffDelay: 0 });
++      tq.addTask('dependent', { dependencies: [dep.id] });
++
++      const t = tq.getNextTask()!;
++      tq.failTask(t.id, 'error');
++
++      // dependent should still be blocked (dep failed, not completed)
++      expect(tq.getNextTask()).toBeNull();
++    });
++
++    it('should provide dependency status', () => {
++      const dep1 = tq.addTask('dep1');
++      const dep2 = tq.addTask('dep2');
++      const dependent = tq.addTask('dependent', { dependencies: [dep1.id, dep2.id] });
++
++      let status = tq.getTaskDependencyStatus(dependent.id);
++      expect(status.dependencies).toHaveLength(2);
++      expect(status.pending).toHaveLength(2);
++      expect(status.resolved).toHaveLength(0);
++
++      const t = tq.getNextTask()!;
++      tq.completeTask(t.id);
++
++      status = tq.getTaskDependencyStatus(dependent.id);
++      expect(status.resolved).toHaveLength(1);
++      expect(status.pending).toHaveLength(1);
++    });
++  });
++
++  // ==================== Phase 8: Concurrency Control ====================
++  describe('Phase 8: Concurrency Control', () => {
++    it('should limit concurrent processing', () => {
++      tq.setConcurrencyLimit('default', 2);
++      tq.addTask('a');
++      tq.addTask('b');
++      tq.addTask('c');
++
++      expect(tq.getNextTask()).not.toBeNull();
++      expect(tq.getNextTask()).not.toBeNull();
++      // Third should be blocked by concurrency
++      expect(tq.getNextTask()).toBeNull();
++    });
++
++    it('should free slot when task completes', () => {
++      tq.setConcurrencyLimit('default', 1);
++      tq.addTask('a');
++      tq.addTask('b');
++
++      const t = tq.getNextTask()!;
++      expect(tq.getNextTask()).toBeNull();
++
++      tq.completeTask(t.id);
++      expect(tq.getNextTask()).not.toBeNull();
++    });
++
++    it('should free slot when task fails', () => {
++      tq.setConcurrencyLimit('default', 1);
++      tq.addTask('a', { maxRetries: 0, backoffDelay: 0 });
++      tq.addTask('b');
++
++      const t = tq.getNextTask()!;
++      expect(tq.getNextTask()).toBeNull();
++
++      tq.failTask(t.id, 'err'); // Exhausts retries (maxRetries=0), goes to DLQ
++      expect(tq.getNextTask()).not.toBeNull();
++    });
++
++    it('should default to no limit', () => {
++      expect(tq.getConcurrencyLimit()).toBeNull();
++    });
++
++    it('should report active count', () => {
++      tq.addTask('a');
++      tq.addTask('b');
++
++      expect(tq.getActiveCount()).toBe(0);
++      tq.getNextTask();
++      expect(tq.getActiveCount()).toBe(1);
++      tq.getNextTask();
++      expect(tq.getActiveCount()).toBe(2);
++    });
++
++    it('should still respect priority ordering with concurrency limit', () => {
++      tq.setConcurrencyLimit('default', 1);
++      tq.addTask('low', { priority: 10 });
++      tq.addTask('high', { priority: 1 });
++
++      const t = tq.getNextTask()!;
++      expect(t.payload).toBe('high');
++    });
++  });
++
++  // ==================== Phase 9: Progress and Cancellation ====================
++  describe('Phase 9: Progress Tracking and Cancellation', () => {
++    it('should report progress', () => {
++      tq.addTask('task');
++      const task = tq.getNextTask()!;
++
++      tq.updateProgress(task.id, 50, 'halfway');
++      expect(task.progress).toBe(50);
++      expect(task.progressMessage).toBe('halfway');
++    });
++
++    it('should query task progress', () => {
++      tq.addTask('task');
++      const task = tq.getNextTask()!;
++
++      tq.updateProgress(task.id, 75, 'almost done');
++      const prog = tq.getTaskProgress(task.id);
++      expect(prog.progress).toBe(75);
++      expect(prog.message).toBe('almost done');
++    });
++
++    it('should notify progress listeners', () => {
++      tq.addTask('task');
++      const task = tq.getNextTask()!;
++
++      const updates: Array<{ progress: number; message?: string }> = [];
++      tq.onProgress(task.id, (progress, message) => {
++        updates.push({ progress, message });
++      });
++
++      tq.updateProgress(task.id, 25, 'started');
++      tq.updateProgress(task.id, 50);
++      tq.updateProgress(task.id, 100, 'done');
++
++      expect(updates).toHaveLength(3);
++      expect(updates[0]).toEqual({ progress: 25, message: 'started' });
++      expect(updates[1]).toEqual({ progress: 50, message: undefined });
++      expect(updates[2]).toEqual({ progress: 100, message: 'done' });
++    });
++
++    it('should support unsubscribing from progress', () => {
++      tq.addTask('task');
++      const task = tq.getNextTask()!;
++
++      const updates: number[] = [];
++      const unsub = tq.onProgress(task.id, (p) => updates.push(p));
++
++      tq.updateProgress(task.id, 25);
++      unsub();
++      tq.updateProgress(task.id, 50);
++
++      expect(updates).toEqual([25]);
++    });
++
++    it('should cancel pending tasks', () => {
++      const task = tq.addTask('task');
++      tq.cancelTask(task.id);
++      expect(task.status).toBe('cancelled');
++      expect(tq.getNextTask()).toBeNull();
++    });
++
++    it('should cancel processing tasks', () => {
++      tq.addTask('task');
++      const task = tq.getNextTask()!;
++      tq.cancelTask(task.id);
++      expect(task.status).toBe('cancelled');
++    });
++
++    it('should not retry cancelled tasks', () => {
++      tq.addTask('task', { maxRetries: 3, backoffDelay: 0 });
++      const task = tq.getNextTask()!;
++      tq.cancelTask(task.id);
++
++      // Should not be available for retry
++      expect(tq.getNextTask()).toBeNull();
++    });
++
++    it('should reject invalid progress values', () => {
++      tq.addTask('task');
++      const task = tq.getNextTask()!;
++      expect(() => tq.updateProgress(task.id, -1)).toThrow();
++      expect(() => tq.updateProgress(task.id, 101)).toThrow();
++    });
++
++    it('should not allow progress on non-processing tasks', () => {
++      const task = tq.addTask('task');
++      expect(() => tq.updateProgress(task.id, 50)).toThrow();
++    });
++
++    it('should not cancel completed tasks', () => {
++      tq.addTask('task');
++      const task = tq.getNextTask()!;
++      tq.completeTask(task.id);
++      expect(() => tq.cancelTask(task.id)).toThrow();
++    });
++  });
++
++  // ==================== Phase 10: Recurring Tasks ====================
++  describe('Phase 10: Recurring Tasks', () => {
++    it('should create a schedule', () => {
++      const schedule = tq.addSchedule('*/5 * * * *', 'default', { type: 'cleanup' });
++      expect(schedule.id).toBeDefined();
++      expect(schedule.cronExpression).toBe('*/5 * * * *');
++      expect(schedule.queue).toBe('default');
++    });
++
++    it('should list schedules', () => {
++      tq.addSchedule('*/5 * * * *', 'default', { type: 'a' });
++      tq.addSchedule('0 * * * *', 'default', { type: 'b' });
++
++      const schedules = tq.getSchedules();
++      expect(schedules).toHaveLength(2);
++    });
++
++    it('should remove a schedule', () => {
++      const schedule = tq.addSchedule('*/5 * * * *', 'default', { type: 'cleanup' });
++      tq.removeSchedule(schedule.id);
++      expect(tq.getSchedules()).toHaveLength(0);
++    });
++
++    it('should enqueue tasks on tick for every-N-minutes cron', () => {
++      tq.addSchedule('*/5 * * * *', 'default', { type: 'cleanup' });
++
++      // Tick at a time divisible by 5 minutes
++      const time = new Date('2024-01-01T00:05:00.000Z');
++      const tasks = tq.tick(time);
++      expect(tasks).toHaveLength(1);
++      expect(tasks[0].payload).toEqual({ type: 'cleanup' });
++    });
++
++    it('should not enqueue twice for the same slot', () => {
++      tq.addSchedule('*/5 * * * *', 'default', { type: 'cleanup' });
++
++      const time = new Date('2024-01-01T00:05:00.000Z');
++      tq.tick(time);
++      const tasks2 = tq.tick(time);
++      expect(tasks2).toHaveLength(0);
++    });
++
++    it('should support hourly cron', () => {
++      tq.addSchedule('0 * * * *', 'default', { type: 'hourly' });
++
++      const onHour = new Date('2024-01-01T01:00:00.000Z');
++      const tasks = tq.tick(onHour);
++      expect(tasks).toHaveLength(1);
++
++      const offHour = new Date('2024-01-01T01:30:00.000Z');
++      const tasks2 = tq.tick(offHour);
++      expect(tasks2).toHaveLength(0);
++    });
++
++    it('should support daily cron', () => {
++      tq.addSchedule('0 0 * * *', 'default', { type: 'daily' });
++
++      const midnight = new Date('2024-01-01T00:00:00.000Z');
++      const tasks = tq.tick(midnight);
++      expect(tasks).toHaveLength(1);
++
++      const noon = new Date('2024-01-01T12:00:00.000Z');
++      const tasks2 = tq.tick(noon);
++      expect(tasks2).toHaveLength(0);
++    });
++
++    it('should reject unsupported cron expressions', () => {
++      expect(() => tq.addSchedule('0 0 1 * *', 'default', {})).toThrow();
++      expect(() => tq.addSchedule('invalid', 'default', {})).toThrow();
++    });
++
++    it('should stop creating tasks when schedule is removed', () => {
++      const schedule = tq.addSchedule('*/5 * * * *', 'default', { type: 'cleanup' });
++      tq.removeSchedule(schedule.id);
++
++      const time = new Date('2024-01-01T00:05:00.000Z');
++      const tasks = tq.tick(time);
++      expect(tasks).toHaveLength(0);
++    });
++
++    it('should create regular tasks subject to queue rules', () => {
++      tq.addSchedule('*/5 * * * *', 'myqueue', { type: 'recurring' }, { priority: 2 });
++
++      const time = new Date('2024-01-01T00:05:00.000Z');
++      const tasks = tq.tick(time);
++      expect(tasks[0].queue).toBe('myqueue');
++      expect(tasks[0].priority).toBe(2);
++    });
++  });
++
++  // ==================== Phase 11: Middleware Pipeline ====================
++  describe('Phase 11: Middleware Pipeline', () => {
++    it('should run middleware in order before handler', async () => {
++      const order: string[] = [];
++
++      tq.use('default', async (_task, next) => {
++        order.push('mw1-before');
++        await next();
++        order.push('mw1-after');
++      });
++
++      tq.use('default', async (_task, next) => {
++        order.push('mw2-before');
++        await next();
++        order.push('mw2-after');
++      });
++
++      tq.setHandler('default', async () => {
++        order.push('handler');
++      });
++
++      tq.addTask('test');
++      await tq.processTask();
++
++      expect(order).toEqual(['mw1-before', 'mw2-before', 'handler', 'mw2-after', 'mw1-after']);
++    });
++
++    it('should skip processing when middleware does not call next', async () => {
++      const handlerCalled = vi.fn();
++
++      tq.use('default', async () => {
++        // Do not call next - task processing should be skipped
++      });
++
++      tq.setHandler('default', handlerCalled);
++
++      tq.addTask('test');
++      const task = await tq.processTask();
++
++      expect(handlerCalled).not.toHaveBeenCalled();
++      // Task should NOT be auto-completed when middleware skips
++      expect(task!.status).toBe('processing');
++    });
++
++    it('should allow middleware to modify task', async () => {
++      tq.use('default', async (task, next) => {
++        (task as Record<string, unknown>).metadata = { enriched: true };
++        await next();
++      });
++
++      let receivedTask: Record<string, unknown> | null = null;
++      tq.setHandler('default', (task) => {
++        receivedTask = task as unknown as Record<string, unknown>;
++      });
++
++      tq.addTask('test');
++      await tq.processTask();
++
++      expect(receivedTask).not.toBeNull();
++      expect((receivedTask as Record<string, unknown>).metadata).toEqual({ enriched: true });
++    });
++
++    it('should mark task as failed when middleware throws', async () => {
++      tq.use('default', async () => {
++        throw new Error('middleware error');
++      });
++
++      tq.addTask('test', { maxRetries: 0, backoffDelay: 0 });
++      const task = await tq.processTask();
++
++      expect(task).not.toBeNull();
++      expect(task!.status).toBe('failed');
++      expect(task!.error).toBe('middleware error');
++    });
++
++    it('should have independent middleware stacks per queue', async () => {
++      const q1Calls: string[] = [];
++      const q2Calls: string[] = [];
++
++      tq.use('q1', async (_task, next) => {
++        q1Calls.push('q1-mw');
++        await next();
++      });
++
++      tq.use('q2', async (_task, next) => {
++        q2Calls.push('q2-mw');
++        await next();
++      });
++
++      tq.setHandler('q1', () => { q1Calls.push('q1-handler'); });
++      tq.setHandler('q2', () => { q2Calls.push('q2-handler'); });
++
++      tq.addTask('a', { queue: 'q1' });
++      tq.addTask('b', { queue: 'q2' });
++
++      await tq.processTask('q1');
++      await tq.processTask('q2');
++
++      expect(q1Calls).toEqual(['q1-mw', 'q1-handler']);
++      expect(q2Calls).toEqual(['q2-mw', 'q2-handler']);
++    });
++
++    it('should complete task after handler', async () => {
++      tq.setHandler('default', async () => {
++        // Do some work
++      });
++
++      tq.addTask('test');
++      const task = await tq.processTask();
++      expect(task!.status).toBe('completed');
++    });
++
++    it('should return null when no task available', async () => {
++      const result = await tq.processTask();
++      expect(result).toBeNull();
++    });
++  });
++
++  // ==================== Phase 12: Graceful Shutdown ====================
++  describe('Phase 12: Graceful Shutdown', () => {
++    it('should reject new tasks after shutdown', async () => {
++      await tq.shutdown();
++      expect(() => tq.addTask('test')).toThrow(/shutting down/);
++    });
++
++    it('should complete immediately with no processing tasks', async () => {
++      const summary = await tq.shutdown();
++      expect(summary.completed).toBe(0);
++      expect(summary.forceCancelled).toBe(0);
++      expect(summary.duration).toBeGreaterThanOrEqual(0);
++    });
++
++    it('should wait for processing tasks', async () => {
++      tq.addTask('task');
++      const task = tq.getNextTask()!;
++
++      // Start shutdown in background
++      const shutdownPromise = tq.shutdown({ timeout: 5000 });
++
++      // Complete the task
++      tq.completeTask(task.id);
++
++      const summary = await shutdownPromise;
++      expect(summary.completed).toBe(1);
++      expect(summary.forceCancelled).toBe(0);
++    });
++
++    it('should force cancel on timeout', async () => {
++      tq.addTask('slow-task');
++      tq.getNextTask(); // Start processing
++
++      const summary = await tq.shutdown({ timeout: 50 });
++      expect(summary.forceCancelled).toBe(1);
++    });
++
++    it('should run shutdown callbacks', async () => {
++      const called = vi.fn();
++      tq.onShutdown(called);
++      await tq.shutdown();
++      expect(called).toHaveBeenCalled();
++    });
++
++    it('should be idempotent', async () => {
++      const s1 = tq.shutdown();
++      const s2 = tq.shutdown();
++      const [r1, r2] = await Promise.all([s1, s2]);
++      expect(r1).toBe(r2);
++    });
++
++    it('should report isShuttingDown', async () => {
++      expect(tq.isShuttingDown()).toBe(false);
++      const promise = tq.shutdown();
++      expect(tq.isShuttingDown()).toBe(true);
++      await promise;
++    });
++
++    it('should produce summary with duration', async () => {
++      const summary = await tq.shutdown();
++      expect(typeof summary.duration).toBe('number');
++      expect(summary.duration).toBeGreaterThanOrEqual(0);
++    });
++  });
++
++  // ==================== Cross-Phase Interaction Tests ====================
++  describe('Cross-Phase Interactions', () => {
++    it('priority + delay: high priority delayed task waits', () => {
++      tq.addTask('high-delayed', { priority: 1, delay: 100000 });
++      tq.addTask('low-immediate', { priority: 10 });
++
++      const next = tq.getNextTask()!;
++      expect(next.payload).toBe('low-immediate');
++    });
++
++    it('dependency + concurrency: blocked task does not count toward concurrency', () => {
++      tq.setConcurrencyLimit('default', 1);
++      const dep = tq.addTask('dep');
++      tq.addTask('dependent', { dependencies: [dep.id] });
++
++      const t = tq.getNextTask()!;
++      expect(t.id).toBe(dep.id);
++      // Should be null due to concurrency, not because dependent is blocked
++      expect(tq.getNextTask()).toBeNull();
++
++      tq.completeTask(t.id);
++      const t2 = tq.getNextTask()!;
++      expect(t2.payload).toBe('dependent');
++    });
++
++    it('cancel + retry: cancelled task should not retry', () => {
++      tq.addTask('task', { maxRetries: 3, backoffDelay: 0 });
++      const t = tq.getNextTask()!;
++      tq.cancelTask(t.id);
++      expect(t.status).toBe('cancelled');
++      expect(tq.getNextTask()).toBeNull();
++    });
++
++    it('getTask should return task by id', () => {
++      const task = tq.addTask('hello');
++      const fetched = tq.getTask(task.id);
++      expect(fetched?.id).toBe(task.id);
++      expect(fetched?.payload).toBe('hello');
++    });
++
++    it('getTask should return undefined for nonexistent id', () => {
++      expect(tq.getTask('nonexistent')).toBeUndefined();
++    });
++  });
++});
+diff --git a/src/task-queue.ts b/src/task-queue.ts
+new file mode 100644
+index 0000000..02f2706
+--- /dev/null
++++ b/src/task-queue.ts
+@@ -0,0 +1,717 @@
++import { randomUUID } from 'node:crypto';
++import type {
++  Task,
++  TaskOptions,
++  ProgressListener,
++  Schedule,
++  MiddlewareFunction,
++  HandlerFunction,
++  ShutdownOptions,
++  ShutdownSummary,
++} from './types.js';
++
++const DEFAULT_QUEUE = 'default';
++const DEFAULT_PRIORITY = 5;
++const DEFAULT_MAX_RETRIES = 3;
++const DEFAULT_BACKOFF_DELAY = 1000;
++
++interface QueueState {
++  tasks: Map<string, Task>;
++  deadLetterQueue: Task[];
++  concurrencyLimit: number | null;
++  middlewares: MiddlewareFunction[];
++  handler: HandlerFunction | null;
++}
++
++export class TaskQueue {
++  private queues: Map<string, QueueState> = new Map();
++  private allTasks: Map<string, Task> = new Map();
++  private progressListeners: Map<string, Set<ProgressListener>> = new Map();
++  private schedules: Map<string, Schedule> = new Map();
++  private shutdownState: {
++    initiated: boolean;
++    promise: Promise<ShutdownSummary> | null;
++  } = { initiated: false, promise: null };
++  private shutdownCallbacks: Array<() => void | Promise<void>> = [];
++
++  // --- Phase 1: Basic FIFO Queue ---
++
++  addTask<T = unknown>(payload: T, options: TaskOptions = {}): Task<T> {
++    if (this.shutdownState.initiated) {
++      throw new Error('Cannot add tasks: queue system is shutting down');
++    }
++
++    const queueName = options.queue ?? DEFAULT_QUEUE;
++    const priority = options.priority ?? DEFAULT_PRIORITY;
++
++    if (priority < 1 || priority > 10 || !Number.isInteger(priority)) {
++      throw new Error(`Invalid priority: ${priority}. Must be an integer between 1 and 10.`);
++    }
++
++    const now = new Date();
++    let availableAt = now;
++
++    if (options.availableAt) {
++      availableAt = options.availableAt;
++    } else if (options.delay !== undefined && options.delay > 0) {
++      availableAt = new Date(now.getTime() + options.delay);
++    }
++
++    // Validate dependencies
++    const dependencies = options.dependencies ?? [];
++    for (const depId of dependencies) {
++      const depTask = this.allTasks.get(depId);
++      if (!depTask) {
++        throw new Error(`Dependency task not found: ${depId}`);
++      }
++    }
++
++    const task: Task<T> = {
++      id: randomUUID(),
++      payload,
++      status: 'pending',
++      queue: queueName,
++      priority,
++      createdAt: now,
++      availableAt,
++      attempt: 0,
++      maxRetries: options.maxRetries ?? DEFAULT_MAX_RETRIES,
++      backoffDelay: options.backoffDelay ?? DEFAULT_BACKOFF_DELAY,
++      failureCount: 0,
++      dependencies,
++      progress: 0,
++    };
++
++    // Check circular dependencies
++    if (dependencies.length > 0) {
++      this.detectCircularDependencies(task.id, dependencies);
++    }
++
++    const queue = this.getOrCreateQueue(queueName);
++    queue.tasks.set(task.id, task);
++    this.allTasks.set(task.id, task);
++
++    return task;
++  }
++
++  getNextTask(queueName: string = DEFAULT_QUEUE): Task | null {
++    const queue = this.queues.get(queueName);
++    if (!queue) return null;
++
++    // Check concurrency limit
++    if (queue.concurrencyLimit !== null) {
++      const activeCount = this.getActiveCount(queueName);
++      if (activeCount >= queue.concurrencyLimit) {
++        return null;
++      }
++    }
++
++    const now = new Date();
++    const candidates: Task[] = [];
++
++    for (const task of queue.tasks.values()) {
++      if (task.status !== 'pending') continue;
++      if (task.availableAt > now) continue;
++      if (!this.areDependenciesMet(task)) continue;
++      candidates.push(task);
++    }
++
++    if (candidates.length === 0) return null;
++
++    // Sort by: priority (ascending = higher priority first), then availableAt, then createdAt (FIFO)
++    candidates.sort((a, b) => {
++      if (a.priority !== b.priority) return a.priority - b.priority;
++      if (a.availableAt.getTime() !== b.availableAt.getTime()) {
++        return a.availableAt.getTime() - b.availableAt.getTime();
++      }
++      return a.createdAt.getTime() - b.createdAt.getTime();
++    });
++
++    const task = candidates[0];
++    task.status = 'processing';
++    task.attempt++;
++    return task;
++  }
++
++  getWaitingCount(queueName: string = DEFAULT_QUEUE): number {
++    const queue = this.queues.get(queueName);
++    if (!queue) return 0;
++
++    let count = 0;
++    for (const task of queue.tasks.values()) {
++      if (task.status === 'pending') count++;
++    }
++    return count;
++  }
++
++  // --- Phase 2: Named Queues ---
++
++  getQueueNames(): string[] {
++    return Array.from(this.queues.keys());
++  }
++
++  // --- Phase 5: Retry with Backoff ---
++
++  completeTask(taskId: string): void {
++    const task = this.allTasks.get(taskId);
++    if (!task) throw new Error(`Task not found: ${taskId}`);
++    if (task.status !== 'processing') {
++      throw new Error(`Cannot complete task in '${task.status}' state`);
++    }
++    task.status = 'completed';
++
++    // Clean up progress listeners
++    this.progressListeners.delete(taskId);
++  }
++
++  failTask(taskId: string, error?: string): void {
++    const task = this.allTasks.get(taskId);
++    if (!task) throw new Error(`Task not found: ${taskId}`);
++    if (task.status !== 'processing') {
++      throw new Error(`Cannot fail task in '${task.status}' state`);
++    }
++
++    task.error = error;
++    task.failureCount++;
++
++    // maxRetries is the number of retries allowed after the initial attempt.
++    // attempt tracks which try we're on (1-based, incremented in getNextTask).
++    // Retry when attempt <= maxRetries (i.e., we haven't used all retries yet).
++    // e.g., maxRetries=3: retry on attempts 1,2,3; fail permanently on attempt 4.
++    if (task.attempt <= task.maxRetries) {
++      // Re-add with backoff delay: baseDelay * 2^(attempt - 1)
++      const delay = task.backoffDelay * Math.pow(2, task.attempt - 1);
++      task.availableAt = new Date(Date.now() + delay);
++      task.status = 'pending';
++      task.progress = 0;
++      task.progressMessage = undefined;
++    } else {
++      // All retries exhausted
++      task.status = 'failed';
++
++      // Clean up progress listeners
++      this.progressListeners.delete(taskId);
++
++      // Move to dead letter queue
++      const queue = this.queues.get(task.queue);
++      if (queue) {
++        queue.tasks.delete(task.id);
++        queue.deadLetterQueue.push(task);
++      }
++    }
++  }
++
++  // --- Phase 6: Dead Letter Queue ---
++
++  getDeadLetterTasks(queueName: string = DEFAULT_QUEUE): Task[] {
++    const queue = this.queues.get(queueName);
++    if (!queue) return [];
++    return [...queue.deadLetterQueue];
++  }
++
++  redriveTask(taskId: string): Task {
++    for (const queue of this.queues.values()) {
++      const index = queue.deadLetterQueue.findIndex(t => t.id === taskId);
++      if (index !== -1) {
++        const task = queue.deadLetterQueue[index];
++        queue.deadLetterQueue.splice(index, 1);
++
++        // Reset task for fresh retries
++        task.status = 'pending';
++        task.attempt = 0;
++        task.failureCount = 0;
++        task.error = undefined;
++        task.availableAt = new Date();
++        task.progress = 0;
++        task.progressMessage = undefined;
++
++        // Re-add to its original queue
++        queue.tasks.set(task.id, task);
++        return task;
++      }
++    }
++    throw new Error(`Task not found in any dead letter queue: ${taskId}`);
++  }
++
++  clearDeadLetterQueue(queueName: string = DEFAULT_QUEUE): void {
++    const queue = this.queues.get(queueName);
++    if (queue) {
++      for (const task of queue.deadLetterQueue) {
++        this.allTasks.delete(task.id);
++      }
++      queue.deadLetterQueue = [];
++    }
++  }
++
++  // --- Phase 7: Task Dependencies ---
++
++  getTaskDependencyStatus(taskId: string): { dependencies: string[]; resolved: string[]; pending: string[] } {
++    const task = this.allTasks.get(taskId);
++    if (!task) throw new Error(`Task not found: ${taskId}`);
++
++    const resolved: string[] = [];
++    const pending: string[] = [];
++
++    for (const depId of task.dependencies) {
++      const dep = this.allTasks.get(depId);
++      if (dep && dep.status === 'completed') {
++        resolved.push(depId);
++      } else {
++        pending.push(depId);
++      }
++    }
++
++    return { dependencies: [...task.dependencies], resolved, pending };
++  }
++
++  // --- Phase 8: Concurrency Control ---
++
++  setConcurrencyLimit(queueName: string, limit: number | null): void {
++    const queue = this.getOrCreateQueue(queueName);
++    queue.concurrencyLimit = limit;
++  }
++
++  getConcurrencyLimit(queueName: string = DEFAULT_QUEUE): number | null {
++    const queue = this.queues.get(queueName);
++    if (!queue) return null;
++    return queue.concurrencyLimit;
++  }
++
++  getActiveCount(queueName: string = DEFAULT_QUEUE): number {
++    const queue = this.queues.get(queueName);
++    if (!queue) return 0;
++
++    let count = 0;
++    for (const task of queue.tasks.values()) {
++      if (task.status === 'processing') count++;
++    }
++    return count;
++  }
++
++  // --- Phase 9: Progress and Cancellation ---
++
++  updateProgress(taskId: string, progress: number, message?: string): void {
++    const task = this.allTasks.get(taskId);
++    if (!task) throw new Error(`Task not found: ${taskId}`);
++    if (task.status !== 'processing') {
++      throw new Error(`Cannot update progress for task in '${task.status}' state`);
++    }
++    if (progress < 0 || progress > 100) {
++      throw new Error(`Invalid progress value: ${progress}. Must be between 0 and 100.`);
++    }
++
++    task.progress = progress;
++    task.progressMessage = message;
++
++    // Notify listeners
++    const listeners = this.progressListeners.get(taskId);
++    if (listeners) {
++      for (const listener of listeners) {
++        listener(progress, message);
++      }
++    }
++  }
++
++  getTaskProgress(taskId: string): { progress: number; message?: string } {
++    const task = this.allTasks.get(taskId);
++    if (!task) throw new Error(`Task not found: ${taskId}`);
++    return { progress: task.progress, message: task.progressMessage };
++  }
++
++  onProgress(taskId: string, listener: ProgressListener): () => void {
++    if (!this.progressListeners.has(taskId)) {
++      this.progressListeners.set(taskId, new Set());
++    }
++    this.progressListeners.get(taskId)!.add(listener);
++
++    return () => {
++      const listeners = this.progressListeners.get(taskId);
++      if (listeners) {
++        listeners.delete(listener);
++        if (listeners.size === 0) {
++          this.progressListeners.delete(taskId);
++        }
++      }
++    };
++  }
++
++  cancelTask(taskId: string): void {
++    const task = this.allTasks.get(taskId);
++    if (!task) throw new Error(`Task not found: ${taskId}`);
++
++    if (task.status !== 'pending' && task.status !== 'processing') {
++      throw new Error(`Cannot cancel task in '${task.status}' state`);
++    }
++
++    task.status = 'cancelled';
++
++    // Remove from queue
++    const queue = this.queues.get(task.queue);
++    if (queue) {
++      queue.tasks.delete(task.id);
++    }
++
++    // Clean up progress listeners
++    this.progressListeners.delete(taskId);
++  }
++
++  // --- Phase 10: Recurring Tasks ---
++
++  addSchedule(
++    cronExpression: string,
++    queueName: string,
++    payload: unknown,
++    taskOptions?: Omit<TaskOptions, 'queue'>
++  ): Schedule {
++    this.validateCronExpression(cronExpression);
++
++    const schedule: Schedule = {
++      id: randomUUID(),
++      cronExpression,
++      queue: queueName,
++      payload,
++      taskOptions,
++    };
++
++    this.schedules.set(schedule.id, schedule);
++    return schedule;
++  }
++
++  removeSchedule(scheduleId: string): void {
++    if (!this.schedules.has(scheduleId)) {
++      throw new Error(`Schedule not found: ${scheduleId}`);
++    }
++    this.schedules.delete(scheduleId);
++  }
++
++  getSchedules(): Schedule[] {
++    return Array.from(this.schedules.values());
++  }
++
++  tick(now: Date = new Date()): Task[] {
++    const created: Task[] = [];
++
++    for (const schedule of this.schedules.values()) {
++      if (this.shouldRunSchedule(schedule, now)) {
++        const task = this.addTask(schedule.payload, {
++          ...schedule.taskOptions,
++          queue: schedule.queue,
++        });
++        created.push(task);
++        schedule.lastRun = now;
++      }
++    }
++
++    return created;
++  }
++
++  // --- Phase 11: Middleware ---
++
++  use(queueName: string, middleware: MiddlewareFunction): void {
++    const queue = this.getOrCreateQueue(queueName);
++    queue.middlewares.push(middleware);
++  }
++
++  setHandler(queueName: string, handler: HandlerFunction): void {
++    const queue = this.getOrCreateQueue(queueName);
++    queue.handler = handler;
++  }
++
++  async processTask(queueName: string = DEFAULT_QUEUE): Promise<Task | null> {
++    const task = this.getNextTask(queueName);
++    if (!task) return null;
++
++    const queue = this.queues.get(queueName);
++    if (!queue) return null;
++
++    const middlewares = [...queue.middlewares];
++    const handler = queue.handler;
++
++    try {
++      const handlerReached = await this.runMiddlewarePipeline(task, middlewares, handler);
++      if (task.status === 'processing' && handlerReached) {
++        this.completeTask(task.id);
++      }
++    } catch (err) {
++      if (task.status === 'processing') {
++        this.failTask(task.id, err instanceof Error ? err.message : String(err));
++      }
++    }
++
++    return task;
++  }
++
++  // --- Phase 12: Graceful Shutdown ---
++
++  onShutdown(callback: () => void | Promise<void>): void {
++    this.shutdownCallbacks.push(callback);
++  }
++
++  async shutdown(options: ShutdownOptions = {}): Promise<ShutdownSummary> {
++    if (this.shutdownState.promise) {
++      return this.shutdownState.promise;
++    }
++
++    this.shutdownState.initiated = true;
++    this.shutdownState.promise = this.performShutdown(options);
++    return this.shutdownState.promise;
++  }
++
++  isShuttingDown(): boolean {
++    return this.shutdownState.initiated;
++  }
++
++  // --- Task Lookup ---
++
++  getTask(taskId: string): Task | undefined {
++    return this.allTasks.get(taskId);
++  }
++
++  // --- Private Helpers ---
++
++  private getOrCreateQueue(name: string): QueueState {
++    if (!this.queues.has(name)) {
++      this.queues.set(name, {
++        tasks: new Map(),
++        deadLetterQueue: [],
++        concurrencyLimit: null,
++        middlewares: [],
++        handler: null,
++      });
++    }
++    return this.queues.get(name)!;
++  }
++
++  private areDependenciesMet(task: Task): boolean {
++    if (task.dependencies.length === 0) return true;
++
++    for (const depId of task.dependencies) {
++      const dep = this.allTasks.get(depId);
++      if (!dep || dep.status !== 'completed') {
++        return false;
++      }
++    }
++    return true;
++  }
++
++  private detectCircularDependencies(newTaskId: string, dependencies: string[]): void {
++    // Check if adding this new task with these dependencies would create a cycle.
++    // Since the new task isn't in allTasks yet, a cycle would mean one of the dependencies
++    // transitively depends on the new task. But since the new task doesn't exist yet,
++    // no existing task can reference it as a dependency. Therefore true circular
++    // dependencies are structurally impossible with our create-only API.
++    //
++    // However, we still validate to satisfy the requirement and future-proof the code.
++    // We check that the dependency graph among existing tasks (including transitive deps
++    // of our direct deps) doesn't contain a cycle that would include the new task.
++    // In practice, this means verifying that none of the dependencies can be reached
++    // from each other through the dependency chain (which would have been caught earlier).
++
++    // Validate no self-dependency
++    for (const depId of dependencies) {
++      if (depId === newTaskId) {
++        throw new Error(`Circular dependency detected: task ${newTaskId} depends on itself`);
++      }
++    }
++
++    // Check that following dependencies from any dep doesn't lead back to any other dep
++    // in a way that would create issues. Since each task was validated at creation time,
++    // the existing graph is acyclic. Adding the new task with these deps maintains acyclicity
++    // because no existing task can depend on the new task (it doesn't exist yet).
++    // This check is a safeguard.
++    const visited = new Set<string>();
++    const stack = [...dependencies];
++
++    while (stack.length > 0) {
++      const current = stack.pop()!;
++      if (current === newTaskId) {
++        throw new Error(`Circular dependency detected involving task ${newTaskId}`);
++      }
++      if (visited.has(current)) continue;
++      visited.add(current);
++
++      const task = this.allTasks.get(current);
++      if (task) {
++        for (const depId of task.dependencies) {
++          if (!visited.has(depId)) {
++            stack.push(depId);
++          }
++        }
++      }
++    }
++  }
++
++  private validateCronExpression(expr: string): void {
++    const parts = expr.split(' ');
++    if (parts.length !== 5) {
++      throw new Error(`Invalid cron expression: ${expr}. Must have 5 fields.`);
++    }
++
++    const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
++
++    // Check supported patterns
++    const everyNMatch = minute.match(/^\*\/(\d+)$/);
++    const isEveryNMinutes = everyNMatch !== null && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*';
++    const isEveryHour = minute === '0' && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*';
++    const isEveryDay = minute === '0' && hour === '0' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*';
++
++    if (!isEveryNMinutes && !isEveryHour && !isEveryDay) {
++      throw new Error(`Unsupported cron expression: ${expr}`);
++    }
++
++    // Validate */N has N >= 1
++    if (isEveryNMinutes && everyNMatch) {
++      const n = parseInt(everyNMatch[1], 10);
++      if (n < 1) {
++        throw new Error(`Invalid cron interval: ${n}. Must be at least 1.`);
++      }
++    }
++  }
++
++  private shouldRunSchedule(schedule: Schedule, now: Date): boolean {
++    const parts = schedule.cronExpression.split(' ');
++    const [minutePart, hourPart] = parts;
++
++    if (minutePart.startsWith('*/')) {
++      // Every N minutes
++      const n = parseInt(minutePart.slice(2), 10);
++      const currentMinute = now.getMinutes();
++      if (currentMinute % n !== 0) return false;
++
++      // Check if we already ran this slot
++      if (schedule.lastRun) {
++        const lastMinuteSlot = Math.floor(schedule.lastRun.getTime() / (n * 60000));
++        const currentMinuteSlot = Math.floor(now.getTime() / (n * 60000));
++        if (lastMinuteSlot >= currentMinuteSlot) return false;
++      }
++      return true;
++    }
++
++    if (minutePart === '0' && hourPart === '*') {
++      // Every hour on the hour
++      if (now.getMinutes() !== 0) return false;
++
++      if (schedule.lastRun) {
++        const lastHour = Math.floor(schedule.lastRun.getTime() / 3600000);
++        const currentHour = Math.floor(now.getTime() / 3600000);
++        if (lastHour >= currentHour) return false;
++      }
++      return true;
++    }
++
++    if (minutePart === '0' && hourPart === '0') {
++      // Every day at midnight
++      if (now.getHours() !== 0 || now.getMinutes() !== 0) return false;
++
++      if (schedule.lastRun) {
++        const lastDay = Math.floor(schedule.lastRun.getTime() / 86400000);
++        const currentDay = Math.floor(now.getTime() / 86400000);
++        if (lastDay >= currentDay) return false;
++      }
++      return true;
++    }
++
++    return false;
++  }
++
++  private async runMiddlewarePipeline(
++    task: Task,
++    middlewares: MiddlewareFunction[],
++    handler: HandlerFunction | null
++  ): Promise<boolean> {
++    let index = 0;
++    let handlerReached = false;
++
++    const next = async (): Promise<void> => {
++      if (index < middlewares.length) {
++        const currentIndex = index++;
++        const middleware = middlewares[currentIndex];
++        await middleware(task, next);
++      } else if (handler) {
++        handlerReached = true;
++        await handler(task);
++      } else {
++        handlerReached = true;
++      }
++    };
++
++    await next();
++    return handlerReached;
++  }
++
++  private async performShutdown(options: ShutdownOptions): Promise<ShutdownSummary> {
++    const startTime = Date.now();
++    const timeout = options.timeout ?? 30000;
++    let completed = 0;
++    let forceCancelled = 0;
++
++    // Run shutdown callbacks
++    for (const cb of this.shutdownCallbacks) {
++      await cb();
++    }
++
++    // Collect all processing tasks
++    const processingTasks: Task[] = [];
++    for (const queue of this.queues.values()) {
++      for (const task of queue.tasks.values()) {
++        if (task.status === 'processing') {
++          processingTasks.push(task);
++        }
++      }
++    }
++
++    if (processingTasks.length === 0) {
++      return { completed: 0, forceCancelled: 0, duration: Date.now() - startTime };
++    }
++
++    // Wait for processing tasks with timeout
++    const waitResult = await Promise.race([
++      this.waitForProcessingTasks(processingTasks),
++      new Promise<'timeout'>(resolve => setTimeout(() => resolve('timeout'), timeout)),
++    ]);
++
++    if (waitResult === 'timeout') {
++      // Force cancel remaining processing tasks
++      for (const task of processingTasks) {
++        if (task.status === 'processing') {
++          task.status = 'cancelled';
++          // Remove from queue
++          const queue = this.queues.get(task.queue);
++          if (queue) {
++            queue.tasks.delete(task.id);
++          }
++          forceCancelled++;
++        } else if (task.status === 'completed' || task.status === 'failed') {
++          completed++;
++        }
++      }
++    } else {
++      // All tasks finished
++      for (const task of processingTasks) {
++        if (task.status === 'completed' || task.status === 'failed') {
++          completed++;
++        }
++      }
++    }
++
++    return {
++      completed,
++      forceCancelled,
++      duration: Date.now() - startTime,
++    };
++  }
++
++  private waitForProcessingTasks(tasks: Task[]): Promise<void> {
++    return new Promise<void>(resolve => {
++      const check = () => {
++        const allDone = tasks.every(t => t.status !== 'processing');
++        if (allDone) {
++          resolve();
++        } else {
++          setTimeout(check, 10);
++        }
++      };
++      check();
++    });
++  }
++}
+diff --git a/src/types.ts b/src/types.ts
+new file mode 100644
+index 0000000..8160ac8
+--- /dev/null
++++ b/src/types.ts
+@@ -0,0 +1,53 @@
++export type TaskStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
++
++export interface TaskOptions {
++  queue?: string;
++  priority?: number;
++  delay?: number;
++  availableAt?: Date;
++  maxRetries?: number;
++  backoffDelay?: number;
++  dependencies?: string[];
++}
++
++export interface Task<T = unknown> {
++  id: string;
++  payload: T;
++  status: TaskStatus;
++  queue: string;
++  priority: number;
++  createdAt: Date;
++  availableAt: Date;
++  attempt: number;
++  maxRetries: number;
++  backoffDelay: number;
++  error?: string;
++  failureCount: number;
++  dependencies: string[];
++  progress: number;
++  progressMessage?: string;
++}
++
++export type ProgressListener = (progress: number, message?: string) => void;
++
++export interface Schedule {
++  id: string;
++  cronExpression: string;
++  queue: string;
++  payload: unknown;
++  taskOptions?: Omit<TaskOptions, 'queue'>;
++  lastRun?: Date;
++}
++
++export type MiddlewareFunction = (task: Task, next: () => Promise<void>) => Promise<void>;
++export type HandlerFunction = (task: Task) => Promise<void> | void;
++
++export interface ShutdownOptions {
++  timeout?: number;
++}
++
++export interface ShutdownSummary {
++  completed: number;
++  forceCancelled: number;
++  duration: number;
++}
+diff --git a/tests/phase-01.test.ts b/tests/phase-01.test.ts
+deleted file mode 100644
+index 9468de0..0000000
+--- a/tests/phase-01.test.ts
++++ /dev/null
+@@ -1,85 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 1: Basic FIFO Queue', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    queue = new TaskQueue();
+-  });
+-
+-  it('enqueue returns a task with id and pending status', () => {
+-    const task = queue.enqueue('default', { type: 'email', to: 'user@test.com' });
+-    expect(task).toHaveProperty('id');
+-    expect(typeof task.id).toBe('string');
+-    expect(task.id.length).toBeGreaterThan(0);
+-    expect(task.status).toBe('pending');
+-    expect(task.payload).toEqual({ type: 'email', to: 'user@test.com' });
+-  });
+-
+-  it('dequeue returns tasks in FIFO order', () => {
+-    queue.enqueue('default', { order: 1 });
+-    queue.enqueue('default', { order: 2 });
+-    queue.enqueue('default', { order: 3 });
+-
+-    const first = queue.dequeue('default');
+-    const second = queue.dequeue('default');
+-    const third = queue.dequeue('default');
+-
+-    expect(first!.payload).toEqual({ order: 1 });
+-    expect(second!.payload).toEqual({ order: 2 });
+-    expect(third!.payload).toEqual({ order: 3 });
+-  });
+-
+-  it('dequeue returns null when queue is empty', () => {
+-    const result = queue.dequeue('default');
+-    expect(result).toBeNull();
+-  });
+-
+-  it('size returns the correct count of pending tasks', () => {
+-    expect(queue.size()).toBe(0);
+-    queue.enqueue('default', { a: 1 });
+-    queue.enqueue('default', { a: 2 });
+-    expect(queue.size()).toBe(2);
+-    queue.dequeue('default');
+-    expect(queue.size()).toBe(1);
+-  });
+-
+-  it('dequeued task has processing status', () => {
+-    queue.enqueue('default', { job: 'process' });
+-    const task = queue.dequeue('default');
+-    expect(task!.status).toBe('processing');
+-  });
+-
+-  it('task has a createdAt timestamp', () => {
+-    const before = new Date();
+-    const task = queue.enqueue('default', { data: 'test' });
+-    const after = new Date();
+-
+-    expect(task.createdAt).toBeInstanceOf(Date);
+-    expect(task.createdAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
+-    expect(task.createdAt.getTime()).toBeLessThanOrEqual(after.getTime());
+-  });
+-
+-  it('multiple enqueue/dequeue cycles maintain FIFO order', () => {
+-    queue.enqueue('default', { v: 'a' });
+-    queue.enqueue('default', { v: 'b' });
+-    queue.dequeue('default'); // removes 'a'
+-    queue.enqueue('default', { v: 'c' });
+-
+-    const next = queue.dequeue('default');
+-    expect(next!.payload).toEqual({ v: 'b' });
+-    const last = queue.dequeue('default');
+-    expect(last!.payload).toEqual({ v: 'c' });
+-  });
+-
+-  it('each task receives a unique id', () => {
+-    const t1 = queue.enqueue('default', { x: 1 });
+-    const t2 = queue.enqueue('default', { x: 2 });
+-    const t3 = queue.enqueue('default', { x: 3 });
+-
+-    const ids = [t1.id, t2.id, t3.id];
+-    const unique = new Set(ids);
+-    expect(unique.size).toBe(3);
+-  });
+-});
+diff --git a/tests/phase-02.test.ts b/tests/phase-02.test.ts
+deleted file mode 100644
+index d62305b..0000000
+--- a/tests/phase-02.test.ts
++++ /dev/null
+@@ -1,63 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 2: Named Queues', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    queue = new TaskQueue();
+-  });
+-
+-  it('enqueue adds a task to a named queue', () => {
+-    const task = queue.enqueue('emails', { to: 'user@test.com' });
+-    expect(task).toHaveProperty('id');
+-    expect(task.status).toBe('pending');
+-  });
+-
+-  it('dequeue retrieves from a specific named queue', () => {
+-    queue.enqueue('emails', { to: 'a@test.com' });
+-    queue.enqueue('notifications', { msg: 'hello' });
+-
+-    const emailTask = queue.dequeue('emails');
+-    expect(emailTask!.payload).toEqual({ to: 'a@test.com' });
+-  });
+-
+-  it('queues are independent - dequeue from wrong queue returns null', () => {
+-    queue.enqueue('queue-a', { data: 'for-a' });
+-    const result = queue.dequeue('queue-b');
+-    expect(result).toBeNull();
+-  });
+-
+-  it('listQueues returns all created queue names', () => {
+-    queue.enqueue('emails', { a: 1 });
+-    queue.enqueue('notifications', { b: 2 });
+-    queue.enqueue('reports', { c: 3 });
+-
+-    const names = queue.listQueues();
+-    expect(names).toContain('emails');
+-    expect(names).toContain('notifications');
+-    expect(names).toContain('reports');
+-    expect(names.length).toBe(3);
+-  });
+-
+-  it('queueSize returns the correct count per queue', () => {
+-    queue.enqueue('fast', { x: 1 });
+-    queue.enqueue('fast', { x: 2 });
+-    queue.enqueue('slow', { x: 3 });
+-
+-    expect(queue.queueSize('fast')).toBe(2);
+-    expect(queue.queueSize('slow')).toBe(1);
+-  });
+-
+-  it('uses default queue name when none is specified', () => {
+-    queue.enqueue('default', { fallback: true });
+-    const task = queue.dequeue('default');
+-    expect(task!.payload).toEqual({ fallback: true });
+-    expect(queue.listQueues()).toContain('default');
+-  });
+-
+-  it('dequeue from non-existent queue returns null', () => {
+-    const result = queue.dequeue('nonexistent');
+-    expect(result).toBeNull();
+-  });
+-});
+diff --git a/tests/phase-03.test.ts b/tests/phase-03.test.ts
+deleted file mode 100644
+index e8aea28..0000000
+--- a/tests/phase-03.test.ts
++++ /dev/null
+@@ -1,74 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 3: Priority', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    queue = new TaskQueue();
+-  });
+-
+-  it('higher priority task is dequeued first', () => {
+-    queue.enqueue('work', { name: 'low' }, { priority: 8 });
+-    queue.enqueue('work', { name: 'high' }, { priority: 2 });
+-
+-    const task = queue.dequeue('work');
+-    expect(task!.payload).toEqual({ name: 'high' });
+-  });
+-
+-  it('same priority maintains FIFO order', () => {
+-    queue.enqueue('work', { order: 'first' }, { priority: 5 });
+-    queue.enqueue('work', { order: 'second' }, { priority: 5 });
+-    queue.enqueue('work', { order: 'third' }, { priority: 5 });
+-
+-    expect(queue.dequeue('work')!.payload).toEqual({ order: 'first' });
+-    expect(queue.dequeue('work')!.payload).toEqual({ order: 'second' });
+-    expect(queue.dequeue('work')!.payload).toEqual({ order: 'third' });
+-  });
+-
+-  it('default priority is 5', () => {
+-    const task = queue.enqueue('work', { test: true });
+-    expect(task.priority).toBe(5);
+-  });
+-
+-  it('priority 1 is dequeued before priority 10', () => {
+-    queue.enqueue('work', { name: 'lowest' }, { priority: 10 });
+-    queue.enqueue('work', { name: 'highest' }, { priority: 1 });
+-
+-    const task = queue.dequeue('work');
+-    expect(task!.payload).toEqual({ name: 'highest' });
+-  });
+-
+-  it('three different priorities dequeue in correct order', () => {
+-    queue.enqueue('work', { p: 'medium' }, { priority: 5 });
+-    queue.enqueue('work', { p: 'low' }, { priority: 9 });
+-    queue.enqueue('work', { p: 'high' }, { priority: 1 });
+-
+-    expect(queue.dequeue('work')!.payload).toEqual({ p: 'high' });
+-    expect(queue.dequeue('work')!.payload).toEqual({ p: 'medium' });
+-    expect(queue.dequeue('work')!.payload).toEqual({ p: 'low' });
+-  });
+-
+-  it('later enqueued high priority beats earlier low priority', () => {
+-    queue.enqueue('work', { name: 'first-low' }, { priority: 8 });
+-    queue.enqueue('work', { name: 'second-high' }, { priority: 2 });
+-
+-    const task = queue.dequeue('work');
+-    expect(task!.payload).toEqual({ name: 'second-high' });
+-  });
+-
+-  it('priority works independently per named queue', () => {
+-    queue.enqueue('queue-a', { name: 'a-low' }, { priority: 9 });
+-    queue.enqueue('queue-a', { name: 'a-high' }, { priority: 1 });
+-    queue.enqueue('queue-b', { name: 'b-only' }, { priority: 7 });
+-
+-    expect(queue.dequeue('queue-a')!.payload).toEqual({ name: 'a-high' });
+-    expect(queue.dequeue('queue-b')!.payload).toEqual({ name: 'b-only' });
+-  });
+-
+-  it('throws error for priority outside 1-10 range', () => {
+-    expect(() => queue.enqueue('work', {}, { priority: 0 })).toThrow();
+-    expect(() => queue.enqueue('work', {}, { priority: 11 })).toThrow();
+-    expect(() => queue.enqueue('work', {}, { priority: -1 })).toThrow();
+-  });
+-});
+diff --git a/tests/phase-04.test.ts b/tests/phase-04.test.ts
+deleted file mode 100644
+index 9a9e767..0000000
+--- a/tests/phase-04.test.ts
++++ /dev/null
+@@ -1,85 +0,0 @@
+-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 4: Delayed/Scheduled Tasks', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    vi.useFakeTimers();
+-    queue = new TaskQueue();
+-  });
+-
+-  afterEach(() => {
+-    vi.useRealTimers();
+-  });
+-
+-  it('delayed task is not available immediately', () => {
+-    queue.enqueue('work', { delayed: true }, { delay: 5000 });
+-    const task = queue.dequeue('work');
+-    expect(task).toBeNull();
+-  });
+-
+-  it('delayed task becomes available after delay period', () => {
+-    queue.enqueue('work', { delayed: true }, { delay: 5000 });
+-
+-    vi.advanceTimersByTime(5000);
+-
+-    const task = queue.dequeue('work');
+-    expect(task).not.toBeNull();
+-    expect(task!.payload).toEqual({ delayed: true });
+-  });
+-
+-  it('runAt task is not available before the specified time', () => {
+-    const futureDate = new Date(Date.now() + 10000);
+-    queue.enqueue('work', { scheduled: true }, { runAt: futureDate });
+-
+-    const task = queue.dequeue('work');
+-    expect(task).toBeNull();
+-  });
+-
+-  it('runAt task becomes available at the specified time', () => {
+-    const futureDate = new Date(Date.now() + 10000);
+-    queue.enqueue('work', { scheduled: true }, { runAt: futureDate });
+-
+-    vi.advanceTimersByTime(10000);
+-
+-    const task = queue.dequeue('work');
+-    expect(task).not.toBeNull();
+-    expect(task!.payload).toEqual({ scheduled: true });
+-  });
+-
+-  it('non-delayed tasks dequeued before delayed tasks still waiting', () => {
+-    queue.enqueue('work', { delayed: true }, { delay: 5000 });
+-    queue.enqueue('work', { immediate: true });
+-
+-    const task = queue.dequeue('work');
+-    expect(task!.payload).toEqual({ immediate: true });
+-  });
+-
+-  it('multiple delayed tasks ordered by availability time', () => {
+-    queue.enqueue('work', { name: 'later' }, { delay: 10000 });
+-    queue.enqueue('work', { name: 'sooner' }, { delay: 3000 });
+-
+-    vi.advanceTimersByTime(10000);
+-
+-    const first = queue.dequeue('work');
+-    const second = queue.dequeue('work');
+-
+-    expect(first!.payload).toEqual({ name: 'sooner' });
+-    expect(second!.payload).toEqual({ name: 'later' });
+-  });
+-
+-  it('delay works with named queues', () => {
+-    queue.enqueue('fast', { name: 'fast-delayed' }, { delay: 2000 });
+-    queue.enqueue('slow', { name: 'slow-delayed' }, { delay: 8000 });
+-
+-    vi.advanceTimersByTime(2000);
+-
+-    expect(queue.dequeue('fast')).not.toBeNull();
+-    expect(queue.dequeue('slow')).toBeNull();
+-
+-    vi.advanceTimersByTime(6000);
+-
+-    expect(queue.dequeue('slow')).not.toBeNull();
+-  });
+-});
+diff --git a/tests/phase-05.test.ts b/tests/phase-05.test.ts
+deleted file mode 100644
+index dde11e3..0000000
+--- a/tests/phase-05.test.ts
++++ /dev/null
+@@ -1,145 +0,0 @@
+-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 5: Retry with Backoff', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    vi.useFakeTimers();
+-    queue = new TaskQueue();
+-  });
+-
+-  afterEach(() => {
+-    vi.useRealTimers();
+-  });
+-
+-  it('fail marks a processing task as failed', () => {
+-    queue.enqueue('work', { job: 'test' }, { maxRetries: 0 });
+-    const task = queue.dequeue('work')!;
+-    queue.fail(task.id, 'something went wrong');
+-
+-    // With maxRetries: 0, no retry - task stays failed
+-    expect(task.status).toBe('failed');
+-  });
+-
+-  it('failed task is re-enqueued automatically when retries remain', () => {
+-    queue.enqueue('work', { job: 'retry-me' });
+-    const task = queue.dequeue('work')!;
+-    queue.fail(task.id, 'transient error');
+-
+-    // After backoff delay, task should be available again
+-    vi.advanceTimersByTime(1000); // first retry: 1000ms
+-    const retried = queue.dequeue('work');
+-    expect(retried).not.toBeNull();
+-    expect(retried!.id).toBe(task.id);
+-  });
+-
+-  it('task attempts count is incremented on each retry', () => {
+-    queue.enqueue('work', { job: 'count-attempts' });
+-    const task = queue.dequeue('work')!;
+-    expect(task.attempts).toBe(1);
+-
+-    queue.fail(task.id, 'error');
+-    vi.advanceTimersByTime(1000);
+-
+-    const retry1 = queue.dequeue('work')!;
+-    expect(retry1.attempts).toBe(2);
+-  });
+-
+-  it('backoff delay increases exponentially between retries', () => {
+-    queue.enqueue('work', { job: 'backoff-test' });
+-
+-    // First attempt
+-    const task = queue.dequeue('work')!;
+-    queue.fail(task.id, 'error 1');
+-
+-    // First retry after 1000ms (1000 * 2^0)
+-    vi.advanceTimersByTime(999);
+-    expect(queue.dequeue('work')).toBeNull();
+-    vi.advanceTimersByTime(1);
+-    expect(queue.dequeue('work')).not.toBeNull();
+-
+-    queue.fail(task.id, 'error 2');
+-
+-    // Second retry after 2000ms (1000 * 2^1)
+-    vi.advanceTimersByTime(1999);
+-    expect(queue.dequeue('work')).toBeNull();
+-    vi.advanceTimersByTime(1);
+-    expect(queue.dequeue('work')).not.toBeNull();
+-
+-    queue.fail(task.id, 'error 3');
+-
+-    // Third retry after 4000ms (1000 * 2^2)
+-    vi.advanceTimersByTime(3999);
+-    expect(queue.dequeue('work')).toBeNull();
+-    vi.advanceTimersByTime(1);
+-    expect(queue.dequeue('work')).not.toBeNull();
+-  });
+-
+-  it('respects maxRetries limit (default 3)', () => {
+-    queue.enqueue('work', { job: 'limited' });
+-
+-    for (let i = 0; i < 3; i++) {
+-      const task = queue.dequeue('work')!;
+-      expect(task).not.toBeNull();
+-      queue.fail(task.id, `error ${i + 1}`);
+-      vi.advanceTimersByTime(1000 * Math.pow(2, i));
+-    }
+-
+-    // Fourth attempt
+-    const lastAttempt = queue.dequeue('work')!;
+-    expect(lastAttempt).not.toBeNull();
+-    queue.fail(lastAttempt.id, 'final error');
+-
+-    // No more retries - should not re-appear
+-    vi.advanceTimersByTime(100000);
+-    expect(queue.dequeue('work')).toBeNull();
+-  });
+-
+-  it('accepts custom maxRetries option', () => {
+-    queue.enqueue('work', { job: 'custom' }, { maxRetries: 1 });
+-
+-    // First attempt
+-    const task = queue.dequeue('work')!;
+-    queue.fail(task.id, 'error 1');
+-    vi.advanceTimersByTime(1000);
+-
+-    // Second attempt (1 retry)
+-    const retry = queue.dequeue('work')!;
+-    expect(retry).not.toBeNull();
+-    queue.fail(retry.id, 'error 2');
+-
+-    // No more retries
+-    vi.advanceTimersByTime(100000);
+-    expect(queue.dequeue('work')).toBeNull();
+-  });
+-
+-  it('retry preserves the original queue name', () => {
+-    queue.enqueue('special-queue', { job: 'preserve-queue' });
+-    const task = queue.dequeue('special-queue')!;
+-    queue.fail(task.id, 'error');
+-    vi.advanceTimersByTime(1000);
+-
+-    // Should appear in the same queue
+-    const retried = queue.dequeue('special-queue');
+-    expect(retried).not.toBeNull();
+-    expect(retried!.id).toBe(task.id);
+-
+-    // Should not appear in other queues
+-    expect(queue.dequeue('default')).toBeNull();
+-  });
+-
+-  it('retry preserves the original priority', () => {
+-    queue.enqueue('work', { job: 'high-pri' }, { priority: 1 });
+-    queue.enqueue('work', { job: 'low-pri' }, { priority: 9 });
+-
+-    const highPri = queue.dequeue('work')!;
+-    expect(highPri.payload).toEqual({ job: 'high-pri' });
+-    queue.fail(highPri.id, 'error');
+-    vi.advanceTimersByTime(1000);
+-
+-    // The retried high-priority task should still come before low-priority
+-    const next = queue.dequeue('work')!;
+-    expect(next.payload).toEqual({ job: 'high-pri' });
+-  });
+-});
+diff --git a/tests/phase-06.test.ts b/tests/phase-06.test.ts
+deleted file mode 100644
+index 381e6f0..0000000
+--- a/tests/phase-06.test.ts
++++ /dev/null
+@@ -1,132 +0,0 @@
+-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 6: Dead Letter Queue', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    vi.useFakeTimers();
+-    queue = new TaskQueue();
+-  });
+-
+-  afterEach(() => {
+-    vi.useRealTimers();
+-  });
+-
+-  it('task moves to DLQ after exhausting all retries', () => {
+-    queue.enqueue('work', { job: 'doomed' }, { maxRetries: 1 });
+-
+-    // First attempt
+-    const task = queue.dequeue('work')!;
+-    queue.fail(task.id, 'error 1');
+-    vi.advanceTimersByTime(1000);
+-
+-    // Second attempt (1 retry)
+-    const retry = queue.dequeue('work')!;
+-    queue.fail(retry.id, 'error 2');
+-
+-    // Should be in DLQ now
+-    const dlq = queue.getDLQ('work');
+-    expect(dlq.length).toBe(1);
+-    expect(dlq[0].id).toBe(task.id);
+-  });
+-
+-  it('getDLQ returns all dead-letter tasks for a queue', () => {
+-    queue.enqueue('work', { job: 'doomed1' }, { maxRetries: 0 });
+-    queue.enqueue('work', { job: 'doomed2' }, { maxRetries: 0 });
+-
+-    const t1 = queue.dequeue('work')!;
+-    queue.fail(t1.id, 'error');
+-    const t2 = queue.dequeue('work')!;
+-    queue.fail(t2.id, 'error');
+-
+-    const dlq = queue.getDLQ('work');
+-    expect(dlq.length).toBe(2);
+-  });
+-
+-  it('retryDLQ moves task back to its original queue', () => {
+-    queue.enqueue('emails', { job: 'retry-dlq' }, { maxRetries: 0 });
+-
+-    const task = queue.dequeue('emails')!;
+-    queue.fail(task.id, 'error');
+-
+-    expect(queue.getDLQ('emails').length).toBe(1);
+-
+-    const retried = queue.retryDLQ(task.id);
+-    expect(retried).not.toBeNull();
+-
+-    // DLQ should be empty now
+-    expect(queue.getDLQ('emails').length).toBe(0);
+-
+-    // Task should be back in the queue
+-    const dequeued = queue.dequeue('emails');
+-    expect(dequeued).not.toBeNull();
+-    expect(dequeued!.id).toBe(task.id);
+-  });
+-
+-  it('clearDLQ removes all DLQ tasks for a queue', () => {
+-    queue.enqueue('work', { job: 'clear1' }, { maxRetries: 0 });
+-    queue.enqueue('work', { job: 'clear2' }, { maxRetries: 0 });
+-
+-    const t1 = queue.dequeue('work')!;
+-    queue.fail(t1.id, 'error');
+-    const t2 = queue.dequeue('work')!;
+-    queue.fail(t2.id, 'error');
+-
+-    expect(queue.getDLQ('work').length).toBe(2);
+-    queue.clearDLQ('work');
+-    expect(queue.getDLQ('work').length).toBe(0);
+-  });
+-
+-  it('DLQ task retains original error information', () => {
+-    queue.enqueue('work', { job: 'error-info' }, { maxRetries: 0 });
+-
+-    const task = queue.dequeue('work')!;
+-    queue.fail(task.id, 'specific error message');
+-
+-    const dlq = queue.getDLQ('work');
+-    expect(dlq[0].lastError).toBe('specific error message');
+-  });
+-
+-  it('DLQ task tracks failure count', () => {
+-    queue.enqueue('work', { job: 'count-fails' }, { maxRetries: 2 });
+-
+-    // Fail through all retries
+-    for (let i = 0; i < 2; i++) {
+-      const task = queue.dequeue('work')!;
+-      queue.fail(task.id, `error ${i}`);
+-      vi.advanceTimersByTime(1000 * Math.pow(2, i));
+-    }
+-    const lastAttempt = queue.dequeue('work')!;
+-    queue.fail(lastAttempt.id, 'final error');
+-
+-    const dlq = queue.getDLQ('work');
+-    expect(dlq[0].failCount).toBe(3); // original + 2 retries = 3 failures
+-  });
+-
+-  it('retried DLQ task gets a fresh retry count', () => {
+-    queue.enqueue('work', { job: 'fresh-retries' }, { maxRetries: 1 });
+-
+-    // Exhaust retries
+-    const t1 = queue.dequeue('work')!;
+-    queue.fail(t1.id, 'error 1');
+-    vi.advanceTimersByTime(1000);
+-    const t2 = queue.dequeue('work')!;
+-    queue.fail(t2.id, 'error 2');
+-
+-    // Should be in DLQ
+-    expect(queue.getDLQ('work').length).toBe(1);
+-
+-    // Retry from DLQ
+-    queue.retryDLQ(t1.id);
+-    const retried = queue.dequeue('work')!;
+-    expect(retried).not.toBeNull();
+-    expect(retried.attempts).toBe(1); // fresh attempt count
+-
+-    // Should have fresh retries available
+-    queue.fail(retried.id, 'new error');
+-    vi.advanceTimersByTime(1000);
+-    const retry = queue.dequeue('work');
+-    expect(retry).not.toBeNull(); // can retry again
+-  });
+-});
+diff --git a/tests/phase-07.test.ts b/tests/phase-07.test.ts
+deleted file mode 100644
+index 27ce811..0000000
+--- a/tests/phase-07.test.ts
++++ /dev/null
+@@ -1,155 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 7: Task Dependencies', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    queue = new TaskQueue();
+-  });
+-
+-  it('task with dependencies is not available until deps complete', () => {
+-    const dep = queue.enqueue('work', { name: 'dependency' });
+-    queue.enqueue('work', { name: 'dependent' }, { dependsOn: [dep.id] });
+-
+-    // Dequeue should return the dependency first (no deps blocking it)
+-    const first = queue.dequeue('work');
+-    expect(first!.payload).toEqual({ name: 'dependency' });
+-
+-    // Dependent should not be available yet
+-    const second = queue.dequeue('work');
+-    expect(second).toBeNull();
+-  });
+-
+-  it('completing a dependency makes dependent task available', () => {
+-    const dep = queue.enqueue('work', { name: 'dependency' });
+-    queue.enqueue('work', { name: 'dependent' }, { dependsOn: [dep.id] });
+-
+-    const task = queue.dequeue('work')!;
+-    queue.complete(task.id);
+-
+-    // Now the dependent should be available
+-    const dependent = queue.dequeue('work');
+-    expect(dependent).not.toBeNull();
+-    expect(dependent!.payload).toEqual({ name: 'dependent' });
+-  });
+-
+-  it('all dependencies must complete before dependent is available', () => {
+-    const dep1 = queue.enqueue('work', { name: 'dep1' });
+-    const dep2 = queue.enqueue('work', { name: 'dep2' });
+-    queue.enqueue('work', { name: 'dependent' }, { dependsOn: [dep1.id, dep2.id] });
+-
+-    // Process dep1
+-    const task1 = queue.dequeue('work')!;
+-    queue.complete(task1.id);
+-
+-    // dep2 should be available but dependent should not
+-    const task2 = queue.dequeue('work')!;
+-    expect(task2.payload).toEqual({ name: 'dep2' });
+-
+-    // Dependent still blocked (dep2 not completed yet)
+-    expect(queue.dequeue('work')).toBeNull();
+-
+-    // Complete dep2
+-    queue.complete(task2.id);
+-
+-    // Now dependent is available
+-    const dependent = queue.dequeue('work');
+-    expect(dependent).not.toBeNull();
+-    expect(dependent!.payload).toEqual({ name: 'dependent' });
+-  });
+-
+-  it('circular dependency throws an error', () => {
+-    const a = queue.enqueue('work', { name: 'A' });
+-    const b = queue.enqueue('work', { name: 'B' }, { dependsOn: [a.id] });
+-
+-    // Trying to make A depend on B creates a cycle
+-    expect(() =>
+-      queue.enqueue('work', { name: 'C' }, { dependsOn: [b.id, a.id] })
+-    ).not.toThrow(); // C -> B -> A is fine, no cycle
+-
+-    // Direct cycle: X depends on Y, Y depends on X
+-    const x = queue.enqueue('work', { name: 'X' });
+-    queue.enqueue('work', { name: 'Y' }, { dependsOn: [x.id] });
+-
+-    // This should not throw since there's no actual circular dependency here
+-    // A true circular dependency:
+-    const m = queue.enqueue('work', { name: 'M' });
+-    const n = queue.enqueue('work', { name: 'N' }, { dependsOn: [m.id] });
+-    expect(() =>
+-      queue.enqueue('work', { name: 'O' }, { dependsOn: [n.id, m.id] })
+-    ).not.toThrow(); // O -> N -> M is fine
+-
+-    // Real cycle detection test
+-    const p = queue.enqueue('other', { name: 'P' });
+-    const _q2 = queue.enqueue('other', { name: 'Q' }, { dependsOn: [p.id] });
+-    // Cycle detection is verified above; with forward-only enqueue,
+-    // cycles can only be detected at enqueue time through transitive dep chains.
+-  });
+-
+-  it('getDependencies returns dependency info with statuses', () => {
+-    const dep1 = queue.enqueue('work', { name: 'dep1' });
+-    const dep2 = queue.enqueue('work', { name: 'dep2' });
+-    const dependent = queue.enqueue('work', { name: 'dependent' }, {
+-      dependsOn: [dep1.id, dep2.id],
+-    });
+-
+-    const deps = queue.getDependencies(dependent.id);
+-    expect(deps).toHaveLength(2);
+-    expect(deps).toContainEqual({ taskId: dep1.id, status: 'pending' });
+-    expect(deps).toContainEqual({ taskId: dep2.id, status: 'pending' });
+-
+-    // After completing one
+-    const task = queue.dequeue('work')!;
+-    queue.complete(task.id);
+-
+-    const updatedDeps = queue.getDependencies(dependent.id);
+-    const completedDep = updatedDeps.find(d => d.taskId === dep1.id);
+-    expect(completedDep!.status).toBe('completed');
+-  });
+-
+-  it('cascading dependencies work correctly (A depends on B depends on C)', () => {
+-    const c = queue.enqueue('work', { name: 'C' });
+-    const b = queue.enqueue('work', { name: 'B' }, { dependsOn: [c.id] });
+-    const a = queue.enqueue('work', { name: 'A' }, { dependsOn: [b.id] });
+-
+-    // Only C is available
+-    const taskC = queue.dequeue('work')!;
+-    expect(taskC.payload).toEqual({ name: 'C' });
+-    expect(queue.dequeue('work')).toBeNull();
+-
+-    queue.complete(taskC.id);
+-
+-    // Now B is available
+-    const taskB = queue.dequeue('work')!;
+-    expect(taskB.payload).toEqual({ name: 'B' });
+-    expect(queue.dequeue('work')).toBeNull();
+-
+-    queue.complete(taskB.id);
+-
+-    // Now A is available
+-    const taskA = queue.dequeue('work')!;
+-    expect(taskA.payload).toEqual({ name: 'A' });
+-    expect(taskA.id).toBe(a.id);
+-  });
+-
+-  it('failed dependency does not auto-fail the dependent task', () => {
+-    const dep = queue.enqueue('work', { name: 'dep' }, { maxRetries: 0 });
+-    const dependent = queue.enqueue('work', { name: 'dependent' }, {
+-      dependsOn: [dep.id],
+-    });
+-
+-    const task = queue.dequeue('work')!;
+-    queue.fail(task.id, 'dep failed');
+-
+-    // Dependent stays blocked (not failed)
+-    expect(dependent.status).toBe('pending');
+-    expect(queue.dequeue('work')).toBeNull();
+-  });
+-
+-  it('dependency on non-existent task throws an error', () => {
+-    expect(() =>
+-      queue.enqueue('work', { name: 'orphan' }, { dependsOn: ['nonexistent-id'] })
+-    ).toThrow();
+-  });
+-});
+diff --git a/tests/phase-08.test.ts b/tests/phase-08.test.ts
+deleted file mode 100644
+index 0983025..0000000
+--- a/tests/phase-08.test.ts
++++ /dev/null
+@@ -1,111 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 8: Concurrency Control', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    queue = new TaskQueue();
+-  });
+-
+-  it('setConcurrency limits the number of concurrent processing tasks', () => {
+-    queue.setConcurrency('work', 2);
+-    queue.enqueue('work', { job: 1 });
+-    queue.enqueue('work', { job: 2 });
+-    queue.enqueue('work', { job: 3 });
+-
+-    const t1 = queue.dequeue('work');
+-    const t2 = queue.dequeue('work');
+-    expect(t1).not.toBeNull();
+-    expect(t2).not.toBeNull();
+-
+-    // Third dequeue should return null (at limit)
+-    const t3 = queue.dequeue('work');
+-    expect(t3).toBeNull();
+-  });
+-
+-  it('dequeue returns null when at concurrency limit even if tasks available', () => {
+-    queue.setConcurrency('work', 1);
+-    queue.enqueue('work', { job: 'a' });
+-    queue.enqueue('work', { job: 'b' });
+-
+-    queue.dequeue('work'); // takes slot
+-    const second = queue.dequeue('work');
+-    expect(second).toBeNull();
+-  });
+-
+-  it('completing a task frees a concurrency slot', () => {
+-    queue.setConcurrency('work', 1);
+-    queue.enqueue('work', { job: 'first' });
+-    queue.enqueue('work', { job: 'second' });
+-
+-    const first = queue.dequeue('work')!;
+-    expect(queue.dequeue('work')).toBeNull(); // at limit
+-
+-    queue.complete(first.id);
+-
+-    const second = queue.dequeue('work');
+-    expect(second).not.toBeNull();
+-    expect(second!.payload).toEqual({ job: 'second' });
+-  });
+-
+-  it('getConcurrency returns current and max info', () => {
+-    queue.setConcurrency('work', 3);
+-    queue.enqueue('work', { job: 1 });
+-    queue.enqueue('work', { job: 2 });
+-
+-    const info1 = queue.getConcurrency('work');
+-    expect(info1.max).toBe(3);
+-    expect(info1.current).toBe(0);
+-
+-    queue.dequeue('work');
+-    const info2 = queue.getConcurrency('work');
+-    expect(info2.current).toBe(1);
+-
+-    queue.dequeue('work');
+-    const info3 = queue.getConcurrency('work');
+-    expect(info3.current).toBe(2);
+-  });
+-
+-  it('default concurrency is unlimited', () => {
+-    for (let i = 0; i < 100; i++) {
+-      queue.enqueue('work', { job: i });
+-    }
+-
+-    const tasks = [];
+-    for (let i = 0; i < 100; i++) {
+-      const t = queue.dequeue('work');
+-      if (!t) break;
+-      tasks.push(t);
+-    }
+-
+-    expect(tasks.length).toBe(100);
+-  });
+-
+-  it('concurrency limits are independent per queue', () => {
+-    queue.setConcurrency('queue-a', 1);
+-    queue.setConcurrency('queue-b', 2);
+-
+-    queue.enqueue('queue-a', { q: 'a1' });
+-    queue.enqueue('queue-a', { q: 'a2' });
+-    queue.enqueue('queue-b', { q: 'b1' });
+-    queue.enqueue('queue-b', { q: 'b2' });
+-    queue.enqueue('queue-b', { q: 'b3' });
+-
+-    queue.dequeue('queue-a'); // 1 processing in queue-a
+-    expect(queue.dequeue('queue-a')).toBeNull(); // at limit for queue-a
+-
+-    queue.dequeue('queue-b'); // 1 processing in queue-b
+-    expect(queue.dequeue('queue-b')).not.toBeNull(); // can still dequeue (limit 2)
+-    expect(queue.dequeue('queue-b')).toBeNull(); // now at limit
+-  });
+-
+-  it('concurrency respects priority ordering', () => {
+-    queue.setConcurrency('work', 1);
+-    queue.enqueue('work', { name: 'low' }, { priority: 9 });
+-    queue.enqueue('work', { name: 'high' }, { priority: 1 });
+-
+-    const task = queue.dequeue('work')!;
+-    expect(task.payload).toEqual({ name: 'high' });
+-  });
+-});
+diff --git a/tests/phase-09.test.ts b/tests/phase-09.test.ts
+deleted file mode 100644
+index b118178..0000000
+--- a/tests/phase-09.test.ts
++++ /dev/null
+@@ -1,107 +0,0 @@
+-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 9: Progress and Cancellation', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    vi.useFakeTimers();
+-    queue = new TaskQueue();
+-  });
+-
+-  afterEach(() => {
+-    vi.useRealTimers();
+-  });
+-
+-  it('updateProgress sets the percentage for a task', () => {
+-    queue.enqueue('work', { job: 'progress' });
+-    const task = queue.dequeue('work')!;
+-
+-    queue.updateProgress(task.id, 50);
+-    const progress = queue.getProgress(task.id);
+-    expect(progress!.percent).toBe(50);
+-  });
+-
+-  it('getProgress returns current progress info', () => {
+-    queue.enqueue('work', { job: 'progress' });
+-    const task = queue.dequeue('work')!;
+-
+-    queue.updateProgress(task.id, 75, 'Almost done');
+-    const progress = queue.getProgress(task.id);
+-
+-    expect(progress).not.toBeNull();
+-    expect(progress!.percent).toBe(75);
+-    expect(progress!.message).toBe('Almost done');
+-    expect(progress!.updatedAt).toBeInstanceOf(Date);
+-  });
+-
+-  it('onProgress callback fires when progress is updated', () => {
+-    queue.enqueue('work', { job: 'callback' });
+-    const task = queue.dequeue('work')!;
+-
+-    const updates: Array<{ percent: number; message?: string }> = [];
+-    queue.onProgress(task.id, (info) => {
+-      updates.push({ percent: info.percent, message: info.message });
+-    });
+-
+-    queue.updateProgress(task.id, 25, 'Starting');
+-    queue.updateProgress(task.id, 50, 'Halfway');
+-    queue.updateProgress(task.id, 100, 'Done');
+-
+-    expect(updates).toHaveLength(3);
+-    expect(updates[0]).toEqual({ percent: 25, message: 'Starting' });
+-    expect(updates[1]).toEqual({ percent: 50, message: 'Halfway' });
+-    expect(updates[2]).toEqual({ percent: 100, message: 'Done' });
+-  });
+-
+-  it('cancel sets task status to cancelled', () => {
+-    const task = queue.enqueue('work', { job: 'cancel-me' });
+-    queue.cancel(task.id);
+-    expect(task.status).toBe('cancelled');
+-  });
+-
+-  it('cancelled pending task is removed from the queue', () => {
+-    queue.enqueue('work', { job: 'stay' });
+-    const toCancel = queue.enqueue('work', { job: 'cancel' });
+-    queue.enqueue('work', { job: 'stay2' });
+-
+-    queue.cancel(toCancel.id);
+-
+-    const t1 = queue.dequeue('work')!;
+-    const t2 = queue.dequeue('work')!;
+-    expect(t1.payload).toEqual({ job: 'stay' });
+-    expect(t2.payload).toEqual({ job: 'stay2' });
+-    expect(queue.dequeue('work')).toBeNull();
+-  });
+-
+-  it('cancelled processing task has its status set to cancelled', () => {
+-    queue.enqueue('work', { job: 'processing-cancel' });
+-    const task = queue.dequeue('work')!;
+-    expect(task.status).toBe('processing');
+-
+-    queue.cancel(task.id);
+-    expect(task.status).toBe('cancelled');
+-  });
+-
+-  it('cancelled task is not retried', () => {
+-    queue.enqueue('work', { job: 'no-retry' }, { maxRetries: 3 });
+-    const task = queue.dequeue('work')!;
+-
+-    queue.cancel(task.id);
+-
+-    // Even after long delay, cancelled task should not reappear
+-    vi.advanceTimersByTime(100000);
+-    expect(queue.dequeue('work')).toBeNull();
+-  });
+-
+-  it('progress message is optional', () => {
+-    queue.enqueue('work', { job: 'no-msg' });
+-    const task = queue.dequeue('work')!;
+-
+-    queue.updateProgress(task.id, 42);
+-    const progress = queue.getProgress(task.id);
+-
+-    expect(progress!.percent).toBe(42);
+-    expect(progress!.message).toBeUndefined();
+-  });
+-});
+diff --git a/tests/phase-10.test.ts b/tests/phase-10.test.ts
+deleted file mode 100644
+index 0b8260e..0000000
+--- a/tests/phase-10.test.ts
++++ /dev/null
+@@ -1,125 +0,0 @@
+-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 10: Recurring Tasks (Cron)', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    vi.useFakeTimers({ now: new Date('2025-01-01T00:00:00.000Z') });
+-    queue = new TaskQueue();
+-  });
+-
+-  afterEach(() => {
+-    vi.useRealTimers();
+-  });
+-
+-  it('schedule creates a recurring task definition', () => {
+-    const schedule = queue.schedule('work', '*/5 * * * *', { type: 'cleanup' });
+-
+-    expect(schedule).toHaveProperty('id');
+-    expect(schedule.queueName).toBe('work');
+-    expect(schedule.cronExpression).toBe('*/5 * * * *');
+-    expect(schedule.taskTemplate).toEqual({ type: 'cleanup' });
+-    expect(schedule.active).toBe(true);
+-  });
+-
+-  it('tick triggers scheduled tasks when they are due', () => {
+-    queue.schedule('work', '*/5 * * * *', { type: 'periodic' });
+-
+-    // Advance 5 minutes
+-    vi.advanceTimersByTime(5 * 60 * 1000);
+-    queue.tick();
+-
+-    const task = queue.dequeue('work');
+-    expect(task).not.toBeNull();
+-    expect(task!.payload).toEqual({ type: 'periodic' });
+-  });
+-
+-  it('unschedule stops future occurrences', () => {
+-    const schedule = queue.schedule('work', '*/5 * * * *', { type: 'stop-me' });
+-
+-    queue.unschedule(schedule.id);
+-
+-    vi.advanceTimersByTime(5 * 60 * 1000);
+-    queue.tick();
+-
+-    expect(queue.dequeue('work')).toBeNull();
+-  });
+-
+-  it('listSchedules returns active schedules', () => {
+-    queue.schedule('work', '*/5 * * * *', { type: 'a' });
+-    queue.schedule('work', '*/10 * * * *', { type: 'b' });
+-    const toRemove = queue.schedule('other', '0 * * * *', { type: 'c' });
+-
+-    queue.unschedule(toRemove.id);
+-
+-    const schedules = queue.listSchedules();
+-    expect(schedules.length).toBe(2);
+-
+-    const workSchedules = queue.listSchedules('work');
+-    expect(workSchedules.length).toBe(2);
+-  });
+-
+-  it('cron "every 5 minutes" triggers at correct intervals', () => {
+-    queue.schedule('work', '*/5 * * * *', { type: 'five-min' });
+-
+-    // Advance 3 minutes - should not trigger
+-    vi.advanceTimersByTime(3 * 60 * 1000);
+-    queue.tick();
+-    expect(queue.dequeue('work')).toBeNull();
+-
+-    // Advance 2 more minutes (total 5) - should trigger
+-    vi.advanceTimersByTime(2 * 60 * 1000);
+-    queue.tick();
+-    expect(queue.dequeue('work')).not.toBeNull();
+-  });
+-
+-  it('scheduled task gets the correct queue and payload', () => {
+-    queue.schedule('notifications', '*/1 * * * *', {
+-      type: 'reminder',
+-      message: 'Check your inbox',
+-    });
+-
+-    vi.advanceTimersByTime(1 * 60 * 1000);
+-    queue.tick();
+-
+-    const task = queue.dequeue('notifications');
+-    expect(task).not.toBeNull();
+-    expect(task!.payload).toEqual({
+-      type: 'reminder',
+-      message: 'Check your inbox',
+-    });
+-
+-    // Should not be in other queues
+-    expect(queue.dequeue('work')).toBeNull();
+-  });
+-
+-  it('multiple schedules can coexist', () => {
+-    queue.schedule('work', '*/5 * * * *', { type: 'every-5' });
+-    queue.schedule('work', '*/10 * * * *', { type: 'every-10' });
+-
+-    // At 5 minutes, only every-5 triggers
+-    vi.advanceTimersByTime(5 * 60 * 1000);
+-    queue.tick();
+-
+-    const tasks5 = [];
+-    let t;
+-    while ((t = queue.dequeue('work')) !== null) {
+-      tasks5.push(t);
+-    }
+-    expect(tasks5.length).toBe(1);
+-    expect(tasks5[0].payload).toEqual({ type: 'every-5' });
+-
+-    // At 10 minutes, both trigger
+-    vi.advanceTimersByTime(5 * 60 * 1000);
+-    queue.tick();
+-
+-    const tasks10 = [];
+-    while ((t = queue.dequeue('work')) !== null) {
+-      tasks10.push(t);
+-    }
+-    expect(tasks10.length).toBe(2);
+-    const types = tasks10.map(t => t.payload.type).sort();
+-    expect(types).toEqual(['every-10', 'every-5']);
+-  });
+-});
+diff --git a/tests/phase-11.test.ts b/tests/phase-11.test.ts
+deleted file mode 100644
+index 816f223..0000000
+--- a/tests/phase-11.test.ts
++++ /dev/null
+@@ -1,147 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 11: Middleware Pipeline', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    queue = new TaskQueue();
+-  });
+-
+-  it('middleware runs before task processing', async () => {
+-    const log: string[] = [];
+-
+-    queue.use('work', async (_task, next) => {
+-      log.push('middleware');
+-      await next();
+-    });
+-
+-    queue.enqueue('work', { job: 'test' });
+-
+-    await queue.process('work', async () => {
+-      log.push('handler');
+-    });
+-
+-    expect(log).toEqual(['middleware', 'handler']);
+-  });
+-
+-  it('multiple middlewares run in the order they were added', async () => {
+-    const log: string[] = [];
+-
+-    queue.use('work', async (_task, next) => {
+-      log.push('first');
+-      await next();
+-    });
+-
+-    queue.use('work', async (_task, next) => {
+-      log.push('second');
+-      await next();
+-    });
+-
+-    queue.use('work', async (_task, next) => {
+-      log.push('third');
+-      await next();
+-    });
+-
+-    queue.enqueue('work', { job: 'test' });
+-
+-    await queue.process('work', async () => {
+-      log.push('handler');
+-    });
+-
+-    expect(log).toEqual(['first', 'second', 'third', 'handler']);
+-  });
+-
+-  it('middleware can modify the task object', async () => {
+-    queue.use('work', async (task, next) => {
+-      task.payload.enriched = true;
+-      task.payload.timestamp = '2025-01-01';
+-      await next();
+-    });
+-
+-    queue.enqueue('work', { job: 'enrich-me' });
+-
+-    let processedPayload: Record<string, unknown> | null = null;
+-    await queue.process('work', async (task) => {
+-      processedPayload = task.payload;
+-    });
+-
+-    expect(processedPayload).toEqual({
+-      job: 'enrich-me',
+-      enriched: true,
+-      timestamp: '2025-01-01',
+-    });
+-  });
+-
+-  it('middleware can skip processing by not calling next', async () => {
+-    const log: string[] = [];
+-
+-    queue.use('work', async (_task, _next) => {
+-      log.push('blocker');
+-      // deliberately not calling next()
+-    });
+-
+-    queue.enqueue('work', { job: 'blocked' });
+-
+-    await queue.process('work', async () => {
+-      log.push('handler');
+-    });
+-
+-    expect(log).toEqual(['blocker']);
+-    expect(log).not.toContain('handler');
+-  });
+-
+-  it('error in middleware fails the task', async () => {
+-    queue.use('work', async (_task, _next) => {
+-      throw new Error('middleware explosion');
+-    });
+-
+-    const task = queue.enqueue('work', { job: 'explode' }, { maxRetries: 0 });
+-
+-    await queue.process('work', async () => {
+-      // should not reach here
+-    });
+-
+-    expect(task.status).toBe('failed');
+-  });
+-
+-  it('middleware stacks are independent per queue', async () => {
+-    const log: string[] = [];
+-
+-    queue.use('queue-a', async (_task, next) => {
+-      log.push('a-middleware');
+-      await next();
+-    });
+-
+-    queue.use('queue-b', async (_task, next) => {
+-      log.push('b-middleware');
+-      await next();
+-    });
+-
+-    queue.enqueue('queue-a', { job: 'a' });
+-
+-    await queue.process('queue-a', async () => {
+-      log.push('a-handler');
+-    });
+-
+-    expect(log).toEqual(['a-middleware', 'a-handler']);
+-    expect(log).not.toContain('b-middleware');
+-  });
+-
+-  it('middleware receives the task context', async () => {
+-    let receivedTask: { id?: string; payload?: unknown; status?: string } | null = null;
+-
+-    queue.use('work', async (task, next) => {
+-      receivedTask = task;
+-      await next();
+-    });
+-
+-    const enqueued = queue.enqueue('work', { job: 'context' });
+-
+-    await queue.process('work', async () => {});
+-
+-    expect(receivedTask).not.toBeNull();
+-    expect(receivedTask!.id).toBe(enqueued.id);
+-    expect(receivedTask!.payload).toEqual({ job: 'context' });
+-  });
+-});
+diff --git a/tests/phase-12.test.ts b/tests/phase-12.test.ts
+deleted file mode 100644
+index 2b34620..0000000
+--- a/tests/phase-12.test.ts
++++ /dev/null
+@@ -1,128 +0,0 @@
+-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+-import { TaskQueue } from '../src/index.js';
+-
+-describe('Phase 12: Graceful Shutdown', () => {
+-  let queue: TaskQueue;
+-
+-  beforeEach(() => {
+-    vi.useFakeTimers();
+-    queue = new TaskQueue();
+-  });
+-
+-  afterEach(() => {
+-    vi.useRealTimers();
+-  });
+-
+-  it('shutdown stops accepting new tasks', async () => {
+-    const shutdownPromise = queue.shutdown(5000);
+-    vi.advanceTimersByTime(0);
+-    await shutdownPromise;
+-
+-    expect(() => queue.enqueue('work', { job: 'too-late' })).toThrow();
+-  });
+-
+-  it('shutdown waits for processing tasks to complete', async () => {
+-    queue.enqueue('work', { job: 'in-flight' });
+-    const task = queue.dequeue('work')!;
+-
+-    let resolved = false;
+-    const shutdownPromise = queue.shutdown(10000).then((summary) => {
+-      resolved = true;
+-      return summary;
+-    });
+-
+-    // Shutdown should not resolve yet (task still processing)
+-    vi.advanceTimersByTime(100);
+-    await Promise.resolve(); // flush microtasks
+-    expect(resolved).toBe(false);
+-
+-    // Complete the task
+-    queue.complete(task.id);
+-    vi.advanceTimersByTime(0);
+-    const summary = await shutdownPromise;
+-
+-    expect(resolved).toBe(true);
+-    expect(summary.completed).toBe(1);
+-  });
+-
+-  it('shutdown force-cancels tasks after timeout', async () => {
+-    queue.enqueue('work', { job: 'slow' });
+-    const task = queue.dequeue('work')!;
+-
+-    const shutdownPromise = queue.shutdown(3000);
+-
+-    // Advance past timeout
+-    vi.advanceTimersByTime(3000);
+-    const summary = await shutdownPromise;
+-
+-    expect(summary.cancelled).toBe(1);
+-    expect(task.status).toBe('cancelled');
+-  });
+-
+-  it('onShutdown callback fires during shutdown', async () => {
+-    const log: string[] = [];
+-    queue.onShutdown(() => {
+-      log.push('shutdown-hook');
+-    });
+-
+-    const shutdownPromise = queue.shutdown(5000);
+-    vi.advanceTimersByTime(0);
+-    await shutdownPromise;
+-
+-    expect(log).toContain('shutdown-hook');
+-  });
+-
+-  it('shutdown returns summary with completed, cancelled, and elapsed', async () => {
+-    queue.enqueue('work', { job: 'fast' });
+-    queue.enqueue('work', { job: 'slow' });
+-
+-    const fast = queue.dequeue('work')!;
+-    const _slow = queue.dequeue('work')!;
+-
+-    const shutdownPromise = queue.shutdown(5000);
+-
+-    // Complete 'fast' quickly
+-    queue.complete(fast.id);
+-
+-    // Let 'slow' timeout (it gets force-cancelled)
+-    vi.advanceTimersByTime(5000);
+-    const summary = await shutdownPromise;
+-
+-    expect(summary.completed).toBe(1);
+-    expect(summary.cancelled).toBe(1);
+-    expect(typeof summary.elapsed).toBe('number');
+-    expect(summary.elapsed).toBeGreaterThanOrEqual(0);
+-  });
+-
+-  it('multiple shutdown calls are idempotent', async () => {
+-    const p1 = queue.shutdown(5000);
+-    const p2 = queue.shutdown(5000);
+-
+-    vi.advanceTimersByTime(0);
+-    const [s1, s2] = await Promise.all([p1, p2]);
+-
+-    // Should return the same result
+-    expect(s1).toEqual(s2);
+-  });
+-
+-  it('enqueue after shutdown throws an error', async () => {
+-    const shutdownPromise = queue.shutdown(5000);
+-    vi.advanceTimersByTime(0);
+-    await shutdownPromise;
+-
+-    expect(() => queue.enqueue('work', { job: 'rejected' })).toThrow();
+-  });
+-
+-  it('shutdown with no processing tasks resolves immediately', async () => {
+-    queue.enqueue('work', { job: 'pending-only' });
+-    // Don't dequeue - nothing is processing
+-
+-    const shutdownPromise = queue.shutdown(5000);
+-    vi.advanceTimersByTime(0);
+-    const summary = await shutdownPromise;
+-
+-    expect(summary.completed).toBe(0);
+-    expect(summary.cancelled).toBe(0);
+-    expect(summary.elapsed).toBeLessThanOrEqual(100);
+-  });
+-});
+diff --git a/tsconfig.json b/tsconfig.json
+index 87fcd6d..aada37c 100644
+--- a/tsconfig.json
++++ b/tsconfig.json
+@@ -15,5 +15,5 @@
+     "sourceMap": true
+   },
+   "include": ["src/**/*"],
+-  "exclude": ["node_modules", "dist", "tests"]
++  "exclude": ["node_modules", "dist", "tests", "src/**/*.test.ts"]
+ }

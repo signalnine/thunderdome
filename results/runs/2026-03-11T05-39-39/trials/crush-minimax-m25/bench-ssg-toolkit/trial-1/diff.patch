@@ -1,0 +1,555 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..4337fd7
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 771553,
++  "output_tokens": 7506,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.4854498
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..2337256
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,272 @@
++Now I'll read the test files to understand what each plugin should do:
++
++
++
++Now let me read each plugin test file:
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++Now let me check the package.json and core index:
++
++
++
++
++
++Now I'll create all 8 plugins. Let me start:
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++The regex for asset-pipeline needs fixing. Let me fix that and then continue with syntax-highlight.
++
++
++Let me fix the asset-pipeline plugin properly:
++
++
++
++Now let's create syntax-highlight:
++
++
++
++
++
++
++
++
++
++
++Now let's create taxonomy:
++
++
++
++
++
++
++
++
++
++
++
++
++
++Now let's create rss-feed:
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++<invoke name="write">
++<parameter name="content">import type { BuildContext, ContentFile, Plugin } from '../core/types.js';
++
++function formatRssDate(date: string | undefined): string {
++  if (!date) return '';
++  try {
++    const d = new Date(date);
++    return d.toUTCString();
++  } catch {
++    return '';
++  }
++}
++
++export function createRssFeedPlugin(): Plugin {
++  return {
++    name: 'rss-feed',
++    version: '1.0.0',
++    dependencies: ['markdown-ext', 'taxonomy'],
++    hooks: {
++      afterBuild: (ctx: BuildContext) => {
++        const { config, files, data } = ctx;
++        
++        // Sort files by date newest first
++        const sortedFiles = [...files].sort((a, b) => {
++          if (!a.date) return 1;
++          if (!b.date) return -1;
++          return new Date(b.date).getTime() - new Date(a.date).getTime();
++        });
++
++        // Get taxonomy data
++        const tagMap = data.get('taxonomy-tags') as Map<string, ContentFile[]> | undefined;
++
++        // Build items XML
++        const itemsXml = sortedFiles.map(file => {
++          const fileTags = file.tags || [];
++          const categoriesXml = fileTags
++            .map(tag => `    <category>${tag}</category>`)
++            .join('\n');
++          
++          const pubDate = file.date ? formatRssDate(file.date) : '';
++          const pubDateXml = pubDate ? `<pubDate>${pubDate}</pubDate>` : '';
++
++          return `  <item>
++    <title>${file.title}</title>
++    <link>${config.baseUrl}/${file.slug}.html</link>
++    <guid>${config.baseUrl}/${file.slug}.html</guid>
++    <description><![CDATA[${file.content}]]></description>
++${pubDateXml}
++${categoriesXml}
++  </item>`;
++        }).join('\n');
++
++        const feed = `<?xml version="1.0" encoding="UTF-8"?>
++<rss version="2.0">
++  <channel>
++    <title>${config.title}</title>
++    <link>${config.baseUrl}</link>
++    <description>${config.title} RSS Feed</description>
++${itemsXml}
++  </channel>
++</rss>`;
++
++        ctx.output.set('feed.xml', feed);
++      },
++    },
++  };
++}</parameter>
++<parameter name="file_path">/workspace/src/plugins/rss-feed.ts</parameter>
++</invoke>
++</minimax:tool_call>
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/src/plugins/asset-pipeline.ts b/src/plugins/asset-pipeline.ts
+new file mode 100644
+index 0000000..a44a1ab
+--- /dev/null
++++ b/src/plugins/asset-pipeline.ts
+@@ -0,0 +1,39 @@
++import type { BuildContext, ContentFile, Plugin } from '../core/types.js';
++
++export function createAssetPipelinePlugin(): Plugin {
++  return {
++    name: 'asset-pipeline',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      beforeBuild: (ctx: BuildContext) => {
++        ctx.data.set('asset-manifest', { assets: [] as string[] });
++      },
++      transformContent: (file: ContentFile, ctx: BuildContext) => {
++        let content = file.content;
++        const manifest = ctx.data.get('asset-manifest') as { assets: string[] };
++        const assets = manifest?.assets || [];
++
++        // Match relative URLs like ./image.png or ./doc.pdf (starting with ./)
++        // Not matching URLs that already start with /assets/
++        const urlRegex = /(?:src|href)=["'](\.\/[^"']+)["']/g;
++
++        content = content.replace(urlRegex, (match, url) => {
++          // Extract the filename (remove ./ prefix)
++          const filename = url.replace(/^\.\//, '');
++          if (filename && !assets.includes(filename)) {
++            assets.push(filename);
++          }
++          return match.replace(url, `/assets/${filename}`);
++        });
++
++        // Update manifest
++        if (manifest) {
++          manifest.assets = [...new Set(assets)];
++        }
++
++        return { ...file, content };
++      },
++    },
++  };
++}
+\ No newline at end of file
+diff --git a/src/plugins/markdown-ext.ts b/src/plugins/markdown-ext.ts
+new file mode 100644
+index 0000000..372926d
+--- /dev/null
++++ b/src/plugins/markdown-ext.ts
+@@ -0,0 +1,110 @@
++import { marked } from 'marked';
++import type { ContentFile, Plugin } from '../core/types.js';
++
++export function createMarkdownExtPlugin(): Plugin {
++  // Configure marked for GFM and footnotes
++  marked.use({
++    gfm: true,
++    breaks: false,
++  });
++
++  // Custom renderer for footnotes
++  const renderer = new marked.Renderer();
++
++  // Process footnote references like [^1]
++  renderer.text = function ({ text }: { text: string }) {
++    return text.replace(/\[\^(\d+)\]/g, '<sup><a href="#fn-$1">$1</a></sup>');
++  };
++
++  // Process admonition containers like :::note
++  renderer.paragraph = function ({ text }: { text: string }) {
++    // Check for admonition start
++    const admonitionMatch = text.match(/^:::(note|warning|tip)\s*$/i);
++    if (admonitionMatch) {
++      return ''; // Skip the marker paragraph
++    }
++    return `<p>${text}</p>`;
++  };
++
++  renderer.html = function ({ html }: { html: string }) {
++    let processed = html;
++
++    // Convert admonition blocks
++    const admonitionRegex = /:::(\w+)\n([\s\S]*?)\n:::/g;
++    processed = processed.replace(admonitionRegex, (_, type, content) => {
++      const typeLower = type.toLowerCase();
++      return `<div class="admonition admonition-${typeLower}">${content.trim()}</div>`;
++    });
++
++    return processed;
++  };
++
++  marked.use({ renderer });
++
++  return {
++    name: 'markdown-ext',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      transformContent: (file: ContentFile) => {
++        if (!file.content.trim()) {
++          return file;
++        }
++
++        // Check if content already contains HTML (has HTML tags)
++        if (/<[a-z][\s\S]*>/i.test(file.content)) {
++          // Process for admonitions even in HTML content
++          let processed = file.content;
++          const admonitionRegex = /:::(\w+)\n([\s\S]*?)\n:::/g;
++          processed = processed.replace(admonitionRegex, (_, type, content) => {
++            const typeLower = type.toLowerCase();
++            return `<div class="admonition admonition-${typeLower}">${content.trim()}</div>`;
++          });
++          return { ...file, content: processed };
++        }
++
++        // Parse footnotes from content
++        const footnoteMap = new Map<string, string>();
++        const footnoteRefs: string[] = [];
++
++        // Extract footnotes from content
++        const footnoteDefRegex = /\[\^(\d+)\]:\s*(.+)/g;
++        let match;
++        while ((match = footnoteDefRegex.exec(file.content)) !== null) {
++          footnoteMap.set(match[1], match[2]);
++        }
++
++        // Replace footnote references
++        let contentWithRefs = file.content.replace(
++          /\[\^(\d+)\]/g,
++          '<sup><a href="#fn-$1">$1</a></sup>'
++        );
++
++        // Remove footnote definitions from main content
++        contentWithRefs = contentWithRefs.replace(footnoteDefRegex, '');
++
++        // Convert markdown to HTML
++        let html = marked.parse(contentWithRefs) as string;
++
++        // Process admonitions in the converted HTML
++        const admonitionRegex = /:::(\w+)\n([\s\S]*?)\n:::/g;
++        html = html.replace(admonitionRegex, (_, type, content) => {
++          const typeLower = type.toLowerCase();
++          return `<div class="admonition admonition-${typeLower}">${content.trim()}</div>`;
++        });
++
++        // Append footnote section if there are footnotes
++        if (footnoteMap.size > 0) {
++          let footnoteSection = '<section class="footnotes">\n';
++          footnoteMap.forEach((text, num) => {
++            footnoteSection += `<li id="fn-${num}">${text}</li>\n`;
++          });
++          footnoteSection += '</section>';
++          html += footnoteSection;
++        }
++
++        return { ...file, content: html };
++      },
++    },
++  };
++}
+\ No newline at end of file
+diff --git a/src/plugins/syntax-highlight.ts b/src/plugins/syntax-highlight.ts
+new file mode 100644
+index 0000000..597faff
+--- /dev/null
++++ b/src/plugins/syntax-highlight.ts
+@@ -0,0 +1,25 @@
++import type { ContentFile, Plugin } from '../core/types.js';
++
++export function createSyntaxHighlightPlugin(): Plugin {
++  return {
++    name: 'syntax-highlight',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      transformContent: (file: ContentFile) => {
++        let content = file.content;
++
++        // Match <pre><code class="language-xxx">...</code></pre> pattern
++        // We need to add 'highlighted' class to code and data-language to pre
++        content = content.replace(
++          /<pre><code class="language-(\w+)">([\s\S]*?)<\/code><\/pre>/g,
++          (match, lang, code) => {
++            return `<pre data-language="${lang}"><code class="language-${lang} highlighted">${code}</code></pre>`;
++          }
++        );
++
++        return { ...file, content };
++      },
++    },
++  };
++}
+\ No newline at end of file
+diff --git a/src/plugins/taxonomy.ts b/src/plugins/taxonomy.ts
+new file mode 100644
+index 0000000..370599c
+--- /dev/null
++++ b/src/plugins/taxonomy.ts
+@@ -0,0 +1,58 @@
++import type { BuildContext, ContentFile, Plugin } from '../core/types.js';
++
++function generateTagPageHtml(tag: string, files: ContentFile[], siteTitle: string): string {
++  const fileList = files
++    .map(f => `<li><a href="/${f.slug}.html">${f.title}</a></li>`)
++    .join('\n');
++
++  return `<!DOCTYPE html>
++<html lang="en">
++<head>
++  <meta charset="UTF-8">
++  <meta name="viewport" content="width=device-width, initial-scale=1.0">
++  <title>${tag} - ${siteTitle}</title>
++</head>
++<body>
++  <h1>Tag: ${tag}</h1>
++  <ul>
++${fileList}
++  </ul>
++</body>
++</html>`;
++}
++
++export function createTaxonomyPlugin(): Plugin {
++  return {
++    name: 'taxonomy',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      beforeBuild: (ctx: BuildContext) => {
++        const tagMap = new Map<string, ContentFile[]>();
++
++        for (const file of ctx.files) {
++          if (file.tags && file.tags.length > 0) {
++            for (const tag of file.tags) {
++              const normalizedTag = tag.toLowerCase();
++              if (!tagMap.has(normalizedTag)) {
++                tagMap.set(normalizedTag, []);
++              }
++              tagMap.get(normalizedTag)!.push(file);
++            }
++          }
++        }
++
++        ctx.data.set('taxonomy-tags', tagMap);
++      },
++      afterBuild: (ctx: BuildContext) => {
++        const tagMap = ctx.data.get('taxonomy-tags') as Map<string, ContentFile[]>;
++        if (!tagMap) return;
++
++        for (const [tag, files] of tagMap) {
++          const pageContent = generateTagPageHtml(tag, files, ctx.config.title);
++          ctx.output.set(`tags/${tag}.html`, pageContent);
++        }
++      },
++    },
++  };
++}
+\ No newline at end of file

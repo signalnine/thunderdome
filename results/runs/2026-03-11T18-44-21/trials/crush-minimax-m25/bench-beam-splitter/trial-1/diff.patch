@@ -1,0 +1,260 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..8fd0d53
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 339474,
++  "output_tokens": 2839,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.21220139999999998
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..9ce9a40
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,68 @@
++Let me check if there are any vitest test files in the workspace:
++
++
++
++
++
++
++
++
++
++
++
++
++Now let me implement the beam splitter simulator. Based on the requirements:
++
++1. `countBeamCells` - Count distinct cells visited by any beam
++2. `countBeamPaths` - Count distinct source-to-exit paths (can be astronomically large, return bigint)
++
++Let me write the implementation:
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++Let me verify the build works and manually test with the examples from the task:
++
++
++
++Let me verify my implementation works with the examples:
++
++
++
++Both examples pass. Let me run lint:
++
++
++
++
++
++
++
++
++
++
++
++
++Let me verify performance on a larger grid:
++
++
++
++Done. Implementation complete:
++
++- `countBeamCells`: BFS/DFS traversal to find all visited cells
++- `countBeamPaths`: Dynamic programming with memoization for path counting (avoids exponential enumeration)
++
++Performance: ~3ms on 200×200 grid (well under 5 seconds).
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index 02b0dae..222cd7d 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..ea31558
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,110 @@
++export type Direction = 'down' | 'down-left' | 'down-right';
++
++export interface Beam {
++  row: number;
++  col: number;
++  dir: Direction;
++}
++
++export function countBeamCells(grid: string[][]): number {
++  const rows = grid.length;
++  const cols = grid[0].length;
++
++  const visited = new Set<string>();
++
++  const beams: Beam[] = [];
++
++  for (let col = 0; col < cols; col++) {
++    if (grid[0][col] === 'S') {
++      beams.push({ row: 0, col, dir: 'down' });
++    }
++  }
++
++  while (beams.length > 0) {
++    const beam = beams.pop()!;
++    const key = `${beam.row},${beam.col}`;
++
++    if (
++      beam.row < 0 ||
++      beam.row >= rows ||
++      beam.col < 0 ||
++      beam.col >= cols
++    ) {
++      continue;
++    }
++
++    if (visited.has(key)) {
++      continue;
++    }
++    visited.add(key);
++
++    const cell = grid[beam.row][beam.col];
++
++    if (cell === '^') {
++      beams.push({ row: beam.row + 1, col: beam.col - 1, dir: 'down-left' });
++      beams.push({ row: beam.row + 1, col: beam.col + 1, dir: 'down-right' });
++    } else if (beam.dir === 'down') {
++      beams.push({ row: beam.row + 1, col: beam.col, dir: 'down' });
++    } else if (beam.dir === 'down-left') {
++      beams.push({ row: beam.row + 1, col: beam.col - 1, dir: 'down-left' });
++    } else if (beam.dir === 'down-right') {
++      beams.push({ row: beam.row + 1, col: beam.col + 1, dir: 'down-right' });
++    }
++  }
++
++  return visited.size;
++}
++
++function computePathsFromCell(
++  grid: string[][],
++  row: number,
++  col: number,
++  dir: Direction,
++  memo: Map<string, bigint>
++): bigint {
++  const rows = grid.length;
++  const cols = grid[0].length;
++
++  if (row < 0 || row >= rows || col < 0 || col >= cols) {
++    return 1n;
++  }
++
++  const cell = grid[row][col];
++  const key = `${row},${col},${dir}`;
++
++  if (memo.has(key)) {
++    return memo.get(key)!;
++  }
++
++  let result: bigint;
++
++  if (cell === '^') {
++    result =
++      computePathsFromCell(grid, row + 1, col - 1, 'down-left', memo) +
++      computePathsFromCell(grid, row + 1, col + 1, 'down-right', memo);
++  } else if (dir === 'down') {
++    result = computePathsFromCell(grid, row + 1, col, 'down', memo);
++  } else if (dir === 'down-left') {
++    result = computePathsFromCell(grid, row + 1, col - 1, 'down-left', memo);
++  } else {
++    result = computePathsFromCell(grid, row + 1, col + 1, 'down-right', memo);
++  }
++
++  memo.set(key, result);
++  return result;
++}
++
++export function countBeamPaths(grid: string[][]): bigint {
++  const cols = grid[0].length;
++  const memo = new Map<string, bigint>();
++
++  let totalPaths = 0n;
++
++  for (let col = 0; col < cols; col++) {
++    if (grid[0][col] === 'S') {
++      totalPaths += computePathsFromCell(grid, 0, col, 'down', memo);
++    }
++  }
++
++  return totalPaths;
++}
+\ No newline at end of file

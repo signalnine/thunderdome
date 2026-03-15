@@ -1,0 +1,824 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..c934a35
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,10 @@
++{
++  "input_tokens": 0,
++  "output_tokens": 0,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "tools_used": [],
++  "duration_ms": 612,
++  "total_cost_usd": 0
++}
+\ No newline at end of file
+diff --git a/.thunderdome-output.jsonl b/.thunderdome-output.jsonl
+new file mode 100644
+index 0000000..dd41481
+--- /dev/null
++++ b/.thunderdome-output.jsonl
+@@ -0,0 +1,3 @@
++{"type":"system","subtype":"init","cwd":"/workspace","session_id":"3b5fb9d1-699f-479b-9bd3-460cd8691fda","tools":["Task","TaskOutput","Bash","Glob","Grep","ExitPlanMode","Read","Edit","Write","NotebookEdit","WebFetch","TodoWrite","WebSearch","TaskStop","Skill","ToolSearch"],"mcp_servers":[],"model":"claude-opus-4-6","permissionMode":"bypassPermissions","slash_commands":["debug","metacog:metacog","compact","context","cost","init","pr-comments","release-notes","review","security-review","insights"],"apiKeySource":"none","claude_code_version":"2.1.39","output_style":"default","agents":["Bash","general-purpose","statusline-setup","Explore","Plan"],"skills":["debug","metacog:metacog"],"plugins":[{"name":"metacog","path":"/opt/metacog-plugin"}],"uuid":"8c9f4476-865e-4bcc-b5b6-a90c81a11585","fast_mode_state":"off"}
++{"type":"assistant","message":{"id":"2dbde0e7-ab48-4c15-b8b3-0bc261eb3b57","container":null,"model":"<synthetic>","role":"assistant","stop_reason":"stop_sequence","stop_sequence":"","type":"message","usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":null,"cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0},"inference_geo":null,"iterations":null},"content":[{"type":"text","text":"You've hit your limit · resets 8pm (UTC)"}],"context_management":null},"parent_tool_use_id":null,"session_id":"3b5fb9d1-699f-479b-9bd3-460cd8691fda","uuid":"b4c6b621-1b4b-4528-a1f6-eae6b8d6979f","error":"rate_limit"}
++{"type":"result","subtype":"success","is_error":true,"duration_ms":612,"duration_api_ms":0,"num_turns":1,"result":"You've hit your limit · resets 8pm (UTC)","stop_reason":"stop_sequence","session_id":"3b5fb9d1-699f-479b-9bd3-460cd8691fda","total_cost_usd":0,"usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[]},"modelUsage":{},"permission_denials":[],"uuid":"8012ebaa-3a97-411b-91ec-8523ebdec34c"}
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/TASK.md b/TASK.md
+index eddf5c5..efb5c2d 100644
+--- a/TASK.md
++++ b/TASK.md
+@@ -2,55 +2,58 @@
+ 
+ **Category:** greenfield/complex
+ **Timeout:** 30 minutes
+-**Tests:** 55 total (40 unit + 15 integration)
+ 
+ ## Objective
+ 
+-Build a plugin marketplace with 5 independent modules. Each module has its own directory, its own tests, and zero cross-module imports. A shared read-only `src/types.ts` defines all inter-module contracts. A thin integration layer `src/index.ts` composes the modules.
++Build a plugin marketplace system that lets developers register plugins, resolve version dependencies, execute plugin code safely, collect user reviews, and manage dependency graphs.
++
++The shared type definitions for all modules live in `src/types.ts` (read-only, do not modify). Your implementation must conform to these interfaces.
+ 
+ ## Modules
+ 
+-1. **Plugin Registry** (`src/registry/index.ts`) — CRUD for plugin metadata with SQLite (better-sqlite3). Stores plugin manifests with name+version as composite key. Search by name/description substring.
++You should build 5 capabilities:
++
++1. **Plugin Registry** -- A catalog of plugin manifests. Users can add plugins, look them up by name, browse all plugins, search through them, and remove specific versions. A single plugin can have multiple registered versions.
+ 
+-2. **Version Resolver** (`src/resolver/index.ts`) — Semver constraint resolution using the `semver` npm package. Resolves a set of version constraints against available versions. Pure logic, no database.
++2. **Version Resolver** -- Logic for resolving semver version constraints. Given a set of version constraints and the versions available in the registry, determine which concrete versions satisfy each constraint. Use the `semver` npm package (already in dependencies).
+ 
+-3. **Sandboxed Runner** (`src/runner/index.ts`) — Execute plugin code in isolated contexts using Node.js `vm` module. Supports timeout enforcement and memory tracking. Returns structured SandboxResult.
++3. **Sandboxed Runner** -- Execute arbitrary plugin code strings in an isolated environment using Node.js `vm` module. Support passing context variables into the sandbox. Enforce execution timeouts so runaway code doesn't hang the system. Return structured results including success/failure, output, timing, and memory info.
+ 
+-4. **Review System** (`src/reviews/index.ts`) — Ratings, comments, and moderation flags with SQLite. Computes average ratings (excluding flagged reviews). Supports querying by user, plugin, and flagged status.
++4. **Review System** -- Let users leave ratings and comments on plugins. Support flagging inappropriate reviews and computing average ratings (flagged reviews should be excluded from averages). Allow querying reviews by plugin, by user, and by flagged status.
+ 
+-5. **Dependency Graph** (`src/deps/index.ts`) — Topological sort, cycle detection using DFS, dependency tree building, and flattening. Pure logic that queries the registry.
++5. **Dependency Graph** -- Analyze plugin dependency relationships. Build dependency trees, detect circular dependencies, produce topological orderings, and flatten transitive dependency lists.
+ 
+ ## Integration Layer
+ 
+-`src/index.ts` exports a `createMarketplace()` function that composes all 5 modules and provides an `installPlugin()` workflow:
+-- Validate manifest (name, version, entryPoint required)
+-- Register the plugin
+-- Resolve dependency versions from registry
+-- Check for circular dependencies
+-- Execute entry point in sandbox
+-- Return resolved versions and sandbox result
++Export a `createMarketplace()` function from `src/index.ts` that composes all five capabilities and provides a high-level `installPlugin()` workflow. The install workflow should:
++
++- Validate that the plugin manifest has the required fields (name, version, entryPoint)
++- Register the plugin in the catalog
++- Resolve its dependency versions against what's available in the registry
++- Check for circular dependencies (reject if found)
++- Execute the plugin's entry point in the sandbox
++- Return the resolved dependency versions and sandbox execution result
+ 
+ ## Constraints
+ 
+-- **DO NOT modify `src/types.ts`** — its SHA-256 checksum is validated in integration tests
+-- Each module must implement its corresponding service interface from `types.ts`
+-- Modules import types from `../types.js` (ESM with .js extension)
+-- Use `better-sqlite3` for database modules (registry, reviews)
+-- Use `semver` package for version resolution
+-- Use Node.js `vm` module (NOT vm2) for sandboxing
+-- Zero cross-module imports (modules only depend on types)
++- **DO NOT modify `src/types.ts`** -- it defines the shared interfaces for all modules
++- Use `better-sqlite3` for any persistence needs (already in dependencies)
++- Use `semver` package for version resolution (already in dependencies)
++- Use Node.js `vm` module for sandboxing (NOT vm2)
++- Modules should only share types, not import each other directly
+ 
+ ## Provided Files
+ 
+-- `src/types.ts` — Read-only shared type definitions (~90 lines)
+-- `package.json` — Dependencies already configured
+-- `tsconfig.json`, `.eslintrc.cjs`, `vitest.config.ts` — Build/test config
+-- All test files in `tests/`
++- `src/types.ts` -- Read-only shared type definitions
++- `package.json` -- Dependencies already configured
++- `tsconfig.json`, `.eslintrc.cjs`, `vitest.config.ts` -- Build/test config
+ 
+ ## Validation
+ 
+ ```bash
+ npm run build   # TypeScript compilation must succeed
+ npm run lint    # ESLint must pass
+-npm test        # All 55 tests must pass
++npm test        # Tests must pass
+ ```
++
++Tip: Write your own tests to verify behavior as you go.
+diff --git a/package.json b/package.json
+index ecd3af0..8001cb2 100644
+--- a/package.json
++++ b/package.json
+@@ -5,7 +5,7 @@
+   "type": "module",
+   "scripts": {
+     "build": "tsc",
+-    "lint": "eslint src/ tests/",
++    "lint": "eslint src/",
+     "test": "vitest run"
+   },
+   "dependencies": {
+@@ -19,6 +19,7 @@
+     "@typescript-eslint/parser": "^7.0.0",
+     "@typescript-eslint/eslint-plugin": "^7.0.0",
+     "@types/better-sqlite3": "^7.6.0",
+-    "@types/semver": "^7.5.0"
++    "@types/semver": "^7.5.0",
++    "@vitest/coverage-v8": "^2.0.0"
+   }
+ }
+diff --git a/tests/deps.test.ts b/tests/deps.test.ts
+deleted file mode 100644
+index 28ecdda..0000000
+--- a/tests/deps.test.ts
++++ /dev/null
+@@ -1,112 +0,0 @@
+-import { describe, it, expect } from 'vitest';
+-import { createDepsService } from '../src/deps/index.js';
+-import { createRegistry } from '../src/registry/index.js';
+-import type { PluginManifest } from '../src/types.js';
+-
+-function makeManifest(name: string, deps: Record<string, string> = {}): PluginManifest {
+-  return {
+-    name,
+-    version: '1.0.0',
+-    description: `Plugin ${name}`,
+-    author: 'tester',
+-    dependencies: deps,
+-    entryPoint: 'return true;',
+-    permissions: [],
+-  };
+-}
+-
+-describe('Dependency Graph', () => {
+-  const depsService = createDepsService();
+-
+-  it('buildTree creates correct dependency tree', () => {
+-    const registry = createRegistry();
+-    registry.register(makeManifest('A', { B: '^1.0.0' }));
+-    registry.register(makeManifest('B', { C: '^1.0.0' }));
+-    registry.register(makeManifest('C'));
+-
+-    const tree = depsService.buildTree('A', registry);
+-    expect(tree.name).toBe('A');
+-    expect(tree.dependencies).toHaveLength(1);
+-    expect(tree.dependencies[0].name).toBe('B');
+-    expect(tree.dependencies[0].dependencies).toHaveLength(1);
+-    expect(tree.dependencies[0].dependencies[0].name).toBe('C');
+-  });
+-
+-  it('detectCycles finds circular dependencies', () => {
+-    const registry = createRegistry();
+-    registry.register(makeManifest('X', { Y: '^1.0.0' }));
+-    registry.register(makeManifest('Y', { X: '^1.0.0' }));
+-
+-    const cycles = depsService.detectCycles('X', registry);
+-    expect(cycles).not.toBeNull();
+-    expect(cycles!.length).toBeGreaterThan(0);
+-    // The cycle should contain both X and Y
+-    const flatCycle = cycles!.flat();
+-    expect(flatCycle).toContain('X');
+-    expect(flatCycle).toContain('Y');
+-  });
+-
+-  it('detectCycles returns null for no cycles', () => {
+-    const registry = createRegistry();
+-    registry.register(makeManifest('A', { B: '^1.0.0' }));
+-    registry.register(makeManifest('B'));
+-
+-    const cycles = depsService.detectCycles('A', registry);
+-    expect(cycles).toBeNull();
+-  });
+-
+-  it('topologicalSort returns correct order', () => {
+-    const registry = createRegistry();
+-    registry.register(makeManifest('A', { B: '^1.0.0', C: '^1.0.0' }));
+-    registry.register(makeManifest('B', { C: '^1.0.0' }));
+-    registry.register(makeManifest('C'));
+-
+-    const sorted = depsService.topologicalSort('A', registry);
+-    expect(sorted.indexOf('C')).toBeLessThan(sorted.indexOf('B'));
+-    expect(sorted.indexOf('B')).toBeLessThan(sorted.indexOf('A'));
+-  });
+-
+-  it('flattenDependencies returns all transitive deps', () => {
+-    const registry = createRegistry();
+-    registry.register(makeManifest('root', { mid: '^1.0.0' }));
+-    registry.register(makeManifest('mid', { leaf: '^1.0.0' }));
+-    registry.register(makeManifest('leaf'));
+-
+-    const deps = depsService.flattenDependencies('root', registry);
+-    expect(deps).toContain('mid');
+-    expect(deps).toContain('leaf');
+-    expect(deps).not.toContain('root');
+-  });
+-
+-  it('hasCircularDependency returns true for cycles', () => {
+-    const registry = createRegistry();
+-    registry.register(makeManifest('A', { B: '^1.0.0' }));
+-    registry.register(makeManifest('B', { A: '^1.0.0' }));
+-
+-    expect(depsService.hasCircularDependency('A', registry)).toBe(true);
+-  });
+-
+-  it('hasCircularDependency returns false for acyclic', () => {
+-    const registry = createRegistry();
+-    registry.register(makeManifest('A', { B: '^1.0.0' }));
+-    registry.register(makeManifest('B'));
+-
+-    expect(depsService.hasCircularDependency('A', registry)).toBe(false);
+-  });
+-
+-  it('topologicalSort handles diamond dependencies', () => {
+-    const registry = createRegistry();
+-    // A -> B, A -> C, B -> D, C -> D (diamond)
+-    registry.register(makeManifest('A', { B: '^1.0.0', C: '^1.0.0' }));
+-    registry.register(makeManifest('B', { D: '^1.0.0' }));
+-    registry.register(makeManifest('C', { D: '^1.0.0' }));
+-    registry.register(makeManifest('D'));
+-
+-    const sorted = depsService.topologicalSort('A', registry);
+-    expect(sorted).toHaveLength(4);
+-    // D must come before B and C, and A must be last
+-    expect(sorted.indexOf('D')).toBeLessThan(sorted.indexOf('B'));
+-    expect(sorted.indexOf('D')).toBeLessThan(sorted.indexOf('C'));
+-    expect(sorted.indexOf('A')).toBe(sorted.length - 1);
+-  });
+-});
+diff --git a/tests/integration.test.ts b/tests/integration.test.ts
+deleted file mode 100644
+index e1819b5..0000000
+--- a/tests/integration.test.ts
++++ /dev/null
+@@ -1,213 +0,0 @@
+-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+-import { createHash } from 'crypto';
+-import { readFileSync } from 'fs';
+-import { createMarketplace } from '../src/index.js';
+-import type { Marketplace } from '../src/index.js';
+-import type { PluginManifest } from '../src/types.js';
+-
+-const EXPECTED_HASH = 'a689d3f8ff186f56d180f66bb33b394e118b0721e7b8685b307b03991bbf9751';
+-
+-function makeManifest(overrides: Partial<PluginManifest> = {}): PluginManifest {
+-  return {
+-    name: 'test-plugin',
+-    version: '1.0.0',
+-    description: 'A test plugin',
+-    author: 'tester',
+-    dependencies: {},
+-    entryPoint: 'return 42;',
+-    permissions: ['read'],
+-    ...overrides,
+-  };
+-}
+-
+-beforeAll(() => {
+-  const content = readFileSync(new URL('../src/types.ts', import.meta.url), 'utf-8');
+-  const hash = createHash('sha256').update(content).digest('hex');
+-  expect(hash).toBe(EXPECTED_HASH);
+-});
+-
+-describe('Integration Tests', () => {
+-  let marketplace: Marketplace;
+-
+-  beforeEach(() => {
+-    marketplace = createMarketplace();
+-  });
+-
+-  it('full install workflow: register -> resolve -> check deps -> run -> review', async () => {
+-    // Register a dependency first
+-    marketplace.registry.register(makeManifest({ name: 'dep-lib', version: '1.0.0' }));
+-    marketplace.registry.register(makeManifest({ name: 'dep-lib', version: '1.2.0' }));
+-
+-    const plugin = makeManifest({
+-      name: 'my-plugin',
+-      version: '1.0.0',
+-      dependencies: { 'dep-lib': '^1.0.0' },
+-      entryPoint: 'return "installed";',
+-    });
+-
+-    const result = await marketplace.installPlugin(plugin);
+-    expect(result.resolved).toHaveLength(1);
+-    expect(result.resolved[0].name).toBe('dep-lib');
+-    expect(result.resolved[0].version).toBe('1.2.0');
+-    expect(result.sandboxResult.success).toBe(true);
+-    expect(result.sandboxResult.output).toBe('installed');
+-
+-    // Add a review
+-    const review = marketplace.reviews.addReview({
+-      pluginName: 'my-plugin',
+-      pluginVersion: '1.0.0',
+-      userId: 'user1',
+-      rating: 5,
+-      comment: 'Works perfectly!',
+-    });
+-    expect(review.id).toBeGreaterThan(0);
+-  });
+-
+-  it('version conflict detection across plugins', () => {
+-    const resolver = marketplace.resolver;
+-    const constraints = [
+-      { name: 'shared-lib', range: '^1.0.0' },
+-      { name: 'shared-lib', range: '^2.0.0' },
+-    ];
+-    const available = { 'shared-lib': ['1.0.0', '1.5.0', '2.0.0', '2.1.0'] };
+-
+-    // Both constraints can be resolved independently; first one gets ^1, second gets ^2
+-    // but the resolver resolves each constraint independently
+-    const result = resolver.resolve(constraints, available);
+-    expect(result).toHaveLength(2);
+-    expect(result[0].version).toBe('1.5.0');
+-    expect(result[1].version).toBe('2.1.0');
+-  });
+-
+-  it('dependency chain resolution (A depends on B depends on C)', async () => {
+-    marketplace.registry.register(makeManifest({ name: 'C', version: '1.0.0' }));
+-    marketplace.registry.register(makeManifest({ name: 'B', version: '1.0.0', dependencies: { C: '^1.0.0' } }));
+-    marketplace.registry.register(makeManifest({ name: 'A', version: '1.0.0', dependencies: { B: '^1.0.0' } }));
+-
+-    const sorted = marketplace.deps.topologicalSort('A', marketplace.registry);
+-    expect(sorted).toEqual(['C', 'B', 'A']);
+-  });
+-
+-  it('sandbox execution of plugin entry point', async () => {
+-    const result = await marketplace.runner.execute('return { status: "ok", value: 100 };');
+-    expect(result.success).toBe(true);
+-    expect(result.output).toEqual({ status: 'ok', value: 100 });
+-  });
+-
+-  it('review aggregation across versions', () => {
+-    marketplace.reviews.addReview({ pluginName: 'plugin-x', pluginVersion: '1.0.0', userId: 'u1', rating: 5, comment: 'v1 great' });
+-    marketplace.reviews.addReview({ pluginName: 'plugin-x', pluginVersion: '2.0.0', userId: 'u2', rating: 3, comment: 'v2 ok' });
+-    // getReviews returns all reviews for the plugin name (all versions)
+-    const allReviews = marketplace.reviews.getReviews('plugin-x');
+-    expect(allReviews).toHaveLength(2);
+-    expect(marketplace.reviews.getAverageRating('plugin-x')).toBe(4);
+-  });
+-
+-  it('plugin removal cascades correctly', () => {
+-    marketplace.registry.register(makeManifest({ name: 'to-remove', version: '1.0.0' }));
+-    marketplace.registry.register(makeManifest({ name: 'to-remove', version: '2.0.0' }));
+-    expect(marketplace.registry.listVersions('to-remove')).toHaveLength(2);
+-
+-    marketplace.registry.remove('to-remove', '1.0.0');
+-    expect(marketplace.registry.listVersions('to-remove')).toHaveLength(1);
+-    expect(marketplace.registry.getVersion('to-remove', '1.0.0')).toBeNull();
+-    expect(marketplace.registry.getVersion('to-remove', '2.0.0')).not.toBeNull();
+-  });
+-
+-  it('search returns relevant results ranked', () => {
+-    marketplace.registry.register(makeManifest({ name: 'image-processor', description: 'Process images' }));
+-    marketplace.registry.register(makeManifest({ name: 'data-analyzer', description: 'Analyze data' }));
+-    marketplace.registry.register(makeManifest({ name: 'image-viewer', description: 'View images' }));
+-
+-    const results = marketplace.registry.search('image');
+-    expect(results.length).toBeGreaterThanOrEqual(2);
+-    const names = results.map(r => r.name);
+-    expect(names).toContain('image-processor');
+-    expect(names).toContain('image-viewer');
+-  });
+-
+-  it('multiple version registration and resolution', () => {
+-    marketplace.registry.register(makeManifest({ name: 'lib', version: '1.0.0' }));
+-    marketplace.registry.register(makeManifest({ name: 'lib', version: '1.1.0' }));
+-    marketplace.registry.register(makeManifest({ name: 'lib', version: '2.0.0' }));
+-
+-    const versions = marketplace.registry.listVersions('lib');
+-    expect(versions).toHaveLength(3);
+-
+-    const resolved = marketplace.resolver.maxSatisfying(versions, '^1.0.0');
+-    expect(resolved).toBe('1.1.0');
+-  });
+-
+-  it('circular dependency detected in install workflow', async () => {
+-    // Register A -> B -> A (cycle)
+-    marketplace.registry.register(makeManifest({ name: 'cycle-b', version: '1.0.0', dependencies: { 'cycle-a': '^1.0.0' } }));
+-
+-    const cyclicPlugin = makeManifest({
+-      name: 'cycle-a',
+-      version: '1.0.0',
+-      dependencies: { 'cycle-b': '^1.0.0' },
+-      entryPoint: 'return true;',
+-    });
+-
+-    await expect(marketplace.installPlugin(cyclicPlugin)).rejects.toThrow(/[Cc]ircular/);
+-  });
+-
+-  it('plugin with no dependencies installs cleanly', async () => {
+-    const plugin = makeManifest({
+-      name: 'standalone',
+-      version: '1.0.0',
+-      entryPoint: 'return "standalone";',
+-    });
+-
+-    const result = await marketplace.installPlugin(plugin);
+-    expect(result.resolved).toHaveLength(0);
+-    expect(result.sandboxResult.success).toBe(true);
+-    expect(result.sandboxResult.output).toBe('standalone');
+-  });
+-
+-  it('rating average updates after new review', () => {
+-    marketplace.reviews.addReview({ pluginName: 'rated', pluginVersion: '1.0.0', userId: 'u1', rating: 4, comment: 'good' });
+-    expect(marketplace.reviews.getAverageRating('rated')).toBe(4);
+-
+-    marketplace.reviews.addReview({ pluginName: 'rated', pluginVersion: '1.0.0', userId: 'u2', rating: 2, comment: 'meh' });
+-    expect(marketplace.reviews.getAverageRating('rated')).toBe(3);
+-  });
+-
+-  it('flagged review excluded from rating', () => {
+-    marketplace.reviews.addReview({ pluginName: 'flagtest', pluginVersion: '1.0.0', userId: 'u1', rating: 5, comment: 'great' });
+-    const badReview = marketplace.reviews.addReview({ pluginName: 'flagtest', pluginVersion: '1.0.0', userId: 'spam', rating: 1, comment: 'spam' });
+-
+-    expect(marketplace.reviews.getAverageRating('flagtest')).toBe(3);
+-    marketplace.reviews.flagReview(badReview.id);
+-    expect(marketplace.reviews.getAverageRating('flagtest')).toBe(5);
+-  });
+-
+-  it('timeout enforcement in sandbox', async () => {
+-    const result = await marketplace.runner.executeWithTimeout('while(true) {}', 100);
+-    expect(result.success).toBe(false);
+-    expect(result.error).toBeDefined();
+-  });
+-
+-  it('install workflow rejects invalid manifest', async () => {
+-    const invalid = makeManifest({ name: '', version: '1.0.0' });
+-    await expect(marketplace.installPlugin(invalid)).rejects.toThrow(/[Ii]nvalid/);
+-  });
+-
+-  it('dependency tree depth limit', () => {
+-    // Build a very deep chain that shouldn't exceed the limit
+-    const registry = marketplace.registry;
+-    registry.register(makeManifest({ name: 'deep-5', version: '1.0.0' }));
+-    registry.register(makeManifest({ name: 'deep-4', version: '1.0.0', dependencies: { 'deep-5': '^1.0.0' } }));
+-    registry.register(makeManifest({ name: 'deep-3', version: '1.0.0', dependencies: { 'deep-4': '^1.0.0' } }));
+-    registry.register(makeManifest({ name: 'deep-2', version: '1.0.0', dependencies: { 'deep-3': '^1.0.0' } }));
+-    registry.register(makeManifest({ name: 'deep-1', version: '1.0.0', dependencies: { 'deep-2': '^1.0.0' } }));
+-
+-    const tree = marketplace.deps.buildTree('deep-1', marketplace.registry);
+-    expect(tree.name).toBe('deep-1');
+-    expect(tree.dependencies[0].name).toBe('deep-2');
+-
+-    // Flatten should return all 4 deps
+-    const flat = marketplace.deps.flattenDependencies('deep-1', marketplace.registry);
+-    expect(flat).toHaveLength(4);
+-  });
+-});
+diff --git a/tests/registry.test.ts b/tests/registry.test.ts
+deleted file mode 100644
+index e7a37db..0000000
+--- a/tests/registry.test.ts
++++ /dev/null
+@@ -1,91 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { createRegistry } from '../src/registry/index.js';
+-import type { PluginManifest, RegistryService } from '../src/types.js';
+-
+-function makeManifest(overrides: Partial<PluginManifest> = {}): PluginManifest {
+-  return {
+-    name: 'test-plugin',
+-    version: '1.0.0',
+-    description: 'A test plugin',
+-    author: 'tester',
+-    dependencies: {},
+-    entryPoint: 'return 42;',
+-    permissions: ['read'],
+-    ...overrides,
+-  };
+-}
+-
+-describe('Plugin Registry', () => {
+-  let registry: RegistryService;
+-
+-  beforeEach(() => {
+-    registry = createRegistry();
+-  });
+-
+-  it('register stores plugin manifest', () => {
+-    const manifest = makeManifest();
+-    registry.register(manifest);
+-    const stored = registry.get('test-plugin');
+-    expect(stored).not.toBeNull();
+-    expect(stored!.name).toBe('test-plugin');
+-    expect(stored!.version).toBe('1.0.0');
+-  });
+-
+-  it('get retrieves registered plugin', () => {
+-    const manifest = makeManifest({ description: 'special plugin' });
+-    registry.register(manifest);
+-    const result = registry.get('test-plugin');
+-    expect(result).not.toBeNull();
+-    expect(result!.description).toBe('special plugin');
+-  });
+-
+-  it('get returns null for unregistered', () => {
+-    const result = registry.get('nonexistent');
+-    expect(result).toBeNull();
+-  });
+-
+-  it('list returns all plugins', () => {
+-    registry.register(makeManifest({ name: 'plugin-a', version: '1.0.0' }));
+-    registry.register(makeManifest({ name: 'plugin-b', version: '2.0.0' }));
+-    const all = registry.list();
+-    expect(all).toHaveLength(2);
+-    const names = all.map(p => p.name);
+-    expect(names).toContain('plugin-a');
+-    expect(names).toContain('plugin-b');
+-  });
+-
+-  it('search finds by name substring', () => {
+-    registry.register(makeManifest({ name: 'awesome-logger' }));
+-    registry.register(makeManifest({ name: 'basic-util' }));
+-    const results = registry.search('logger');
+-    expect(results).toHaveLength(1);
+-    expect(results[0].name).toBe('awesome-logger');
+-  });
+-
+-  it('search finds by description', () => {
+-    registry.register(makeManifest({ name: 'foo', description: 'A fantastic logging utility' }));
+-    registry.register(makeManifest({ name: 'bar', description: 'Math helpers' }));
+-    const results = registry.search('logging');
+-    expect(results).toHaveLength(1);
+-    expect(results[0].name).toBe('foo');
+-  });
+-
+-  it('remove deletes plugin version', () => {
+-    registry.register(makeManifest({ name: 'removable', version: '1.0.0' }));
+-    expect(registry.get('removable')).not.toBeNull();
+-    const removed = registry.remove('removable', '1.0.0');
+-    expect(removed).toBe(true);
+-    expect(registry.get('removable')).toBeNull();
+-  });
+-
+-  it('listVersions returns all versions for a plugin', () => {
+-    registry.register(makeManifest({ name: 'multi', version: '1.0.0' }));
+-    registry.register(makeManifest({ name: 'multi', version: '1.1.0' }));
+-    registry.register(makeManifest({ name: 'multi', version: '2.0.0' }));
+-    const versions = registry.listVersions('multi');
+-    expect(versions).toHaveLength(3);
+-    expect(versions).toContain('1.0.0');
+-    expect(versions).toContain('1.1.0');
+-    expect(versions).toContain('2.0.0');
+-  });
+-});
+diff --git a/tests/resolver.test.ts b/tests/resolver.test.ts
+deleted file mode 100644
+index 8c87d8d..0000000
+--- a/tests/resolver.test.ts
++++ /dev/null
+@@ -1,71 +0,0 @@
+-import { describe, it, expect } from 'vitest';
+-import { createResolver } from '../src/resolver/index.js';
+-
+-describe('Version Resolver', () => {
+-  const resolver = createResolver();
+-
+-  it('satisfies returns true for matching version', () => {
+-    expect(resolver.satisfies('1.2.3', '^1.0.0')).toBe(true);
+-  });
+-
+-  it('satisfies returns false for non-matching', () => {
+-    expect(resolver.satisfies('2.0.0', '^1.0.0')).toBe(false);
+-  });
+-
+-  it('resolve finds versions satisfying all constraints', () => {
+-    const constraints = [
+-      { name: 'foo', range: '^1.0.0' },
+-      { name: 'bar', range: '~2.1.0' },
+-    ];
+-    const available = {
+-      foo: ['1.0.0', '1.2.3', '2.0.0'],
+-      bar: ['2.0.0', '2.1.0', '2.1.5', '2.2.0'],
+-    };
+-    const result = resolver.resolve(constraints, available);
+-    expect(result).toHaveLength(2);
+-    expect(result[0].name).toBe('foo');
+-    expect(result[0].version).toBe('1.2.3');
+-    expect(result[1].name).toBe('bar');
+-    expect(result[1].version).toBe('2.1.5');
+-  });
+-
+-  it('resolve throws for unsatisfiable constraints', () => {
+-    const constraints = [{ name: 'foo', range: '^3.0.0' }];
+-    const available = { foo: ['1.0.0', '2.0.0'] };
+-    expect(() => resolver.resolve(constraints, available)).toThrow();
+-  });
+-
+-  it('maxSatisfying returns highest matching version', () => {
+-    const versions = ['1.0.0', '1.1.0', '1.2.0', '2.0.0'];
+-    expect(resolver.maxSatisfying(versions, '^1.0.0')).toBe('1.2.0');
+-  });
+-
+-  it('validRange returns true for valid ranges', () => {
+-    expect(resolver.validRange('^1.0.0')).toBe(true);
+-    expect(resolver.validRange('~2.3.0')).toBe(true);
+-    expect(resolver.validRange('>=1.0.0 <2.0.0')).toBe(true);
+-  });
+-
+-  it('validRange returns false for invalid ranges', () => {
+-    expect(resolver.validRange('not-a-range')).toBe(false);
+-    expect(resolver.validRange('abc.def.ghi')).toBe(false);
+-  });
+-
+-  it('resolve handles multiple plugins with dependencies', () => {
+-    const constraints = [
+-      { name: 'core', range: '^1.0.0' },
+-      { name: 'utils', range: '^2.0.0' },
+-      { name: 'logger', range: '>=1.5.0' },
+-    ];
+-    const available = {
+-      core: ['1.0.0', '1.3.0', '2.0.0'],
+-      utils: ['2.0.0', '2.1.0', '3.0.0'],
+-      logger: ['1.0.0', '1.5.0', '1.9.0', '2.0.0'],
+-    };
+-    const result = resolver.resolve(constraints, available);
+-    expect(result).toHaveLength(3);
+-    expect(result.find(r => r.name === 'core')!.version).toBe('1.3.0');
+-    expect(result.find(r => r.name === 'utils')!.version).toBe('2.1.0');
+-    expect(result.find(r => r.name === 'logger')!.version).toBe('2.0.0');
+-  });
+-});
+diff --git a/tests/reviews.test.ts b/tests/reviews.test.ts
+deleted file mode 100644
+index 8348b6f..0000000
+--- a/tests/reviews.test.ts
++++ /dev/null
+@@ -1,102 +0,0 @@
+-import { describe, it, expect, beforeEach } from 'vitest';
+-import { createReviewSystem } from '../src/reviews/index.js';
+-import type { ReviewService } from '../src/types.js';
+-
+-describe('Review System', () => {
+-  let reviews: ReviewService;
+-
+-  beforeEach(() => {
+-    reviews = createReviewSystem();
+-  });
+-
+-  it('addReview creates review with auto-generated id', () => {
+-    const review = reviews.addReview({
+-      pluginName: 'test-plugin',
+-      pluginVersion: '1.0.0',
+-      userId: 'user1',
+-      rating: 5,
+-      comment: 'Great plugin!',
+-    });
+-    expect(review.id).toBeDefined();
+-    expect(review.id).toBeGreaterThan(0);
+-    expect(review.flagged).toBe(false);
+-    expect(review.createdAt).toBeDefined();
+-  });
+-
+-  it('getReviews returns reviews for plugin', () => {
+-    reviews.addReview({
+-      pluginName: 'plugin-a',
+-      pluginVersion: '1.0.0',
+-      userId: 'user1',
+-      rating: 4,
+-      comment: 'Good',
+-    });
+-    reviews.addReview({
+-      pluginName: 'plugin-b',
+-      pluginVersion: '1.0.0',
+-      userId: 'user2',
+-      rating: 3,
+-      comment: 'Okay',
+-    });
+-    const result = reviews.getReviews('plugin-a');
+-    expect(result).toHaveLength(1);
+-    expect(result[0].pluginName).toBe('plugin-a');
+-  });
+-
+-  it('getAverageRating computes correct average', () => {
+-    reviews.addReview({ pluginName: 'p', pluginVersion: '1.0.0', userId: 'u1', rating: 4, comment: 'a' });
+-    reviews.addReview({ pluginName: 'p', pluginVersion: '1.0.0', userId: 'u2', rating: 2, comment: 'b' });
+-    expect(reviews.getAverageRating('p')).toBe(3);
+-  });
+-
+-  it('flagReview sets flagged to true', () => {
+-    const review = reviews.addReview({
+-      pluginName: 'p',
+-      pluginVersion: '1.0.0',
+-      userId: 'u1',
+-      rating: 1,
+-      comment: 'spam',
+-    });
+-    reviews.flagReview(review.id);
+-    const flagged = reviews.getFlaggedReviews();
+-    expect(flagged).toHaveLength(1);
+-    expect(flagged[0].flagged).toBe(true);
+-  });
+-
+-  it('getFlaggedReviews returns only flagged', () => {
+-    const r1 = reviews.addReview({ pluginName: 'p', pluginVersion: '1.0.0', userId: 'u1', rating: 1, comment: 'bad' });
+-    reviews.addReview({ pluginName: 'p', pluginVersion: '1.0.0', userId: 'u2', rating: 5, comment: 'good' });
+-    reviews.flagReview(r1.id);
+-    const flagged = reviews.getFlaggedReviews();
+-    expect(flagged).toHaveLength(1);
+-    expect(flagged[0].id).toBe(r1.id);
+-  });
+-
+-  it('removeReview deletes review', () => {
+-    const review = reviews.addReview({
+-      pluginName: 'p',
+-      pluginVersion: '1.0.0',
+-      userId: 'u1',
+-      rating: 3,
+-      comment: 'meh',
+-    });
+-    expect(reviews.removeReview(review.id)).toBe(true);
+-    expect(reviews.getReviews('p')).toHaveLength(0);
+-  });
+-
+-  it('getReviewsByUser returns user reviews', () => {
+-    reviews.addReview({ pluginName: 'p1', pluginVersion: '1.0.0', userId: 'alice', rating: 5, comment: 'love it' });
+-    reviews.addReview({ pluginName: 'p2', pluginVersion: '1.0.0', userId: 'alice', rating: 4, comment: 'nice' });
+-    reviews.addReview({ pluginName: 'p1', pluginVersion: '1.0.0', userId: 'bob', rating: 3, comment: 'ok' });
+-    const aliceReviews = reviews.getReviewsByUser('alice');
+-    expect(aliceReviews).toHaveLength(2);
+-    aliceReviews.forEach(r => expect(r.userId).toBe('alice'));
+-  });
+-
+-  it('getReviewCount returns correct count', () => {
+-    reviews.addReview({ pluginName: 'counter', pluginVersion: '1.0.0', userId: 'u1', rating: 5, comment: 'a' });
+-    reviews.addReview({ pluginName: 'counter', pluginVersion: '1.0.0', userId: 'u2', rating: 4, comment: 'b' });
+-    reviews.addReview({ pluginName: 'counter', pluginVersion: '1.1.0', userId: 'u3', rating: 3, comment: 'c' });
+-    expect(reviews.getReviewCount('counter')).toBe(3);
+-  });
+-});
+diff --git a/tests/runner.test.ts b/tests/runner.test.ts
+deleted file mode 100644
+index 78f5539..0000000
+--- a/tests/runner.test.ts
++++ /dev/null
+@@ -1,59 +0,0 @@
+-import { describe, it, expect } from 'vitest';
+-import { createRunner } from '../src/runner/index.js';
+-
+-describe('Sandboxed Runner', () => {
+-  const runner = createRunner();
+-
+-  it('execute runs simple code and returns result', async () => {
+-    const result = await runner.execute('return 2 + 3;');
+-    expect(result.success).toBe(true);
+-    expect(result.output).toBe(5);
+-  });
+-
+-  it('execute provides context variables', async () => {
+-    const result = await runner.execute('return x * y;', { x: 6, y: 7 });
+-    expect(result.success).toBe(true);
+-    expect(result.output).toBe(42);
+-  });
+-
+-  it('executeWithTimeout kills long-running code', async () => {
+-    const result = await runner.executeWithTimeout('while(true) {}', 100);
+-    expect(result.success).toBe(false);
+-    expect(result.error).toBeDefined();
+-  });
+-
+-  it('execute captures output in result', async () => {
+-    const result = await runner.execute('return { message: "hello" };');
+-    expect(result.success).toBe(true);
+-    expect(result.output).toEqual({ message: 'hello' });
+-  });
+-
+-  it('execute reports duration', async () => {
+-    const result = await runner.execute('return 1;');
+-    expect(result.duration).toBeGreaterThanOrEqual(0);
+-    expect(typeof result.duration).toBe('number');
+-  });
+-
+-  it('execute catches runtime errors', async () => {
+-    const result = await runner.execute('throw new Error("boom");');
+-    expect(result.success).toBe(false);
+-    expect(result.error).toContain('boom');
+-  });
+-
+-  it('execute isolates between runs (no shared state)', async () => {
+-    await runner.execute('var leaked = 42;');
+-    const result = await runner.execute('return typeof leaked;');
+-    expect(result.success).toBe(true);
+-    expect(result.output).toBe('undefined');
+-  });
+-
+-  it('executeWithTimeout returns error on timeout', async () => {
+-    const result = await runner.executeWithTimeout(
+-      'var i = 0; while(true) { i++; }',
+-      50
+-    );
+-    expect(result.success).toBe(false);
+-    expect(result.error).toBeDefined();
+-    expect(result.duration).toBeGreaterThan(0);
+-  });
+-});

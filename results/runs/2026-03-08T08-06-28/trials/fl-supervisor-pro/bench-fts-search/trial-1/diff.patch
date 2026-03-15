@@ -1,0 +1,198 @@
+diff --git a/package-lock.json b/package-lock.json
+index a3ad476..a7ecd82 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1131,7 +1131,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1247,7 +1246,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1540,7 +1538,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2301,7 +2298,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -4604,7 +4600,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/db.ts b/src/db.ts
+index 810e0fd..c482df2 100644
+--- a/src/db.ts
++++ b/src/db.ts
+@@ -18,6 +18,38 @@ export function createDatabase(path?: string): Database.Database {
+     )
+   `);
+ 
++  // Create FTS5 virtual table for full-text search
++  // We are indexing title and body.
++  // 'notes_id' column will store the corresponding note ID for manual synchronization.
++  // FTS5 will manage its own internal rowid.
++  db.exec(`
++    CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
++      notes_id UNINDEXED, -- Store the ID of the note it's linked to
++      title,
++      body
++    )
++  `);
++
++  // Create triggers to synchronize FTS table with notes table manually
++  // On INSERT into notes, insert into notes_fts
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
++      INSERT INTO notes_fts (notes_id, title, body) VALUES (new.id, new.title, new.body);
++    END;
++  `);
++  // On UPDATE on notes, update notes_fts
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
++      UPDATE notes_fts SET notes_id = new.id, title = new.title, body = new.body WHERE notes_id = new.id;
++    END;
++  `);
++  // On DELETE on notes, delete from notes_fts
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
++      DELETE FROM notes_fts WHERE notes_id = old.id;
++    END;
++  `);
++
+   return db;
+ }
+ 
+diff --git a/src/routes.ts b/src/routes.ts
+index 013b2dc..3edfa68 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -1,6 +1,6 @@
+ import { Router, Request, Response, NextFunction } from 'express';
+ import Database from 'better-sqlite3';
+-import { Note, NoteInput } from './models.js';
++import { Note, NoteInput, SearchResult, SuggestResult } from './models.js';
+ import { NotFoundError, ValidationError } from './errors.js';
+ 
+ export function createRoutes(db: Database.Database): Router {
+@@ -118,5 +118,98 @@ export function createRoutes(db: Database.Database): Router {
+     }
+   });
+ 
++  // GET /notes/search - Full-text search notes
++  router.get('/notes/search', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const query = req.query.q as string | undefined;
++      const page = parseInt(req.query.page as string) || 1;
++      const perPage = 20;
++
++      if (!query || query.trim() === '') {
++        return res.status(400).json({ error: 'Query parameter "q" is required and cannot be empty.' });
++      }
++
++      // FTS5 query with snippet highlighting and ranking
++      // Using 'snippet' function for highlighting.
++      const searchStmt = db.prepare(`
++        SELECT
++          notes.id,
++          notes.title,
++          snippet(notes_fts, 'title', '<mark>', '</mark>', 3, 3, '') AS title_snippet,
++          snippet(notes_fts, 'body', '<mark>', '</mark>', 3, 3, '') AS body_snippet,
++          rank
++        FROM notes
++        JOIN notes_fts ON notes.id = notes_fts.notes_id -- Join on the manually linked notes_id
++        WHERE notes_fts MATCH ?
++        ORDER BY rank DESC
++        LIMIT ? OFFSET ?
++      `);
++
++      const countStmt = db.prepare(`
++        SELECT COUNT(*) as total FROM notes_fts WHERE notes_fts MATCH ?
++      `);
++
++      const searchTerm = query;
++
++      const totalResults = countStmt.get(searchTerm)?.total;
++      const offset = (page - 1) * perPage;
++
++      const searchResults = searchStmt.all(searchTerm, perPage, offset) as SearchResult[];
++
++      // Combine title and body snippets for the final snippet.
++      // Provide a fallback to title/body if snippet extraction yields nothing.
++      const formattedResults = searchResults.map(result => ({
++        ...result,
++        // Prioritize title snippet if available, otherwise use body snippet.
++        // Fallback to the first 100 characters of title or body if snippets are empty.
++        snippet: (result.title_snippet || result.body_snippet || result.title || result.body).substring(0, 100),
++        rank: result.rank // FTS5's rank is automatically calculated
++      }));
++
++      res.json({
++        results: formattedResults,
++        total: totalResults,
++        page: page,
++        perPage: perPage
++      });
++    } catch (err) {
++      next(err);
++    }
++  });
++
++  // GET /notes/search/suggest - Autocomplete for note titles
++  router.get('/notes/search/suggest', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const prefix = req.query.q as string | undefined;
++
++      if (!prefix || prefix.trim() === '') {
++        return res.status(400).json({ error: 'Query parameter "q" is required and cannot be empty.' });
++      }
++
++      // Search for prefixes in title and body, return up to 5 matching titles
++      const suggestStmt = db.prepare(`
++        SELECT id, title
++        FROM notes
++        WHERE id IN (
++          SELECT notes_id FROM notes_fts WHERE notes_fts MATCH ? -- Select notes_id from FTS table
++        )
++        ORDER BY title
++        LIMIT 5
++      `);
++
++      // For suggestions, we want prefix matching. SQLite FTS5 MATCH operator
++      // with a term not enclosed in quotes and not a boolean operator typically
++      // performs prefix matching. E.g., "apple" will match "apple", "apples", "appletree".
++      // A common pattern is `term*` for prefix.
++      const searchTerm = `${prefix}*`; // Explicitly use * for prefix matching
++
++      const suggestions = suggestStmt.all(searchTerm) as SuggestResult[];
++
++      res.json({ results: suggestions });
++    } catch (err) {
++      next(err);
++    }
++  });
++
+   return router;
+ }

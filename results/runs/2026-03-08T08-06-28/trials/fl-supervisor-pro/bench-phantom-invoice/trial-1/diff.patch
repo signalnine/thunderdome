@@ -1,0 +1,39 @@
+diff --git a/src/db/queries.ts b/src/db/queries.ts
+index 40c4307..ccea42d 100644
+--- a/src/db/queries.ts
++++ b/src/db/queries.ts
+@@ -11,7 +11,7 @@ export function getInvoicesByDateRange(
+ ): Invoice[] {
+   const stmt = db.prepare(`
+     SELECT * FROM invoices
+-    WHERE date >= ? AND date < ?
++    WHERE date >= ? AND date <= ?
+     ORDER BY date ASC
+   `);
+   return stmt.all(startDate, endDate) as Invoice[];
+diff --git a/src/services/billing.ts b/src/services/billing.ts
+index b274692..3a1e841 100644
+--- a/src/services/billing.ts
++++ b/src/services/billing.ts
+@@ -15,7 +15,7 @@ export function calculateInvoiceTotal(
+   taxRate: number,
+ ): number {
+   const discounted = subtotal * (1 - discountRate);
+-  const total = discounted + subtotal * taxRate;
++  const total = discounted * (1 + taxRate);
+   return Math.round(total * 100) / 100;
+ }
+ 
+diff --git a/src/services/reporting.ts b/src/services/reporting.ts
+index 132a907..8fd136f 100644
+--- a/src/services/reporting.ts
++++ b/src/services/reporting.ts
+@@ -25,7 +25,7 @@ export function getMonthlyReport(
+ 
+   for (const inv of invoices) {
+     const d = new Date(inv.date + 'T00:00:00Z');
+-    const month = d.getMonth() + 1; // 1-indexed
++    const month = d.getUTCMonth() + 1; // 1-indexed
+ 
+     const current = monthlyMap.get(month) || { count: 0, total: 0 };
+     current.count += 1;

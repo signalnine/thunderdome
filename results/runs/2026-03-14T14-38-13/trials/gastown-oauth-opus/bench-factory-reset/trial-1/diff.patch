@@ -1,0 +1,698 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..a178017
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,50 @@
++{
++  "input_tokens": 33,
++  "output_tokens": 19063,
++  "cache_read_tokens": 1006001,
++  "cache_creation_tokens": 43590,
++  "turns": 34,
++  "tools_used": [
++    "Read",
++    "Glob",
++    "Bash",
++    "TodoWrite",
++    "Write",
++    "Edit"
++  ],
++  "duration_ms": 364000,
++  "total_cost_usd": 1.269,
++  "gastown_meta": {
++    "strategy": "single",
++    "polecat_count": 1,
++    "roles": {
++      "mayor": {
++        "input_tokens": 3,
++        "output_tokens": 786,
++        "cache_read_tokens": 7687,
++        "cache_creation_tokens": 1873,
++        "turns": 1,
++        "tools_used": [],
++        "duration_ms": 21181,
++        "total_cost_usd": 0.03521475
++      },
++      "polecat-0": {
++        "input_tokens": 30,
++        "output_tokens": 18277,
++        "cache_read_tokens": 998314,
++        "cache_creation_tokens": 41717,
++        "turns": 33,
++        "tools_used": [
++          "Read",
++          "Glob",
++          "Bash",
++          "TodoWrite",
++          "Write",
++          "Edit"
++        ],
++        "duration_ms": 330416,
++        "total_cost_usd": 1.2337752499999994
++      }
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/package-lock.json b/package-lock.json
+index 07657bf..1a9db02 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..6ee57a3
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,253 @@
++export interface Machine {
++  target: boolean[];
++  buttons: number[][];
++}
++
++/**
++ * Solve a toggle puzzle over GF(2) using Gaussian elimination.
++ */
++export function solveToggle(machine: Machine): number[] | null {
++  const { target, buttons } = machine;
++  const numLights = target.length;
++  const numButtons = buttons.length;
++
++  const matrix: number[][] = [];
++  for (let i = 0; i < numLights; i++) {
++    const row = new Array(numButtons + 1).fill(0);
++    row[numButtons] = target[i] ? 1 : 0;
++    matrix.push(row);
++  }
++  for (let j = 0; j < numButtons; j++) {
++    for (const lightIdx of buttons[j]) {
++      if (lightIdx < numLights) {
++        matrix[lightIdx][j] = 1;
++      }
++    }
++  }
++
++  const result = solveSystem(matrix, numLights, numButtons, 2, 'toggle');
++  return result;
++}
++
++/**
++ * Solve a counter puzzle over GF(p) using Gaussian elimination.
++ */
++export function solveCounter(
++  lights: number[],
++  buttons: number[][],
++  modulus: number
++): number[] | null {
++  const numCounters = lights.length;
++  const numButtons = buttons.length;
++
++  const matrix: number[][] = [];
++  for (let i = 0; i < numCounters; i++) {
++    const row = new Array(numButtons + 1).fill(0);
++    row[numButtons] = ((lights[i] % modulus) + modulus) % modulus;
++    matrix.push(row);
++  }
++  for (let j = 0; j < numButtons; j++) {
++    for (const counterIdx of buttons[j]) {
++      if (counterIdx < numCounters) {
++        matrix[counterIdx][j] = 1;
++      }
++    }
++  }
++
++  const result = solveSystem(matrix, numCounters, numButtons, modulus, 'counter');
++  return result;
++}
++
++function modPow(base: number, exp: number, m: number): number {
++  let result = 1;
++  base = ((base % m) + m) % m;
++  while (exp > 0) {
++    if (exp & 1) {
++      result = (result * base) % m;
++    }
++    exp >>= 1;
++    base = (base * base) % m;
++  }
++  return result;
++}
++
++function modInverse(a: number, p: number): number {
++  return modPow(a, p - 2, p);
++}
++
++/**
++ * For toggle mode: cost = number of 1s, tiebreak by lex order of sorted index set.
++ * For counter mode: cost = sum of values, tiebreak by lex order of value array.
++ */
++function solveSystem(
++  matrix: number[][],
++  numRows: number,
++  numCols: number,
++  p: number,
++  mode: 'toggle' | 'counter'
++): number[] | null {
++  const cols = numCols;
++  const augCol = cols;
++
++  const pivotCol: number[] = new Array(numRows).fill(-1);
++  const pivotRow: number[] = new Array(cols).fill(-1);
++
++  let currentRow = 0;
++  for (let col = 0; col < cols && currentRow < numRows; col++) {
++    let pivot = -1;
++    for (let row = currentRow; row < numRows; row++) {
++      if (matrix[row][col] !== 0) {
++        pivot = row;
++        break;
++      }
++    }
++    if (pivot === -1) continue;
++
++    if (pivot !== currentRow) {
++      [matrix[currentRow], matrix[pivot]] = [matrix[pivot], matrix[currentRow]];
++    }
++
++    pivotCol[currentRow] = col;
++    pivotRow[col] = currentRow;
++
++    const pivotVal = matrix[currentRow][col];
++    if (pivotVal !== 1) {
++      const inv = modInverse(pivotVal, p);
++      for (let j = col; j <= augCol; j++) {
++        matrix[currentRow][j] = (matrix[currentRow][j] * inv) % p;
++      }
++    }
++
++    for (let row = 0; row < numRows; row++) {
++      if (row === currentRow) continue;
++      const factor = matrix[row][col];
++      if (factor === 0) continue;
++      for (let j = col; j <= augCol; j++) {
++        matrix[row][j] = (((matrix[row][j] - factor * matrix[currentRow][j]) % p) + p) % p;
++      }
++    }
++
++    currentRow++;
++  }
++
++  const rank = currentRow;
++
++  for (let row = rank; row < numRows; row++) {
++    if (matrix[row][augCol] !== 0) {
++      return null;
++    }
++  }
++
++  const freeVars: number[] = [];
++  for (let col = 0; col < cols; col++) {
++    if (pivotRow[col] === -1) {
++      freeVars.push(col);
++    }
++  }
++
++  // Pre-compute pivot info
++  const pivotInfo: { col: number; constant: number; freeCoeffs: number[] }[] = [];
++  for (let row = 0; row < rank; row++) {
++    const col = pivotCol[row];
++    if (col === -1) continue;
++    const freeCoeffs: number[] = [];
++    for (const fv of freeVars) {
++      freeCoeffs.push(matrix[row][fv]);
++    }
++    pivotInfo.push({ col, constant: matrix[row][augCol], freeCoeffs });
++  }
++
++  if (freeVars.length === 0) {
++    const solution = new Array(cols).fill(0);
++    for (const info of pivotInfo) {
++      solution[info.col] = info.constant;
++    }
++    return formatResult(solution, mode);
++  }
++
++  const numFree = freeVars.length;
++
++  let bestSolution: number[] | null = null;
++  let bestCost = Infinity;
++
++  // Enumerate all p^k combinations of free variable values using an odometer pattern
++  const freeVals = new Array(numFree).fill(0);
++  let done = false;
++
++  while (!done) {
++    const solution = new Array(cols).fill(0);
++    for (let i = 0; i < numFree; i++) {
++      solution[freeVars[i]] = freeVals[i];
++    }
++
++    for (const info of pivotInfo) {
++      let val = info.constant;
++      for (let i = 0; i < numFree; i++) {
++        val = (((val - info.freeCoeffs[i] * freeVals[i]) % p) + p) % p;
++      }
++      solution[info.col] = val;
++    }
++
++    const cost = solution.reduce((a: number, b: number) => a + b, 0);
++    if (cost < bestCost) {
++      bestCost = cost;
++      bestSolution = solution;
++    } else if (cost === bestCost && bestSolution !== null) {
++      if (isBetter(solution, bestSolution, mode)) {
++        bestSolution = solution;
++      }
++    }
++
++    // Increment odometer (rightmost digit first)
++    let carry = true;
++    for (let i = numFree - 1; i >= 0 && carry; i--) {
++      freeVals[i]++;
++      if (freeVals[i] >= p) {
++        freeVals[i] = 0;
++      } else {
++        carry = false;
++      }
++    }
++    if (carry) done = true;
++  }
++
++  if (bestSolution === null) return null;
++  return formatResult(bestSolution, mode);
++}
++
++/**
++ * Check if solution a is better (lex smaller) than b for tiebreaking.
++ */
++function isBetter(a: number[], b: number[], mode: 'toggle' | 'counter'): boolean {
++  if (mode === 'counter') {
++    // Lex compare value arrays
++    for (let i = 0; i < a.length; i++) {
++      if (a[i] !== b[i]) return a[i] < b[i];
++    }
++    return false;
++  } else {
++    // Toggle: lex compare sorted index sets
++    // Two sets have the same size (same cost), so compare element by element
++    const aIndices: number[] = [];
++    const bIndices: number[] = [];
++    for (let i = 0; i < a.length; i++) {
++      if (a[i] === 1) aIndices.push(i);
++      if (b[i] === 1) bIndices.push(i);
++    }
++    for (let i = 0; i < aIndices.length; i++) {
++      if (aIndices[i] !== bIndices[i]) return aIndices[i] < bIndices[i];
++    }
++    return false;
++  }
++}
++
++function formatResult(solution: number[], mode: 'toggle' | 'counter'): number[] {
++  if (mode === 'toggle') {
++    const result: number[] = [];
++    for (let i = 0; i < solution.length; i++) {
++      if (solution[i] === 1) result.push(i);
++    }
++    return result;
++  }
++  return solution;
++}
+diff --git a/tests/index.test.ts b/tests/index.test.ts
+new file mode 100644
+index 0000000..2018d3a
+--- /dev/null
++++ b/tests/index.test.ts
+@@ -0,0 +1,324 @@
++import { describe, it, expect } from 'vitest';
++import { solveToggle, solveCounter, Machine } from '../src/index.js';
++
++describe('solveToggle', () => {
++  it('should return empty array when target is all off', () => {
++    const machine: Machine = {
++      target: [false, false, false],
++      buttons: [[0, 1], [1, 2], [0, 2]],
++    };
++    expect(solveToggle(machine)).toEqual([]);
++  });
++
++  it('should return null when no solution exists', () => {
++    // From the TASK example: target [T, T, F, T]
++    // b0 XOR b2 = 1, b0 XOR b1 = 1, b1 = 0, b1 XOR b2 = 1
++    // b1=0, b0=1, b2=0, but check: b1 XOR b2 = 0 ≠ 1 → no solution
++    const machine: Machine = {
++      target: [true, true, false, true],
++      buttons: [[0, 1], [1, 2, 3], [0, 3]],
++    };
++    expect(solveToggle(machine)).toBeNull();
++  });
++
++  it('should solve a simple toggle puzzle', () => {
++    // 2 lights, 2 buttons
++    // Button 0 toggles light 0, Button 1 toggles light 1
++    // Target: [true, true]
++    const machine: Machine = {
++      target: [true, true],
++      buttons: [[0], [1]],
++    };
++    expect(solveToggle(machine)).toEqual([0, 1]);
++  });
++
++  it('should find minimum presses', () => {
++    // 2 lights, 3 buttons
++    // Button 0 toggles [0, 1], Button 1 toggles [0], Button 2 toggles [1]
++    // Target: [true, true]
++    // Solutions: {0} (1 press) or {1, 2} (2 presses)
++    const machine: Machine = {
++      target: [true, true],
++      buttons: [[0, 1], [0], [1]],
++    };
++    expect(solveToggle(machine)).toEqual([0]);
++  });
++
++  it('should break ties lexicographically', () => {
++    // 1 light, 2 buttons that both toggle light 0
++    // Target: [true]
++    // Solutions: {0} or {1}, both 1 press. Lex smallest is {0}
++    const machine: Machine = {
++      target: [true],
++      buttons: [[0], [0]],
++    };
++    expect(solveToggle(machine)).toEqual([0]);
++  });
++
++  it('should handle single button', () => {
++    const machine: Machine = {
++      target: [true, true],
++      buttons: [[0, 1]],
++    };
++    expect(solveToggle(machine)).toEqual([0]);
++  });
++
++  it('should handle button toggling all lights', () => {
++    const machine: Machine = {
++      target: [true, true, true],
++      buttons: [[0, 1, 2]],
++    };
++    expect(solveToggle(machine)).toEqual([0]);
++  });
++
++  it('should handle identity-like system', () => {
++    // Each button toggles exactly one light
++    const machine: Machine = {
++      target: [true, false, true, false, true],
++      buttons: [[0], [1], [2], [3], [4]],
++    };
++    expect(solveToggle(machine)).toEqual([0, 2, 4]);
++  });
++
++  it('should handle overlapping buttons', () => {
++    // 3 lights, 3 buttons
++    // b0: [0,1], b1: [1,2], b2: [0,2]
++    // Target: [true, true, true]
++    // Equations: b0+b2=1, b0+b1=1, b1+b2=1 (mod 2)
++    // Add all: 2b0+2b1+2b2 = 3 → 0 = 1 (mod 2)? No, 3 mod 2 = 1
++    // So 0 = 1 mod 2 → no solution... wait
++    // Actually: from eq1+eq2+eq3: 2(b0+b1+b2) = 3 mod 2 → 0 = 1 → no solution
++    const machine: Machine = {
++      target: [true, true, true],
++      buttons: [[0, 1], [1, 2], [0, 2]],
++    };
++    expect(solveToggle(machine)).toBeNull();
++  });
++
++  it('should handle more buttons than lights', () => {
++    // 2 lights, 4 buttons
++    // b0: [0], b1: [1], b2: [0,1], b3: [0]
++    // Target: [true, false]
++    // Need: b0+b2+b3=1 (mod2), b1+b2=0 (mod2)
++    // Solutions include {0}, {3}, {1,2}, etc. Min presses = 1: {0} or {3}. Lex: {0}
++    const machine: Machine = {
++      target: [true, false],
++      buttons: [[0], [1], [0, 1], [0]],
++    };
++    expect(solveToggle(machine)).toEqual([0]);
++  });
++
++  it('should handle no buttons needed', () => {
++    const machine: Machine = {
++      target: [false, false],
++      buttons: [[0], [1]],
++    };
++    expect(solveToggle(machine)).toEqual([]);
++  });
++
++  it('should handle empty buttons array', () => {
++    const machine: Machine = {
++      target: [false, false],
++      buttons: [],
++    };
++    expect(solveToggle(machine)).toEqual([]);
++  });
++
++  it('should return null with empty buttons but non-zero target', () => {
++    const machine: Machine = {
++      target: [true, false],
++      buttons: [],
++    };
++    expect(solveToggle(machine)).toBeNull();
++  });
++});
++
++describe('solveCounter', () => {
++  it('should return all zeros when target is all zeros', () => {
++    const result = solveCounter([0, 0, 0], [[0, 1], [1, 2]], 5);
++    expect(result).toEqual([0, 0]);
++  });
++
++  it('should solve a simple counter puzzle', () => {
++    // 2 counters, 2 buttons, mod 3
++    // Button 0 affects counter 0, Button 1 affects counter 1
++    // Target: [2, 1]
++    const result = solveCounter([2, 1], [[0], [1]], 3);
++    expect(result).toEqual([2, 1]);
++  });
++
++  it('should return null when no solution exists', () => {
++    // 2 counters, 1 button, mod 3
++    // Button 0 affects both counters → pressing it x times gives [x, x] mod 3
++    // Target: [1, 2] → need x=1 and x=2 simultaneously → impossible
++    const result = solveCounter([1, 2], [[0, 1]], 3);
++    expect(result).toBeNull();
++  });
++
++  it('should find minimum total presses', () => {
++    // 1 counter, 2 buttons both affecting counter 0, mod 5
++    // Target: [1]
++    // Solutions: [1,0], [0,1], [2,4], [3,3], [4,2]... sum 1,1,6,6,6
++    // Min sum = 1, lex smallest: [0,1]... wait [1,0] < [0,1]? No, [0,1] < [1,0]
++    // Actually lex comparison: [0,1] vs [1,0]: [0,1] is smaller since 0 < 1
++    const result = solveCounter([1], [[0], [0]], 5);
++    expect(result).toEqual([0, 1]);
++  });
++
++  it('should handle modular arithmetic correctly', () => {
++    // 1 counter, 1 button affecting counter 0, mod 7
++    // Target: [5]
++    // Press button 0 five times
++    const result = solveCounter([5], [[0]], 7);
++    expect(result).toEqual([5]);
++  });
++
++  it('should handle multiple buttons affecting same counter', () => {
++    // 2 counters, 3 buttons, mod 5
++    // b0: [0], b1: [1], b2: [0, 1]
++    // Target: [3, 2]
++    // Need: b0+b2 = 3 (mod5), b1+b2 = 2 (mod5)
++    // Free var possibilities or unique solution
++    const result = solveCounter([3, 2], [[0], [1], [0, 1]], 5);
++    expect(result).not.toBeNull();
++    if (result) {
++      // Verify solution
++      const counters = [0, 0];
++      const buttons = [[0], [1], [0, 1]];
++      for (let i = 0; i < result.length; i++) {
++        for (const ci of buttons[i]) {
++          counters[ci] = (counters[ci] + result[i]) % 5;
++        }
++      }
++      expect(counters).toEqual([3, 2]);
++    }
++  });
++
++  it('should handle mod 2 (behaves like toggle)', () => {
++    const result = solveCounter([1, 1], [[0], [1]], 2);
++    expect(result).toEqual([1, 1]);
++  });
++
++  it('should handle empty buttons and zero target', () => {
++    const result = solveCounter([0, 0], [], 3);
++    expect(result).toEqual([]);
++  });
++
++  it('should return null for empty buttons and non-zero target', () => {
++    const result = solveCounter([1, 0], [], 3);
++    expect(result).toBeNull();
++  });
++
++  it('should prefer lexicographically smallest on tie', () => {
++    // Verify lex ordering when multiple solutions have same total
++    // 1 counter, 2 buttons both affecting counter 0, mod 3
++    // Target: [0] → need b0+b1 = 0 mod 3
++    // Solutions: [0,0] sum 0, [1,2] sum 3, [2,1] sum 3
++    // Min sum = 0: [0,0]
++    const result = solveCounter([0], [[0], [0]], 3);
++    expect(result).toEqual([0, 0]);
++  });
++
++  it('should handle larger modulus', () => {
++    // mod 97 (a prime)
++    // 1 counter, 1 button
++    // Target: [50]
++    const result = solveCounter([50], [[0]], 97);
++    expect(result).toEqual([50]);
++  });
++
++  it('should handle mod 2 with free variables correctly', () => {
++    // 1 counter, 2 buttons both affecting counter 0, mod 2
++    // Target: [1]
++    // Need: b0 + b1 = 1 mod 2
++    // Solutions: [1,0] sum=1, [0,1] sum=1
++    // Lex smallest value array: [0,1]
++    const result = solveCounter([1], [[0], [0]], 2);
++    expect(result).toEqual([0, 1]);
++  });
++});
++
++describe('solveToggle - verification', () => {
++  function verifyToggleSolution(machine: Machine, solution: number[] | null): boolean {
++    if (solution === null) return true; // can't verify null
++    const lights = new Array(machine.target.length).fill(false);
++    for (const btnIdx of solution) {
++      for (const lightIdx of machine.buttons[btnIdx]) {
++        lights[lightIdx] = !lights[lightIdx];
++      }
++    }
++    return lights.every((val, i) => val === machine.target[i]);
++  }
++
++  it('should produce valid solutions for various configs', () => {
++    const configs: Machine[] = [
++      { target: [true], buttons: [[0]] },
++      { target: [true, false], buttons: [[0, 1], [1]] },
++      { target: [true, true, true], buttons: [[0], [1], [2]] },
++      { target: [false, true], buttons: [[0, 1], [0]] },
++    ];
++    for (const machine of configs) {
++      const result = solveToggle(machine);
++      if (result !== null) {
++        expect(verifyToggleSolution(machine, result)).toBe(true);
++      }
++    }
++  });
++});
++
++describe('solveCounter - verification', () => {
++  function verifyCounterSolution(
++    lights: number[],
++    buttons: number[][],
++    modulus: number,
++    solution: number[] | null
++  ): boolean {
++    if (solution === null) return true;
++    const counters = new Array(lights.length).fill(0);
++    for (let i = 0; i < solution.length; i++) {
++      for (const ci of buttons[i]) {
++        counters[ci] = (counters[ci] + solution[i]) % modulus;
++      }
++    }
++    return counters.every((val, i) => val === lights[i]);
++  }
++
++  it('should produce valid solutions for various counter configs', () => {
++    const configs = [
++      { lights: [1, 2, 3], buttons: [[0], [1], [2]], modulus: 5 },
++      { lights: [4, 4], buttons: [[0, 1]], modulus: 5 },
++      { lights: [1, 0, 1], buttons: [[0, 2], [1]], modulus: 3 },
++    ];
++    for (const { lights, buttons, modulus } of configs) {
++      const result = solveCounter(lights, buttons, modulus);
++      if (result !== null) {
++        expect(verifyCounterSolution(lights, buttons, modulus, result)).toBe(true);
++      }
++    }
++  });
++
++  it('should handle 3 free variables with mod 5', () => {
++    // 1 counter, 4 buttons all affecting counter 0, mod 5
++    // Target: [1]
++    // Need: b0+b1+b2+b3 = 1 mod 5
++    // 3 free vars → 5^3 = 125 combinations
++    const result = solveCounter([1], [[0], [0], [0], [0]], 5);
++    expect(result).not.toBeNull();
++    if (result) {
++      expect(result.reduce((a, b) => a + b, 0) % 5 === 1 ||
++             result.reduce((a, b) => a + b, 0) === 1).toBeTruthy();
++      // Min sum should be 1 (one button pressed once)
++      expect(result.reduce((a, b) => a + b, 0)).toBe(1);
++      // Lex smallest: [0, 0, 0, 1]
++      expect(result).toEqual([0, 0, 0, 1]);
++    }
++  });
++
++  it('should handle larger system correctly', () => {
++    // 5 counters, 5 buttons (identity), mod 7
++    const lights = [1, 2, 3, 4, 5];
++    const buttons = [[0], [1], [2], [3], [4]];
++    const result = solveCounter(lights, buttons, 7);
++    expect(result).toEqual([1, 2, 3, 4, 5]);
++  });
++});
