@@ -194,6 +194,11 @@ func TaskName(t *config.Task) string {
 	return filepath.Base(t.Repo)
 }
 
+// ValidationTimeout is the maximum time allowed for the entire validation
+// pipeline (tests + lint + coverage + hidden tests). Prevents hangs from
+// infinite loops in agent-generated code.
+const ValidationTimeout = 5 * time.Minute
+
 // ValidateAndScore runs the validation pipeline (tests, lint)
 // against a completed trial and updates the meta with scores.
 func ValidateAndScore(ctx context.Context, trialDir string, task *config.Task, gatewayURL string) (*result.TrialMeta, error) {
@@ -204,10 +209,14 @@ func ValidateAndScore(ctx context.Context, trialDir string, task *config.Task, g
 
 	workDir := filepath.Join(trialDir, "workspace")
 
+	// Apply validation timeout to prevent hangs from infinite loops
+	valCtx, cancel := context.WithTimeout(ctx, ValidationTimeout)
+	defer cancel()
+
 	if task.Greenfield {
-		return validateGreenfield(ctx, trialDir, workDir, meta, task, gatewayURL)
+		return validateGreenfield(valCtx, trialDir, workDir, meta, task, gatewayURL)
 	}
-	return validateStandard(ctx, trialDir, workDir, meta, task, gatewayURL)
+	return validateStandard(valCtx, trialDir, workDir, meta, task, gatewayURL)
 }
 
 // validateStandard runs the original validation pipeline for non-greenfield tasks.
