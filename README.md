@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 2,298 scored trials across 75 orchestrator variants (3,030 total including crash trials). All scoring is deterministic — no LLM judges, no rubric. Crash trials ($0 cost) are excluded from averages. Leaderboard requires 8+ standard AND 8+ hard non-crash trials.
+Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 2,740 scored trials across 87 orchestrator variants (3,541 total including crash trials). All scoring is deterministic — no LLM judges, no rubric. Crash trials ($0 cost, or <15s for local/free-inference models) are excluded from averages. Leaderboard requires 8+ standard AND 8+ hard non-crash trials.
 
 ### Leaderboard
 
@@ -20,43 +20,50 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 | 4 | [Stacked](#contenders) | 86.0% | 87.5% | **86.8%** | 64 | $1.58 | Opus 4.6 |
 | 5 | [Conclave v6 (Sonnet)](#contenders) | 85.8% | 87.2% | **86.5%** | 84 | $1.11 | Sonnet 4.6 |
 | 6 | [Agent Teams](#contenders) | 87.5% | 85.1% | **86.3%** | 73 | $3.29 | Opus 4.6 |
-| 7 | [Metacog Inversion](#contenders) | 85.4% | 86.4% | **85.9%** | 66 | $1.03 | Opus 4.6 |
-| 8 | [Conclave v6 (Opus)](#contenders) | 86.0% | 85.2% | **85.6%** | 76 | $2.12 | Opus 4.6 |
-| 9 | [Gas Station](#contenders) | 88.9% | 81.3% | **85.1%** | 39 | $1.07 | Opus 4.6 |
-| 10 | [Metacog Banishing](#contenders) | 86.2% | 83.8% | **85.0%** | 19 | $1.05 | Opus 4.6 |
-| 11 | [Tango and Cash](#contenders) | 83.3% | 86.4% | **84.8%** | 59 | $1.10 | Opus 4.6 + Gemini |
-| 12 | [Metacog Pivot](#contenders) | 84.5% | 85.1% | **84.8%** | 59 | $0.98 | Opus 4.6 |
-| 13 | [Metacog Fool](#contenders) | 84.9% | 84.0% | **84.5%** | 20 | $1.23 | Opus 4.6 |
-| 14 | [Metacog Invocation](#contenders) | 84.8% | 83.7% | **84.2%** | 57 | $1.32 | Opus 4.6 |
-| 15 | [Metacog Gift](#contenders) | 83.3% | 84.8% | **84.0%** | 18 | $1.42 | Opus 4.6 |
-| 16 | [Claude Code (Opus)](#contenders) | 88.0% | 80.0% | **84.0%** | 35 | $1.18 | Opus 4.6 |
-| 17 | [Metacog](#contenders) | 88.0% | 79.5% | **83.7%** | 58 | $1.17 | Opus 4.6 |
-| 18 | [Gas Town](#contenders) | 79.8% | 86.3% | **83.0%** | 61 | $2.38 | Opus 4.6 |
-| 19 | [GSD](#contenders) | 84.4% | 81.5% | **82.9%** | 57 | $1.13 | Opus 4.6 |
-| 20 | [Metacog Reset](#contenders) | 85.7% | 80.2% | **82.9%** | 20 | $1.68 | Opus 4.6 |
-| 21 | [Metacog Error](#contenders) | 84.8% | 80.5% | **82.7%** | 57 | $1.42 | Opus 4.6 |
-| 22 | [Metacog Drift](#contenders) | 87.0% | 78.4% | **82.7%** | 19 | $1.30 | Opus 4.6 |
-| 23 | [Metacog Veil](#contenders) | 85.4% | 79.8% | **82.6%** | 19 | $1.16 | Opus 4.6 |
-| 24 | [Metacog Stack](#contenders) | 85.7% | 79.1% | **82.4%** | 19 | $1.29 | Opus 4.6 |
-| 25 | [Self-Review (Opus)](#contenders) | 86.1% | 77.8% | **81.9%** | 19 | $1.23 | Opus 4.6 |
-| 26 | [CRUSH (GLM5)](#contenders) | 89.1% | 74.3% | **81.7%** | 30 | $0.73 | GLM-5 |
-| 27 | [Metacog Mirror](#contenders) | 83.6% | 78.9% | **81.2%** | 19 | $1.41 | Opus 4.6 |
-| 28 | [Gemini CLI](#contenders) | 80.9% | 80.8% | **80.9%** | 60 | $0.14 | Gemini 2.5 Pro |
-| 29 | [Verify (Opus)](#contenders) | 86.0% | 75.7% | **80.8%** | 19 | $0.94 | Opus 4.6 |
-| 30 | [ExoMonad v2](#contenders) | 73.5% | 88.2% | **80.8%** | 40 | $0.72 | Opus 4.6 + Gemini |
-| 31 | [Metacog Sacrifice](#contenders) | 80.8% | 80.6% | **80.7%** | 19 | $1.16 | Opus 4.6 |
-| 32 | [Metacog Anchor](#contenders) | 85.6% | 75.7% | **80.6%** | 19 | $0.92 | Opus 4.6 |
-| 33 | [Metacog Scrying](#contenders) | 87.3% | 72.6% | **80.0%** | 19 | $1.32 | Opus 4.6 |
-| 34 | [Debug (Opus)](#contenders) | 84.6% | 70.0% | **77.3%** | 28 | $1.16 | Opus 4.6 |
-| 35 | [Amplifier (Gemini 2.5 Flash)](#contenders) | 78.7% | 72.7% | **75.7%** | 17 | $0.02 | Gemini 2.5 Flash |
-| 36 | [ExoMonad v1](#contenders) | 66.8% | 82.9% | **74.8%** | 22 | $0.84 | Opus 4.6 + Gemini |
-| 37 | [Cerebras CLI Ralph](#contenders) | 69.9% | 74.9% | **72.4%** | 25 | $0.00 | gpt-oss-120b |
-| 38 | [CRUSH (Nemotron 120B)](#contenders) | 66.0% | 70.5% | **68.2%** | 58 | $2.31 | Nemotron 120B |
-| 39 | [CRUSH (Kimi K2.5)](#contenders) | 72.9% | 59.8% | **66.3%** | 64 | $0.47 | Kimi K2.5 |
-| 40 | [CRUSH (MiniMax M2.5)](#contenders) | 71.9% | 51.6% | **61.7%** | 66 | $0.47 | MiniMax M2.5 |
-| 41 | [CRUSH (GLM-4.7-Flash)](#contenders) | 63.6% | 48.5% | **56.1%** | 70 | $0.55 | GLM-4.7-Flash |
-| 42 | [FL Supervisor Pro](#contenders) | 51.8% | 37.6% | **44.7%** | 127 | $0.16 | Gemini 2.5 Pro |
-| 43 | [FL Supervisor (Opus)](#contenders) | 50.8% | 37.6% | **44.2%** | 119 | $0.26 | Opus 4.6 |
+| 7 | [gstack](#contenders) | 85.2% | 87.5% | **86.3%** | 57 | $1.32 | Opus 4.6 |
+| 8 | [Metacog Inversion](#contenders) | 85.4% | 86.4% | **85.9%** | 66 | $1.03 | Opus 4.6 |
+| 9 | [Conclave v6 (Opus)](#contenders) | 86.0% | 85.2% | **85.6%** | 76 | $2.12 | Opus 4.6 |
+| 10 | [Gas Station](#contenders) | 88.9% | 81.3% | **85.1%** | 39 | $1.07 | Opus 4.6 |
+| 11 | [Metacog Banishing](#contenders) | 86.2% | 83.8% | **85.0%** | 19 | $1.05 | Opus 4.6 |
+| 12 | [Tango and Cash](#contenders) | 83.3% | 86.4% | **84.8%** | 59 | $1.10 | Opus 4.6 + Gemini |
+| 13 | [Metacog Pivot](#contenders) | 84.5% | 85.1% | **84.8%** | 59 | $0.98 | Opus 4.6 |
+| 14 | [Metacog Fool](#contenders) | 84.9% | 84.0% | **84.5%** | 20 | $1.23 | Opus 4.6 |
+| 15 | [Metacog Invocation](#contenders) | 84.8% | 83.7% | **84.2%** | 57 | $1.32 | Opus 4.6 |
+| 16 | [Metacog Gift](#contenders) | 83.3% | 84.8% | **84.0%** | 18 | $1.42 | Opus 4.6 |
+| 17 | [Claude Code (Opus)](#contenders) | 88.0% | 80.0% | **84.0%** | 35 | $1.18 | Opus 4.6 |
+| 18 | [Metacog](#contenders) | 88.0% | 79.5% | **83.7%** | 58 | $1.17 | Opus 4.6 |
+| 19 | [Gas Town](#contenders) | 79.8% | 86.3% | **83.0%** | 61 | $2.38 | Opus 4.6 |
+| 20 | [GSD](#contenders) | 84.4% | 81.5% | **82.9%** | 57 | $1.13 | Opus 4.6 |
+| 21 | [Metacog Reset](#contenders) | 85.7% | 80.2% | **82.9%** | 20 | $1.68 | Opus 4.6 |
+| 22 | [Metacog Error](#contenders) | 84.8% | 80.5% | **82.7%** | 57 | $1.42 | Opus 4.6 |
+| 23 | [Metacog Drift](#contenders) | 87.0% | 78.4% | **82.7%** | 19 | $1.30 | Opus 4.6 |
+| 24 | [Metacog Veil](#contenders) | 85.4% | 79.8% | **82.6%** | 19 | $1.16 | Opus 4.6 |
+| 25 | [Metacog Stack](#contenders) | 85.7% | 79.1% | **82.4%** | 19 | $1.29 | Opus 4.6 |
+| 26 | [Self-Review (Opus)](#contenders) | 86.1% | 77.8% | **81.9%** | 19 | $1.23 | Opus 4.6 |
+| 27 | [CRUSH (GLM5)](#contenders) | 89.1% | 74.3% | **81.7%** | 30 | $0.73 | GLM-5 |
+| 28 | [Metacog Mirror](#contenders) | 83.6% | 78.9% | **81.2%** | 19 | $1.41 | Opus 4.6 |
+| 29 | [Gemini CLI](#contenders) | 80.9% | 80.8% | **80.9%** | 60 | $0.14 | Gemini 2.5 Pro |
+| 30 | [Verify (Opus)](#contenders) | 86.0% | 75.7% | **80.8%** | 19 | $0.94 | Opus 4.6 |
+| 31 | [ExoMonad v2](#contenders) | 73.5% | 88.2% | **80.8%** | 40 | $0.72 | Opus 4.6 + Gemini |
+| 32 | [Metacog Sacrifice](#contenders) | 80.8% | 80.6% | **80.7%** | 19 | $1.16 | Opus 4.6 |
+| 33 | [Metacog Anchor](#contenders) | 85.6% | 75.7% | **80.6%** | 19 | $0.92 | Opus 4.6 |
+| 34 | [Metacog Scrying](#contenders) | 87.3% | 72.6% | **80.0%** | 19 | $1.32 | Opus 4.6 |
+| 35 | [Debug (Opus)](#contenders) | 84.6% | 70.0% | **77.3%** | 28 | $1.16 | Opus 4.6 |
+| 36 | [Amplifier (Gemini 2.5 Flash)](#contenders) | 78.7% | 72.7% | **75.7%** | 17 | $0.02 | Gemini 2.5 Flash |
+| 37 | [ExoMonad v1](#contenders) | 66.8% | 82.9% | **74.8%** | 22 | $0.84 | Opus 4.6 + Gemini |
+| 38 | [Cerebras CLI Ralph](#contenders) | 69.9% | 74.9% | **72.4%** | 25 | $0.00 | gpt-oss-120b |
+| 39 | [CRUSH (Nemotron 120B)](#contenders) | 66.6% | 70.5% | **68.5%** | 67 | $2.50 | Nemotron 120B |
+| 40 | [CRUSH (Kimi K2.5)](#contenders) | 72.9% | 59.8% | **66.3%** | 64 | $0.47 | Kimi K2.5 |
+| 41 | [Hermes MiMo (prompted)](#contenders) | 62.3% | 67.5% | **64.9%** | 18 | $0.18 | MiMo-V2-Flash |
+| 42 | [Hermes MiMo](#contenders) | 61.3% | 67.3% | **64.3%** | 56 | $0.16 | MiMo-V2-Flash |
+| 43 | [CRUSH (Nemotron 120B prompted)](#contenders) | 70.1% | 57.3% | **63.7%** | 57 | $2.16 | Nemotron 120B |
+| 44 | [CRUSH (MiniMax M2.5)](#contenders) | 71.9% | 51.6% | **61.7%** | 66 | $0.47 | MiniMax M2.5 |
+| 45 | [CRUSH (GLM-4.7-Flash)](#contenders) | 63.6% | 48.2% | **55.9%** | 71 | $0.54 | GLM-4.7-Flash |
+| 46 | [CRUSH (Qwen3-Coder 30B)](#contenders) | 60.4% | 48.9% | **54.6%** | 57 | $0.00 | Qwen3-Coder 30B AWQ (local) |
+| 47 | [CRUSH (Qwen 3.5 32B)](#contenders) | 55.9% | 42.4% | **49.1%** | 59 | $0.00 | Qwen 3.5 32B (local) |
+| 48 | [FL Supervisor Pro](#contenders) | 51.8% | 37.6% | **44.7%** | 170 | $0.15 | Gemini 2.5 Pro |
+| 49 | [CRUSH (Devstral 24B)](#contenders) | 55.3% | 34.1% | **44.7%** | 36 | $0.00 | Devstral 24B (local) |
+| 50 | [FL Supervisor (Opus)](#contenders) | 50.3% | 37.6% | **44.0%** | 163 | $0.26 | Opus 4.6 |
 
 ### Cost Efficiency
 
@@ -64,14 +71,18 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no othe
 
 | Orchestrator | Overall | Avg Cost | Pareto |
 |---|---:|---:|:---:|
+| CRUSH (Qwen 3.5 32B) | 49.1% | $0.00 | |
+| CRUSH (Qwen3-Coder 30B) | 54.6% | $0.00 | |
 | Cerebras CLI Ralph | 72.4% | $0.00 | |
 | **Amplifier (Gemini 2.5 Flash)** | **75.7%** | **$0.02** | **best <$0.14** |
-| **Gemini CLI** | **80.9%** | **$0.14** | **best <$0.55** |
-| FL Supervisor Pro | 44.7% | $0.16 | |
-| FL Supervisor (Opus) | 44.2% | $0.26 | |
+| **Gemini CLI** | **80.9%** | **$0.14** | **best <$0.16** |
+| FL Supervisor Pro | 44.7% | $0.15 | |
+| Hermes MiMo | 64.3% | $0.16 | |
+| Hermes MiMo (prompted) | 64.9% | $0.18 | |
+| FL Supervisor (Opus) | 44.0% | $0.26 | |
 | CRUSH (Kimi K2.5) | 66.3% | $0.47 | |
 | CRUSH (MiniMax M2.5) | 61.7% | $0.47 | |
-| CRUSH (GLM-4.7-Flash) | 56.1% | $0.55 | |
+| CRUSH (GLM-4.7-Flash) | 55.9% | $0.54 | |
 | ExoMonad v2 | 80.8% | $0.72 | |
 | **CRUSH (GLM5)** | **81.7%** | **$0.73** | **best <$0.92** |
 | ExoMonad v1 | 74.8% | $0.84 | |
@@ -88,17 +99,19 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no othe
 | Metacog | 83.7% | $1.17 | |
 | Claude Code (Opus) | 84.0% | $1.18 | |
 | Self-Review (Opus) | 81.9% | $1.23 | |
-| **Plans (Opus)** | **87.6%** | **$1.26** | **best <$1.58** |
+| **Plans (Opus)** | **87.6%** | **$1.26** | **best <$1.32** |
+| gstack | 86.3% | $1.32 | |
 | Metacog Error | 82.7% | $1.42 | |
 | Stacked | 86.8% | $1.58 | |
 | BMAD-METHOD | 87.3% | $1.74 | |
 | **Conclave Review** | **87.8%** | **$1.86** | **best overall** |
 | Conclave v6 (Opus) | 85.6% | $2.12 | |
-| CRUSH (Nemotron 120B) | 68.2% | $2.31 | |
+| CRUSH (Nemotron 120B prompted) | 63.7% | $2.16 | |
 | Gas Town | 83.0% | $2.38 | |
+| CRUSH (Nemotron 120B) | 68.5% | $2.50 | |
 | Agent Teams | 86.3% | $3.29 | |
 
-The Pareto frontier: Amplifier Gemini 2.5 Flash ($0.02, 75.7%) → Gemini CLI ($0.14, 80.9%) → CRUSH GLM5 ($0.73, 81.7%) → Metacog Pivot ($0.98, 84.8%) → Metacog Inversion ($1.03, 85.9%) → v6 Sonnet ($1.11, 86.5%) → Plans ($1.26, 87.6%) → Conclave Review ($1.86, 87.8%). Gemini CLI remains the standout value: 80.9% at $0.14/task — 10x cheaper than any Opus variant. Agent Teams ($3.29) doesn't justify its cost premium over Conclave Review ($1.86) with 73 trials of data.
+The Pareto frontier: Amplifier Gemini 2.5 Flash ($0.02, 75.7%) → Gemini CLI ($0.14, 80.9%) → CRUSH GLM5 ($0.73, 81.7%) → Metacog Pivot ($0.98, 84.8%) → Metacog Inversion ($1.03, 85.9%) → v6 Sonnet ($1.11, 86.5%) → Plans ($1.26, 87.6%) → Conclave Review ($1.86, 87.8%). Gemini CLI remains the standout value: 80.9% at $0.14/task — 10x cheaper than any Opus variant. Agent Teams ($3.29) doesn't justify its cost premium over Conclave Review ($1.86) with 73 trials of data. Local models (Qwen3-Coder 30B at 54.6%, Qwen 3.5 32B at 49.1%) are free but trail API models by 25-30pp — the CRUSH.md system prompt nearly tripled Qwen 3.5's score from ~20% to 49.1%.
 
 ### Gene Ablation Variants
 
@@ -127,7 +140,7 @@ Individual orchestrator "genes" tested in isolation — Claude Code with a singl
 
 Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T13, T16), correctness constraints (T14), ambiguous requirements (T15), and deep reasoning where naive approaches fail at scale (T17-T19). Aggregate rankings are in the [leaderboard](#leaderboard) above.
 
-53 orchestrators with hard-task data, sorted by hard-suite mean. All leaderboard orchestrators have complete 8/8 hard task coverage. Metacog arcana variants (8+ with complete hard data) cluster at 73-86%.
+58 orchestrators with hard-task data, sorted by hard-suite mean. All leaderboard orchestrators have complete 8/8 hard task coverage. Metacog arcana variants (8+ with complete hard data) cluster at 73-86%.
 
 | Orchestrator | Hard | T12 | T13 | T14 | T15 | T16 | T17 | T18 | T19 | n |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -135,6 +148,7 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 | Plans (Opus) | **88.3%** | 93.9% | 93.5% | 100% | 72.5% | 92.2% | 82.2% | 81.1% | 91.3% | 24 |
 | Conclave Review | **88.2%** | 94.5% | 90.8% | 98.8% | 69.8% | 89.3% | 84.7% | 88.5% | 89.3% | 52 |
 | Stacked | **87.5%** | 82.3% | 90.4% | 100% | 72.7% | 89.8% | 82.6% | 94.1% | 87.9% | 24 |
+| gstack | **87.5%** | 93.1% | 93.8% | 100% | 70.8% | 87.7% | 86.0% | 81.2% | 87.1% | 24 |
 | Conclave v6 (Sonnet) | **87.2%** | 86.6% | 92.5% | 100% | 73.2% | 90.4% | 74.4% | 92.1% | 88.4% | 32 |
 | Metacog Inversion | **86.4%** | 81.6% | 93.0% | 100% | 77.2% | 90.0% | 90.9% | 69.5% | 89.0% | 25 |
 | Tango and Cash | **86.4%** | 94.1% | 90.4% | 100% | 74.6% | 90.7% | 81.0% | 79.1% | 81.5% | 24 |
@@ -164,11 +178,16 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 | Amplifier (Gemini 2.5 Flash) | **72.7%** | 89.2% | 87.9% | 100% | 63.2% | 23.1% | — | — | — | 8 |
 | CRUSH (Nemotron 120B) | **70.5%** | 70.5% | 91.4% | 100% | 33.5% | 62.8% | 26.3% | 95.2% | 84.0% | 21 |
 | Debug (Opus) | **70.0%** | 88.9% | 87.4% | 100% | 62.1% | 86.1% | 58.1% | 20.0% | 56.9% | 8 |
+| Hermes MiMo (prompted) | **67.5%** | 69.2% | 63.8% | 100% | 54.5% | 76.9% | 67.2% | 61.2% | 46.9% | 8 |
+| Hermes MiMo | **67.3%** | 84.2% | 54.5% | 100% | 56.8% | 84.1% | 32.2% | 62.8% | 64.2% | 24 |
 | CRUSH (Kimi K2.5) | **59.8%** | 55.8% | 63.3% | 94.8% | 61.1% | 56.7% | 38.1% | 46.0% | 62.6% | 26 |
+| CRUSH (Nemotron 120B prompted) | **57.3%** | 66.9% | 47.3% | 95.3% | 54.2% | 44.2% | 21.8% | 70.0% | 59.1% | 24 |
 | CRUSH (MiniMax M2.5) | **51.6%** | 29.6% | 63.3% | 100% | 50.6% | 32.1% | 28.2% | 57.4% | 51.4% | 25 |
-| CRUSH (GLM-4.7-Flash) | **48.5%** | 43.7% | 27.5% | 100% | 66.3% | 30.7% | 41.0% | 41.2% | 37.7% | 21 |
+| CRUSH (Qwen3-Coder 30B) | **48.9%** | 36.7% | 37.2% | 99.4% | 42.6% | 48.2% | 39.3% | 53.5% | 34.4% | 24 |
+| CRUSH (GLM-4.7-Flash) | **48.2%** | 41.2% | 27.5% | 100% | 66.3% | 30.7% | 41.0% | 41.2% | 37.7% | 22 |
+| CRUSH (Qwen 3.5 32B) | **42.4%** | 49.6% | 33.8% | 99.4% | 48.1% | 19.8% | 20.0% | 48.5% | 20.0% | 24 |
 | FL Supervisor (Opus) | **37.6%** | 58.5% | 20.0% | 84.2% | 58.5% | 20.0% | 20.0% | 20.0% | 20.0% | 48 |
-| FL Supervisor Pro | **37.6%** | 58.5% | 20.0% | 84.2% | 58.5% | 20.0% | 20.0% | 20.0% | 20.0% | 63 |
+| FL Supervisor Pro | **37.6%** | 58.5% | 20.0% | 84.2% | 58.5% | 20.0% | 20.0% | 20.0% | 20.0% | 69 |
 
 **Key findings from the hard suite:**
 
@@ -197,6 +216,10 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 - **Multi-agent consensus adds nothing — even with real multi-provider keys.** Three-way test: pure superpowers (no binary), conclave (Claude-only consensus), conclave + keys (Claude + Gemini + Codex). The structured skill text drives all the value
 - **Gene stacking has diminishing returns** — Review + Verify scores worse than either alone. Two discipline checkpoints don't compound
 - **T14** (financial-ledger) is the great equalizer — every orchestrator scores 96-100%, the task is too easy
+- **gstack "Boil the Lake" enters at #7 (86.3%, n=57).** [garrytan/gstack](https://github.com/garrytan/gstack)'s core philosophy — "always do the complete implementation when AI makes the marginal cost near-zero" — injected as a workspace CLAUDE.md gives a ~2.3pp lift over vanilla Claude Code. Particularly strong on hard tasks (87.5%) where the completeness mindset helps agents push through edge cases rather than stopping early
+- **MiMo-V2-Flash: cheapest open-weight contender.** Xiaomi's 309B MoE (15B active) via OpenRouter scores 64.3% at $0.16/task (n=56) — the cheapest model with full-suite data. Surprisingly competitive on hard tasks (67.3%) where it outperforms several 120B models. System prompt helps standard (+2.1pp) but hurts hard (-8.4pp) — MiMo is strong enough to be constrained by rigid instructions
+- **Nemotron 120B system prompt: mixed results.** Adding the CRUSH.md system prompt to Nemotron actually *hurts* overall (63.7% prompted vs 68.5% unprompted) — standard improves (+3.5pp) but hard collapses (-13.2pp). The prescriptive "write code in src/index.ts" instructions prevent Nemotron from discovering its own approach on reasoning tasks
+- **Local models with CRUSH.md: free but far behind.** Qwen3-Coder 30B AWQ (54.6%) and Qwen 3.5 32B (49.1%) run entirely on a single RTX 5090 at $0/task. The CRUSH.md system prompt — a simple "read task, write code, verify, fix, repeat" loop — nearly tripled Qwen 3.5's score from ~20% to 49%. The prompt works as a universal upgrade for weaker models that would otherwise fail to iterate
 - **T2, T5, and T8 are the variance killers.** These three complex tasks (collab-server, task-queue, analytics-dashboard) account for virtually all inter-trial variance. Scores range from 15% to 78% across orchestrators
 - **Tango and Cash: dual-model orchestration works.** Claude Opus architects and reviews, Gemini CLI implements in agentic mode — 84.8% overall (#13) with 86.4% hard. The key was mandatory tests and a completion gate; without them, the same architecture scored only 82.7%
 - **Gemini CLI is the cost-efficiency king.** 80.9% overall at $0.14/task (n=60) — 10x cheaper than any Opus variant. Competitive on hard tasks (80.8%) with strong T18 beam-splitter (95.9%). Weaker on standard tasks requiring complex architecture (T8: 43%, T2: 55%)
@@ -1078,9 +1101,16 @@ The framework tests five hypotheses:
 | **CRUSH (Kimi K2.5)** | Crush + Kimi K2.5 via Synthetic API | Open-weight model via proxy; strong standard (72.9%) but weak on hard tasks |
 | **CRUSH (MiniMax M2.5)** | Crush + MiniMax M2.5 via Synthetic API | Open-weight model via proxy; decent standard (71.9%) but struggles on reasoning |
 | **CRUSH (Nemotron 120B)** | Crush + NVIDIA Nemotron 3 Super 120B via Synthetic API | 120B MoE model; 70.5% hard including 95.2% on T18 beam-splitter; expensive at $2.31/task |
-| **CRUSH (GLM-4.7-Flash)** | Crush + GLM-4.7-Flash via Synthetic API | Smaller GLM variant; weakest of the CRUSH models at 56.4% overall |
+| **CRUSH (GLM-4.7-Flash)** | Crush + GLM-4.7-Flash via Synthetic API | Smaller GLM variant; 55.9% overall |
+| **CRUSH (Qwen3-Coder 30B)** | Crush + Qwen3-Coder 30B AWQ (local vLLM) | Local inference on RTX 5090; CRUSH.md system prompt; 54.6% at $0/task |
+| **CRUSH (Qwen 3.5 32B)** | Crush + Qwen 3.5 32B (local vLLM) | Local inference on RTX 5090; CRUSH.md system prompt nearly tripled score from ~20% to 49.1% |
 | **[ExoMonad v2](https://github.com/tidepool-heavy-industries/exomonad)** | Haskell WASM + Rust runtime | Same as v1 but with guided TL behavior: selective delegation, completion gate, self-review; 88.2% hard at $0.72/task |
 | **[ExoMonad v1](https://github.com/tidepool-heavy-industries/exomonad)** | Haskell WASM + Rust runtime | Claude decomposes tasks, Gemini implements via MCP; tmux process isolation; strong hard (82.9%) but weak standard (66.8%) |
+| **[gstack](https://github.com/garrytan/gstack)** | Claude Code Opus + CLAUDE.md guidance | "Boil the Lake" completeness principle as workspace CLAUDE.md; no plugins, just philosophy |
+| **Hermes MiMo** | Hermes agent + MiMo-V2-Flash via OpenRouter | Xiaomi's 309B MoE (15B active); cheapest full-suite model at $0.16/task |
+| **Hermes MiMo (prompted)** | Hermes agent + MiMo-V2-Flash + system prompt | Same model with CRUSH-style system prompt; helps standard, hurts hard |
+| **CRUSH (Nemotron 120B prompted)** | Crush + Nemotron 120B + system prompt | System prompt ablation — helps standard but collapses hard (-13.2pp) |
+| **CRUSH (Devstral 24B)** | Crush + Devstral 24B (local vLLM) | Local inference on RTX 5090; tool calling via `--tool-call-parser mistral` |
 
 See [`docs/survey/orchestrator-survey.md`](docs/survey/orchestrator-survey.md) for the full gene matrix and per-tool analysis.
 
