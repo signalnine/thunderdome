@@ -6,7 +6,7 @@ A benchmarking framework that pits agentic coding orchestrators against standard
 
 ## Results
 
-Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 3,331 scored trials across 95 orchestrator variants (5,140 total including crash trials). All scoring is deterministic — no LLM judges, no rubric. Crash trials ($0 cost, or <15s for local/free-inference models) are excluded from averages. Leaderboard requires 8+ standard AND 8+ hard non-crash trials.
+Composite scores across 19 tasks — the original 11-task standard suite (T1-T11) plus 8 hard benchmarks (T12-T19) spanning algorithmic, correctness, ambiguity, and reasoning challenges. Data includes 3,459 scored trials across 97 orchestrator variants (5,273 total including crash trials). All scoring is deterministic — no LLM judges, no rubric. Crash trials ($0 cost, or <15s for local/free-inference models) are excluded from averages. Leaderboard requires 8+ standard AND 8+ hard non-crash trials.
 
 ### Leaderboard
 
@@ -50,12 +50,14 @@ Composite scores ranked by Overall (weighted average of Standard and Hard suite 
 | 34 | [Hermes MiMo](#contenders) | 61.3% | 67.3% | **64.3%** | 56 | $0.16 | MiMo-V2-Flash |
 | 35 | [CRUSH (Nemotron 120B prompted)](#contenders) | 70.1% | 57.3% | **63.7%** | 57 | $2.16 | Nemotron 120B |
 | 36 | [CRUSH (MiniMax M2.5)](#contenders) | 71.9% | 51.6% | **61.7%** | 66 | $0.47 | MiniMax M2.5 |
-| 37 | [CRUSH (GLM-4.7-Flash)](#contenders) | 63.6% | 48.2% | **55.9%** | 71 | $0.54 | GLM-4.7-Flash |
-| 38 | [CRUSH (Qwen3-Coder 30B)](#contenders) | 60.4% | 48.9% | **54.6%** | 57 | $0.00 | Qwen3-Coder 30B AWQ (local) |
-| 39 | [CRUSH (Qwen 3.5 32B)](#contenders) | 55.9% | 42.4% | **49.1%** | 59 | $0.00 | Qwen 3.5 32B (local) |
-| 40 | [CRUSH (Devstral 24B)](#contenders) | 55.3% | 34.1% | **44.7%** | 36 | $0.00 | Devstral 24B (local) |
-| 41 | [FL Supervisor Pro](#contenders) | 51.5% | 37.6% | **44.6%** | 200 | $0.15 | Gemini 2.5 Pro |
-| 42 | [FL Supervisor (Opus)](#contenders) | 50.0% | 37.6% | **43.8%** | 182 | $0.26 | Opus 4.6 |
+| 37 | [Aider (Qwen3-Coder 30B Q5_K_M)](#contenders) | 64.7% | 44.1% | **56.1%** | 55 | $0.00 | Qwen3-Coder 30B Q5_K_M (local) |
+| 38 | [CRUSH (GLM-4.7-Flash)](#contenders) | 63.6% | 48.2% | **55.9%** | 71 | $0.54 | GLM-4.7-Flash |
+| 39 | [CRUSH (Qwen3-Coder 30B Q5_K_M)](#contenders) | 60.7% | 46.7% | **54.8%** | 54 | $0.00 | Qwen3-Coder 30B Q5_K_M (local) |
+| 40 | [CRUSH (Qwen3-Coder 30B)](#contenders) | 60.4% | 48.9% | **54.6%** | 57 | $0.00 | Qwen3-Coder 30B AWQ (local) |
+| 41 | [CRUSH (Qwen 3.5 32B)](#contenders) | 55.9% | 42.4% | **49.1%** | 59 | $0.00 | Qwen 3.5 32B (local) |
+| 42 | [CRUSH (Devstral 24B)](#contenders) | 55.3% | 34.1% | **44.7%** | 36 | $0.00 | Devstral 24B (local) |
+| 43 | [FL Supervisor Pro](#contenders) | 51.5% | 37.6% | **44.6%** | 200 | $0.15 | Gemini 2.5 Pro |
+| 44 | [FL Supervisor (Opus)](#contenders) | 50.0% | 37.6% | **43.8%** | 182 | $0.26 | Opus 4.6 |
 
 ### Metacog Ablations
 
@@ -88,6 +90,8 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no othe
 |---|---:|---:|:---:|
 | CRUSH (Qwen 3.5 32B) | 49.1% | $0.00 | |
 | CRUSH (Qwen3-Coder 30B) | 54.6% | $0.00 | |
+| CRUSH (Qwen3-Coder 30B Q5_K_M) | 54.8% | $0.00 | |
+| Aider (Qwen3-Coder 30B Q5_K_M) | 56.1% | $0.00 | |
 | Cerebras CLI Ralph | 72.4% | $0.00 | |
 | **Amplifier (Gemini 2.5 Flash)** | **75.7%** | **$0.02** | **best <$0.14** |
 | **Gemini CLI** | **80.9%** | **$0.14** | **best <$0.75** |
@@ -223,6 +227,8 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 | CRUSH (Nemotron 120B prompted) | **57.3%** | 66.9% | 47.3% | 95.3% | 54.2% | 44.2% | 21.8% | 70.0% | 59.1% | 24 |
 | CRUSH (MiniMax M2.5) | **51.6%** | 29.6% | 63.3% | 100% | 50.6% | 32.1% | 28.2% | 57.4% | 51.4% | 25 |
 | CRUSH (Qwen3-Coder 30B) | **48.9%** | 36.7% | 37.2% | 99.4% | 42.6% | 48.2% | 39.3% | 53.5% | 34.4% | 24 |
+| CRUSH (Qwen3-Coder 30B Q5_K_M) | **46.7%** | 55.2% | 26.3% | 94.2% | 38.5% | 47.3% | 32.2% | 38.6% | 41.5% | 24 |
+| Aider (Qwen3-Coder 30B Q5_K_M) | **44.1%** | 45.7% | 24.6% | 97.1% | 66.2% | 30.0% | 21.5% | 42.9% | 25.0% | 24 |
 | CRUSH (GLM-4.7-Flash) | **48.2%** | 41.2% | 27.5% | 100% | 66.3% | 30.7% | 41.0% | 41.2% | 37.7% | 22 |
 | CRUSH (Qwen 3.5 32B) | **42.4%** | 49.6% | 33.8% | 99.4% | 48.1% | 19.8% | 20.0% | 48.5% | 20.0% | 24 |
 | FL Supervisor (Opus) | **37.6%** | 58.5% | 20.0% | 84.2% | 58.5% | 20.0% | 20.0% | 20.0% | 20.0% | 72 |
@@ -273,6 +279,7 @@ Per-task breakdown for the 8 harder benchmarks — algorithmic complexity (T12-T
 - **Third-party tools: BMAD thrives, GSD collapses with data.** [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) actually *improved* from 88.1% hard (n=8) to 89.9% (n=24) — now #3 overall at 87.3%. [GSD](https://github.com/gsd-build/get-shit-done) cratered from 88.1% hard (n=8) to 81.5% (n=24) — T13 dropped from 88.1% to 67.2%, T18 from 92.3% to 70.8%. Another dramatic n=1 correction
 - **Gas Town: multi-agent decomposition works for hard tasks, not standard.** The real multi-agent pipeline (Mayor decomposes → parallel Polecats implement → Refinery merges) scores 86.3% hard but only 79.8% standard (83.0% overall, n=61). Gas Station (the single-agent impostor) improved to 84.8% overall (n=55) with full hard-suite data — 89.0% standard but only 80.6% hard. The multi-agent pipeline's hard-task advantage (86.3% vs 80.6%) persists
 - **Qwen3-Coder bake-off: orchestrator matters more than model.** Three agents ran Qwen3-Coder-480B (via Synthetic API): CRUSH (57.4% overall), OpenCode (55.3%), and oh-my-pi with GLM-5 via z.ai (63.8%). oh-my-pi cracked hard tasks that crashed both CRUSH and OpenCode — beam-splitter (60%), circuit-debugger (64.3%), structural-merge (64.4%) — while CRUSH and OpenCode scored 20% (crashes) on all three. The orchestrator's tool-calling integration and error recovery matter more than the model at this capability tier. All n=1 — needs more data
+- **Quantization + context window: no signal at n=3.** Same Qwen3-Coder 30B model, same CRUSH harness — Q5_K_M (320k ctx, llama.cpp) scores 54.8% vs AWQ (114k ctx, vLLM) at 54.6%. The n=1 result showed +5.7pp but that was noise — at n=3 the delta is +0.2pp. Aider on the same Q5_K_M quant scores 56.1%, beating CRUSH on standard (+4pp) but losing on hard (-2.6pp). The harness matters more than the quant
 - **ExoMonad v2: guided TL behavior rescues multi-agent.** [ExoMonad v2](https://github.com/tidepool-heavy-industries/exomonad) adds selective delegation, completion gate, and self-review to the v1 architecture — 88.2% hard at $0.72/task (n=40), up from v1's 82.9%. Standard improved from 66.8% to 73.5% but remains weak — the "do it yourself for simple tasks" guidance helps but doesn't fully close the gap. The inverted standard/hard pattern persists across both versions, confirming multi-agent decomposition is a "hard task gene"
 
 ### The Gas Station Story
@@ -1179,6 +1186,8 @@ The framework tests five hypotheses:
 | **CRUSH (Nemotron 120B)** | Crush + NVIDIA Nemotron 3 Super 120B via Synthetic API | 120B MoE model; 70.5% hard including 95.2% on T18 beam-splitter; expensive at $2.31/task |
 | **CRUSH (GLM-4.7-Flash)** | Crush + GLM-4.7-Flash via Synthetic API | Smaller GLM variant; 55.9% overall |
 | **CRUSH (Qwen3-Coder 30B)** | Crush + Qwen3-Coder 30B AWQ (local vLLM) | Local inference on RTX 5090; CRUSH.md system prompt; 54.6% at $0/task |
+| **CRUSH (Qwen3-Coder 30B Q5_K_M)** | Crush + Qwen3-Coder 30B Q5_K_M (local llama.cpp) | Same model, higher-quality quant (Q5_K_M vs AWQ), 320k context (vs 114k); +0.2pp at n=3 — quant difference is noise |
+| **Aider (Qwen3-Coder 30B Q5_K_M)** | Aider + Qwen3-Coder 30B Q5_K_M (local llama.cpp) | Single-pass diff edits; beats CRUSH on standard (+4pp) but loses on hard (-2.6pp); 56.1% overall |
 | **CRUSH (Qwen 3.5 32B)** | Crush + Qwen 3.5 32B (local vLLM) | Local inference on RTX 5090; CRUSH.md system prompt nearly tripled score from ~20% to 49.1% |
 | **[ExoMonad v2](https://github.com/tidepool-heavy-industries/exomonad)** | Haskell WASM + Rust runtime | Same as v1 but with guided TL behavior: selective delegation, completion gate, self-review; 88.2% hard at $0.72/task |
 | **[ExoMonad v1](https://github.com/tidepool-heavy-industries/exomonad)** | Haskell WASM + Rust runtime | Claude decomposes tasks, Gemini implements via MCP; tmux process isolation; strong hard (82.9%) but weak standard (66.8%) |
