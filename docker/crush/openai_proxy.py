@@ -19,6 +19,10 @@ from urllib.error import HTTPError
 upstream_url = None
 log_path = None
 model_rewrites = {}  # local_name -> upstream_name
+max_tokens_clamp = 0  # 0 = no clamping
+auth_override = None  # if set, replace Authorization header with this key
+no_think = False  # if set, inject enable_thinking=false into chat requests
+reasoning_effort_override = None  # if set, inject reasoning_effort into chat requests
 
 
 class ProxyHandler(BaseHTTPRequestHandler):
@@ -37,6 +41,15 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 model = data.get("model", "")
                 if model in model_rewrites:
                     data["model"] = model_rewrites[model]
+                # Clamp max_tokens if configured
+                if max_tokens_clamp and "max_tokens" in data:
+                    if data["max_tokens"] > max_tokens_clamp:
+                        data["max_tokens"] = max_tokens_clamp
+                # Disable or limit thinking if configured
+                if no_think and is_chat:
+                    data["enable_thinking"] = False
+                if reasoning_effort_override and is_chat:
+                    data["reasoning_effort"] = reasoning_effort_override
                 # Check if streaming
                 is_streaming = data.get("stream", False)
                 # Inject stream_options.include_usage for streaming chat requests
@@ -53,6 +66,9 @@ class ProxyHandler(BaseHTTPRequestHandler):
         req = Request(url, data=body, method="POST")
         for key, val in self.headers.items():
             if key.lower() in ("host", "content-length", "transfer-encoding"):
+                continue
+            if key.lower() == "authorization" and auth_override:
+                req.add_header("Authorization", f"Bearer {auth_override}")
                 continue
             req.add_header(key, val)
         req.add_header("Content-Length", str(len(body)))
@@ -189,16 +205,32 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
 
 def main():
-    global upstream_url, log_path, model_rewrites
+    global upstream_url, log_path, model_rewrites, max_tokens_clamp, auth_override, no_think, reasoning_effort_override
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--log", required=True)
     parser.add_argument("--upstream", required=True, help="Upstream API base URL")
     parser.add_argument("--model-rewrite", action="append", default=[],
                         help="Rewrite model name: local=upstream (e.g. minimax-m25=MiniMaxAI/MiniMax-M2.5)")
+    parser.add_argument("--max-tokens", type=int, default=0,
+                        help="Clamp max_tokens to this value (0 = no clamping)")
+    parser.add_argument("--auth-key", default=None,
+                        help="Override Authorization header with this API key")
+    parser.add_argument("--no-think", action="store_true", default=False,
+                        help="Inject enable_thinking=false into chat requests")
+    parser.add_argument("--reasoning-effort", default=None, choices=["low", "medium", "high"],
+                        help="Inject reasoning_effort into chat requests")
     args = parser.parse_args()
     upstream_url = args.upstream.rstrip("/")
     log_path = args.log
+    max_tokens_clamp = args.max_tokens
+    auth_override = args.auth_key
+    no_think = args.no_think
+    reasoning_effort_override = args.reasoning_effort
+    if no_think:
+        print("  Thinking disabled (enable_thinking=false)", flush=True)
+    if reasoning_effort_override:
+        print(f"  Reasoning effort: {reasoning_effort_override}", flush=True)
     for rw in args.model_rewrite:
         if "=" in rw:
             local, upstream = rw.split("=", 1)

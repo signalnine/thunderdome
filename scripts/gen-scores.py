@@ -26,12 +26,20 @@ TASK_IDS = {
 }
 
 _NO_COST_TRACKING = {"aider", "aider-gemini", "cerebras-cli", "cerebras-cli-ralph", "swe-agent"}
+# Local inference models always have cost=0; use duration-based crash detection
+_LOCAL_INFERENCE = {o for o in (
+    "crush-qwen35-local", "crush-qwen3coder-local", "crush-qwen3coder-next-local",
+    "crush-devstral-local", "crush-gptoss-local",
+    "crush-qwen3coder-q5km", "crush-deckard-q4km", "crush-deckard-q4km-nothink",
+    "aider-qwen3coder-q5km", "aider-deckard-q4km",
+    "hermes-devstral-local", "hermes-qwen35-local", "hermes-gptoss-local",
+)}
 
 def is_crash(meta):
     orch = meta.get("orchestrator", "")
     cost = meta.get("total_cost_usd", None)
     dur = meta.get("duration_s", 0) or 0
-    if orch in _NO_COST_TRACKING:
+    if orch in _NO_COST_TRACKING or orch in _LOCAL_INFERENCE:
         return dur < 15
     return cost is None or cost == 0
 
