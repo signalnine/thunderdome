@@ -5,7 +5,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
     python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install litellm proxy (translates OpenAI API to ollama native API properly)
+RUN pip3 install --break-system-packages 'litellm[proxy]<1.82.8'
 
 # Copy pre-downloaded crush binary from host
 COPY bin/crush /usr/local/bin/crush
