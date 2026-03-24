@@ -5,7 +5,7 @@ RUN npm install -g @anthropic-ai/claude-code@2.1.39
 
 # Install Python and LiteLLM proxy
 RUN apt-get update && apt-get install -y python3-pip python3-venv && rm -rf /var/lib/apt/lists/*
-RUN pip3 install --break-system-packages 'litellm[proxy]<1.82.8'
+RUN pip3 install --break-system-packages 'litellm[proxy]<1.82.7'
 
 # Git config (Claude Code needs this for tool use)
 RUN git config --global user.name "Thunderdome" && \
