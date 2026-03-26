@@ -2,7 +2,7 @@
 
 Two agents enter, one agent leaves.
 
-Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic — automated tests and static analysis, no LLM judges. The dataset spans 3,583 scored trials across 101 orchestrator variants (5,411 total including crashes).
+Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic — automated tests and static analysis, no LLM judges. The dataset spans 3,786 scored trials across 108 orchestrator variants (5,799 total including crashes).
 
 ## Results
 
@@ -17,11 +17,13 @@ Third-party orchestrators and harnesses — things you can install and run today
 | 1 | [Conclave](https://github.com/signalnine/conclave) Review | **87.8%** | 87.4% | 88.2% | 139 | $1.86 | Opus 4.6 |
 | 2 | [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) | **87.3%** | 84.7% | 89.9% | 57 | $1.74 | Opus 4.6 |
 | 3 | [Conclave](https://github.com/signalnine/conclave) v6 (Sonnet) | **86.5%** | 85.8% | 87.2% | 84 | $1.11 | Sonnet 4.6 |
-| 4 | [Conclave](https://github.com/signalnine/conclave) v6 (Opus) | **85.6%** | 86.0% | 85.2% | 76 | $2.12 | Opus 4.6 |
-| 5 | [Gas Town](https://github.com/steveyegge/gastown) | **83.0%** | 79.8% | 86.3% | 61 | $2.38 | Opus 4.6 |
-| 6 | [GSD](https://github.com/gsd-build/get-shit-done) | **82.9%** | 84.4% | 81.5% | 57 | $1.13 | Opus 4.6 |
-| 7 | [ExoMonad v2](https://github.com/tidepool-heavy-industries/exomonad) | **80.9%** | 73.5% | 88.2% | 45 | $0.75 | Opus 4.6 + Gemini |
-| 8 | [ExoMonad v1](https://github.com/tidepool-heavy-industries/exomonad) | **74.8%** | 66.8% | 82.9% | 22 | $0.84 | Opus 4.6 + Gemini |
+| 4 | [Conclave](https://github.com/signalnine/conclave) v6 (Opus) | **85.8%** | 86.4% | 85.2% | 82 | $2.10 | Opus 4.6 |
+| 5 | [Conclave](https://github.com/signalnine/conclave) v7 Lite (Opus) | **85.6%** | 85.8% | 85.4% | 36 | $1.36 | Opus 4.6 |
+| 6 | [Gas Town](https://github.com/steveyegge/gastown) | **83.0%** | 79.8% | 86.3% | 61 | $2.38 | Opus 4.6 |
+| 7 | [GSD](https://github.com/gsd-build/get-shit-done) | **82.9%** | 84.4% | 81.5% | 57 | $1.13 | Opus 4.6 |
+| 8 | [Conclave](https://github.com/signalnine/conclave) v7 Lite (Sonnet) | **80.3%** | 84.1% | 76.4% | 31 | $0.71 | Sonnet 4.6 |
+| 9 | [ExoMonad v2](https://github.com/tidepool-heavy-industries/exomonad) | **80.9%** | 73.5% | 88.2% | 45 | $0.75 | Opus 4.6 + Gemini |
+| 10 | [ExoMonad v1](https://github.com/tidepool-heavy-industries/exomonad) | **74.8%** | 66.8% | 82.9% | 22 | $0.84 | Opus 4.6 + Gemini |
 
 ### Harness and Model Tests
 
@@ -40,8 +42,8 @@ Same harness with different models, or same model through different harnesses. T
 | CRUSH (Nemotron 120B prompted) | **63.7%** | 70.1% | 57.3% | 57 | $2.16 | Nemotron 120B |
 | CRUSH (MiniMax M2.5) | **61.7%** | 71.9% | 51.6% | 66 | $0.47 | MiniMax M2.5 |
 | CRUSH (GLM-4.7-Flash) | **55.9%** | 63.6% | 48.2% | 71 | $0.54 | GLM-4.7-Flash |
-| FL Supervisor Pro | **44.6%** | 51.5% | 37.6% | 200 | $0.15 | Gemini 2.5 Pro |
-| FL Supervisor (Opus) | **43.8%** | 50.0% | 37.6% | 182 | $0.26 | Opus 4.6 |
+| FL Supervisor Pro | **44.8%** | 52.0% | 37.6% | 277 | $0.16 | Gemini 2.5 Pro |
+| FL Supervisor (Opus) | **43.7%** | 49.7% | 37.6% | 242 | $0.25 | Opus 4.6 |
 
 ### Local Inference (RTX 5090, $0/task)
 
@@ -49,9 +51,9 @@ Models running on a single GPU via llama.cpp or vLLM. Free inference, but 30-40p
 
 | Orchestrator | Overall | Standard | Hard | Trials | Model |
 |---|---:|---:|---:|---:|---|
-| CRUSH (Qwen3-Coder 30B AWQ) | **57.5%** | 63.3% | 49.5% | 57 | Qwen3-Coder 30B AWQ (vLLM) |
-| Aider (Qwen3-Coder 30B Q5_K_M) | **56.1%** | 64.7% | 44.1% | 55 | Qwen3-Coder 30B Q5_K_M (llama.cpp) |
-| CRUSH (Qwen3-Coder 30B Q5_K_M) | **54.8%** | 60.7% | 46.7% | 54 | Qwen3-Coder 30B Q5_K_M (llama.cpp) |
+| CRUSH (Qwen3-Coder 30B AWQ) | **55.5%** | 61.8% | 49.2% | 114 | Qwen3-Coder 30B AWQ (vLLM) |
+| CRUSH (Qwen3-Coder 30B Q5_K_M) | **54.9%** | 62.4% | 47.4% | 75 | Qwen3-Coder 30B Q5_K_M (llama.cpp) |
+| Aider (Qwen3-Coder 30B Q5_K_M) | **53.7%** | 64.6% | 42.7% | 55 | Qwen3-Coder 30B Q5_K_M (llama.cpp) |
 | CRUSH (Qwen 3.5 32B) | **49.1%** | 55.9% | 42.4% | 59 | Qwen 3.5 32B (vLLM) |
 | CRUSH (Devstral 24B) | **44.7%** | 55.3% | 34.1% | 36 | Devstral 24B (vLLM) |
 
@@ -130,7 +132,7 @@ Same GLM-5 model, same weights, same API, three different harnesses:
 
 The spread is 24 points. CRUSH won because its loop is simple: read the task, write code, run tests, fix failures, repeat. GLM-5 follows that recipe reliably. Claude Code lost because its agentic protocol — multi-turn tool chains, subagent delegation, structured content blocks — demands capabilities GLM-5 cannot sustain across 50+ turns.
 
-Same Qwen3-Coder 30B model, same GPU, two quantizations: AWQ on vLLM (57.5%) beats Q5_K_M on llama.cpp (54.8%). The "lower quality" 4-bit quant wins because the inference engine matters more than bit depth.
+Same Qwen3-Coder 30B model, same GPU, two quantizations: AWQ on vLLM (55.5%) edges Q5_K_M on llama.cpp (54.9%). The inference engine matters as much as bit depth.
 
 Dense thinking models need fast harnesses. Deckard 40B at 50 tok/s timed out on every CRUSH task but scored 57.5% standard via Aider's single-pass approach in two minutes per task. For slow models, one good shot beats iterative retry.
 
@@ -162,7 +164,7 @@ Spending 2x more than Sonnet gstack buys 0.5pp. The sharpest knee is at $0.92 �
 
 ### Local models work but lag behind
 
-Qwen3-Coder 30B on a single RTX 5090 scores 55-58% at $0/task. The [CRUSH](https://github.com/nicepkg/crush) system prompt nearly tripled Qwen 3.5 32B's score from ~20% to 49%. Harness matters as much as model at this tier — the right prompt and loop structure extract far more from a mid-range model than raw capability alone.
+Qwen3-Coder 30B on a single RTX 5090 scores 54-56% at $0/task. The [CRUSH](https://github.com/nicepkg/crush) system prompt nearly tripled Qwen 3.5 32B's score from ~20% to 49%. Harness matters as much as model at this tier — the right prompt and loop structure extract far more from a mid-range model than raw capability alone.
 
 [Hermes](https://github.com/anthropics/hermes) + MiMo-V2-Flash (Xiaomi's 309B MoE, 15B active) scores 64.3% at $0.16/task — the cheapest model with full-suite data and competitive hard-task performance (67.3%).
 
@@ -173,19 +175,20 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | Orchestrator | Overall | $/task | Pareto |
 |---|---:|---:|:---:|
 | CRUSH (Qwen 3.5 32B) | 49.1% | $0.00 | |
-| CRUSH (Qwen3-Coder 30B Q5_K_M) | 54.8% | $0.00 | |
-| CRUSH (Qwen3-Coder 30B) | 57.5% | $0.00 | |
-| Aider (Qwen3-Coder 30B Q5_K_M) | 56.1% | $0.00 | |
+| Aider (Qwen3-Coder 30B Q5_K_M) | 53.7% | $0.00 | |
+| CRUSH (Qwen3-Coder 30B Q5_K_M) | 54.9% | $0.00 | |
+| CRUSH (Qwen3-Coder 30B) | 55.5% | $0.00 | |
 | Cerebras CLI Ralph | 72.4% | $0.00 | |
 | **Amplifier (Gemini 2.5 Flash)** | **75.7%** | **$0.02** | **best <$0.14** |
 | **Gemini CLI** | **80.9%** | **$0.14** | **best <$0.73** |
 | Hermes MiMo | 64.3% | $0.16 | |
-| FL Supervisor Pro | 44.6% | $0.15 | |
+| FL Supervisor Pro | 44.8% | $0.16 | |
 | Hermes MiMo (prompted) | 64.9% | $0.18 | |
-| FL Supervisor (Opus) | 43.8% | $0.26 | |
+| FL Supervisor (Opus) | 43.7% | $0.25 | |
 | CRUSH (Kimi K2.5) | 66.3% | $0.47 | |
 | CRUSH (MiniMax M2.5) | 61.7% | $0.47 | |
 | CRUSH (GLM-4.7-Flash) | 55.9% | $0.54 | |
+| Conclave v7 Lite (Sonnet) | 80.3% | $0.71 | |
 | **CRUSH (GLM5)** | **81.7%** | **$0.73** | **best <$0.92** |
 | ExoMonad v2 | 80.9% | $0.75 | |
 | ExoMonad v1 | 74.8% | $0.84 | |
@@ -205,11 +208,12 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | **Plans (Opus)** | **87.6%** | **$1.26** | **best <$1.86** |
 | gstack | 86.3% | $1.32 | |
 | Ralph Fresh (Opus) | 87.2% | $1.34 | |
+| Conclave v7 Lite (Opus) | 85.6% | $1.36 | |
 | Conclave Design | 84.0% | $1.45 | |
 | Stacked | 86.8% | $1.58 | |
 | BMAD-METHOD | 87.3% | $1.74 | |
 | **Conclave Review** | **87.8%** | **$1.86** | **best overall** |
-| Conclave v6 (Opus) | 85.6% | $2.12 | |
+| Conclave v6 (Opus) | 85.8% | $2.10 | |
 | CRUSH (Nemotron 120B prompted) | 63.7% | $2.16 | |
 | Gas Town | 83.0% | $2.38 | |
 | CRUSH (Nemotron 120B) | 68.5% | $2.50 | |
@@ -279,6 +283,8 @@ Two scoring paths based on task type:
 | Ralph Fresh (Opus) | Claude Code + fresh-context loop | Multi-iteration fresh context on same workspace |
 | Stacked | Metacog + review + worktree | Three top genes combined |
 | Sonnet Plans+gstack | Claude Code Sonnet + plans + gstack | Two high-ROI genes stacked |
+| [Conclave](https://github.com/signalnine/conclave) v7 Lite (Opus) | Conclave plugin + Opus 4.6 | v7 adaptive routing — double-review on state-heavy tasks |
+| [Conclave](https://github.com/signalnine/conclave) v7 Lite (Sonnet) | Conclave plugin + Sonnet 4.6 | Same v7 routing on Sonnet; cheapest Conclave at $0.71 |
 | [Conclave](https://github.com/signalnine/conclave) v6 (Sonnet) | Conclave plugin + Sonnet 4.6 | Task classifier + completion gate; consensus opt-in |
 | Agent Teams | Claude Code interactive + teams | Experimental parallel teammates |
 | [gstack](https://github.com/garrytan/gstack) | Claude Code Opus + gstack CLAUDE.md | "Boil the Lake" on Opus |
@@ -308,7 +314,7 @@ Two scoring paths based on task type:
 | CRUSH (Qwen3-Coder 30B) | CRUSH CLI + Qwen3-Coder 30B AWQ (local vLLM) | Local RTX 5090 inference, $0/task |
 | Aider (Qwen3-Coder 30B Q5_K_M) | Aider + Qwen3-Coder 30B (local llama.cpp) | Single-pass diff edits on local GPU |
 | CRUSH (GLM-4.7-Flash) | CRUSH CLI + GLM-4.7-Flash | Smaller GLM variant |
-| CRUSH (Qwen3-Coder 30B Q5_K_M) | CRUSH CLI + Qwen3-Coder 30B (local llama.cpp) | Higher-quality quant, loses to AWQ by 2.7pp |
+| CRUSH (Qwen3-Coder 30B Q5_K_M) | CRUSH CLI + Qwen3-Coder 30B (local llama.cpp) | Higher-quality quant on llama.cpp |
 | CRUSH (Qwen 3.5 32B) | CRUSH CLI + Qwen 3.5 32B (local vLLM) | CRUSH system prompt nearly tripled score from ~20% |
 | CRUSH (Devstral 24B) | CRUSH CLI + Devstral 24B (local vLLM) | Local inference with Mistral tool calling |
 | FL Supervisor Pro | Gemini 2.5 Pro supervisor | Multi-agent supervisor pattern |
