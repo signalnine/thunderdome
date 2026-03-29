@@ -2,7 +2,7 @@
 
 Two agents enter, one agent leaves.
 
-Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic — automated tests and static analysis, no LLM judges. The dataset spans 3,786 scored trials across 108 orchestrator variants (5,799 total including crashes).
+Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic — automated tests and static analysis, no LLM judges. The dataset spans 4,231 scored trials across 120 orchestrator variants (6,473 total including crashes).
 
 ## Results
 
@@ -34,6 +34,8 @@ Same harness with different models, or same model through different harnesses. T
 | [CRUSH](https://github.com/nicepkg/crush) (GLM5) | **81.7%** | 89.1% | 74.3% | 30 | $0.73 | GLM-5 |
 | Gemini CLI | **80.9%** | 80.9% | 80.8% | 60 | $0.14 | Gemini 2.5 Pro |
 | [Amplifier](https://github.com/microsoft/amplifier) (Gemini 2.5 Flash) | **75.7%** | 78.7% | 72.7% | 17 | $0.02 | Gemini 2.5 Flash |
+| CRUSH (GLM-5-Turbo) | **73.7%** | 76.5% | 70.9% | 38 | $2.27 | GLM-5-Turbo |
+| CRUSH (MiniMax M2.7) | **72.7%** | 75.1% | 70.4% | 39 | $0.39 | MiniMax M2.7 |
 | Cerebras CLI Ralph | **72.4%** | 69.9% | 74.9% | 25 | - | gpt-oss-120b |
 | CRUSH (Nemotron 120B) | **68.5%** | 66.6% | 70.5% | 67 | $2.50 | Nemotron 120B |
 | CRUSH (Kimi K2.5) | **66.3%** | 72.9% | 59.8% | 64 | $0.47 | Kimi K2.5 |
@@ -185,6 +187,7 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | FL Supervisor Pro | 44.8% | $0.16 | |
 | Hermes MiMo (prompted) | 64.9% | $0.18 | |
 | FL Supervisor (Opus) | 43.7% | $0.25 | |
+| CRUSH (MiniMax M2.7) | 72.7% | $0.39 | |
 | CRUSH (Kimi K2.5) | 66.3% | $0.47 | |
 | CRUSH (MiniMax M2.5) | 61.7% | $0.47 | |
 | CRUSH (GLM-4.7-Flash) | 55.9% | $0.54 | |
@@ -215,6 +218,7 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | **Conclave Review** | **87.8%** | **$1.86** | **best overall** |
 | Conclave v6 (Opus) | 85.8% | $2.10 | |
 | CRUSH (Nemotron 120B prompted) | 63.7% | $2.16 | |
+| CRUSH (GLM-5-Turbo) | 73.7% | $2.27 | |
 | Gas Town | 83.0% | $2.38 | |
 | CRUSH (Nemotron 120B) | 68.5% | $2.50 | |
 | Agent Teams | 86.3% | $3.29 | |
@@ -307,6 +311,8 @@ Two scoring paths based on task type:
 | [Amplifier](https://github.com/microsoft/amplifier) (Gemini 2.5 Flash) | Microsoft Amplifier + Gemini Flash | Micro-kernel platform, cheapest usable orchestrator |
 | [ExoMonad v1](https://github.com/tidepool-heavy-industries/exomonad) | Haskell WASM + Rust runtime | Claude decomposes, Gemini implements via MCP |
 | Cerebras CLI Ralph | OpenCode fork + gpt-oss-120b | Full agentic tool use via Cerebras inference |
+| CRUSH (GLM-5-Turbo) | CRUSH CLI + GLM-5-Turbo | Agent-optimized GLM-5 variant, 3x cost of GLM-5 |
+| CRUSH (MiniMax M2.7) | CRUSH CLI + MiniMax M2.7 (via OpenRouter) | +11pp over M2.5 at lower cost ($0.39 vs $0.47) |
 | CRUSH (Nemotron 120B) | CRUSH CLI + Nemotron 3 Super 120B | 120B MoE via Synthetic API |
 | CRUSH (Kimi K2.5) | CRUSH CLI + Kimi K2.5 | Open-weight model via proxy |
 | [Hermes](https://github.com/anthropics/hermes) MiMo | Hermes agent + MiMo-V2-Flash | Cheapest full-suite model at $0.16/task |
