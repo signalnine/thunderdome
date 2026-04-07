@@ -125,7 +125,11 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 							fmt.Printf("  WARNING: validation failed for %s trial %d: %v\n", task.Category, trial, err)
 							fmt.Printf("  %s (duration: %ds)\n", meta.ExitReason, meta.DurationS)
 						} else {
-							fmt.Printf("  %s (duration: %ds, score: %.2f)\n", meta.ExitReason, meta.DurationS, scored.CompositeScore)
+							noContrib := ""
+							if scored.NoAgentContribution {
+								noContrib = " [NO AGENT CONTRIBUTION]"
+							}
+							fmt.Printf("  %s (duration: %ds, score: %.2f)%s\n", meta.ExitReason, meta.DurationS, scored.CompositeScore, noContrib)
 						}
 						return nil
 					})
@@ -162,7 +166,11 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 						fmt.Printf("  WARNING: validation failed for %s trial %d: %v\n", task.Category, trial, err)
 						fmt.Printf("  %s (duration: %ds)\n", meta.ExitReason, meta.DurationS)
 					} else {
-						fmt.Printf("  %s (duration: %ds, score: %.2f)\n", meta.ExitReason, meta.DurationS, scored.CompositeScore)
+						noContrib := ""
+						if scored.NoAgentContribution {
+							noContrib = " [NO AGENT CONTRIBUTION]"
+						}
+						fmt.Printf("  %s (duration: %ds, score: %.2f)%s\n", meta.ExitReason, meta.DurationS, scored.CompositeScore, noContrib)
 					}
 				}
 			}

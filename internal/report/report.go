@@ -16,17 +16,19 @@ import (
 )
 
 type OrchestratorSummary struct {
-	Name            string  `json:"name"`
-	Trials          int     `json:"trials"`
-	PassRate        float64 `json:"pass_rate"`
-	MeanScore       float64 `json:"mean_score"`
-	MeanTokens      float64 `json:"mean_tokens"`
-	MeanCostUSD     float64 `json:"mean_cost_usd"`
-	HasGreenfield   bool    `json:"has_greenfield,omitempty"`
-	MeanHiddenTests float64 `json:"mean_hidden_tests,omitempty"`
-	MeanAgentTests  float64 `json:"mean_agent_tests,omitempty"`
-	MeanCoverage    float64 `json:"mean_coverage,omitempty"`
-	MeanCodeMetrics float64 `json:"mean_code_metrics,omitempty"`
+	Name                 string  `json:"name"`
+	Trials               int     `json:"trials"`
+	NoContributionTrials int     `json:"no_contribution_trials,omitempty"`
+	PassRate             float64 `json:"pass_rate"`
+	MeanScore            float64 `json:"mean_score"`
+	MeanScoreFiltered    float64 `json:"mean_score_filtered,omitempty"`
+	MeanTokens           float64 `json:"mean_tokens"`
+	MeanCostUSD          float64 `json:"mean_cost_usd"`
+	HasGreenfield        bool    `json:"has_greenfield,omitempty"`
+	MeanHiddenTests      float64 `json:"mean_hidden_tests,omitempty"`
+	MeanAgentTests       float64 `json:"mean_agent_tests,omitempty"`
+	MeanCoverage         float64 `json:"mean_coverage,omitempty"`
+	MeanCodeMetrics      float64 `json:"mean_code_metrics,omitempty"`
 }
 
 // Generate reads trial results and produces a summary report.
@@ -72,16 +74,19 @@ func collectMetas(runDir string) ([]*result.TrialMeta, error) {
 
 func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 	type accum struct {
-		count        int
-		passed       int
-		score        float64
-		tokens       float64
-		cost         float64
-		hiddenTests  float64
-		agentTests   float64
-		coverage     float64
-		codeMetrics  float64
-		hasGreenfield bool
+		count            int
+		passed           int
+		noContribution   int
+		score            float64
+		scoreFiltered    float64
+		countFiltered    int
+		tokens           float64
+		cost             float64
+		hiddenTests      float64
+		agentTests       float64
+		coverage         float64
+		codeMetrics      float64
+		hasGreenfield    bool
 	}
 	byOrch := map[string]*accum{}
 
@@ -98,6 +103,12 @@ func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 		if m.ExitReason == "completed" {
 			a.passed++
 		}
+		if m.NoAgentContribution {
+			a.noContribution++
+		} else {
+			a.scoreFiltered += m.CompositeScore
+			a.countFiltered++
+		}
 		// Track greenfield-specific scores
 		if m.Scores.HiddenTests > 0 || m.Scores.AgentTests > 0 || m.Scores.CodeMetrics > 0 {
 			a.hasGreenfield = true
@@ -111,12 +122,16 @@ func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 	var summaries []OrchestratorSummary
 	for name, a := range byOrch {
 		s := OrchestratorSummary{
-			Name:        name,
-			Trials:      a.count,
-			PassRate:    float64(a.passed) / float64(a.count),
-			MeanScore:   a.score / float64(a.count),
-			MeanTokens:  a.tokens / float64(a.count),
-			MeanCostUSD: a.cost / float64(a.count),
+			Name:                 name,
+			Trials:               a.count,
+			NoContributionTrials: a.noContribution,
+			PassRate:             float64(a.passed) / float64(a.count),
+			MeanScore:            a.score / float64(a.count),
+			MeanTokens:           a.tokens / float64(a.count),
+			MeanCostUSD:          a.cost / float64(a.count),
+		}
+		if a.countFiltered > 0 {
+			s.MeanScoreFiltered = a.scoreFiltered / float64(a.countFiltered)
 		}
 		if a.hasGreenfield {
 			s.HasGreenfield = true
@@ -165,6 +180,31 @@ func writeTable(summaries []OrchestratorSummary, w io.Writer) error {
 	}
 	if err := tw.Flush(); err != nil {
 		return err
+	}
+
+	// Print no-contribution warning if any orchestrator had flagged trials
+	hasNoContrib := false
+	for _, s := range summaries {
+		if s.NoContributionTrials > 0 {
+			hasNoContrib = true
+			break
+		}
+	}
+	if hasNoContrib {
+		fmt.Fprintln(w)
+		tw2 := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(tw2, "NO-CONTRIBUTION TRIALS (agent crashed/failed before doing work)")
+		fmt.Fprintln(tw2, "ORCHESTRATOR\tFLAGGED\tTOTAL\tMEAN SCORE (filtered)")
+		fmt.Fprintln(tw2, strings.Repeat("-", 80))
+		for _, s := range summaries {
+			if s.NoContributionTrials > 0 {
+				fmt.Fprintf(tw2, "%s\t%d\t%d\t%.3f\n",
+					s.Name, s.NoContributionTrials, s.Trials, s.MeanScoreFiltered)
+			}
+		}
+		if err := tw2.Flush(); err != nil {
+			return err
+		}
 	}
 
 	// Print greenfield breakdown if any orchestrator has greenfield results

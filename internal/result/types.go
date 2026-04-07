@@ -1,17 +1,19 @@
 package result
 
 type TrialMeta struct {
-	Orchestrator   string             `json:"orchestrator"`
-	Task           string             `json:"task"`
-	Trial          int                `json:"trial"`
-	DurationS      int                `json:"duration_s"`
-	ExitCode       int                `json:"exit_code"`
-	ExitReason     string             `json:"exit_reason"`
-	Scores         Scores             `json:"scores"`
-	CompositeScore float64            `json:"composite_score"`
-	TotalTokens    int                `json:"total_tokens"`
-	TotalCostUSD   float64            `json:"total_cost_usd"`
-	BudgetExceeded bool               `json:"budget_exceeded"`
+	Orchestrator        string  `json:"orchestrator"`
+	Task                string  `json:"task"`
+	Trial               int     `json:"trial"`
+	DurationS           int     `json:"duration_s"`
+	WallClockMS         int64   `json:"wall_clock_ms"`
+	ExitCode            int     `json:"exit_code"`
+	ExitReason          string  `json:"exit_reason"`
+	NoAgentContribution bool    `json:"no_agent_contribution,omitempty"`
+	Scores              Scores  `json:"scores"`
+	CompositeScore      float64 `json:"composite_score"`
+	TotalTokens         int     `json:"total_tokens"`
+	TotalCostUSD        float64 `json:"total_cost_usd"`
+	BudgetExceeded      bool    `json:"budget_exceeded"`
 }
 
 type Scores struct {

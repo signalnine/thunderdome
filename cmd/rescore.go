@@ -12,6 +12,7 @@ import (
 	"github.com/signalnine/thunderdome/internal/config"
 	"github.com/signalnine/thunderdome/internal/gitops"
 	"github.com/signalnine/thunderdome/internal/result"
+	"github.com/signalnine/thunderdome/internal/runner"
 	"github.com/signalnine/thunderdome/internal/validation"
 	"github.com/spf13/cobra"
 )
@@ -186,6 +187,9 @@ func rescoreTestsOnly(ctx context.Context, trialDir string, task *config.Task) e
 		meta.CompositeScore = validation.CompositeScore(meta.Scores, task.Weights)
 	}
 
+	// Recompute no-contribution flag for existing trials
+	meta.NoAgentContribution = runner.DetectNoAgentContribution(meta.ExitReason, meta.DurationS, meta.TotalTokens)
+
 	return result.WriteTrialMeta(trialDir, meta)
 }
 
@@ -268,6 +272,9 @@ func rescoreFull(ctx context.Context, trialDir string, task *config.Task) error 
 		}
 		meta.CompositeScore = validation.CompositeScore(meta.Scores, task.Weights)
 	}
+
+	// Recompute no-contribution flag for existing trials
+	meta.NoAgentContribution = runner.DetectNoAgentContribution(meta.ExitReason, meta.DurationS, meta.TotalTokens)
 
 	return result.WriteTrialMeta(trialDir, meta)
 }

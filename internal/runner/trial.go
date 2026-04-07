@@ -46,6 +46,22 @@ func ExitReasonFromCode(code int, timedOut bool) string {
 	}
 }
 
+// DetectNoAgentContribution returns true when the agent didn't meaningfully
+// contribute to the workspace. This happens when the adapter crashes
+// immediately (auth failure, startup error) -- the workspace still has
+// starter code that gets scored, inflating means.
+//
+// Detection: zero tokens OR (non-success exit in under 30s).
+func DetectNoAgentContribution(exitReason string, durationS int, totalTokens int) bool {
+	if totalTokens == 0 {
+		return true
+	}
+	if exitReason != "completed" && exitReason != "timeout" && durationS < 30 {
+		return true
+	}
+	return false
+}
+
 func BuildAdapterCommand(orch *config.Orchestrator, taskDir, taskDesc, proxyURL string) []string {
 	return []string{"bash", "/adapter.sh"}
 }
@@ -173,16 +189,23 @@ func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
 		}
 	}
 
+	exitReason := ExitReasonFromCode(containerResult.ExitCode, containerResult.TimedOut)
+	durationS := int(containerResult.Duration.Seconds())
+	wallClockMS := containerResult.Duration.Milliseconds()
+
 	meta := &result.TrialMeta{
 		Orchestrator: opts.Orchestrator.Name,
 		Task:         TaskName(opts.Task),
 		Trial:        opts.TrialNum,
-		DurationS:    int(containerResult.Duration.Seconds()),
+		DurationS:    durationS,
+		WallClockMS:  wallClockMS,
 		ExitCode:     containerResult.ExitCode,
-		ExitReason:   ExitReasonFromCode(containerResult.ExitCode, containerResult.TimedOut),
+		ExitReason:   exitReason,
 		TotalTokens:  totalTokens,
 		TotalCostUSD: totalCostUSD,
 	}
+
+	meta.NoAgentContribution = DetectNoAgentContribution(exitReason, durationS, totalTokens)
 	if err := result.WriteTrialMeta(trialDir, meta); err != nil {
 		return nil, fmt.Errorf("writing meta: %w", err)
 	}
