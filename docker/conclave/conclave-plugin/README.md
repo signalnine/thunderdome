@@ -1,6 +1,6 @@
 # Conclave
 
-Conclave is a multi-agent consensus development system for coding agents. It orchestrates a council of AI reviewers (Claude, Gemini, and Codex) that independently analyze your work, synthesize their perspectives, and produce prioritized recommendations - all built on top of composable "skills" that activate automatically at the right moments.
+Conclave is a structured development methodology plugin for coding agents. It provides composable "skills" — TDD, design brainstorming, verification, and code review — that activate automatically based on task type and guide the agent through disciplined workflows. Benchmark data from 796 isolated trials shows these skills improve code quality by 10-12 points over unguided development. Optionally includes multi-agent consensus (Claude, Gemini, Codex) for higher-stakes decisions.
 
 > Forked from [obra/superpowers](https://github.com/obra/superpowers) under MIT license
 
@@ -8,15 +8,15 @@ Conclave is a multi-agent consensus development system for coding agents. It orc
 
 ## How It Works
 
-It starts from the moment you fire up your coding agent. Before any code gets written, the system activates a brainstorming skill that teases out what you're actually trying to build through structured questions. You can answer interactively, or switch to **Consensus Autopilot** mode where the council of AI agents debates each design decision while you watch and intervene only when needed.
+It starts from the moment you fire up your coding agent. A task classifier automatically selects the right methodology: brainstorming for new features, TDD for implementation, verification before completion. Before any code gets written, the brainstorming skill teases out what you're actually trying to build through structured questions. You can answer interactively, or switch to **Autopilot** mode where the agent explores design decisions autonomously while you watch and intervene only when needed.
 
-Once the design is validated (by multi-agent consensus), the system generates an implementation plan broken into bite-sized tasks. Each task gets dispatched to a fresh subagent with two-stage review: spec compliance first, then code quality. At every checkpoint, the council weighs in - architecture validation on plans, per-task review during execution, root cause validation during debugging, and a final multi-agent check before you merge.
+Once the design is set, the system generates an implementation plan broken into bite-sized tasks. Each task follows TDD discipline: write failing test, implement minimal code, verify, commit. A completion gate ensures fresh verification (test + build + lint) and diff review before any work is declared done.
 
-The result: your coding agent works autonomously for hours at a time, with multiple AI perspectives catching issues that any single reviewer would miss. And because the skills trigger automatically, you don't need to do anything special.
+The result: your coding agent works autonomously for hours at a time, following proven methodology that catches issues before they compound. And because the skills trigger automatically, you don't need to do anything special.
 
-## Multi-Agent Consensus
+## Multi-Agent Consensus (Optional)
 
-Consensus review triggers automatically at key workflow points:
+Consensus review is available as an opt-in enhancement at key workflow points:
 
 ```
 Brainstorming -> Writing Plans -> Execution -> Debugging -> Verification
@@ -135,6 +135,27 @@ Fetch and follow instructions from https://raw.githubusercontent.com/signalnine/
 7. **finishing-a-development-branch** - Activates when tasks complete. Verifies tests, presents options (merge/PR/keep/discard), cleans up worktree.
 
 **The agent checks for relevant skills before any task.** Mandatory workflows, not suggestions.
+
+## Benchmark Results
+
+796 isolated Docker trials across 34 orchestrator variants on 11 standardized coding tasks. All scoring is deterministic (tests, build/lint, coverage, code metrics) — no LLM judges. Full methodology: [docs/plans/2026-02-26-thunderdome-findings-and-roadmap.md](docs/plans/2026-02-26-thunderdome-findings-and-roadmap.md)
+
+**Key findings:**
+
+| Methodology | Score | Delta vs Vanilla | Cost/Task | Model |
+|-------------|------:|------:|------:|-------|
+| TDD | **98.2%** | +12.3pp | $1.08 | Sonnet 4.6 |
+| Brainstorming | 97.4% | +11.5pp | $1.43 | Opus 4.6 |
+| Verification | 97.3% | +11.4pp | $0.94 | Opus 4.6 |
+| Code Review | 97.0% | +11.1pp | $2.01 | Opus 4.6 |
+| Self-Review (system prompt only) | 96.8% | +10.9pp | $1.33 | Opus 4.6 |
+| Vanilla Claude Code | 85.9% | — | $0.27 | Opus 4.6 |
+
+**Takeaways:**
+- **Structured methodology is the engine.** All discipline genes cluster within 1.4 points of each other. The gap between any discipline and no discipline is massive (+10-12pp).
+- **TDD is the single most effective methodology.** Sonnet + TDD beats every Opus variant at half the cost.
+- **Model capability is secondary.** With strong methodology, Sonnet matches or beats Opus. Structure matters more than model capability.
+- **Multi-agent consensus is optional.** The skill text drives all the value; consensus adds noise on benchmarks. It remains available for users who want multi-perspective validation on high-stakes decisions.
 
 ## What's Inside
 

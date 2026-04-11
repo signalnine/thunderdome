@@ -5,9 +5,9 @@ description: Use when completing tasks, implementing major features, or before m
 
 # Requesting Code Review
 
-Get parallel reviews from Claude, Gemini, and Codex to catch issues before they cascade.
+Get a structured code review to catch issues before they cascade.
 
-**Core principle:** Multiple independent reviews = maximum coverage.
+**Core principle:** Fresh eyes on code = maximum coverage.
 
 ## When to Request Review
 
@@ -21,7 +21,25 @@ Get parallel reviews from Claude, Gemini, and Codex to catch issues before they 
 - Before refactoring (baseline check)
 - After fixing complex bug
 
-## How to Request Multi-Reviewer Consensus
+## How to Request Review
+
+### Default: Subagent Review
+
+Dispatch a `conclave:code-reviewer` subagent via the Task tool to review your changes:
+
+1. Commit your work: `git add -A && git commit -m 'implementation'`
+2. Get the diff:
+   ```bash
+   BASE_SHA=$(git merge-base origin/main HEAD)
+   git diff $BASE_SHA..HEAD
+   ```
+3. Dispatch the `conclave:code-reviewer` subagent via Task tool with the diff and description of what was implemented
+4. Address HIGH and MEDIUM priority findings
+5. Re-verify after fixes
+
+### Optional: Multi-Agent Consensus Review
+
+For higher-stakes reviews (before merge to main, critical systems), use multi-agent consensus. Requires API keys for Gemini and/or Codex in addition to Claude.
 
 **1. Get git SHAs:**
 ```bash
@@ -29,13 +47,7 @@ BASE_SHA=$(git rev-parse HEAD~1)  # or origin/main
 HEAD_SHA=$(git rev-parse HEAD)
 ```
 
-**2. Identify plan file:**
-```bash
-PLAN_FILE="docs/plans/2025-12-13-feature-name.md"  # or "-" if no plan
-DESCRIPTION="Brief description of what was implemented"
-```
-
-**3. Run multi-agent consensus:**
+**2. Run multi-agent consensus:**
 
 ```bash
 conclave consensus --mode=code-review \
@@ -47,74 +59,50 @@ conclave consensus --mode=code-review \
 
 The framework uses a two-stage process:
 - **Stage 1:** Launches Claude, Gemini, and Codex reviewers in parallel for independent analysis
-- **Stage 2:** Chairman agent (Claude → Gemini → Codex fallback) synthesizes consensus
+- **Stage 2:** Chairman agent synthesizes consensus
 - Groups issues by agreement level:
   - **High Priority** - Multiple reviewers agree
   - **Medium Priority** - Single reviewer, significant issue
   - **Consider** - Suggestions from any reviewer
-- Gracefully degrades if reviewers are unavailable
 
-**4. Act on consensus feedback:**
+**3. Act on consensus feedback:**
 - **All reviewers agree** → Fix immediately before proceeding
 - **Majority flagged** → Fix unless you have strong reasoning otherwise
 - **Single reviewer** → Consider, but use judgment
 - Push back if feedback is wrong (with technical reasoning)
 
-## Simplified Single-Reviewer Mode
+## Second-Pass Review (State-Heavy Tasks Only)
 
-If you need a quick review, use Claude-only mode:
+After addressing first-review findings, run a second review with this focus prompt.
 
-Dispatch `conclave:code-reviewer` subagent directly with Task tool.
+**Important:** This review must be independent. Assume the first review's findings
+may NOT have been fully addressed. Do not rubber-stamp — verify from scratch.
 
-This skips Gemini/Codex and gives you just Claude's review.
+Use this prompt for the second-pass `conclave:code-reviewer` subagent:
 
-## Example Multi-Review Workflow
+> Review this implementation with fresh eyes, specifically for:
+> 1. State consistency: Can any operation leave the system in an invalid state?
+> 2. Constraint propagation: When one value changes, are all dependent values updated?
+> 3. Race conditions: Can concurrent operations produce inconsistent results?
+> 4. Edge cases: What happens at boundaries (empty, full, overflow, underflow)?
+> 5. Performance invariants: Are state update paths O(n) or better? Any hidden O(n²)?
+> Assume nothing from prior reviews. Ignore code style and naming — focus only on correctness.
+> Verify each property by tracing through the code, not by checking review comments.
 
-```
-[Just completed Task 2: Add verification function]
-
-You: Let me request consensus code review.
-
-# Get SHAs
-BASE_SHA=a7981ec
-HEAD_SHA=3df7661
-PLAN_FILE="docs/plans/deployment-plan.md"
-DESCRIPTION="Added verifyIndex() and repairIndex() with 4 issue types"
-
-# Run multi-agent consensus
-[Invoke conclave consensus]
-
-# Framework produces consensus report:
-## High Priority - All Reviewers Agree
-- [Critical] Missing progress indicators
-  - Claude: "No user feedback during long operations"
-  - Gemini: "Progress reporting missing for iteration"
-  - Codex: "Add progress callbacks"
-
-## Medium Priority - Majority Flagged (2/3)
-- [Important] Magic number in code
-  - Claude: "100 should be a named constant"
-  - Codex: "Extract BATCH_SIZE constant"
-
-## Summary
-- Critical: 1 (consensus: 1)
-- Important: 1 (consensus: 0, majority: 1)
-
-You: [Fix progress indicators immediately]
-You: [Fix magic number]
-[Continue to Task 3]
-```
+After the second review:
+- Address HIGH and MEDIUM priority findings
+- Re-verify after fixes
+- Log: "State-heavy: double-review completed"
 
 ## Integration with Workflows
 
 **Subagent-Driven Development:**
 - Review after EACH task
-- All three reviewers for thoroughness
-- Fix consensus issues before next task
+- Fix issues before next task
 
 **Executing Plans:**
 - Review after each batch (3 tasks)
-- Get consensus feedback, apply, continue
+- Get feedback, apply, continue
 
 **Ad-Hoc Development:**
 - Review before merge
@@ -124,40 +112,16 @@ You: [Fix magic number]
 
 **Never:**
 - Skip review because "it's simple"
-- Ignore Critical issues from consensus
-- Proceed with unfixed consensus issues
-- Argue with valid technical feedback from multiple reviewers
+- Ignore Critical issues
+- Proceed with unfixed high-priority issues
+- Argue with valid technical feedback
 
-**If reviewers wrong:**
+**If reviewer is wrong:**
 - Push back with technical reasoning
 - Show code/tests that prove it works
 - Request clarification
 
-**If reviewers disagree:**
-- Consensus issues (all agree) take priority
-- Investigate majority-flagged issues
-- Use judgment on single-reviewer issues
-
-## Troubleshooting
-
-**Gemini not available:**
-- Script will mark Gemini as "✗ (not available)"
-- Continue with Claude + Codex
-- Consensus threshold adjusts (2/2 instead of 3/3)
-
-**Codex MCP fails:**
-- Mark Codex as "✗ (error)"
-- Continue with Claude + Gemini
-- Consensus threshold adjusts
-
-**Only Claude succeeds:**
-- Falls back to single-reviewer mode
-- Still get thorough review from Claude
-- Consider why other reviewers failed
-
 ## Files
 
 - `conclave consensus` - Multi-agent consensus framework (code-review mode)
-- `code-reviewer.md` - Claude agent definition (legacy, for single-reviewer mode)
-- `multi-review.sh` - Legacy script (deprecated, use `conclave consensus` instead)
-- `README.md` - Architecture documentation
+- `code-reviewer.md` - Claude agent definition (for subagent review)

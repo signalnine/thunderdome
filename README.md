@@ -47,8 +47,8 @@ Same harness with different models, or same model through different harnesses. T
 | CRUSH (Nemotron 120B prompted) | **63.7%** | 70.1% | 57.3% | 57 | $2.16 | Nemotron 120B |
 | CRUSH (MiniMax M2.5) | **61.7%** | 71.9% | 51.6% | 66 | $0.47 | MiniMax M2.5 |
 | CRUSH (GLM-4.7-Flash) | **55.9%** | 63.6% | 48.2% | 71 | $0.54 | GLM-4.7-Flash |
-| FL Supervisor Pro | **44.8%** | 52.0% | 37.6% | 341 | $0.16 | Gemini 2.5 Pro |
-| FL Supervisor (Opus) | **43.8%** | 50.0% | 37.6% | 285 | $0.25 | Opus 4.6 |
+| FL Supervisor Pro | **46.3%** | 59.2% | 33.4% | 666 | $0.16 | Gemini 2.5 Pro |
+| FL Supervisor (Opus) | **45.0%** | 57.8% | 32.2% | 669 | $0.26 | Opus 4.6 |
 
 ### Local Inference (RTX 5090, $0/task)
 
@@ -56,6 +56,8 @@ Models running on a single GPU via llama.cpp or vLLM. Free inference, but 30-40p
 
 | Orchestrator | Overall | Standard | Hard | Trials | Model |
 |---|---:|---:|---:|---:|---|
+| CRUSH Meditation (Qwen3-Coder 30B Q4_K_S) | **59.8%** | 72.2% | 47.3% | 76 | Qwen3-Coder 30B Q4_K_S (llama.cpp) |
+| CRUSH (Qwen3-Coder 30B Q4_K_S) | **57.0%** | 68.7% | 45.3% | 76 | Qwen3-Coder 30B Q4_K_S (llama.cpp) |
 | CRUSH (Qwen3-Coder 30B AWQ) | **55.5%** | 61.8% | 49.2% | 114 | Qwen3-Coder 30B AWQ (vLLM) |
 | CRUSH (Qwen3-Coder 30B Q5_K_M) | **54.9%** | 62.4% | 47.4% | 75 | Qwen3-Coder 30B Q5_K_M (llama.cpp) |
 | Aider (Qwen3-Coder 30B Q5_K_M) | **53.7%** | 64.6% | 42.7% | 55 | Qwen3-Coder 30B Q5_K_M (llama.cpp) |
@@ -114,22 +116,98 @@ Each variant injects a different metacognitive reframing into vanilla Claude Cod
 </details>
 
 <details>
+<summary><strong>Zen Meditation Experiment</strong> -- metacognitive "meditate" primitive across 3 iterations (click to expand)</summary>
+
+Three iterations of a zen stratagem that reframes the agent's mindset before coding. v1: base zen prompt. v2: added TDD discipline. v3: added a "meditate" primitive (objectless awareness before acting). All Sonnet 4.6 unless noted, 19 tasks each.
+
+| Variant | Standard | Hard | Overall | Trials | $/task | What changed |
+|---|---:|---:|---:|---:|---:|---|
+| Zen v1 (Sonnet) | 77.8% | 85.5% | **81.7%** | 19 | $0.57 | Base zen reframing |
+| Zen v2 (Sonnet) | 76.8% | 83.8% | **80.3%** | 19 | $0.85 | + TDD discipline (-1.4pp) |
+| Zen v3 (Sonnet) | 82.4% | 88.7% | **85.6%** | 19 | $0.73 | + meditate primitive (+5.3pp) |
+| Zen v3 (Opus) | 87.4% | 87.4% | **87.4%** | 18 | $1.30 | Opus model (+1.8pp, +78% cost) |
+| Routed Stratagem (Sonnet) | 96.6% | 78.3% | **87.4%** | 38 | $0.73 | Haiku routes to best stratagem per category |
+| v8 Combined (Sonnet) | 87.2% | 89.9% | **88.6%** | 38 | $0.82 | Baseline for comparison |
+
+Zen v3 is the strongest zen variant at 85.6% but trails the v8 methodology baseline by 3pp. The meditate primitive added +5.3pp over v2, mostly through standard-suite gains (+5.6pp) where implementation completeness improved. Hard tasks gained +4.9pp from better reasoning/hard scores (91.3% vs 75.9% in v2).
+
+Per-category highlights (v3 Sonnet vs v8 baseline): marathon +13.9pp (75.6% vs 61.7%), greenfield/simple +10.3pp (88.8% vs 78.5%), reasoning/hard +1.8pp (91.3% vs 89.5%). But greenfield/complex -19.4pp (60.9% vs 80.3%) and ambiguity/hard -16.8pp (59.6% vs 76.4%) -- meditation hurts tasks requiring aggressive exploration. The ambiguity regression is driven by coverage (93.8% -> 82.2%) and code metrics (100% -> 70%), not hidden test performance (identical at 21.2%).
+
+v2 was a regression from v1 -- adding TDD discipline without the meditate primitive hurt greenfield/simple (32.3% vs 60.0%) and increased cost 49%. The meditate primitive was the key ingredient, not the discipline scaffolding.
+
+**Routed stratagem** uses Haiku to classify each task's category, then routes to the best-performing metacog stratagem for that category (based on the 16-stratagem Opus ablation data above). Routing table: algorithmic->fool, ambiguity->scrying, reasoning->mirror, greenfield/simple->drift, greenfield/complex->veil, marathon->scrying, default->fool. Result: 87.4% at $0.73/task -- +1.8pp over zen v3 and slightly cheaper, but -1.2pp below v8 baseline. Haiku classification is noisy: 3/38 trials got essay-length responses instead of labels, beam-splitter (reasoning) was misclassified as greenfield, and the mirror stratagem was never triggered. Standard-suite scores (96.6%) are excellent but hard-suite (78.3%) lags v8 by 11.6pp. Routing adds complexity without clear benefit over simpler approaches.
+
+</details>
+
+<details>
+<summary><strong>Meditation Prompt on Local Models</strong> -- does zen framing transfer to Qwen3-Coder? (click to expand)</summary>
+
+The zen meditation experiment above showed mindset reframing helps Claude. Does it transfer to non-Claude models running locally? We adapted the meditation prompt into a CRUSH.md system prompt ("The Way of Calm Precision") and tested it against the baseline CRUSH.md on Qwen3-Coder 30B Q4_K_S via llama.cpp on a single RTX 5090. 76 paired trials per orchestrator (4 trials x 19 tasks).
+
+| Variant | Standard | Hard | Overall | Trials | Tokens/task |
+|---|---:|---:|---:|---:|---:|
+| CRUSH Meditation | 72.2% | 47.3% | **59.8%** | 76 | 1.82M |
+| CRUSH Baseline | 68.7% | 45.3% | **57.0%** | 76 | 2.61M |
+| Delta | +3.6pp | +2.0pp | **+2.8pp** | | 0.70x |
+
+Statistical tests: paired t-test on 76 trial pairs gives t=2.03, p=0.046 (significant). Paired t-test on 19 task means gives t=1.25, p=0.23 (not significant). Wilcoxon signed-rank gives p=0.12 (not significant). Cohen's d = 0.23 (small effect).
+
+The effect is real but modest. Meditation wins 8 tasks, loses 5, ties 6. Biggest wins: beam-splitter (+27pp), constraint-scheduler (+20pp). Biggest losses: plugin-marketplace (-13pp), reactive-spreadsheet (-9pp). The 30% token reduction is the more reliable finding -- the meditation prompt produces more focused, less verbose agent behavior regardless of whether final scores improve.
+
+</details>
+
+<details>
 <summary><strong>Conclave v8 Methodology Ablations</strong> -- 6-step methodology dissected on Sonnet 4.6 (click to expand)</summary>
 
-The v8 methodology has six steps: (1) Understand, (2) Contract, (3) TDD, (4) Boil the Lake, (5) Verify against contract, (6) Adversarial self-review. Ablation variants remove individual steps from the full v8-combined baseline. All Sonnet 4.6 unless noted.
+The v8 methodology has six steps: (1) Understand, (2) Contract, (3) TDD, (4) Boil the Lake, (5) Verify against contract, (6) Adversarial self-review. Two ablation designs: **gene removal** (remove one step from the full stack) and **gene isolation** (emphasize one step, weaken others). All Sonnet 4.6 unless noted.
+
+**Gene Removal** -- each variant removes one step from the full v8 stack:
+
+| Variant | Overall | Standard | Hard | Trials | $/task | Gene removed | Delta |
+|---|---:|---:|---:|---:|---:|---|---:|
+| v8 Combined (Sonnet) | **88.6%** | 87.2% | 89.9% | 38 | $0.82 | None (baseline) | -- |
+| v8 No-Boil (Sonnet) | **87.8%** | 92.0% | 83.7% | 48 | $0.89 | Boil the Lake | -0.8pp |
+| v8 No-TDD (Sonnet) | **87.3%** | 92.5% | 82.1% | 47 | $0.80 | TDD | -1.3pp |
+| v8 No-Review (Sonnet) | **87.1%** | 85.7% | 88.4% | 85 | $0.78 | Self-review | -1.5pp |
+| v8 No-Contract (Sonnet) | **87.1%** | 90.0% | 84.3% | 46 | $0.89 | Contract | -1.5pp |
+| v8 Bare (Sonnet) | **83.5%** | 90.9% | 76.2% | 50 | $0.69 | All methodology | -5.1pp |
+
+The genes are perfectly additive: boil (0.8) + TDD (1.3) + contract (1.5) + self-review (1.5) = 5.1pp, exactly matching the bare-to-combined gap. No synergy effects -- each gene contributes independently.
+
+Contract and self-review tie as the most valuable single genes at 1.5pp each. TDD follows at 1.3pp. Boil the Lake ("handle ALL edge cases") adds only 0.8pp -- the smallest individual contribution, though it may enable the other genes to work by ensuring completeness.
+
+The bare variant is revealing: even with no methodology beyond "understand first", Sonnet scores 83.5% -- higher than many structured Opus orchestrators. The model's baseline capability is strong; methodology adds the last 5pp of polish.
+
+**Gene Isolation** -- each variant emphasizes one step with weaker others:
 
 | Variant | Overall | Standard | Hard | Trials | $/task | What changed |
 |---|---:|---:|---:|---:|---:|---|
-| v8 Combined (Sonnet) | **88.6%** | 87.2% | 89.9% | 38 | $0.82 | Full methodology (baseline) |
 | v8 Ralph (Sonnet) | **87.9%** | 86.5% | 89.4% | 21 | $0.93 | Control for eval variant |
 | v8 Contract (Opus) | **87.5%** | 86.7% | 88.3% | 38 | $1.60 | Contract emphasis, weaker TDD |
 | v8 Eval (Sonnet) | **87.2%** | 86.6% | 87.7% | 38 | $0.78 | Two-pass with evaluator diagnosis |
-| v8 No-Review (Sonnet) | **87.1%** | 85.7% | 88.4% | 85 | $0.78 | Removed self-review (-1.5pp) |
+| v8 No-Review Ralph (Sonnet) | **87.2%** | 89.5% | 85.0% | 43 | $0.83 | No-Review + fresh-context retry loop |
 | v8 Contract (Sonnet) | **86.5%** | 83.5% | 89.6% | 38 | $0.74 | Contract emphasis, weaker TDD |
 | v8 TDD-Hard (Sonnet) | **86.4%** | 86.7% | 86.1% | 38 | $0.84 | TDD emphasis, no contract |
 | v8 TDD-Hard (Opus) | **83.4%** | 87.5% | 79.3% | 37 | $1.62 | TDD emphasis, no contract |
 
-TDD and contracts each contribute ~2pp when added to the other. Self-review adds ~1.5pp. The two-pass evaluator variant (v8 Eval) performs no better than removing self-review entirely -- external diagnosis does not outperform self-correction. The cheapest competitive config is v8 No-Review at $0.78 and 87.1%, which beats every Opus ablation variant at half the cost.
+**Other variants:**
+
+| Variant | Overall | Standard | Hard | Trials | $/task | What changed |
+|---|---:|---:|---:|---:|---:|---|
+| v10 Haiku-Routed | **90.2%** | 91.4% | 89.1% | 52 | $1.23 | Haiku classifies -> Opus (hard) / Sonnet (easy) |
+| v9 Review Slim (Sonnet) | **87.5%** | 92.2% | 82.9% | 19 | $1.72 | Two-pass: v8 then hostile review+fix (-1.1pp, +$0.90) |
+| v8 Combined High Effort (Sonnet) | **87.3%** | 88.8% | 85.7% | 38 | $0.80 | `--effort high` reasoning mode (-1.2pp) |
+| v8 Outcomes (Sonnet) | **86.9%** | 92.9% | 81.0% | 32 | $0.72 | Deterministic iteration loop (16/19 tasks) |
+
+The two-pass evaluator (v8 Eval) performs no better than removing self-review entirely -- external diagnosis does not outperform self-correction. v9 Review Slim confirms this: a hard-wired hostile review+fix pass after full v8 implementation scores 87.5% at $1.72 -- losing 1.1pp while more than doubling cost. The second pass finds and "fixes" things that weren't broken. The cheapest competitive config is v8 No-Review at $0.78 and 87.1%, which beats every Opus ablation variant at half the cost.
+
+Adding a fresh-context retry loop (ralph) to No-Review produces 87.2% -- within noise of the 87.1% baseline. Retry helps on standard tasks (+3.8pp) but hurts on hard tasks (-3.4pp). On reasoning-heavy problems like circuit-debugger, a wrong first approach pollutes the workspace and subsequent retries dig deeper into the wrong hole. Iteration without insight is not improvement.
+
+The outcomes variant uses a harness-enforced iteration loop: initial pass with v8 (no self-review), then up to 2 more iterations driven by deterministic validation feedback (test results, build errors, lint output). At 86.9% (16/19 tasks, missing 3 reasoning/hard), it underperforms single-pass v8 combined. Deterministic feedback loops don't substitute for methodology completeness.
+
+Increasing reasoning effort (`--effort high`) also hurts: 87.3% vs the 88.6% medium baseline (-1.2pp). The methodology is a recipe -- following it precisely matters more than thinking deeply about each step. Extra reasoning doesn't help when the bottleneck is execution discipline, not insight.
+
+Haiku-based model routing (v10) scores highest at 90.2% but barely routes -- Haiku classifies 17/19 tasks as HARD, sending almost everything to Opus. Only phantom-invoice and time-tracker get Sonnet. The result is effectively "Opus with no-review v8 prompt" at a small discount ($1.20 vs $1.45). The +1.6pp over v8 Sonnet comes from Opus quality on hard tasks (91.9% vs 89.9%), not from smart routing. A smarter classifier that routes more tasks to Sonnet could preserve most of the quality gain at lower cost.
 
 </details>
 
@@ -141,9 +219,11 @@ The gap from vanilla Claude Code (84.0%) to the best orchestrator (88.7%) is 4.7
 
 Every discipline gene helps. Self-review, TDD, plan-before-code, verification gates -- all lift scores above vanilla. The specific discipline matters less than having one at all. Sixteen metacog variants with wildly different system prompts all land between 80-86%.
 
-Methodology components stack, but diminishingly. v8 ablations show TDD and contracts each add ~2pp when combined with the other, and self-review adds ~1.5pp. But a two-pass evaluator (separate diagnostic agent) adds nothing over self-review. The lesson: simple introspective loops beat complex multi-pass architectures.
+Methodology components stack additively. Gene removal ablations show each step's independent contribution: contract (-1.5pp when removed), self-review (-1.5pp), TDD (-1.3pp), boil-the-lake (-0.8pp). These sum to exactly 5.1pp -- the gap between bare Sonnet (83.5%) and full v8 (88.6%). No synergy effects: each gene helps regardless of what other genes are present. A two-pass evaluator (separate diagnostic agent) adds nothing over self-review. The lesson: simple introspective loops beat complex multi-pass architectures.
 
 Multi-agent consensus adds nothing measurable. We tested three configurations: pure skill text (no binary), Claude-only consensus, and true multi-provider consensus (Claude + Gemini + Codex). All converged within 2pp. The skill text drives the value. The consensus mechanism is noise.
+
+Retry loops don't help either. The ralph fresh-context loop -- which runs `claude -p` up to 5 times per task with a clean context each attempt -- adds +0.1pp overall (87.2% vs 87.1% No-Review baseline, n=43). On standard tasks ralph gains +3.8pp, but on hard tasks it loses -3.4pp. The pattern: retry helps on simpler tasks where a second attempt can fix mechanical errors, but hurts on reasoning-heavy tasks where a wrong first approach leaves workspace artifacts that mislead subsequent attempts. T17 (circuit-debugger) drops hardest -- agents that simulate instead of recognizing structure keep simulating on retry.
 
 ### The model is not the bottleneck — the harness is
 
@@ -183,13 +263,13 @@ Trust scores backed by 50+ trials, not 8. The leaderboard stabilized only after 
 
 The Pareto frontier spans three orders of magnitude in cost:
 
-**$0.02** Amplifier Gemini 2.5 Flash (75.7%) -> **$0.14** Gemini CLI (80.9%) -> **$0.73** CRUSH GLM5 (81.7%) -> **$0.82** Conclave v8 Sonnet (88.6%) -> **$1.45** Conclave v8 Opus (88.7%)
+**$0.02** Amplifier Gemini 2.5 Flash (75.7%) -> **$0.14** Gemini CLI (80.9%) -> **$0.73** Metacog Routed Sonnet (87.4%) -> **$0.82** Conclave v8 Sonnet (88.6%) -> **$1.20** Conclave v10 Routed (90.2%) -> **$1.45** Conclave v8 Opus (88.7%)
 
-The sharpest knee is at $0.82. Below it, each dollar buys several percentage points. Above it, $0.63 more buys 0.1pp. Conclave v8 Sonnet collapsed the old frontier -- Sonnet gstack ($0.92, 87.3%), Plans Opus ($1.26, 87.6%), and Conclave Review ($1.86, 87.8%) are all dominated by a cheaper, higher-scoring config.
+The sharpest knee is at $0.73. Metacog stratagem routing on Sonnet displaced CRUSH GLM5 (81.7%) from the frontier, jumping from 80.9% at $0.14 to 87.4% at $0.73. Above it, $0.09 more buys +1.2pp via the full v8 methodology (88.6%), then $0.38 more buys +1.6pp via Haiku-routed model selection (v10 at 90.2%), then $0.25 more buys nothing (v8 Opus at 88.7% is dominated by v10). Conclave v8 Sonnet collapsed the old frontier -- Sonnet gstack ($0.92, 87.3%), Plans Opus ($1.26, 87.6%), and Conclave Review ($1.86, 87.8%) are all dominated by cheaper, higher-scoring configs.
 
 ### Local models work but lag behind
 
-Qwen3-Coder 30B on a single RTX 5090 scores 54-56% at $0/task. The [CRUSH](https://github.com/nicepkg/crush) system prompt nearly tripled Qwen 3.5 32B's score from ~20% to 49%. Harness matters as much as model at this tier — the right prompt and loop structure extract far more from a mid-range model than raw capability alone.
+Qwen3-Coder 30B on a single RTX 5090 scores 54-60% at $0/task. A meditation-adapted CRUSH.md -- reframing the agent's mindset toward calm precision before coding -- pushes Q4_K_S to 59.8%, the best local result (+2.8pp over baseline, p=0.046 paired t-test on 76 trial pairs, though non-parametric tests don't reach significance). The meditation prompt also uses 30% fewer tokens. The [CRUSH](https://github.com/nicepkg/crush) system prompt nearly tripled Qwen 3.5 32B's score from ~20% to 49%. Harness matters as much as model at this tier -- the right prompt and loop structure extract far more from a mid-range model than raw capability alone.
 
 [Hermes](https://github.com/anthropics/hermes) + MiMo-V2-Flash (Xiaomi's 309B MoE, 15B active) scores 64.3% at $0.16/task — the cheapest model with full-suite data and competitive hard-task performance (67.3%).
 
@@ -203,25 +283,35 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | Aider (Qwen3-Coder 30B Q5_K_M) | 53.7% | $0.00 | |
 | CRUSH (Qwen3-Coder 30B Q5_K_M) | 54.9% | $0.00 | |
 | CRUSH (Qwen3-Coder 30B) | 55.5% | $0.00 | |
+| CRUSH (Qwen3-Coder 30B Q4_K_S) | 57.0% | $0.00 | |
+| CRUSH Meditation (Qwen3-Coder 30B Q4_K_S) | 59.8% | $0.00 | |
 | Cerebras CLI Ralph | 72.4% | $0.00 | |
 | **Amplifier (Gemini 2.5 Flash)** | **75.7%** | **$0.02** | **best <$0.14** |
 | **Gemini CLI** | **80.9%** | **$0.14** | **best <$0.73** |
 | Hermes MiMo | 64.3% | $0.16 | |
-| FL Supervisor Pro | 44.8% | $0.16 | |
+| FL Supervisor Pro | 46.3% | $0.16 | |
 | Hermes MiMo (prompted) | 64.9% | $0.18 | |
-| FL Supervisor (Opus) | 43.8% | $0.25 | |
+| FL Supervisor (Opus) | 45.0% | $0.26 | |
 | CRUSH (MiniMax M2.7) | 72.7% | $0.39 | |
 | CRUSH (Kimi K2.5) | 66.3% | $0.47 | |
 | CRUSH (MiniMax M2.5) | 61.7% | $0.47 | |
 | CRUSH (GLM-4.7-Flash) | 55.9% | $0.54 | |
 | Conclave v7 Lite (Sonnet) | 80.3% | $0.71 | |
-| **CRUSH (GLM5)** | **81.7%** | **$0.73** | **best <$0.82** |
+| CRUSH (GLM5) | 81.7% | $0.73 | |
+| **Metacog Routed (Sonnet)** | **87.4%** | **$0.73** | **best <$0.82** |
 | Conclave v8 Contract (Sonnet) | 86.5% | $0.74 | |
 | ExoMonad v2 | 80.9% | $0.75 | |
+| Conclave v8 Bare (Sonnet) | 83.5% | $0.69 | |
+| Conclave v8 Outcomes (Sonnet) | 86.9% | $0.72 | |
 | Conclave v8 Eval (Sonnet) | 87.2% | $0.78 | |
 | Conclave v8 No-Review (Sonnet) | 87.1% | $0.78 | |
-| **Conclave v8 (Sonnet)** | **88.6%** | **$0.82** | **best <$1.45** |
+| Conclave v8 No-TDD (Sonnet) | 87.3% | $0.80 | |
+| Conclave v8 High Effort (Sonnet) | 87.3% | $0.80 | |
+| **Conclave v8 (Sonnet)** | **88.6%** | **$0.82** | **best <$1.20** |
+| Conclave v8 No-Review Ralph (Sonnet) | 87.2% | $0.83 | |
 | Conclave v8 TDD-Hard (Sonnet) | 86.4% | $0.84 | |
+| Conclave v8 No-Boil (Sonnet) | 87.8% | $0.89 | |
+| Conclave v8 No-Contract (Sonnet) | 87.1% | $0.89 | |
 | ExoMonad v1 | 74.8% | $0.84 | |
 | Sonnet gstack | 87.3% | $0.92 | |
 | Sonnet Plans | 87.3% | $0.92 | |
@@ -236,6 +326,7 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | GSD | 82.9% | $1.13 | |
 | Sonnet Plans+gstack | 86.7% | $1.17 | |
 | Claude Code (Opus) | 84.0% | $1.18 | |
+| **Conclave v10 Routed** | **90.2%** | **$1.23** | **best <$1.45** |
 | Self-Review (Opus) | 81.9% | $1.23 | |
 | Plans (Opus) | 87.6% | $1.26 | |
 | gstack | 86.3% | $1.32 | |
@@ -244,6 +335,7 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | Conclave Design | 84.0% | $1.45 | |
 | **Conclave v8 (Opus)** | **88.7%** | **$1.45** | **best overall** |
 | Stacked | 86.8% | $1.58 | |
+| Conclave v9 Review Slim (Sonnet) | 87.5% | $1.72 | |
 | Conclave v8 Contract (Opus) | 87.5% | $1.60 | |
 | Conclave v8 TDD-Hard (Opus) | 83.4% | $1.62 | |
 | BMAD-METHOD | 87.3% | $1.74 | |
@@ -312,7 +404,9 @@ Two scoring paths based on task type:
 
 | Orchestrator | Architecture | Key Differentiator |
 |---|---|---|
-| [Conclave](https://github.com/signalnine/conclave) v8 (Opus) | 6-step methodology prompt + Opus 4.6 | TDD + contracts + self-review; new #1 overall |
+| [Conclave](https://github.com/signalnine/conclave) v10 Routed | Haiku classifier -> Opus/Sonnet + no-review v8 | Highest overall; Haiku routes 17/19 tasks to Opus |
+| Metacog Routed (Sonnet) | Haiku classifier -> per-category stratagem + Sonnet | Per-task stratagem routing; new Pareto at $0.73 |
+| [Conclave](https://github.com/signalnine/conclave) v8 (Opus) | 6-step methodology prompt + Opus 4.6 | TDD + contracts + self-review |
 | [Conclave](https://github.com/signalnine/conclave) v8 (Sonnet) | 6-step methodology prompt + Sonnet 4.6 | Same methodology at half the cost; ties Opus |
 | [Conclave](https://github.com/signalnine/conclave) Review | Claude Code + consensus review | Code review only -- no skills, no planning |
 | Plans (Opus) | Claude Code + writing-plans skill | Plan-before-code on Opus |
@@ -322,7 +416,13 @@ Two scoring paths based on task type:
 | Ralph Fresh (Opus) | Claude Code + fresh-context loop | Multi-iteration fresh context on same workspace |
 | Stacked | Metacog + review + worktree | Three top genes combined |
 | Sonnet Plans+gstack | Claude Code Sonnet + plans + gstack | Two high-ROI genes stacked |
+| [Conclave](https://github.com/signalnine/conclave) v9 Review Slim (Sonnet) | Two-pass: v8 then hostile review+fix | Second pass costs 2x, loses 1.1pp |
 | [Conclave](https://github.com/signalnine/conclave) v8 No-Review (Sonnet) | v8 minus self-review | Ablation: 87.1% at $0.78; review adds only 1.5pp |
+| [Conclave](https://github.com/signalnine/conclave) v8 No-Boil (Sonnet) | v8 minus "Boil the Lake" | Ablation: 87.8% at $0.89; completeness adds 0.8pp |
+| [Conclave](https://github.com/signalnine/conclave) v8 No-Contract (Sonnet) | v8 minus CONTRACT.md | Ablation: 87.1% at $0.89; contract adds 1.5pp |
+| [Conclave](https://github.com/signalnine/conclave) v8 No-TDD (Sonnet) | v8 minus test-first development | Ablation: 87.3% at $0.80; TDD adds 1.3pp |
+| [Conclave](https://github.com/signalnine/conclave) v8 Bare (Sonnet) | v8 with all methodology removed | Baseline: 83.5% at $0.69; methodology adds 5.1pp total |
+| [Conclave](https://github.com/signalnine/conclave) v8 Outcomes (Sonnet) | v8 + deterministic iteration loop | Harness-enforced retry with test/build feedback |
 | [Conclave](https://github.com/signalnine/conclave) v8 Eval (Sonnet) | v8 + two-pass evaluator diagnosis | External diagnostic agent between passes |
 | [Conclave](https://github.com/signalnine/conclave) v8 Contract (Sonnet/Opus) | v8 contract-focused, weaker TDD | Tests contract gene in isolation |
 | [Conclave](https://github.com/signalnine/conclave) v8 TDD-Hard (Sonnet/Opus) | v8 TDD-focused, no contract | Tests TDD gene in isolation |
@@ -357,6 +457,8 @@ Two scoring paths based on task type:
 | CRUSH (Kimi K2.5) | CRUSH CLI + Kimi K2.5 | Open-weight model via proxy |
 | [Hermes](https://github.com/anthropics/hermes) MiMo | Hermes agent + MiMo-V2-Flash | Cheapest full-suite model at $0.16/task |
 | CRUSH (MiniMax M2.5) | CRUSH CLI + MiniMax M2.5 | Open-weight model via proxy |
+| CRUSH Meditation (Qwen3-Coder 30B Q4_K_S) | CRUSH CLI + meditation CRUSH.md (local llama.cpp) | Zen-adapted prompt, new best local at 59.8% |
+| CRUSH (Qwen3-Coder 30B Q4_K_S) | CRUSH CLI + Qwen3-Coder 30B (local llama.cpp) | Baseline Q4_K_S quant for meditation A/B test |
 | CRUSH (Qwen3-Coder 30B) | CRUSH CLI + Qwen3-Coder 30B AWQ (local vLLM) | Local RTX 5090 inference, $0/task |
 | Aider (Qwen3-Coder 30B Q5_K_M) | Aider + Qwen3-Coder 30B (local llama.cpp) | Single-pass diff edits on local GPU |
 | CRUSH (GLM-4.7-Flash) | CRUSH CLI + GLM-4.7-Flash | Smaller GLM variant |

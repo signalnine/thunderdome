@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 
@@ -141,7 +142,8 @@ func (a *CodexAgent) Name() string   { return "Codex" }
 func (a *CodexAgent) Available() bool { return a.cfg.OpenAIAPIKey != "" }
 
 var codexModelRe = regexp.MustCompile(`^gpt-5.*-codex`)
-var chatModelRe = regexp.MustCompile(`^(gpt-4|gpt-3\.5-turbo|o1|o3)`)
+var reasoningModelRe = regexp.MustCompile(`^(o1|o3|o4)`)
+var chatModelRe = regexp.MustCompile(`^(gpt-[345]|o1|o3|o4)`)
 
 func (a *CodexAgent) Run(ctx context.Context, prompt string) (string, error) {
 	base := strings.TrimRight(a.cfg.OpenAIBaseURL, "/")
@@ -157,10 +159,14 @@ func (a *CodexAgent) Run(ctx context.Context, prompt string) (string, error) {
 		}
 	} else if chatModelRe.MatchString(a.cfg.OpenAIModel) {
 		url = base + "/v1/chat/completions"
+		tokenKey := "max_tokens"
+		if reasoningModelRe.MatchString(a.cfg.OpenAIModel) {
+			tokenKey = "max_completion_tokens"
+		}
 		body = map[string]any{
-			"model":      a.cfg.OpenAIModel,
-			"max_tokens": a.cfg.OpenAIMaxTokens,
-			"messages":   []map[string]any{{"role": "user", "content": prompt}},
+			"model":    a.cfg.OpenAIModel,
+			tokenKey:   a.cfg.OpenAIMaxTokens,
+			"messages": []map[string]any{{"role": "user", "content": prompt}},
 		}
 	} else {
 		url = base + "/v1/completions"
@@ -187,6 +193,90 @@ func (a *CodexAgent) Run(ctx context.Context, prompt string) (string, error) {
 
 	respBody, _ := io.ReadAll(resp.Body)
 	return a.extractResponse(respBody)
+}
+
+// --- OpenRouter (fallback for any model) ---
+
+type OpenRouterAgent struct {
+	cfg   *config.Config
+	model string
+	label string
+}
+
+func NewOpenRouterAgent(cfg *config.Config, model, label string) *OpenRouterAgent {
+	return &OpenRouterAgent{cfg: cfg, model: model, label: label}
+}
+
+func (a *OpenRouterAgent) Name() string   { return a.label + " (OpenRouter)" }
+func (a *OpenRouterAgent) Available() bool { return a.cfg.OpenRouterAPIKey != "" && a.model != "" }
+
+func (a *OpenRouterAgent) Run(ctx context.Context, prompt string) (string, error) {
+	body := map[string]any{
+		"model":    a.model,
+		"messages": []map[string]any{{"role": "user", "content": prompt}},
+	}
+	data, _ := json.Marshal(body)
+
+	url := strings.TrimRight(a.cfg.OpenRouterBaseURL, "/") + "/v1/chat/completions"
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(data))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+a.cfg.OpenRouterAPIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Choices []struct {
+			Message struct{ Content string } `json:"message"`
+		} `json:"choices"`
+		Error *struct{ Message string } `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("decode: %w", err)
+	}
+	if result.Error != nil {
+		return "", fmt.Errorf("API error: %s", result.Error.Message)
+	}
+	if len(result.Choices) == 0 || result.Choices[0].Message.Content == "" {
+		return "", fmt.Errorf("empty response")
+	}
+	return result.Choices[0].Message.Content, nil
+}
+
+// --- FallbackAgent (tries primary, falls back to secondary on failure) ---
+
+type FallbackAgent struct {
+	primary  Agent
+	fallback Agent
+}
+
+func NewFallbackAgent(primary, fallback Agent) *FallbackAgent {
+	return &FallbackAgent{primary: primary, fallback: fallback}
+}
+
+func (f *FallbackAgent) Name() string { return f.primary.Name() }
+func (f *FallbackAgent) Available() bool {
+	return f.primary.Available() || f.fallback.Available()
+}
+
+func (f *FallbackAgent) Run(ctx context.Context, prompt string) (string, error) {
+	if f.primary.Available() {
+		out, err := f.primary.Run(ctx, prompt)
+		if err == nil {
+			return out, nil
+		}
+		fmt.Fprintf(os.Stderr, "    %s direct failed (%v), trying OpenRouter fallback...\n", f.primary.Name(), err)
+	}
+	if f.fallback.Available() {
+		return f.fallback.Run(ctx, prompt)
+	}
+	return "", fmt.Errorf("both primary and fallback unavailable for %s", f.primary.Name())
 }
 
 func (a *CodexAgent) extractResponse(body []byte) (string, error) {

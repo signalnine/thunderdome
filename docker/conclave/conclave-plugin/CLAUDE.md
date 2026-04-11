@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-Conclave is a Claude Code plugin that provides a multi-agent consensus development system. It orchestrates a council of AI reviewers (Claude, Gemini, Codex) that independently analyze work, synthesize perspectives, and produce prioritized recommendations. Built on composable "skills" that activate automatically at the right moments. Forked from [obra/superpowers](https://github.com/obra/superpowers).
+Conclave is a Claude Code plugin that provides structured development methodologies through composable "skills" — TDD, design brainstorming, verification, and code review. Skills activate automatically based on task type and guide the agent through disciplined workflows that improve code quality by 10-12 points over unguided development. Optionally includes multi-agent consensus for higher-stakes decisions (requires API keys for Gemini and/or Codex in addition to Claude). Forked from [obra/superpowers](https://github.com/obra/superpowers).
 
 ## Running Tests
 
@@ -127,6 +127,15 @@ ANTHROPIC_BASE_URL=http://localhost:8199 claude
 - **Claude Code**: Native plugin via `.claude-plugin/`, hooks, skills, commands, agents
 - **Codex**: `.codex/conclave-codex` unified Node.js script + bootstrap markdown
 - **OpenCode**: `.opencode/plugin/conclave.js` native JS plugin
+
+## Model Recommendations
+
+Benchmark data (796 trials) shows that with Conclave's structured methodology, **Sonnet 4.6 matches or beats Opus 4.6** at half the cost:
+
+- TDD: Sonnet 98.2% vs Opus 97.4%
+- Self-Review: Sonnet 97.1% vs Opus 96.8%
+
+Sonnet 4.6 is the recommended default model for Conclave-guided work.
 
 ## Key Conventions
 

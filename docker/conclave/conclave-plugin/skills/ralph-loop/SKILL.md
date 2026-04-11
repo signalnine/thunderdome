@@ -16,10 +16,13 @@ Runs each task in a loop until:
 - **Failure:** Iteration cap hit (default: 5)
 
 Each iteration:
-1. Dispatches Claude Code with task spec + previous failure context
-2. Runs test gate (hard - must pass)
-3. Runs spec compliance gate (hard - must pass)
-4. Runs code quality gate (soft - warnings only)
+1. Prepends TDD discipline + completion gate preamble to the task prompt
+2. Dispatches Claude Code with task spec + previous failure context
+3. Runs test gate (hard - must pass)
+4. Runs spec compliance gate (hard - must pass)
+5. Runs code quality gate (soft - warnings only)
+
+**TDD enforcement:** Every iteration prompt includes mandatory TDD instructions (RED-GREEN-REFACTOR) and a completion gate (full suite + diff review). This was identified as the single most effective methodology in benchmarks (+12.3pp over vanilla).
 
 ## Usage
 

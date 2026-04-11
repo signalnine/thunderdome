@@ -90,6 +90,10 @@ func (f *flexFloat) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &s); err != nil {
 		return err
 	}
+	if s == "" {
+		*f = 0
+		return nil
+	}
 	var val float64
 	if _, err := fmt.Sscanf(s, "%f", &val); err != nil {
 		return err

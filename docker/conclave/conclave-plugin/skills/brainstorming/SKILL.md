@@ -50,26 +50,25 @@ If no checkpoint or user chooses fresh start, proceed to The Process.
 
 **Mode Selection** (after checking project context):
 
-**If `CONCLAVE_NON_INTERACTIVE=1`:** Skip mode selection, use Consensus Autopilot automatically. Announce: "Non-interactive mode: using Consensus Autopilot."
+**If `CONCLAVE_NON_INTERACTIVE=1`:** Skip mode selection, use Autopilot automatically. Announce: "Non-interactive mode: using Autopilot."
 
 Otherwise, present the choice:
 
 ```
-I'll help design this feature. Two modes available:
+I'll help design this feature. Three modes available:
 
 1. **Interactive** - I ask questions, you answer, we iterate together
-2. **Consensus Autopilot** - Multi-agent consensus (Claude, Gemini, Codex)
-   answers design questions. You watch decisions narrate and can interrupt
-   anytime to override.
-
-Note: Autopilot calls consensus for each question (~30-60 seconds each).
-Full design typically takes 5-10 minutes.
+2. **Autopilot** - I explore design decisions autonomously, you watch
+   and can interrupt anytime to override
+3. **Consensus Autopilot** - Multi-agent consensus (Claude, Gemini, Codex)
+   answers design questions. Requires API keys. (~30-60s per question)
 
 Which mode?
 ```
 
 - If **Interactive**: Proceed with normal question flow (one at a time, user answers)
 - If **Autopilot**: See "Autopilot Mode" section below
+- If **Consensus Autopilot**: See "Consensus Autopilot Mode" section below
 
 **Exploring approaches:**
 - Propose 2-3 different approaches with trade-offs
@@ -86,6 +85,26 @@ Which mode?
 ## Autopilot Mode
 
 When user selects autopilot, announce: "Starting autopilot. I'll narrate each decision. Jump in anytime to override."
+
+**For each design question:**
+
+1. **Explore the project context** — read relevant code, docs, recent commits
+2. **Propose 2-3 approaches** with trade-offs for this design question
+3. **Evaluate and pick the best option** — narrate your reasoning:
+   ```
+   Q: What database technology?
+   → Choosing: PostgreSQL
+     Reasoning: Relational model fits the entity relationships,
+     ACID compliance needed for financial data, team has experience.
+
+   Proceeding...
+   ```
+4. **Save checkpoint** (see Checkpoint Saving below)
+5. **Continue to next question** — if user sends any message, that's an interrupt
+
+## Consensus Autopilot Mode
+
+Same flow as Autopilot, but each design question goes to multi-agent consensus instead of the agent's own judgment. Requires API keys for Gemini and/or Codex.
 
 **For each design question:**
 
@@ -121,33 +140,19 @@ When user selects autopilot, announce: "Starting autopilot. I'll narrate each de
    ```
 
 4. **Save checkpoint** (see Checkpoint Saving below)
-
-5. **Continue to next question** - if user sends any message, that's an interrupt
+5. **Continue to next question** — if user sends any message, that's an interrupt
 
 **Error Handling:**
 
 If consensus fails (timeout, API errors, <2 agents respond):
 ```
-Consensus unavailable for this question. Falling back to interactive:
-
-Q: What database technology?
-Options:
-1. PostgreSQL - relational, ACID compliant
-2. MongoDB - document store, flexible schema
-3. SQLite - embedded, simple
-
-Your choice?
+Consensus unavailable for this question. Falling back to interactive.
 ```
-After user answers, offer: "Resume autopilot for remaining questions, or stay interactive?"
+After user answers, offer: "Resume consensus autopilot for remaining questions, or stay interactive?"
 
 If consensus returns split decision (no clear winner):
 ```
-Consensus split on this question:
-- Claude recommends PostgreSQL (relational model fits)
-- Gemini recommends MongoDB (schema flexibility)
-- Codex recommends PostgreSQL (team experience)
-
-No strong consensus. Your call - which direction?
+Consensus split on this question. Your call - which direction?
 ```
 Then resume autopilot after user decides.
 
@@ -233,17 +238,17 @@ Write checkpoint after each decision using the Write tool.
 
 ## After the Design
 
-**For Autopilot Mode - Summarize Decisions:**
+**For Autopilot/Consensus Autopilot - Summarize Decisions:**
 ```
-Design complete. Consensus made [N] decisions:
+Design complete. Made [N] decisions:
 
-- Database: PostgreSQL (consensus)
-- API style: REST (consensus)
-- Frontend: React (you overrode → Vue)
-- Auth: JWT (consensus)
+- Database: PostgreSQL
+- API style: REST
+- Frontend: Vue (you overrode)
+- Auth: JWT
 ...
 
-Review the full design below, then we'll run final validation.
+Review the full design below.
 ```
 
 **Documentation:**
@@ -252,52 +257,36 @@ Review the full design below, then we'll run final validation.
 - Commit the design document to git
 - **Delete checkpoint file** after successful save
 
-**Multi-Agent Design Validation (Recommended):**
-
-After the user validates the complete design, run multi-agent review:
-
-"Running multi-agent validation. Claude, Gemini, and Codex will review for architectural flaws, over-engineering, and missing requirements..."
-
-**Always run unless user explicitly skips:**
-1. Prepare validation prompt:
-   ```
-   Review this software design for issues. Find architectural flaws, missing
-   requirements, over-engineering, maintainability concerns, testing gaps, or
-   any other problems. Rate each issue as:
-   STRONG (critical flaw), MODERATE (should address), WEAK (minor concern)
-   ```
-
-2. Invoke consensus:
-   ```bash
-   DESIGN_TEXT=$(cat "docs/plans/YYYY-MM-DD-<topic>-design.md")
-
-   conclave consensus --mode=general-prompt \
-     --prompt="Review this software design..." \
-     --context="$DESIGN_TEXT"
-   ```
-
-3. Present results:
-   - **High Priority issues**: "Consensus found X critical concerns. Recommend addressing before implementation."
-   - **Medium Priority**: "Y moderate concerns identified. Review recommended."
-   - **Consider only**: "Design validated. Z minor suggestions noted."
-
-4. Handle response:
-   - High Priority issues → Revise design, re-run consensus
-   - User accepts concerns → Proceed to Implementation
-   - User wants details → Show full consensus breakdown from `/tmp/consensus-*.md`
-
-5. **For Autopilot Mode - Flag self-disagreement:**
-   If validation consensus disagrees with a decision made during autopilot:
-   ```
-   Interesting: Validation consensus questions the PostgreSQL choice
-   made earlier. They suggest considering SQLite for this scale.
-   Want to revisit?
-   ```
-
 **Implementation (if continuing):**
 - Ask: "Ready to set up for implementation?"
 - Use conclave:using-git-worktrees to create isolated workspace
 - Use conclave:writing-plans to create detailed implementation plan
+
+**Completion Gate** (when brainstorming flows into implementation):
+
+After all implementation work, before claiming done:
+1. Run the full verification suite fresh (test + build + lint)
+2. Read COMPLETE output. Count failures.
+3. If ANY failure: fix and re-run. Do NOT proceed.
+4. Commit: `git add -A && git commit -m '<description>'`
+5. Review your diff: `git diff HEAD~1`
+6. Look for: missing edge cases, incomplete implementations, dead code, debug artifacts
+7. If issues found: fix, re-verify, re-commit
+8. Only stop when verification passes AND diff review is clean
+
+### Optional: Multi-Agent Design Validation
+
+If you have API keys for multiple providers and want additional validation:
+
+```bash
+DESIGN_TEXT=$(cat "docs/plans/YYYY-MM-DD-<topic>-design.md")
+
+conclave consensus --mode=general-prompt \
+  --prompt="Review this software design for architectural flaws, missing requirements, over-engineering, and testing gaps. Rate each issue as STRONG/MODERATE/WEAK." \
+  --context="$DESIGN_TEXT"
+```
+
+Present results and address High Priority issues before proceeding to implementation.
 
 ## Key Principles
 

@@ -1,9 +1,8 @@
 #!/bin/bash
 set -e
 
-# conclave-v8-ralph-sonnet: v8-combined prompt with ralph-loop retry (no evaluator).
-# Control group — tests whether simple retry-on-test-failure improves scores
-# beyond single-shot v8-combined.
+# conclave-v8-ralph-sonnet: Single-shot v8-combined baseline (control group).
+# Identical to v8-combined-sonnet. Used as the control for the v8-eval ablation.
 
 [[ -f "$TASK_DESCRIPTION" ]] || { echo "Task file not found: $TASK_DESCRIPTION" >&2; exit 2; }
 
@@ -20,7 +19,17 @@ if [ -n "$PROXY_URL" ]; then
   export ANTHROPIC_BASE_URL="$PROXY_URL"
 fi
 
-SYSTEM_PROMPT='You are running in a headless benchmark environment. No human to interact with. Work directly in the current directory — no worktrees or branches.
+TASK_PROMPT=$(cat "$TASK_DESCRIPTION")
+OUTPUT_FILE=/workspace/.thunderdome-output.jsonl
+
+set +e
+claude -p \
+  --model claude-sonnet-4-6 \
+  --output-format stream-json \
+  --verbose \
+  --dangerously-skip-permissions \
+  --disallowed-tools "AskUserQuestion,EnterPlanMode" \
+  --append-system-prompt "You are running in a headless benchmark environment. No human to interact with. Work directly in the current directory — no worktrees or branches.
 
 ## How to Work
 
@@ -35,11 +44,11 @@ Before writing any implementation, create a CONTRACT.md file that defines:
 3. **What done looks like** for each criterion — expected output, return value, or state
 
 Example:
-```
+\`\`\`
 - [ ] POST /api/users creates a new user → test: POST returns 201 with user object
 - [ ] Duplicate email returns 409 → test: second POST with same email returns 409
 - [ ] Empty name rejected → test: POST with empty name returns 400
-```
+\`\`\`
 
 This contract is your definition of done. You are not finished until every criterion passes.
 
@@ -78,23 +87,13 @@ After all contract criteria pass, review your own diff as if you were a hostile 
 - Check for: dead code, debug artifacts, TODOs left behind
 - If you find issues, fix them and re-verify against the contract
 
-Done means: all contract criteria pass, tests pass, build clean, lint clean, self-review clean.'
-
-OUTPUT_FILE=/workspace/.thunderdome-output.jsonl
-
-set +e
-/opt/conclave-plugin/conclave ralph-run \
-  --task "$TASK_DESCRIPTION" \
-  --system-prompt "$SYSTEM_PROMPT" \
-  --max-iterations 3 \
-  --implement-timeout 300 \
-  --test-timeout 120 \
-  --skip-spec \
+Done means: all contract criteria pass, tests pass, build clean, lint clean, self-review clean." \
+  -- "$TASK_PROMPT" \
   > "$OUTPUT_FILE" 2>/workspace/.thunderdome-stderr.log
-RALPH_EXIT=$?
+CLAUDE_EXIT=$?
 set -e
 
-# Extract metrics — sum across all claude invocations in NDJSON output
+# Extract metrics from NDJSON output
 node -e '
 const fs = require("fs");
 try {
@@ -137,4 +136,4 @@ try {
 }
 ' "$OUTPUT_FILE" || true
 
-exit $RALPH_EXIT
+exit $CLAUDE_EXIT

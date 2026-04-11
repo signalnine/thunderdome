@@ -148,3 +148,32 @@ func TestRevParse(t *testing.T) {
 		t.Errorf("sha length = %d, want 40", len(sha))
 	}
 }
+
+func TestDiffNameOnlyHead(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := New(dir)
+
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("hello"), 0644)
+	run(t, dir, "git", "add", "-A")
+	run(t, dir, "git", "commit", "-m", "init")
+
+	// Modify a.txt and add b.txt (staged)
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("changed"), 0644)
+	os.WriteFile(filepath.Join(dir, "b.txt"), []byte("new"), 0644)
+	run(t, dir, "git", "add", "-A")
+
+	files, err := g.DiffNameOnlyHead()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := map[string]bool{"a.txt": true, "b.txt": true}
+	for _, f := range files {
+		if !expected[f] {
+			t.Errorf("unexpected file: %s", f)
+		}
+		delete(expected, f)
+	}
+	for f := range expected {
+		t.Errorf("missing file: %s", f)
+	}
+}

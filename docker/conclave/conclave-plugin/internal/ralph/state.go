@@ -16,10 +16,12 @@ const (
 )
 
 type Attempt struct {
-	Iteration int    `json:"iteration"`
-	Gate      string `json:"gate"`
-	Hash      string `json:"hash"`
-	Shift     bool   `json:"shift"`
+	Iteration    int    `json:"iteration"`
+	Gate         string `json:"gate"`
+	Hash         string `json:"hash"`
+	Shift        bool   `json:"shift"`
+	EvaluatorRan bool   `json:"evaluator_ran,omitempty"`
+	RawOutputRef string `json:"raw_output_ref,omitempty"`
 }
 
 type State struct {
@@ -123,6 +125,55 @@ func (s *StateManager) Update(gate string, exitCode int, output string) error {
 	}
 
 	// Update context file
+	ctx := fmt.Sprintf("# Ralph Loop Context: %s\n\n## Status\n- Iteration: %d of %d\n- Last gate failed: %s\n- Stuck count: %d (threshold: 3)\n\n## Last Error Output (verbatim)\n```\n%s\n```\n",
+		state.TaskID, state.Iteration, state.MaxIterations, gate, state.StuckCount, truncated)
+	return os.WriteFile(s.contextPath(), []byte(ctx), 0644)
+}
+
+func (s *StateManager) UpdateWithEval(gate string, exitCode int, output string, evalRan bool, rawRef string, rawHash string) error {
+	state, err := s.Load()
+	if err != nil {
+		return err
+	}
+
+	hash := rawHash
+
+	if hash == state.ErrorHash && state.ErrorHash != "" {
+		state.StuckCount++
+	} else {
+		state.StuckCount = 0
+	}
+
+	truncated := output
+	allLines := strings.Split(output, "\n")
+	if len(allLines) > 100 {
+		truncated = strings.Join(allLines[:100], "\n") +
+			fmt.Sprintf("\n[... truncated, %d total lines ...]", len(allLines))
+	}
+
+	hashPrefix := hash
+	if len(hashPrefix) > 8 {
+		hashPrefix = hashPrefix[:8]
+	}
+
+	state.Attempts = append(state.Attempts, Attempt{
+		Iteration:    state.Iteration,
+		Gate:         gate,
+		Hash:         hashPrefix,
+		Shift:        state.StrategyShifts > 0,
+		EvaluatorRan: evalRan,
+		RawOutputRef: rawRef,
+	})
+	state.Iteration++
+	state.LastGate = gate
+	state.ExitCode = exitCode
+	state.ErrorHash = hash
+	state.Timestamp = time.Now()
+
+	if err := s.save(state); err != nil {
+		return err
+	}
+
 	ctx := fmt.Sprintf("# Ralph Loop Context: %s\n\n## Status\n- Iteration: %d of %d\n- Last gate failed: %s\n- Stuck count: %d (threshold: 3)\n\n## Last Error Output (verbatim)\n```\n%s\n```\n",
 		state.TaskID, state.Iteration, state.MaxIterations, gate, state.StuckCount, truncated)
 	return os.WriteFile(s.contextPath(), []byte(ctx), 0644)

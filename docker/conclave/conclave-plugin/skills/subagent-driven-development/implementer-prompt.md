@@ -29,12 +29,13 @@ Task tool (general-purpose):
     ## Your Job
 
     Once you're clear on requirements:
-    1. Implement exactly what the task specifies
-    2. Write tests (following TDD if task says to)
-    3. Verify implementation works
+    1. Follow TDD: write a failing test FIRST, then minimal code to pass, repeat
+    2. Implement exactly what the task specifies
+    3. Run full verification suite (tests + build + lint) — all must pass
     4. Commit your work
-    5. Self-review (see below)
-    6. Report back
+    5. Review your diff: `git diff HEAD~1` — fix any issues found
+    6. Self-review (see below)
+    7. Report back
 
     Work from: [directory]
 
@@ -59,11 +60,16 @@ Task tool (general-purpose):
     - Did I avoid overbuilding (YAGNI)?
     - Did I only build what was requested?
     - Did I follow existing patterns in the codebase?
+    - Did I follow TDD (failing test before every piece of production code)?
 
     **Testing:**
     - Do tests actually verify behavior (not just mock behavior)?
-    - Did I follow TDD if required?
+    - Did I watch each test fail before implementing?
     - Are tests comprehensive?
+
+    **Completion Gate:**
+    - Did I run the FULL verification suite (tests + build + lint)?
+    - Did I review my diff for missing edge cases, dead code, debug artifacts?
 
     If you find issues during self-review, fix them now before reporting.
 
