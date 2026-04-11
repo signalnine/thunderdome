@@ -2,7 +2,7 @@
 
 Two agents enter, one agent leaves.
 
-Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 4,419 scored trials across 125 orchestrator variants (6,752 total including crashes).
+Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 5,156 scored trials across 134 orchestrator variants (7,872 total including crashes).
 
 ## Results
 
@@ -14,19 +14,20 @@ Third-party orchestrators and harnesses — things you can install and run today
 
 | Rank | Orchestrator | Overall | Standard | Hard | Trials | $/task | Model |
 |---:|---|---:|---:|---:|---:|---:|---|
-| 1 | [Conclave](https://github.com/signalnine/conclave) v8 (Opus) | **88.7%** | 88.5% | 89.0% | 37 | $1.45 | Opus 4.6 |
-| 2 | [Conclave](https://github.com/signalnine/conclave) v8 (Sonnet) | **88.6%** | 87.2% | 89.9% | 38 | $0.82 | Sonnet 4.6 |
-| 3 | [Conclave](https://github.com/signalnine/conclave) Review | **87.8%** | 87.4% | 88.2% | 139 | $1.86 | Opus 4.6 |
-| 4 | [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) | **87.3%** | 84.7% | 89.9% | 57 | $1.74 | Opus 4.6 |
-| 5 | [Conclave](https://github.com/signalnine/conclave) v6 (Sonnet) | **86.5%** | 85.8% | 87.2% | 84 | $1.11 | Sonnet 4.6 |
-| 6 | [Conclave](https://github.com/signalnine/conclave) v6 (Opus) | **85.8%** | 86.4% | 85.2% | 82 | $2.10 | Opus 4.6 |
-| 7 | [Conclave](https://github.com/signalnine/conclave) v7 Lite (Opus) | **85.6%** | 85.8% | 85.4% | 36 | $1.36 | Opus 4.6 |
-| 8 | [Conclave](https://github.com/signalnine/conclave) v7 Double Review (Sonnet) | **84.4%** | 82.9% | 86.0% | 21 | $2.80 | Sonnet 4.6 |
-| 9 | [Gas Town](https://github.com/steveyegge/gastown) | **83.0%** | 79.8% | 86.3% | 61 | $2.38 | Opus 4.6 |
-| 10 | [GSD](https://github.com/gsd-build/get-shit-done) | **82.9%** | 84.4% | 81.5% | 57 | $1.13 | Opus 4.6 |
-| 11 | [ExoMonad v2](https://github.com/tidepool-heavy-industries/exomonad) | **80.9%** | 73.5% | 88.2% | 45 | $0.75 | Opus 4.6 + Gemini |
-| 12 | [Conclave](https://github.com/signalnine/conclave) v7 Lite (Sonnet) | **80.3%** | 84.1% | 76.4% | 31 | $0.71 | Sonnet 4.6 |
-| 13 | [ExoMonad v1](https://github.com/tidepool-heavy-industries/exomonad) | **74.8%** | 66.8% | 82.9% | 22 | $0.84 | Opus 4.6 + Gemini |
+| 1 | [Conclave](https://github.com/signalnine/conclave) v10 Routed | **90.4%** | 88.9% | 91.9% | 52 | $1.23 | Haiku -> Opus/Sonnet |
+| 2 | [Conclave](https://github.com/signalnine/conclave) v8 (Opus) | **88.7%** | 88.5% | 89.0% | 37 | $1.45 | Opus 4.6 |
+| 3 | [Conclave](https://github.com/signalnine/conclave) v8 (Sonnet) | **88.6%** | 87.2% | 89.9% | 38 | $0.82 | Sonnet 4.6 |
+| 4 | [Conclave](https://github.com/signalnine/conclave) Review | **87.8%** | 87.4% | 88.2% | 139 | $1.86 | Opus 4.6 |
+| 5 | [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) | **87.3%** | 84.7% | 89.9% | 57 | $1.74 | Opus 4.6 |
+| 6 | [Conclave](https://github.com/signalnine/conclave) v6 (Sonnet) | **86.5%** | 85.8% | 87.2% | 84 | $1.11 | Sonnet 4.6 |
+| 7 | [Conclave](https://github.com/signalnine/conclave) v6 (Opus) | **85.8%** | 86.4% | 85.2% | 82 | $2.10 | Opus 4.6 |
+| 8 | [Conclave](https://github.com/signalnine/conclave) v7 Lite (Opus) | **85.6%** | 85.8% | 85.4% | 36 | $1.36 | Opus 4.6 |
+| 9 | [Conclave](https://github.com/signalnine/conclave) v7 Double Review (Sonnet) | **84.4%** | 82.9% | 86.0% | 21 | $2.80 | Sonnet 4.6 |
+| 10 | [Gas Town](https://github.com/steveyegge/gastown) | **83.0%** | 79.8% | 86.3% | 61 | $2.38 | Opus 4.6 |
+| 11 | [GSD](https://github.com/gsd-build/get-shit-done) | **82.9%** | 84.4% | 81.5% | 57 | $1.13 | Opus 4.6 |
+| 12 | [ExoMonad v2](https://github.com/tidepool-heavy-industries/exomonad) | **80.9%** | 73.5% | 88.2% | 45 | $0.75 | Opus 4.6 + Gemini |
+| 13 | [Conclave](https://github.com/signalnine/conclave) v7 Lite (Sonnet) | **80.3%** | 84.1% | 76.4% | 31 | $0.71 | Sonnet 4.6 |
+| 14 | [ExoMonad v1](https://github.com/tidepool-heavy-industries/exomonad) | **74.8%** | 66.8% | 82.9% | 22 | $0.84 | Opus 4.6 + Gemini |
 
 ### Harness and Model Tests
 
@@ -47,8 +48,8 @@ Same harness with different models, or same model through different harnesses. T
 | CRUSH (Nemotron 120B prompted) | **63.7%** | 70.1% | 57.3% | 57 | $2.16 | Nemotron 120B |
 | CRUSH (MiniMax M2.5) | **61.7%** | 71.9% | 51.6% | 66 | $0.47 | MiniMax M2.5 |
 | CRUSH (GLM-4.7-Flash) | **55.9%** | 63.6% | 48.2% | 71 | $0.54 | GLM-4.7-Flash |
-| FL Supervisor Pro | **46.3%** | 59.2% | 33.4% | 666 | $0.16 | Gemini 2.5 Pro |
-| FL Supervisor (Opus) | **45.0%** | 57.8% | 32.2% | 669 | $0.26 | Opus 4.6 |
+| FL Supervisor Pro | **45.0%** | 52.3% | 37.6% | 483 | $0.16 | Gemini 2.5 Pro |
+| FL Supervisor (Opus) | **44.0%** | 50.3% | 37.6% | 382 | $0.26 | Opus 4.6 |
 
 ### Local Inference (RTX 5090, $0/task)
 
@@ -166,17 +167,17 @@ The v8 methodology has six steps: (1) Understand, (2) Contract, (3) TDD, (4) Boi
 | Variant | Overall | Standard | Hard | Trials | $/task | Gene removed | Delta |
 |---|---:|---:|---:|---:|---:|---|---:|
 | v8 Combined (Sonnet) | **88.6%** | 87.2% | 89.9% | 38 | $0.82 | None (baseline) | -- |
-| v8 No-Boil (Sonnet) | **87.8%** | 92.0% | 83.7% | 48 | $0.89 | Boil the Lake | -0.8pp |
-| v8 No-TDD (Sonnet) | **87.3%** | 92.5% | 82.1% | 47 | $0.80 | TDD | -1.3pp |
+| v8 No-Boil (Sonnet) | **87.7%** | 87.1% | 88.3% | 47 | $0.89 | Boil the Lake | -0.9pp |
+| v8 No-TDD (Sonnet) | **87.6%** | 84.1% | 91.1% | 47 | $0.80 | TDD | -1.0pp |
 | v8 No-Review (Sonnet) | **87.1%** | 85.7% | 88.4% | 85 | $0.78 | Self-review | -1.5pp |
-| v8 No-Contract (Sonnet) | **87.1%** | 90.0% | 84.3% | 46 | $0.89 | Contract | -1.5pp |
-| v8 Bare (Sonnet) | **83.5%** | 90.9% | 76.2% | 50 | $0.69 | All methodology | -5.1pp |
+| v8 No-Contract (Sonnet) | **87.0%** | 87.0% | 87.0% | 46 | $0.89 | Contract | -1.6pp |
+| v8 Bare (Sonnet) | **83.4%** | 82.0% | 84.7% | 50 | $0.69 | All methodology | -5.2pp |
 
-The genes are perfectly additive: boil (0.8) + TDD (1.3) + contract (1.5) + self-review (1.5) = 5.1pp, exactly matching the bare-to-combined gap. No synergy effects -- each gene contributes independently.
+The genes are roughly additive: boil (0.9) + TDD (1.0) + review (1.5) + contract (1.6) = 5.0pp, closely matching the 5.2pp bare-to-combined gap. No major synergy effects -- each gene contributes independently.
 
-Contract and self-review tie as the most valuable single genes at 1.5pp each. TDD follows at 1.3pp. Boil the Lake ("handle ALL edge cases") adds only 0.8pp -- the smallest individual contribution, though it may enable the other genes to work by ensuring completeness.
+Contract is the most valuable single gene at 1.6pp, followed by self-review at 1.5pp. TDD and boil-the-lake contribute ~1pp each. All four genes pull their weight.
 
-The bare variant is revealing: even with no methodology beyond "understand first", Sonnet scores 83.5% -- higher than many structured Opus orchestrators. The model's baseline capability is strong; methodology adds the last 5pp of polish.
+The bare variant is revealing: even with no methodology beyond "understand first", Sonnet scores 83.4% -- higher than many structured Opus orchestrators. The model's baseline capability is strong; methodology adds the last 5pp of polish.
 
 **Gene Isolation** -- each variant emphasizes one step with weaker others:
 
@@ -194,16 +195,16 @@ The bare variant is revealing: even with no methodology beyond "understand first
 
 | Variant | Overall | Standard | Hard | Trials | $/task | What changed |
 |---|---:|---:|---:|---:|---:|---|
-| v10 Haiku-Routed | **90.2%** | 91.4% | 89.1% | 52 | $1.23 | Haiku classifies -> Opus (hard) / Sonnet (easy) |
+| v10 Haiku-Routed | **90.4%** | 88.9% | 91.9% | 52 | $1.23 | Haiku classifies -> Opus (hard) / Sonnet (easy) |
 | v9 Review Slim (Sonnet) | **87.5%** | 92.2% | 82.9% | 19 | $1.72 | Two-pass: v8 then hostile review+fix (-1.1pp, +$0.90) |
 | v8 Combined High Effort (Sonnet) | **87.3%** | 88.8% | 85.7% | 38 | $0.80 | `--effort high` reasoning mode (-1.2pp) |
-| v8 Outcomes (Sonnet) | **86.9%** | 92.9% | 81.0% | 32 | $0.72 | Deterministic iteration loop (16/19 tasks) |
+| v8 Outcomes (Sonnet) | **87.7%** | 87.2% | 88.2% | 34 | $0.74 | Deterministic iteration loop |
 
 The two-pass evaluator (v8 Eval) performs no better than removing self-review entirely -- external diagnosis does not outperform self-correction. v9 Review Slim confirms this: a hard-wired hostile review+fix pass after full v8 implementation scores 87.5% at $1.72 -- losing 1.1pp while more than doubling cost. The second pass finds and "fixes" things that weren't broken. The cheapest competitive config is v8 No-Review at $0.78 and 87.1%, which beats every Opus ablation variant at half the cost.
 
 Adding a fresh-context retry loop (ralph) to No-Review produces 87.2% -- within noise of the 87.1% baseline. Retry helps on standard tasks (+3.8pp) but hurts on hard tasks (-3.4pp). On reasoning-heavy problems like circuit-debugger, a wrong first approach pollutes the workspace and subsequent retries dig deeper into the wrong hole. Iteration without insight is not improvement.
 
-The outcomes variant uses a harness-enforced iteration loop: initial pass with v8 (no self-review), then up to 2 more iterations driven by deterministic validation feedback (test results, build errors, lint output). At 86.9% (16/19 tasks, missing 3 reasoning/hard), it underperforms single-pass v8 combined. Deterministic feedback loops don't substitute for methodology completeness.
+The outcomes variant uses a harness-enforced iteration loop inspired by Anthropic's Managed Agents "Outcomes" pattern: initial pass with v8 (no self-review), then up to 2 more iterations driven by deterministic validation feedback (test results, build errors, lint output) in a fresh context window. At 87.7% it outperforms no-review (87.1%) by 0.6pp but trails self-review (88.6%) by 0.9pp. The isolated grading helps -- fresh-context feedback catches things the agent missed -- but same-context introspection still wins. The agent's ability to reason about its own implementation choices is more valuable than external test feedback.
 
 Increasing reasoning effort (`--effort high`) also hurts: 87.3% vs the 88.6% medium baseline (-1.2pp). The methodology is a recipe -- following it precisely matters more than thinking deeply about each step. Extra reasoning doesn't help when the bottleneck is execution discipline, not insight.
 
@@ -215,11 +216,11 @@ Haiku-based model routing (v10) scores highest at 90.2% but barely routes -- Hai
 
 ### Discipline beats complexity
 
-The gap from vanilla Claude Code (84.0%) to the best orchestrator (88.7%) is 4.7 percentage points. The v8 methodology -- a 6-step system prompt (understand, contract, TDD, complete implementation, verify, self-review) -- captures that gap with no plugins, no multi-agent overhead, and runs on Sonnet at 88.6% for $0.82/task.
+The gap from vanilla Claude Code (84.0%) to the best orchestrator (90.4%) is 6.4 percentage points. The v8 methodology -- a 6-step system prompt (understand, contract, TDD, complete implementation, verify, self-review) -- captures most of that gap with no plugins, no multi-agent overhead, and runs on Sonnet at 88.6% for $0.82/task. Haiku-routed model selection (v10) pushes to 90.4% at $1.23 by routing hard tasks to Opus.
 
 Every discipline gene helps. Self-review, TDD, plan-before-code, verification gates -- all lift scores above vanilla. The specific discipline matters less than having one at all. Sixteen metacog variants with wildly different system prompts all land between 80-86%.
 
-Methodology components stack additively. Gene removal ablations show each step's independent contribution: contract (-1.5pp when removed), self-review (-1.5pp), TDD (-1.3pp), boil-the-lake (-0.8pp). These sum to exactly 5.1pp -- the gap between bare Sonnet (83.5%) and full v8 (88.6%). No synergy effects: each gene helps regardless of what other genes are present. A two-pass evaluator (separate diagnostic agent) adds nothing over self-review. The lesson: simple introspective loops beat complex multi-pass architectures.
+Methodology components stack additively. Gene removal ablations show each step's independent contribution: contract (-1.6pp when removed), self-review (-1.5pp), TDD (-1.0pp), boil-the-lake (-0.9pp). These sum to 5.0pp -- closely matching the 5.2pp gap between bare Sonnet (83.4%) and full v8 (88.6%). No synergy effects: each gene helps regardless of what other genes are present. A two-pass evaluator (separate diagnostic agent) adds nothing over self-review. The lesson: simple introspective loops beat complex multi-pass architectures.
 
 Multi-agent consensus adds nothing measurable. We tested three configurations: pure skill text (no binary), Claude-only consensus, and true multi-provider consensus (Claude + Gemini + Codex). All converged within 2pp. The skill text drives the value. The consensus mechanism is noise.
 
@@ -263,9 +264,9 @@ Trust scores backed by 50+ trials, not 8. The leaderboard stabilized only after 
 
 The Pareto frontier spans three orders of magnitude in cost:
 
-**$0.02** Amplifier Gemini 2.5 Flash (75.7%) -> **$0.14** Gemini CLI (80.9%) -> **$0.73** Metacog Routed Sonnet (87.4%) -> **$0.82** Conclave v8 Sonnet (88.6%) -> **$1.20** Conclave v10 Routed (90.2%) -> **$1.45** Conclave v8 Opus (88.7%)
+**$0.02** Amplifier Gemini 2.5 Flash (75.7%) -> **$0.14** Gemini CLI (80.9%) -> **$0.73** Metacog Routed Sonnet (87.4%) -> **$0.82** Conclave v8 Sonnet (88.6%) -> **$1.23** Conclave v10 Routed (90.4%)
 
-The sharpest knee is at $0.73. Metacog stratagem routing on Sonnet displaced CRUSH GLM5 (81.7%) from the frontier, jumping from 80.9% at $0.14 to 87.4% at $0.73. Above it, $0.09 more buys +1.2pp via the full v8 methodology (88.6%), then $0.38 more buys +1.6pp via Haiku-routed model selection (v10 at 90.2%), then $0.25 more buys nothing (v8 Opus at 88.7% is dominated by v10). Conclave v8 Sonnet collapsed the old frontier -- Sonnet gstack ($0.92, 87.3%), Plans Opus ($1.26, 87.6%), and Conclave Review ($1.86, 87.8%) are all dominated by cheaper, higher-scoring configs.
+The sharpest knee is at $0.73. Metacog stratagem routing on Sonnet displaced CRUSH GLM5 (81.7%) from the frontier, jumping from 80.9% at $0.14 to 87.4% at $0.73. Above it, $0.09 more buys +1.2pp via the full v8 methodology (88.6%), then $0.41 more buys +1.8pp via Haiku-routed model selection (v10 at 90.4%). v8 Opus ($1.45, 88.7%) is dominated by v10 -- cheaper and higher-scoring. Conclave v8 Sonnet collapsed the old frontier -- Sonnet gstack ($0.92, 87.3%), Plans Opus ($1.26, 87.6%), and Conclave Review ($1.86, 87.8%) are all dominated by cheaper, higher-scoring configs.
 
 ### Local models work but lag behind
 
@@ -289,9 +290,9 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | **Amplifier (Gemini 2.5 Flash)** | **75.7%** | **$0.02** | **best <$0.14** |
 | **Gemini CLI** | **80.9%** | **$0.14** | **best <$0.73** |
 | Hermes MiMo | 64.3% | $0.16 | |
-| FL Supervisor Pro | 46.3% | $0.16 | |
+| FL Supervisor Pro | 45.0% | $0.16 | |
 | Hermes MiMo (prompted) | 64.9% | $0.18 | |
-| FL Supervisor (Opus) | 45.0% | $0.26 | |
+| FL Supervisor (Opus) | 44.0% | $0.26 | |
 | CRUSH (MiniMax M2.7) | 72.7% | $0.39 | |
 | CRUSH (Kimi K2.5) | 66.3% | $0.47 | |
 | CRUSH (MiniMax M2.5) | 61.7% | $0.47 | |
@@ -301,17 +302,17 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | **Metacog Routed (Sonnet)** | **87.4%** | **$0.73** | **best <$0.82** |
 | Conclave v8 Contract (Sonnet) | 86.5% | $0.74 | |
 | ExoMonad v2 | 80.9% | $0.75 | |
-| Conclave v8 Bare (Sonnet) | 83.5% | $0.69 | |
-| Conclave v8 Outcomes (Sonnet) | 86.9% | $0.72 | |
+| Conclave v8 Bare (Sonnet) | 83.4% | $0.69 | |
+| Conclave v8 Outcomes (Sonnet) | 87.7% | $0.74 | |
 | Conclave v8 Eval (Sonnet) | 87.2% | $0.78 | |
 | Conclave v8 No-Review (Sonnet) | 87.1% | $0.78 | |
-| Conclave v8 No-TDD (Sonnet) | 87.3% | $0.80 | |
+| Conclave v8 No-TDD (Sonnet) | 87.6% | $0.80 | |
 | Conclave v8 High Effort (Sonnet) | 87.3% | $0.80 | |
-| **Conclave v8 (Sonnet)** | **88.6%** | **$0.82** | **best <$1.20** |
+| **Conclave v8 (Sonnet)** | **88.6%** | **$0.82** | **best <$1.23** |
 | Conclave v8 No-Review Ralph (Sonnet) | 87.2% | $0.83 | |
 | Conclave v8 TDD-Hard (Sonnet) | 86.4% | $0.84 | |
-| Conclave v8 No-Boil (Sonnet) | 87.8% | $0.89 | |
-| Conclave v8 No-Contract (Sonnet) | 87.1% | $0.89 | |
+| Conclave v8 No-Boil (Sonnet) | 87.7% | $0.89 | |
+| Conclave v8 No-Contract (Sonnet) | 87.0% | $0.89 | |
 | ExoMonad v1 | 74.8% | $0.84 | |
 | Sonnet gstack | 87.3% | $0.92 | |
 | Sonnet Plans | 87.3% | $0.92 | |
@@ -326,14 +327,14 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | GSD | 82.9% | $1.13 | |
 | Sonnet Plans+gstack | 86.7% | $1.17 | |
 | Claude Code (Opus) | 84.0% | $1.18 | |
-| **Conclave v10 Routed** | **90.2%** | **$1.23** | **best <$1.45** |
+| **Conclave v10 Routed** | **90.4%** | **$1.23** | **best overall** |
 | Self-Review (Opus) | 81.9% | $1.23 | |
 | Plans (Opus) | 87.6% | $1.26 | |
 | gstack | 86.3% | $1.32 | |
 | Ralph Fresh (Opus) | 87.2% | $1.34 | |
 | Conclave v7 Lite (Opus) | 85.6% | $1.36 | |
 | Conclave Design | 84.0% | $1.45 | |
-| **Conclave v8 (Opus)** | **88.7%** | **$1.45** | **best overall** |
+| Conclave v8 (Opus) | 88.7% | $1.45 | |
 | Stacked | 86.8% | $1.58 | |
 | Conclave v9 Review Slim (Sonnet) | 87.5% | $1.72 | |
 | Conclave v8 Contract (Opus) | 87.5% | $1.60 | |
@@ -417,11 +418,11 @@ Two scoring paths based on task type:
 | Stacked | Metacog + review + worktree | Three top genes combined |
 | Sonnet Plans+gstack | Claude Code Sonnet + plans + gstack | Two high-ROI genes stacked |
 | [Conclave](https://github.com/signalnine/conclave) v9 Review Slim (Sonnet) | Two-pass: v8 then hostile review+fix | Second pass costs 2x, loses 1.1pp |
-| [Conclave](https://github.com/signalnine/conclave) v8 No-Review (Sonnet) | v8 minus self-review | Ablation: 87.1% at $0.78; review adds only 1.5pp |
-| [Conclave](https://github.com/signalnine/conclave) v8 No-Boil (Sonnet) | v8 minus "Boil the Lake" | Ablation: 87.8% at $0.89; completeness adds 0.8pp |
-| [Conclave](https://github.com/signalnine/conclave) v8 No-Contract (Sonnet) | v8 minus CONTRACT.md | Ablation: 87.1% at $0.89; contract adds 1.5pp |
-| [Conclave](https://github.com/signalnine/conclave) v8 No-TDD (Sonnet) | v8 minus test-first development | Ablation: 87.3% at $0.80; TDD adds 1.3pp |
-| [Conclave](https://github.com/signalnine/conclave) v8 Bare (Sonnet) | v8 with all methodology removed | Baseline: 83.5% at $0.69; methodology adds 5.1pp total |
+| [Conclave](https://github.com/signalnine/conclave) v8 No-Review (Sonnet) | v8 minus self-review | Ablation: 87.1% at $0.78; review adds 1.5pp |
+| [Conclave](https://github.com/signalnine/conclave) v8 No-Boil (Sonnet) | v8 minus "Boil the Lake" | Ablation: 87.7% at $0.89; completeness adds 0.9pp |
+| [Conclave](https://github.com/signalnine/conclave) v8 No-Contract (Sonnet) | v8 minus CONTRACT.md | Ablation: 87.0% at $0.89; contract adds 1.6pp |
+| [Conclave](https://github.com/signalnine/conclave) v8 No-TDD (Sonnet) | v8 minus test-first development | Ablation: 87.6% at $0.80; TDD adds 1.0pp |
+| [Conclave](https://github.com/signalnine/conclave) v8 Bare (Sonnet) | v8 with all methodology removed | Baseline: 83.4% at $0.69; methodology adds 5.2pp total |
 | [Conclave](https://github.com/signalnine/conclave) v8 Outcomes (Sonnet) | v8 + deterministic iteration loop | Harness-enforced retry with test/build feedback |
 | [Conclave](https://github.com/signalnine/conclave) v8 Eval (Sonnet) | v8 + two-pass evaluator diagnosis | External diagnostic agent between passes |
 | [Conclave](https://github.com/signalnine/conclave) v8 Contract (Sonnet/Opus) | v8 contract-focused, weaker TDD | Tests contract gene in isolation |
