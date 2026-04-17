@@ -45,6 +45,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
         # Build upstream request
         url = upstream_url.rstrip("/") + self.path
         req = Request(url, data=body, method="POST")
+        saw_ua = False
         for key, val in self.headers.items():
             if key.lower() in ("host", "content-length", "transfer-encoding"):
                 continue
@@ -55,7 +56,15 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 # Claude Code may send Authorization instead of x-api-key
                 req.add_header("x-api-key", api_key_override)
                 continue
+            if key.lower() == "user-agent":
+                # Override client UA with a browser UA so Cloudflare WAF
+                # (e.g. Neuralwatt) doesn't block the Claude Code client.
+                req.add_header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+                saw_ua = True
+                continue
             req.add_header(key, val)
+        if not saw_ua:
+            req.add_header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
         if api_key_override and not any(k.lower() == "x-api-key" for k in self.headers):
             req.add_header("x-api-key", api_key_override)
         req.add_header("Content-Length", str(len(body)))

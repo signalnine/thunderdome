@@ -2,7 +2,7 @@
 
 Two agents enter, one agent leaves.
 
-Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 5,156 scored trials across 134 orchestrator variants (7,872 total including crashes).
+Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 5,341 scored trials across 137 orchestrator variants (8,167 total including crashes).
 
 ## Results
 
@@ -37,6 +37,7 @@ Same harness with different models, or same model through different harnesses. T
 |---|---:|---:|---:|---:|---:|---|
 | [CRUSH](https://github.com/nicepkg/crush) (GLM5) | **81.7%** | 89.1% | 74.3% | 30 | $0.73 | GLM-5 |
 | Gemini CLI | **80.9%** | 80.9% | 80.8% | 60 | $0.14 | Gemini 2.5 Pro |
+| Claude Code + GLM-5.1-fast (Neuralwatt) | **76.3%** | 83.7% | 68.9% | 37 | $0.83 | GLM-5.1-FP8 |
 | [Amplifier](https://github.com/microsoft/amplifier) (Gemini 2.5 Flash) | **75.7%** | 78.7% | 72.7% | 17 | $0.02 | Gemini 2.5 Flash |
 | CRUSH (GLM-5-Turbo) | **73.7%** | 76.5% | 70.9% | 38 | $2.27 | GLM-5-Turbo |
 | CRUSH (MiniMax M2.7) | **72.7%** | 75.1% | 70.4% | 39 | $0.39 | MiniMax M2.7 |
@@ -87,6 +88,7 @@ Single "genes" tested in isolation on Claude Code — each variant holds everyth
 | **Claude Code (Opus)** | **84.0%** | 88.0% | 80.0% | 35 | $1.18 | **Baseline (no gene)** |
 | Self-Review (Opus) | **81.9%** | 86.1% | 77.8% | 19 | $1.23 | System prompt self-review |
 | Verify (Opus) | **80.8%** | 86.0% | 75.7% | 19 | $0.94 | Verification gate |
+| [Caveman](https://juliusbrussee.github.io/caveman/) (Opus 4.7) | **80.6%** | 79.9% | 81.2% | 20 | $3.30 | Output-compression directive (brevity prompt) |
 | Claude Code Worktree | **80.0%** | 83.8% | 76.2% | 41 | $1.00 | Git worktree workspace |
 | Debug (Opus) | **77.3%** | 84.6% | 70.0% | 28 | $1.16 | Systematic debugging skill |
 
@@ -220,6 +222,8 @@ The gap from vanilla Claude Code (84.0%) to the best orchestrator (90.4%) is 6.4
 
 Every discipline gene helps. Self-review, TDD, plan-before-code, verification gates -- all lift scores above vanilla. The specific discipline matters less than having one at all. Sixteen metacog variants with wildly different system prompts all land between 80-86%.
 
+Output-compression directives don't substitute for discipline. [Caveman](https://juliusbrussee.github.io/caveman/) (drop articles, fragments OK, terse technical prose) on Opus 4.7 scored 80.6% overall vs 84.0% for vanilla Opus 4.6 -- brevity alone doesn't improve codegen accuracy. Caveman's public claim ("brevity improves accuracy by 26pp") does not replicate on these tasks. Token savings were real (12 turns avg vs 16-19 for discipline orchestrators), but the standard suite dropped -8.1pp.
+
 Methodology components stack additively. Gene removal ablations show each step's independent contribution: contract (-1.6pp when removed), self-review (-1.5pp), TDD (-1.0pp), boil-the-lake (-0.9pp). These sum to 5.0pp -- closely matching the 5.2pp gap between bare Sonnet (83.4%) and full v8 (88.6%). No synergy effects: each gene helps regardless of what other genes are present. A two-pass evaluator (separate diagnostic agent) adds nothing over self-review. The lesson: simple introspective loops beat complex multi-pass architectures.
 
 Multi-agent consensus adds nothing measurable. We tested three configurations: pure skill text (no binary), Claude-only consensus, and true multi-provider consensus (Claude + Gemini + Codex). All converged within 2pp. The skill text drives the value. The consensus mechanism is noise.
@@ -309,6 +313,7 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | Conclave v8 No-TDD (Sonnet) | 87.6% | $0.80 | |
 | Conclave v8 High Effort (Sonnet) | 87.3% | $0.80 | |
 | **Conclave v8 (Sonnet)** | **88.6%** | **$0.82** | **best <$1.23** |
+| Claude Code + GLM-5.1-fast (Neuralwatt) | 76.3% | $0.83 | |
 | Conclave v8 No-Review Ralph (Sonnet) | 87.2% | $0.83 | |
 | Conclave v8 TDD-Hard (Sonnet) | 86.4% | $0.84 | |
 | Conclave v8 No-Boil (Sonnet) | 87.7% | $0.89 | |
@@ -348,6 +353,39 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | CRUSH (Nemotron 120B) | 68.5% | $2.50 | |
 | Conclave v7 Double Review (Sonnet) | 84.4% | $2.80 | |
 | Agent Teams | 86.3% | $3.29 | |
+
+## Throughput
+
+Wall-clock output tokens per second, measured across all trials for each orchestrator. Includes tool calls, test execution, and lint runs -- so these numbers reflect the agent's experienced throughput, not pure generation speed on an empty prompt.
+
+| Orchestrator | Model | Host | Mean tok/s | Max |
+|---|---|---|---:|---:|
+| Cerebras CLI Ralph | gpt-oss-120b | Cerebras Cloud | **185** | 185 |
+| CRUSH Nemotron 120B | Nemotron 3 Super 120B | Synthetic API | **109** | 186 |
+| CRUSH Qwen3-Coder 30B | Qwen3-Coder 30B AWQ | local vLLM (RTX 5090) | **94** | 141 |
+| CRUSH Qwen 3.5 32B | Qwen 3.5 32B | local vLLM (RTX 5090) | 81 | 130 |
+| Aider Qwen3-Coder | Qwen3-Coder 30B Q5_K_M | local llama.cpp | 67 | 148 |
+| CRUSH GLM-4.7-fast | GLM-4.7-Flash | z.ai | 64 | 104 |
+| Conclave v8 (Sonnet) | Claude Sonnet 4.6 | Anthropic | 54 | 73 |
+| CRUSH Devstral 24B | Devstral 24B | local vLLM | 53 | 70 |
+| CRUSH MiniMax M2.5 | MiniMax M2.5 | OpenRouter | 50 | 77 |
+| Conclave v8 (Opus) | Claude Opus 4.6 | Anthropic | 49 | 66 |
+| CRUSH Qwen3-Coder Q4_K_S | Qwen3-Coder 30B Q4_K_S | local llama.cpp | 48 | 93 |
+| Hermes MiMo-V2-Flash | MiMo-V2-Flash | OpenRouter | 47 | 89 |
+| CRUSH Qwen3-Coder Q5_K_M | Qwen3-Coder 30B Q5_K_M | local llama.cpp | 42 | 94 |
+| CRUSH Kimi K2.5 | Kimi K2.5 | proxy | 34 | 86 |
+| Claude Code + GLM-5.1-fast | GLM-5.1-FP8 | Neuralwatt | 32 | 50 |
+| Claude Code + GLM-5 | GLM-5 | z.ai | 24 | 35 |
+
+Three findings worth naming:
+
+**Local GPUs beat hosted frontier APIs on throughput.** Qwen3-Coder 30B AWQ on a single RTX 5090 averages 94 tok/s -- nearly twice Opus (49) and meaningfully ahead of Sonnet (54). The Anthropic models aren't slow; the bottleneck is shared-tenant queueing, not model speed. A dedicated GPU wins on latency even with a weaker model.
+
+**Cerebras is in a class of its own.** gpt-oss-120b on Cerebras Cloud averages 185 wall-clock tok/s including ralph loop orchestration -- ~3.8x Opus, ~1.7x Nemotron. Cerebras's silicon is purpose-built for fast inference; the wall-clock number is dragged down by test execution and setup, but pure generation on Cerebras is documented at 3,000+ tok/s. Specialized hardware wins the raw speed race.
+
+**Nemotron 120B via Synthetic is the fastest conventional-GPU hosted model.** 109 tok/s mean, 186 max. That's ~2x Sonnet, 2.2x Opus. Synthetic's infrastructure is tuned for throughput; the model itself isn't smaller than the competition. Speed and quality are independent axes.
+
+**"Fast" in a model name is not a guarantee.** GLM-5.1-**fast** on Neuralwatt runs at 32 tok/s -- slower than every local variant we tested and half the speed of GLM-4.7-**Flash** (64 tok/s). Branding doesn't predict throughput. Benchmark your inference.
 
 ## The Gas Station Story
 
@@ -444,6 +482,7 @@ Two scoring paths based on task type:
 | [GSD](https://github.com/gsd-build/get-shit-done) | Third-party wave-based execution | Parallel wave execution with dependency tracking |
 | Self-Review (Opus) | Claude Code + system prompt only | No plugins — just "verify, commit, review diff, fix" |
 | [CRUSH](https://github.com/nicepkg/crush) (GLM5) | CRUSH CLI + GLM-5 | Simple read-code-test-fix loop |
+| Claude Code + GLM-5.1-fast (Neuralwatt) | Claude Code protocol + GLM-5.1-FP8 | Neuralwatt's native Anthropic-compatible endpoint |
 | Gemini CLI | Google's agentic CLI | Gemini 2.5 Pro via Google One OAuth |
 | [ExoMonad v2](https://github.com/tidepool-heavy-industries/exomonad) | Haskell WASM + Rust runtime | Claude decomposes, Gemini implements via MCP; guided TL behavior |
 | Verify (Opus) | Claude Code + verification skill | "No completion claims without fresh evidence" |

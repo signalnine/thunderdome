@@ -64,13 +64,22 @@ class ProxyHandler(BaseHTTPRequestHandler):
         # Build upstream request
         url = upstream_url + self.path
         req = Request(url, data=body, method="POST")
+        saw_user_agent = False
         for key, val in self.headers.items():
             if key.lower() in ("host", "content-length", "transfer-encoding"):
                 continue
             if key.lower() == "authorization" and auth_override:
                 req.add_header("Authorization", f"Bearer {auth_override}")
                 continue
+            if key.lower() == "user-agent":
+                # Override client UA with a browser UA so Cloudflare WAF (e.g. Neuralwatt)
+                # doesn't block Go-http-client / python-urllib as a suspected bot.
+                req.add_header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+                saw_user_agent = True
+                continue
             req.add_header(key, val)
+        if not saw_user_agent:
+            req.add_header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
         req.add_header("Content-Length", str(len(body)))
 
         try:
