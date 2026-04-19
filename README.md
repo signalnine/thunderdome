@@ -35,6 +35,8 @@ Same harness with different models, or same model through different harnesses. T
 
 | Orchestrator | Overall | Standard | Hard | Trials | $/task | Model |
 |---|---:|---:|---:|---:|---:|---|
+| v11 Qwen-routed (Neuralwatt+Sonnet) | **86.3%** | 86.6% | 86.0% | 20 | $0.74 | Haiku -> (Qwen+zen + Sonnet verify \| Sonnet v8) |
+| Qwen+Sonnet-verify (Neuralwatt+Sonnet) | **83.3%** | 82.5% | 84.1% | 54 | $0.51 | Qwen3.6 zen-lite writes, Sonnet verifies/fixes (Pareto-optimal at $0.51, n=3) |
 | [CRUSH](https://github.com/nicepkg/crush) (GLM5) | **81.7%** | 89.1% | 74.3% | 30 | $0.73 | GLM-5 |
 | Gemini CLI | **80.9%** | 80.9% | 80.8% | 60 | $0.14 | Gemini 2.5 Pro |
 | Claude Code + GLM-5.1-fast (Neuralwatt) | **76.3%** | 83.7% | 68.9% | 37 | $0.83 | GLM-5.1-FP8 |
@@ -42,17 +44,7 @@ Same harness with different models, or same model through different harnesses. T
 | CRUSH (GLM-5-Turbo) | **73.7%** | 76.5% | 70.9% | 38 | $2.27 | GLM-5-Turbo |
 | CRUSH (MiniMax M2.7) | **72.7%** | 75.1% | 70.4% | 39 | $0.39 | MiniMax M2.7 |
 | Cerebras CLI Ralph | **72.4%** | 69.9% | 74.9% | 25 | - | gpt-oss-120b |
-| v11 Qwen-routed (Neuralwatt+Sonnet) | **86.3%** | 86.6% | 86.0% | 20 | $0.74 | Haiku -> (Qwen+zen + Sonnet verify \| Sonnet v8) |
-| Qwen+Sonnet-verify (Neuralwatt+Sonnet) | **83.3%** | 82.5% | 84.1% | 54 | $0.51 | Qwen3.6 zen-lite writes, Sonnet verifies/fixes (Pareto-optimal at $0.51, n=3) |
-| Zen-lite + Qwen3.6 (Neuralwatt) | **76.1%** | 78.1% | 74.2% | 57 | $0.03 | Qwen3.6-35B-A3B + meditation framing + TDD (best pure-Qwen config, n=3) |
-| Dao + Qwen3.6 (Neuralwatt) | **76.4%** | 76.8% | 76.1% | 20 | $0.03 | Qwen3.6-35B-A3B + water/wu-wei framing (matches zen within noise) |
-| Claude Code + Qwen3.6 (Neuralwatt) | **70.3%** | 77.7% | 62.9% | 19 | $0.04 | Qwen3.6-35B-A3B (vLLM, 19-way parallel, energy-priced) |
-| Conclave v8 + Qwen3.6 (Neuralwatt) | **69.1%** | 77.7% | 60.5% | 20 | $0.03 | Qwen3.6-35B-A3B + v8 discipline (2 hard tasks timed out) |
 | CRUSH (Nemotron 120B) | **68.5%** | 66.6% | 70.5% | 67 | $2.50 | Nemotron 120B |
-| [pi](https://github.com/badlogic/pi-mono) + Qwen3.6 (Neuralwatt) | **55.3%** | 65.5% | 45.1% | 20 | $0.03 | Qwen3.6-35B-A3B via vanilla pi coding agent |
-| [CRUSH](https://github.com/charmbracelet/crush) + Qwen3.6 (Neuralwatt) | **65.5%** | 77.9% | 53.2% | 20 | $0.03 | Qwen3.6-35B-A3B via CRUSH native Anthropic endpoint |
-| CRUSH + zen-lite + Qwen3.6 (Neuralwatt) | **60.3%** | 70.4% | 50.2% | 21 | $0.03 | CRUSH + zen prompt — zen does NOT transfer (-5.2pp vs vanilla) |
-| [Aider](https://github.com/Aider-AI/aider) + Qwen3.6 (Neuralwatt) | **50.5%** | 56.0% | 44.9% | 20 | ~$0.01 | Qwen3.6-35B-A3B via aider single-pass edit mode (weakest Qwen3.6 harness) |
 | CRUSH (Kimi K2.5) | **66.3%** | 72.9% | 59.8% | 64 | $0.47 | Kimi K2.5 |
 | [Hermes](https://github.com/anthropics/hermes) MiMo (prompted) | **64.9%** | 62.3% | 67.5% | 18 | $0.18 | MiMo-V2-Flash |
 | [Hermes](https://github.com/anthropics/hermes) MiMo | **64.3%** | 61.3% | 67.3% | 56 | $0.16 | MiMo-V2-Flash |
@@ -62,19 +54,27 @@ Same harness with different models, or same model through different harnesses. T
 | FL Supervisor Pro | **45.0%** | 52.3% | 37.6% | 483 | $0.16 | Gemini 2.5 Pro |
 | FL Supervisor (Opus) | **44.0%** | 50.3% | 37.6% | 382 | $0.26 | Opus 4.6 |
 
-### Local Inference (RTX 5090, $0/task)
+### Local Inference (local GPU or energy-priced equivalent, effectively free)
 
-Models running on a single GPU via llama.cpp or vLLM. Free inference, but 30-40pp behind frontier APIs.
+Models that run on a single RTX 5090 via llama.cpp or vLLM, plus Qwen3.6-35B-A3B on Neuralwatt (energy-priced at ~$0.03/task -- we used Neuralwatt for parallel capacity, but the same weights run locally). Ranked by Overall.
 
-| Orchestrator | Overall | Standard | Hard | Trials | Model |
-|---|---:|---:|---:|---:|---|
-| CRUSH Meditation (Qwen3-Coder 30B Q4_K_S) | **59.8%** | 72.2% | 47.3% | 76 | Qwen3-Coder 30B Q4_K_S (llama.cpp) |
-| CRUSH (Qwen3-Coder 30B Q4_K_S) | **57.0%** | 68.7% | 45.3% | 76 | Qwen3-Coder 30B Q4_K_S (llama.cpp) |
-| CRUSH (Qwen3-Coder 30B AWQ) | **55.5%** | 61.8% | 49.2% | 114 | Qwen3-Coder 30B AWQ (vLLM) |
-| CRUSH (Qwen3-Coder 30B Q5_K_M) | **54.9%** | 62.4% | 47.4% | 75 | Qwen3-Coder 30B Q5_K_M (llama.cpp) |
-| Aider (Qwen3-Coder 30B Q5_K_M) | **53.7%** | 64.6% | 42.7% | 55 | Qwen3-Coder 30B Q5_K_M (llama.cpp) |
-| CRUSH (Qwen 3.5 32B) | **49.1%** | 55.9% | 42.4% | 59 | Qwen 3.5 32B (vLLM) |
-| CRUSH (Devstral 24B) | **44.7%** | 55.3% | 34.1% | 36 | Devstral 24B (vLLM) |
+| Orchestrator | Overall | Standard | Hard | Trials | $/task | Model |
+|---|---:|---:|---:|---:|---:|---|
+| Dao + Qwen3.6 (Neuralwatt) | **76.4%** | 76.8% | 76.1% | 20 | $0.03 | Qwen3.6-35B-A3B + water/wu-wei framing |
+| Zen-lite + Qwen3.6 (Neuralwatt) | **76.1%** | 78.1% | 74.2% | 57 | $0.03 | Qwen3.6-35B-A3B + meditation + TDD (best pure-Qwen config, n=3) |
+| Claude Code + Qwen3.6 (Neuralwatt) | **70.3%** | 77.7% | 62.9% | 19 | $0.04 | Qwen3.6-35B-A3B (vanilla Claude Code harness) |
+| Conclave v8 + Qwen3.6 (Neuralwatt) | **69.1%** | 77.7% | 60.5% | 20 | $0.03 | Qwen3.6-35B-A3B + v8 discipline (2 hard tasks timed out) |
+| [CRUSH](https://github.com/charmbracelet/crush) + Qwen3.6 (Neuralwatt) | **65.5%** | 77.9% | 53.2% | 20 | $0.03 | Qwen3.6-35B-A3B via CRUSH native Anthropic endpoint |
+| CRUSH + zen-lite + Qwen3.6 (Neuralwatt) | **60.3%** | 70.4% | 50.2% | 21 | $0.03 | CRUSH + zen prompt -- zen does NOT transfer (-5.2pp vs CRUSH vanilla) |
+| CRUSH Meditation (Qwen3-Coder 30B Q4_K_S) | **59.8%** | 72.2% | 47.3% | 76 | $0 | Qwen3-Coder 30B Q4_K_S (llama.cpp) |
+| CRUSH (Qwen3-Coder 30B Q4_K_S) | **57.0%** | 68.7% | 45.3% | 76 | $0 | Qwen3-Coder 30B Q4_K_S (llama.cpp) |
+| CRUSH (Qwen3-Coder 30B AWQ) | **55.5%** | 61.8% | 49.2% | 114 | $0 | Qwen3-Coder 30B AWQ (vLLM) |
+| [pi](https://github.com/badlogic/pi-mono) + Qwen3.6 (Neuralwatt) | **55.3%** | 65.5% | 45.1% | 20 | $0.03 | Qwen3.6-35B-A3B via vanilla pi coding agent |
+| CRUSH (Qwen3-Coder 30B Q5_K_M) | **54.9%** | 62.4% | 47.4% | 75 | $0 | Qwen3-Coder 30B Q5_K_M (llama.cpp) |
+| Aider (Qwen3-Coder 30B Q5_K_M) | **53.7%** | 64.6% | 42.7% | 55 | $0 | Qwen3-Coder 30B Q5_K_M (llama.cpp) |
+| [Aider](https://github.com/Aider-AI/aider) + Qwen3.6 (Neuralwatt) | **50.5%** | 56.0% | 44.9% | 20 | ~$0.01 | Qwen3.6-35B-A3B via aider single-pass edit mode |
+| CRUSH (Qwen 3.5 32B) | **49.1%** | 55.9% | 42.4% | 59 | $0 | Qwen 3.5 32B (vLLM) |
+| CRUSH (Devstral 24B) | **44.7%** | 55.3% | 34.1% | 36 | $0 | Devstral 24B (vLLM) |
 
 ### Feature Ablations
 
