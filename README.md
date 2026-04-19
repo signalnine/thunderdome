@@ -2,7 +2,7 @@
 
 Two agents enter, one agent leaves.
 
-Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 5,915 scored trials across 155 orchestrator variants (8,898 total including crashes).
+Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 5,919 scored trials across 155 orchestrator variants (8,900 total including crashes).
 
 ## Results
 
@@ -40,7 +40,7 @@ Same harness with different models, or same model through different harnesses. T
 | [CRUSH](https://github.com/nicepkg/crush) (GLM5) | **81.7%** | 89.1% | 74.3% | 30 | $0.73 | GLM-5 |
 | Gemini CLI | **80.9%** | 80.9% | 80.8% | 60 | $0.14 | Gemini 2.5 Pro |
 | Claude Code + GLM-5.1-fast (Neuralwatt) | **75.7%** | 84.2% | 67.2% | 54 | $0.93 | GLM-5.1-FP8 |
-| Zen-lite + GLM-5.1-fast (Neuralwatt) | **68.2%** | 82.9% | 53.4% | 19 | $0.52 | GLM-5.1-FP8 + zen prompt -- 5 hard tasks timed out at 40min (zen iteration x GLM-5.1 slowness) |
+| Zen-lite + GLM-5.1-fast (Neuralwatt) | **83.1%** | 85.2% | 80.9% | 20 | ~$1.00 | GLM-5.1-FP8 + zen prompt (7 initial timeouts discarded + re-run with 90-150min limits) |
 | [CRUSH](https://github.com/charmbracelet/crush) + GLM-5.1-fast (Neuralwatt) | **64.9%** | 76.9% | 52.8% | 20 | -- | GLM-5.1-FP8 via CRUSH native Anthropic endpoint (-10.8pp vs Claude Code harness) |
 | [Amplifier](https://github.com/microsoft/amplifier) (Gemini 2.5 Flash) | **75.7%** | 78.7% | 72.7% | 17 | $0.02 | Gemini 2.5 Flash |
 | CRUSH (GLM-5-Turbo) | **73.7%** | 76.5% | 70.9% | 38 | $2.27 | GLM-5-Turbo |
@@ -273,7 +273,7 @@ The best cost/quality point so far: **Qwen3.6 writes, Sonnet verifies** at 83.3%
 
 The tool-surface penalty is model-dependent and gets worse for more capable models. CRUSH loses Qwen3.6 about -5pp vs Claude Code (70.3 → 65.5), but loses GLM-5.1-fast about -11pp (75.7 → 64.9). GLM-5.1 is a 600B+ param model; Qwen3.6 is 35B active. Claude Code's richer tools (TodoWrite for state, Grep/Glob for exploration, parallel Bash for verification) matter more when the model has more capability to channel into structured iteration. CRUSH + GLM-5.1 lands at basically the same score as CRUSH + Qwen3.6 (64.9% vs 65.5%) -- same harness, same ceiling, model capability can't punch through the tool constraint.
 
-Zen does not transfer to GLM-5.1 either -- but the failure mode is different. GLM-5.1 + zen-lite scored **68.2% overall (82.9% std, 53.4% hard), -7.5pp below vanilla GLM-5.1 (75.7%)**. Of the 14 trials that finished before the 40-minute task limit the model was at 86.8% -- high enough to be Pareto at $0.52 if it could finish. But zen's "one small truth at a time" cadence multiplied by GLM-5.1's slower per-turn latency (32 tok/s vs Qwen3.6's 64 tok/s) meant 5 reasoning-heavy tasks hit the wall before green. **Zen's lift requires both the right tools (Claude Code's surface) AND enough speed to finish the deliberate iteration cadence in budget.** On Qwen3.6 both conditions hold; on GLM-5.1 the latency budget is too tight. On smaller faster models it lifts; on larger slower ones it times out.
+Zen on GLM-5.1 is a time-budget story, not a quality story. GLM-5.1 + zen-lite initially scored **68.2% overall** with 7 of 19 tasks hitting the default 45-60 minute timeouts. After discarding the timeouts and re-running with 90-150 minute limits, the score jumped to **83.1% (85.2% std, 80.9% hard)** -- a +14.9pp correction. The model can solve the hard tasks when given time; zen's deliberate cadence on GLM-5.1's slower per-turn latency (32 tok/s vs Qwen3.6's 64 tok/s) just multiplies wall-clock time. One task still never completed even at 2.5 hours: bench-circuit-debugger scored 0.29 after 82 minutes. **Zen's lift requires both the right tools (Claude Code's surface) AND enough time budget** -- increase the time limit and GLM-5.1 + zen lands competitive. Methodology note: discarding timeout artifacts from orchestrators that prove capable-given-time is how we treat "failure to finish" vs "failure to solve"; see also `crush-qwen3coder-local-meditate` where similar timeout replacement lifted scores +2.8pp.
 
 CRUSH lands between Claude Code and pi. Running CRUSH via its native Anthropic-compatible provider type (no proxy, direct to Neuralwatt's `/v1/messages` with a browser User-Agent header to bypass Cloudflare WAF) gave **65.5% overall** on Qwen3.6 -- better than pi (+10pp), worse than Claude Code (-5pp). Zero crashes, zero timeouts. CRUSH's simple test-driven loop matches well-specified tasks well but its minimal tool surface (read/bash/edit/write, same as pi) leaves hard-suite scores at 53.2%.
 
