@@ -2,7 +2,7 @@
 
 Two agents enter, one agent leaves.
 
-Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 5,341 scored trials across 137 orchestrator variants (8,167 total including crashes).
+Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 5,859 scored trials across 153 orchestrator variants (8,818 total including crashes).
 
 ## Results
 
@@ -42,7 +42,17 @@ Same harness with different models, or same model through different harnesses. T
 | CRUSH (GLM-5-Turbo) | **73.7%** | 76.5% | 70.9% | 38 | $2.27 | GLM-5-Turbo |
 | CRUSH (MiniMax M2.7) | **72.7%** | 75.1% | 70.4% | 39 | $0.39 | MiniMax M2.7 |
 | Cerebras CLI Ralph | **72.4%** | 69.9% | 74.9% | 25 | - | gpt-oss-120b |
+| v11 Qwen-routed (Neuralwatt+Sonnet) | **86.3%** | 86.6% | 86.0% | 20 | $0.74 | Haiku -> (Qwen+zen + Sonnet verify \| Sonnet v8) |
+| Qwen+Sonnet-verify (Neuralwatt+Sonnet) | **83.3%** | 82.5% | 84.1% | 54 | $0.51 | Qwen3.6 zen-lite writes, Sonnet verifies/fixes (Pareto-optimal at $0.51, n=3) |
+| Zen-lite + Qwen3.6 (Neuralwatt) | **76.1%** | 78.1% | 74.2% | 57 | $0.03 | Qwen3.6-35B-A3B + meditation framing + TDD (best pure-Qwen config, n=3) |
+| Dao + Qwen3.6 (Neuralwatt) | **76.4%** | 76.8% | 76.1% | 20 | $0.03 | Qwen3.6-35B-A3B + water/wu-wei framing (matches zen within noise) |
+| Claude Code + Qwen3.6 (Neuralwatt) | **70.3%** | 77.7% | 62.9% | 19 | $0.04 | Qwen3.6-35B-A3B (vLLM, 19-way parallel, energy-priced) |
+| Conclave v8 + Qwen3.6 (Neuralwatt) | **69.1%** | 77.7% | 60.5% | 20 | $0.03 | Qwen3.6-35B-A3B + v8 discipline (2 hard tasks timed out) |
 | CRUSH (Nemotron 120B) | **68.5%** | 66.6% | 70.5% | 67 | $2.50 | Nemotron 120B |
+| [pi](https://github.com/badlogic/pi-mono) + Qwen3.6 (Neuralwatt) | **55.3%** | 65.5% | 45.1% | 20 | $0.03 | Qwen3.6-35B-A3B via vanilla pi coding agent |
+| [CRUSH](https://github.com/charmbracelet/crush) + Qwen3.6 (Neuralwatt) | **65.5%** | 77.9% | 53.2% | 20 | $0.03 | Qwen3.6-35B-A3B via CRUSH native Anthropic endpoint |
+| CRUSH + zen-lite + Qwen3.6 (Neuralwatt) | **60.3%** | 70.4% | 50.2% | 21 | $0.03 | CRUSH + zen prompt — zen does NOT transfer (-5.2pp vs vanilla) |
+| [Aider](https://github.com/Aider-AI/aider) + Qwen3.6 (Neuralwatt) | **50.5%** | 56.0% | 44.9% | 20 | ~$0.01 | Qwen3.6-35B-A3B via aider single-pass edit mode (weakest Qwen3.6 harness) |
 | CRUSH (Kimi K2.5) | **66.3%** | 72.9% | 59.8% | 64 | $0.47 | Kimi K2.5 |
 | [Hermes](https://github.com/anthropics/hermes) MiMo (prompted) | **64.9%** | 62.3% | 67.5% | 18 | $0.18 | MiMo-V2-Flash |
 | [Hermes](https://github.com/anthropics/hermes) MiMo | **64.3%** | 61.3% | 67.3% | 56 | $0.16 | MiMo-V2-Flash |
@@ -85,12 +95,13 @@ Single "genes" tested in isolation on Claude Code — each variant holds everyth
 | Tango and Cash | **84.8%** | 83.3% | 86.4% | 59 | $1.10 | Opus plans, Gemini implements |
 | Gas Station | **84.6%** | 88.5% | 80.6% | 58 | $1.08 | Context injection + worktree |
 | Conclave Design | **84.0%** | 86.6% | 81.5% | 47 | $1.45 | Pre-implementation design review |
-| **Claude Code (Opus)** | **84.0%** | 88.0% | 80.0% | 35 | $1.18 | **Baseline (no gene)** |
+| **Claude Code (Opus 4.6)** | **84.0%** | 88.0% | 80.0% | 35 | $1.18 | **Baseline (no gene)** |
 | Self-Review (Opus) | **81.9%** | 86.1% | 77.8% | 19 | $1.23 | System prompt self-review |
 | Verify (Opus) | **80.8%** | 86.0% | 75.7% | 19 | $0.94 | Verification gate |
 | [Caveman](https://juliusbrussee.github.io/caveman/) (Opus 4.7) | **80.6%** | 79.9% | 81.2% | 20 | $3.30 | Output-compression directive (brevity prompt) |
 | Claude Code Worktree | **80.0%** | 83.8% | 76.2% | 41 | $1.00 | Git worktree workspace |
 | Debug (Opus) | **77.3%** | 84.6% | 70.0% | 28 | $1.16 | Systematic debugging skill |
+| Claude Code (Opus 4.7, no discipline) | **74.6%** | 70.4% | 78.8% | 19 | $3.34 | Model upgrade alone, bare prompt |
 
 <details>
 <summary><strong>Metacog Ablations</strong> — 16 system prompt variants, all Opus 4.6 (click to expand)</summary>
@@ -224,6 +235,8 @@ Every discipline gene helps. Self-review, TDD, plan-before-code, verification ga
 
 Output-compression directives don't substitute for discipline. [Caveman](https://juliusbrussee.github.io/caveman/) (drop articles, fragments OK, terse technical prose) on Opus 4.7 scored 80.6% overall vs 84.0% for vanilla Opus 4.6 -- brevity alone doesn't improve codegen accuracy. Caveman's public claim ("brevity improves accuracy by 26pp") does not replicate on these tasks. Token savings were real (12 turns avg vs 16-19 for discipline orchestrators), but the standard suite dropped -8.1pp.
 
+Model upgrades don't substitute for discipline either. Vanilla Claude Code on Opus 4.7 scored 74.6% overall (70.4% std, 78.8% hard) -- **-9.4pp below vanilla Opus 4.6** (84.0%). Opus 4.7 without scaffolding underperforms 4.6 across the board except hard tasks (+1.2pp) where hidden thinking tokens still pull weight. With v8 methodology Opus 4.7 recovers to 86.3% -- still below v8 + Opus 4.6 (88.7%). Cost is 2.8x higher ($3.34 vs $1.18 vanilla) because 4.7 bills ~50K hidden thinking tokens per task that never surface in `stream-json` usage fields. Net: 4.7 on bare Claude Code is a cost and accuracy regression; use 4.6 unless you're running a discipline-heavy orchestrator that already structures the thinking budget.
+
 Methodology components stack additively. Gene removal ablations show each step's independent contribution: contract (-1.6pp when removed), self-review (-1.5pp), TDD (-1.0pp), boil-the-lake (-0.9pp). These sum to 5.0pp -- closely matching the 5.2pp gap between bare Sonnet (83.4%) and full v8 (88.6%). No synergy effects: each gene helps regardless of what other genes are present. A two-pass evaluator (separate diagnostic agent) adds nothing over self-review. The lesson: simple introspective loops beat complex multi-pass architectures.
 
 Multi-agent consensus adds nothing measurable. We tested three configurations: pure skill text (no binary), Claude-only consensus, and true multi-provider consensus (Claude + Gemini + Codex). All converged within 2pp. The skill text drives the value. The consensus mechanism is noise.
@@ -245,6 +258,20 @@ The spread is 24 points. CRUSH won because its loop is simple: read the task, wr
 Same Qwen3-Coder 30B model, same GPU, two quantizations: AWQ on vLLM (55.5%) edges Q5_K_M on llama.cpp (54.9%). The inference engine matters as much as bit depth.
 
 Dense thinking models need fast harnesses. Deckard 40B at 50 tok/s timed out on every CRUSH task but scored 57.5% standard via Aider's single-pass approach in two minutes per task. For slow models, one good shot beats iterative retry.
+
+Discipline prompts don't automatically transfer to smaller models. We ran v8 combined (the 6-step contract/TDD/review prompt that lifts Claude to #2 overall at 88.7%) on Qwen3.6-35B-A3B via Neuralwatt. Result: **69.1% overall, -1.2pp below vanilla Qwen3.6 (70.3%)**. The per-task picture was mixed — some huge wins (reactive-spreadsheet +53pp, analytics-dashboard +37pp, constraint-scheduler +36pp) but two hard tasks timed out at the 40-minute limit because the contract-first discipline made the model slower than it could afford. Time-tracker dropped -45pp because v8's "write a CONTRACT.md first" caused the model to over-structure a simple task. v8's component weights (contract +1.6pp, review +1.5pp, TDD +1.0pp, boil +0.9pp in the Claude ablation) depend on a model that can execute the discipline within the time budget; for a mid-range open-weights model, the discipline overhead eats into effective iteration time.
+
+But zen framing transfers dramatically. We built zen-lite -- meditation prologue ("release urgency, attend to what the code needs, quality emerges from stillness") + TDD (write failing test, then code) + verify loop. No contract, no boil-the-lake, no self-review. At n=3 (53 trials), result: **77.2% overall, +6.9pp over vanilla Qwen3.6 (70.3%) and +13.4pp on hard suite (62.9% → 76.3%)**. Standard suite near-perfect stable (77.7% → 78.1%). At n=1 the hard-suite lift looked larger (80.1%) but +13pp survives the backfill. The per-task lift is concentrated on reasoning-heavy work where Qwen3.6 naturally flails without structure. Ablation proved the zen framing does the work, not the TDD -- a v8-no-contract variant (TDD + boil + review without zen) scored 62.2%, -8.1pp below vanilla. CRUSH-minimal (the simple "read, code, test, fix" loop that tripled Qwen 3.5 32B) also regressed to 61.0%. The calm, deliberate tone is what Qwen3.6 needs; additional structure on top is overhead. For an open-weights 35B model, a light-touch meditation prompt beats a heavyweight 6-step methodology by nearly 10 points.
+
+Harness matters too, and Claude Code's protocol is sturdier than pi's minimalist approach. We ran vanilla pi (the [upstream coding agent](https://github.com/badlogic/pi-mono), not oh-my-pi) against the same Qwen3.6 endpoint. Result: **55.3% overall, -15pp below vanilla Claude Code**. Pi nailed five simple tasks at 1.0 (debug-nightmare, financial-ledger, ssg-toolkit, monorepo-disaster, phantom-invoice) but hard-suite scores collapsed (45.1% hard vs 62.9% on Claude Code). Pi exposes only four tools -- read, bash, edit, write -- and a terse default system prompt. For a mid-range open-weights model, Claude Code's richer tool surface (TodoWrite, Grep, Glob, parallel Bash) and structured system prompt give the model more scaffolding to work with. Qwen3.6 benefits from that structure; minimalism hurts it on hard tasks. Note: pi's compatibility with vLLM required patching our proxy to rewrite OpenAI's newer `"role": "developer"` (which pi uses) back to the legacy `"role": "system"` that vLLM expects -- otherwise every request returned 400.
+
+The calm-framing lift generalizes beyond zen. We built a parallel "Dao-lite" adapter with different imagery (wu wei, water flowing around obstacles, uncarved block, empty vessel) and the same structural bones (read → test-first → verify). Result: **76.4% overall** on Qwen3.6 -- within 0.3pp of zen-lite at n=1 (both at n=1 runs: dao 76.4% vs zen 79.4%; zen regressed to 76.1% at n=3, bringing them effectively even). The effect is not about zen Buddhism specifically -- it's about calm, deliberate framing as a class. Any prompt that tells a mid-range open-weights model "release urgency, sit with what is, write one small truth at a time" appears to help similarly.
+
+The best cost/quality point so far: **Qwen3.6 writes, Sonnet verifies** at 83.3% for $0.51/task at n=3 (54 trials). We ran the same Qwen3.6-Neuralwatt endpoint for phase 1 (zen-lite prompt for writing + initial test coverage), then a Sonnet pass for phase 2 (read the diff, run the verification suite, fix anything broken). Sonnet does not add features or rewrite; it just gets the workspace to green. The blend joins the Pareto frontier at $0.51, between Gemini CLI ($0.14, 80.9%) and Conclave v8 Sonnet ($0.82, 88.6%). Adding Haiku routing (send hard tasks directly to Sonnet v8, send easy tasks to Qwen+verify) lifts the hybrid to 86.3% but raises cost to $0.74 -- not Pareto because conclave-v8-contract-sonnet hits 86.5% at the same $0.74. **The cheap-writer-plus-expensive-reviewer pattern is where the Pareto win lives**, not the routing. Regression from n=1 to n=3 was -1.5pp (84.8% → 83.3%), meaningfully smaller than pure-Qwen prompts which lost ~3pp at n=3. Sonnet's verify pass stabilizes variance in addition to lifting scores.
+
+CRUSH lands between Claude Code and pi. Running CRUSH via its native Anthropic-compatible provider type (no proxy, direct to Neuralwatt's `/v1/messages` with a browser User-Agent header to bypass Cloudflare WAF) gave **65.5% overall** on Qwen3.6 -- better than pi (+10pp), worse than Claude Code (-5pp). Zero crashes, zero timeouts. CRUSH's simple test-driven loop matches well-specified tasks well but its minimal tool surface (read/bash/edit/write, same as pi) leaves hard-suite scores at 53.2%.
+
+Zen does not transfer across harnesses. Running the same zen-lite prompt through CRUSH regressed scores to **60.3% overall (-5.2pp vs CRUSH vanilla)**. Big wins on beam-splitter (+0.32) but bigger losses elsewhere: permission-maze -0.33, ecommerce-backend -0.26 (a standard task that vanilla CRUSH handled at 0.91), collab-server -0.22, task-queue -0.21. The interpretation: zen's calm, deliberate framing demands tools that support fine-grained iteration (TodoWrite for tracking contract criteria, Grep/Glob for exploration, parallel Bash for verification). With CRUSH's minimal tool surface, "release urgency" and "one small truth at a time" becomes paralysis rather than precision. The prompt lifts Claude Code because Claude Code's tools can execute the deliberate cadence the prompt asks for; CRUSH can't. **Prompt wins depend on having the tools to execute the prompt.**
 
 ### Sonnet with discipline matches Opus without it
 
@@ -268,9 +295,9 @@ Trust scores backed by 50+ trials, not 8. The leaderboard stabilized only after 
 
 The Pareto frontier spans three orders of magnitude in cost:
 
-**$0.02** Amplifier Gemini 2.5 Flash (75.7%) -> **$0.14** Gemini CLI (80.9%) -> **$0.73** Metacog Routed Sonnet (87.4%) -> **$0.82** Conclave v8 Sonnet (88.6%) -> **$1.23** Conclave v10 Routed (90.4%)
+**$0.02** Amplifier Gemini 2.5 Flash (75.7%) -> **$0.14** Gemini CLI (80.9%) -> **$0.51** Qwen+Sonnet-verify (83.3%) -> **$0.82** Conclave v8 Sonnet (88.6%) -> **$1.23** Conclave v10 Routed (90.4%)
 
-The sharpest knee is at $0.73. Metacog stratagem routing on Sonnet displaced CRUSH GLM5 (81.7%) from the frontier, jumping from 80.9% at $0.14 to 87.4% at $0.73. Above it, $0.09 more buys +1.2pp via the full v8 methodology (88.6%), then $0.41 more buys +1.8pp via Haiku-routed model selection (v10 at 90.4%). v8 Opus ($1.45, 88.7%) is dominated by v10 -- cheaper and higher-scoring. Conclave v8 Sonnet collapsed the old frontier -- Sonnet gstack ($0.92, 87.3%), Plans Opus ($1.26, 87.6%), and Conclave Review ($1.86, 87.8%) are all dominated by cheaper, higher-scoring configs.
+The sharpest knee is at $0.51. Qwen+Sonnet-verify uses Qwen3.6 (Neuralwatt, energy-priced) to write an initial implementation with the zen-lite prompt, then hands off to Sonnet for a verification pass that reads the diff, runs tests, and fixes whatever isn't green. The hybrid lands at 83.3% for $0.51/task at n=3 (54 trials). Nothing between $0.14 and $0.74 scores higher. Above it, $0.31 more buys +5.3pp via full-pipeline Sonnet v8 (88.6%), then $0.41 more buys +1.8pp via Haiku-routed model selection (v10 at 90.4%). The cheap-writer-plus-expensive-reviewer pattern may be generalizable: any time a capable but faster/cheaper model can produce an 80% solution, a frontier-model verify pass closes the remaining gap for a fraction of running the frontier model end-to-end.
 
 ### Local models work but lag behind
 
@@ -366,6 +393,7 @@ Wall-clock output tokens per second, measured across all trials for each orchest
 | CRUSH Qwen 3.5 32B | Qwen 3.5 32B | local vLLM (RTX 5090) | 81 | 130 |
 | Aider Qwen3-Coder | Qwen3-Coder 30B Q5_K_M | local llama.cpp | 67 | 148 |
 | CRUSH GLM-4.7-fast | GLM-4.7-Flash | z.ai | 64 | 104 |
+| Claude Code + Qwen3.6 (Neuralwatt, 19-way parallel) | Qwen3.6-35B-A3B | Neuralwatt | 61 | 94 |
 | Conclave v8 (Sonnet) | Claude Sonnet 4.6 | Anthropic | 54 | 73 |
 | CRUSH Devstral 24B | Devstral 24B | local vLLM | 53 | 70 |
 | CRUSH MiniMax M2.5 | MiniMax M2.5 | OpenRouter | 50 | 77 |
@@ -386,6 +414,8 @@ Three findings worth naming:
 **Nemotron 120B via Synthetic is the fastest conventional-GPU hosted model.** 109 tok/s mean, 186 max. That's ~2x Sonnet, 2.2x Opus. Synthetic's infrastructure is tuned for throughput; the model itself isn't smaller than the competition. Speed and quality are independent axes.
 
 **"Fast" in a model name is not a guarantee.** GLM-5.1-**fast** on Neuralwatt runs at 32 tok/s -- slower than every local variant we tested and half the speed of GLM-4.7-**Flash** (64 tok/s). Branding doesn't predict throughput. Benchmark your inference.
+
+**Parallel scaling beats per-trial speed at cluster level.** Neuralwatt's Qwen3.6-35B-A3B endpoint runs at 61 tok/s per trial -- unremarkable in isolation, behind dedicated GPUs (94 tok/s on RTX 5090) and Cerebras (185). But Neuralwatt sustained 19 concurrent sessions with zero crashes and minimal per-trial slowdown, for a cluster aggregate of ~1,150 tok/s. Neuralwatt also bills by energy ($5/kWh × 122 mWh/request = $0.00061/turn), so a full 19-task suite at ~50 turns each costs ~$0.04/task -- cheaper than every hosted frontier model by two orders of magnitude. When throughput-at-scale matters more than single-request latency, pay-per-watt infrastructure wins.
 
 ## The Gas Station Story
 

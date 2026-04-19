@@ -19,6 +19,10 @@ RUN chmod +x /usr/local/bin/crush
 COPY openai_proxy.py /usr/local/bin/openai_proxy.py
 RUN chmod +x /usr/local/bin/openai_proxy.py
 
+# Copy the Anthropic-format proxy (for Claude-compat endpoints like Neuralwatt).
+COPY anthropic_proxy.py /usr/local/bin/anthropic_proxy.py
+RUN chmod +x /usr/local/bin/anthropic_proxy.py
+
 # Use /tmp as HOME so Crush can write config/session files
 ENV HOME=/tmp
 ENV CRUSH_DISABLE_PROVIDER_AUTO_UPDATE=1

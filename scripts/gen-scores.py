@@ -33,6 +33,22 @@ _LOCAL_INFERENCE = {o for o in (
     "crush-qwen3coder-q5km", "crush-deckard-q4km", "crush-deckard-q4km-nothink",
     "aider-qwen3coder-q5km", "aider-deckard-q4km",
     "hermes-devstral-local", "hermes-qwen35-local", "hermes-gptoss-local",
+    # Neuralwatt Qwen3.6: energy-billed, some trials have $0 cost when turn
+    # tracking fails; fall back to duration-based crash detection.
+    "claude-code-qwen36-neuralwatt",
+    "conclave-v8-combined-qwen36-neuralwatt",
+    "zen-lite-qwen36-neuralwatt",
+    "crush-minimal-qwen36-neuralwatt",
+    "conclave-v8-no-contract-qwen36-neuralwatt",
+    "pi-qwen36-neuralwatt",
+    "crush-qwen36-neuralwatt",
+    "crush-zen-qwen36-neuralwatt",
+    "aider-qwen36-neuralwatt",
+    "dao-qwen36-neuralwatt",
+    # Hybrid (Qwen + Sonnet) adapters — Sonnet-verify phase can be $0
+    # when Qwen's implementation was clean; use duration filter instead.
+    "qwen-sonnet-verify",
+    "v11-qwen-routed",
 )}
 
 def is_crash(meta):
