@@ -49,6 +49,7 @@ _LOCAL_INFERENCE = {o for o in (
     # when Qwen's implementation was clean; use duration filter instead.
     "qwen-sonnet-verify",
     "v11-qwen-routed",
+    "crush-glm51-fast-neuralwatt-anthropic",
 )}
 
 def is_crash(meta):
