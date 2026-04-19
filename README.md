@@ -299,11 +299,18 @@ The Pareto frontier spans three orders of magnitude in cost:
 
 The sharpest knee is at $0.51. Qwen+Sonnet-verify uses Qwen3.6 (Neuralwatt, energy-priced) to write an initial implementation with the zen-lite prompt, then hands off to Sonnet for a verification pass that reads the diff, runs tests, and fixes whatever isn't green. The hybrid lands at 83.3% for $0.51/task at n=3 (54 trials). Nothing between $0.14 and $0.74 scores higher. Above it, $0.31 more buys +5.3pp via full-pipeline Sonnet v8 (88.6%), then $0.41 more buys +1.8pp via Haiku-routed model selection (v10 at 90.4%). The cheap-writer-plus-expensive-reviewer pattern may be generalizable: any time a capable but faster/cheaper model can produce an 80% solution, a frontier-model verify pass closes the remaining gap for a fraction of running the frontier model end-to-end.
 
-### Local models work but lag behind
+### Local models closed most of the gap
 
-Qwen3-Coder 30B on a single RTX 5090 scores 54-60% at $0/task. A meditation-adapted CRUSH.md -- reframing the agent's mindset toward calm precision before coding -- pushes Q4_K_S to 59.8%, the best local result (+2.8pp over baseline, p=0.046 paired t-test on 76 trial pairs, though non-parametric tests don't reach significance). The meditation prompt also uses 30% fewer tokens. The [CRUSH](https://github.com/nicepkg/crush) system prompt nearly tripled Qwen 3.5 32B's score from ~20% to 49%. Harness matters as much as model at this tier -- the right prompt and loop structure extract far more from a mid-range model than raw capability alone.
+A year ago the story was "local models lag frontier APIs by 30-40pp." It's now 13pp and shrinking. Qwen3.6-35B-A3B (runs on a single RTX 5090) with a zen-lite prompt hits **76.1% at n=3** -- competitive with many hosted Sonnet orchestrators. Plug that same model into the cheap-writer-plus-expensive-reviewer pattern (Qwen writes, Sonnet verifies) and it lands on the Pareto frontier at $0.51.
 
-[Hermes](https://github.com/anthropics/hermes) + MiMo-V2-Flash (Xiaomi's 309B MoE, 15B active) scores 64.3% at $0.16/task — the cheapest model with full-suite data and competitive hard-task performance (67.3%).
+Key progressions:
+- **Qwen 3.5 32B (early 2026)**: 49% via CRUSH, near-zero via Claude Code protocol. The [CRUSH](https://github.com/nicepkg/crush) system prompt nearly tripled it from ~20% to 49%. Harness mattered more than model.
+- **Qwen3-Coder 30B**: 54-60% at $0/task. Meditation-adapted CRUSH.md pushed Q4_K_S to 59.8% (+2.8pp, p=0.046 paired t-test on 76 trial pairs, non-parametric tests don't reach significance).
+- **Qwen3.6-35B-A3B (current)**: 70.3% vanilla, **76.1% with zen-lite, 76.4% with Dao framing** -- effectively tied. The calm-framing lift is a class effect, not specific to zen.
+
+The prompts learned on prior Qwen generations transfer with bigger absolute deltas: Qwen3-Coder got +2.8pp from meditation; Qwen3.6 gets +6.9pp from zen-lite (+13.4pp hard). Prompt discoveries compound with model capability. The best open-weights number we've measured on this suite is now 76.4% -- far from the 90.4% frontier but closer every iteration.
+
+[Hermes](https://github.com/anthropics/hermes) + MiMo-V2-Flash (Xiaomi's 309B MoE, 15B active) scores 64.3% at $0.16/task — the cheapest hosted option with full-suite data and competitive hard-task performance (67.3%).
 
 ## Cost Efficiency
 
@@ -319,7 +326,14 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | CRUSH Meditation (Qwen3-Coder 30B Q4_K_S) | 59.8% | $0.00 | |
 | Cerebras CLI Ralph | 72.4% | $0.00 | |
 | **Amplifier (Gemini 2.5 Flash)** | **75.7%** | **$0.02** | **best <$0.14** |
-| **Gemini CLI** | **80.9%** | **$0.14** | **best <$0.73** |
+| Conclave v8 + Qwen3.6 (Neuralwatt) | 69.1% | $0.03 | |
+| CRUSH + zen-lite + Qwen3.6 (Neuralwatt) | 60.3% | $0.03 | |
+| CRUSH + Qwen3.6 (Neuralwatt) | 65.5% | $0.03 | |
+| Dao + Qwen3.6 (Neuralwatt) | 76.4% | $0.03 | |
+| pi + Qwen3.6 (Neuralwatt) | 55.3% | $0.03 | |
+| Zen-lite + Qwen3.6 (Neuralwatt) | 76.1% | $0.03 | |
+| Claude Code + Qwen3.6 (Neuralwatt) | 70.3% | $0.04 | |
+| **Gemini CLI** | **80.9%** | **$0.14** | **best <$0.51** |
 | Hermes MiMo | 64.3% | $0.16 | |
 | FL Supervisor Pro | 45.0% | $0.16 | |
 | Hermes MiMo (prompted) | 64.9% | $0.18 | |
@@ -327,10 +341,15 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | CRUSH (MiniMax M2.7) | 72.7% | $0.39 | |
 | CRUSH (Kimi K2.5) | 66.3% | $0.47 | |
 | CRUSH (MiniMax M2.5) | 61.7% | $0.47 | |
+| **Qwen+Sonnet-verify (Neuralwatt+Sonnet)** | **83.3%** | **$0.51** | **best <$0.74** |
 | CRUSH (GLM-4.7-Flash) | 55.9% | $0.54 | |
+| Conclave v8 Bare (Sonnet) | 83.4% | $0.69 | |
 | Conclave v7 Lite (Sonnet) | 80.3% | $0.71 | |
+| Metacog Routed (Sonnet) | 84.8% | $0.73 | |
 | CRUSH (GLM5) | 81.7% | $0.73 | |
-| **Metacog Routed (Sonnet)** | **87.4%** | **$0.73** | **best <$0.82** |
+| **Conclave v8 Outcomes (Sonnet)** | **87.7%** | **$0.74** | **best <$0.82** |
+| Conclave v8 Contract (Sonnet) | 86.5% | $0.74 | |
+| v11 Qwen-routed (Neuralwatt+Sonnet) | 86.3% | $0.74 | |
 | Conclave v8 Contract (Sonnet) | 86.5% | $0.74 | |
 | ExoMonad v2 | 80.9% | $0.75 | |
 | Conclave v8 Bare (Sonnet) | 83.4% | $0.69 | |
@@ -393,7 +412,9 @@ Wall-clock output tokens per second, measured across all trials for each orchest
 | CRUSH Qwen 3.5 32B | Qwen 3.5 32B | local vLLM (RTX 5090) | 81 | 130 |
 | Aider Qwen3-Coder | Qwen3-Coder 30B Q5_K_M | local llama.cpp | 67 | 148 |
 | CRUSH GLM-4.7-fast | GLM-4.7-Flash | z.ai | 64 | 104 |
-| Claude Code + Qwen3.6 (Neuralwatt, 19-way parallel) | Qwen3.6-35B-A3B | Neuralwatt | 61 | 94 |
+| Claude Code + Qwen3.6 (19-way parallel) | Qwen3.6-35B-A3B | Neuralwatt | 64 | 133 |
+| Zen-lite + Qwen3.6 (19-way parallel) | Qwen3.6-35B-A3B | Neuralwatt | 42 | 64 |
+| Dao + Qwen3.6 (19-way parallel) | Qwen3.6-35B-A3B | Neuralwatt | 35 | 69 |
 | Conclave v8 (Sonnet) | Claude Sonnet 4.6 | Anthropic | 54 | 73 |
 | CRUSH Devstral 24B | Devstral 24B | local vLLM | 53 | 70 |
 | CRUSH MiniMax M2.5 | MiniMax M2.5 | OpenRouter | 50 | 77 |
@@ -415,7 +436,9 @@ Three findings worth naming:
 
 **"Fast" in a model name is not a guarantee.** GLM-5.1-**fast** on Neuralwatt runs at 32 tok/s -- slower than every local variant we tested and half the speed of GLM-4.7-**Flash** (64 tok/s). Branding doesn't predict throughput. Benchmark your inference.
 
-**Parallel scaling beats per-trial speed at cluster level.** Neuralwatt's Qwen3.6-35B-A3B endpoint runs at 61 tok/s per trial -- unremarkable in isolation, behind dedicated GPUs (94 tok/s on RTX 5090) and Cerebras (185). But Neuralwatt sustained 19 concurrent sessions with zero crashes and minimal per-trial slowdown, for a cluster aggregate of ~1,150 tok/s. Neuralwatt also bills by energy ($5/kWh × 122 mWh/request = $0.00061/turn), so a full 19-task suite at ~50 turns each costs ~$0.04/task -- cheaper than every hosted frontier model by two orders of magnitude. When throughput-at-scale matters more than single-request latency, pay-per-watt infrastructure wins.
+**Parallel scaling beats per-trial speed at cluster level.** Neuralwatt's Qwen3.6-35B-A3B endpoint runs at 64 tok/s per trial (vanilla Claude Code) -- unremarkable in isolation, behind dedicated GPUs (94 tok/s on RTX 5090) and Cerebras (185). But Neuralwatt sustained 19 concurrent sessions with zero crashes and minimal per-trial slowdown, for a cluster aggregate of ~1,200 tok/s. Actual billing came in at $0.00208/request (342 requests / $0.71), so a full 19-task suite at ~50 turns each costs ~$0.10/task -- still cheaper than every hosted frontier model by an order of magnitude. When throughput-at-scale matters more than single-request latency, pay-per-watt infrastructure wins.
+
+**Calm-framing prompts cost throughput.** Plain Claude Code + Qwen3.6 runs at 64 tok/s, but adding the zen-lite prompt drops it to 42 tok/s and Dao to 35 tok/s -- a 34-45% throughput hit. The model spends more tokens reasoning before acting (that's the point of the prompt). Wall-clock runtime goes up proportionally, but quality goes up further: zen-lite lifts Qwen3.6 from 70.3% to 76.1% and holds it. You're trading time and energy for correctness; on reasoning-heavy tasks that's a good trade.
 
 ## The Gas Station Story
 
