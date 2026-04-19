@@ -50,6 +50,8 @@ _LOCAL_INFERENCE = {o for o in (
     "qwen-sonnet-verify",
     "v11-qwen-routed",
     "crush-glm51-fast-neuralwatt-anthropic",
+    "forge-gpt54",
+    "forge-qwen36-neuralwatt",
 )}
 
 def is_crash(meta):

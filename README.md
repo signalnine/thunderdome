@@ -2,7 +2,7 @@
 
 Two agents enter, one agent leaves.
 
-Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 5,919 scored trials across 155 orchestrator variants (8,900 total including crashes).
+Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 5,959 scored trials across 157 orchestrator variants (8,939 total including crashes).
 
 ## Results
 
@@ -42,6 +42,7 @@ Same harness with different models, or same model through different harnesses. T
 | Claude Code + GLM-5.1-fast (Neuralwatt) | **75.7%** | 84.2% | 67.2% | 54 | $0.93 | GLM-5.1-FP8 |
 | Zen-lite + GLM-5.1-fast (Neuralwatt) | **83.1%** | 85.2% | 80.9% | 20 | ~$1.00 | GLM-5.1-FP8 + zen prompt (7 initial timeouts discarded + re-run with 90-150min limits) |
 | [CRUSH](https://github.com/charmbracelet/crush) + GLM-5.1-fast (Neuralwatt) | **64.9%** | 76.9% | 52.8% | 20 | -- | GLM-5.1-FP8 via CRUSH native Anthropic endpoint (-10.8pp vs Claude Code harness) |
+| [Forge Code](https://forgecode.dev) + GPT-5.4 | **66.3%** | 72.6% | 59.9% | 20 | -- | GPT-5.4 via Forge (TermBench 2.0 leader); fast but no lift on this suite |
 | [Amplifier](https://github.com/microsoft/amplifier) (Gemini 2.5 Flash) | **75.7%** | 78.7% | 72.7% | 17 | $0.02 | Gemini 2.5 Flash |
 | CRUSH (GLM-5-Turbo) | **73.7%** | 76.5% | 70.9% | 38 | $2.27 | GLM-5-Turbo |
 | CRUSH (MiniMax M2.7) | **72.7%** | 75.1% | 70.4% | 39 | $0.39 | MiniMax M2.7 |
@@ -65,6 +66,7 @@ Models that run on a single RTX 5090 via llama.cpp or vLLM, plus Qwen3.6-35B-A3B
 | Dao + Qwen3.6 (Neuralwatt) | **76.4%** | 76.8% | 76.1% | 20 | $0.03 | Qwen3.6-35B-A3B + water/wu-wei framing |
 | Zen-lite + Qwen3.6 (Neuralwatt) | **76.1%** | 78.1% | 74.2% | 57 | $0.03 | Qwen3.6-35B-A3B + meditation + TDD (best pure-Qwen config, n=3) |
 | Claude Code + Qwen3.6 (Neuralwatt) | **70.3%** | 77.7% | 62.9% | 19 | $0.04 | Qwen3.6-35B-A3B (vanilla Claude Code harness) |
+| [Forge Code](https://forgecode.dev) + Qwen3.6 (Neuralwatt) | **69.9%** | 75.9% | 64.0% | 20 | ~$0.03 | Qwen3.6-35B-A3B via Forge (TermBench 2.0 leader, tied with Claude Code on this suite) |
 | Conclave v8 + Qwen3.6 (Neuralwatt) | **69.1%** | 77.7% | 60.5% | 20 | $0.03 | Qwen3.6-35B-A3B + v8 discipline (2 hard tasks timed out) |
 | [CRUSH](https://github.com/charmbracelet/crush) + Qwen3.6 (Neuralwatt) | **65.5%** | 77.9% | 53.2% | 20 | $0.03 | Qwen3.6-35B-A3B via CRUSH native Anthropic endpoint |
 | CRUSH + zen-lite + Qwen3.6 (Neuralwatt) | **60.3%** | 70.4% | 50.2% | 21 | $0.03 | CRUSH + zen prompt -- zen does NOT transfer (-5.2pp vs CRUSH vanilla) |
@@ -274,6 +276,8 @@ The best cost/quality point so far: **Qwen3.6 writes, Sonnet verifies** at 83.3%
 The tool-surface penalty is model-dependent and gets worse for more capable models. CRUSH loses Qwen3.6 about -5pp vs Claude Code (70.3 → 65.5), but loses GLM-5.1-fast about -11pp (75.7 → 64.9). GLM-5.1 is a 600B+ param model; Qwen3.6 is 35B active. Claude Code's richer tools (TodoWrite for state, Grep/Glob for exploration, parallel Bash for verification) matter more when the model has more capability to channel into structured iteration. CRUSH + GLM-5.1 lands at basically the same score as CRUSH + Qwen3.6 (64.9% vs 65.5%) -- same harness, same ceiling, model capability can't punch through the tool constraint.
 
 Zen on GLM-5.1 is a time-budget story, not a quality story. GLM-5.1 + zen-lite initially scored **68.2% overall** with 7 of 19 tasks hitting the default 45-60 minute timeouts. After discarding the timeouts and re-running with 90-150 minute limits, the score jumped to **83.1% (85.2% std, 80.9% hard)** -- a +14.9pp correction. The model can solve the hard tasks when given time; zen's deliberate cadence on GLM-5.1's slower per-turn latency (32 tok/s vs Qwen3.6's 64 tok/s) just multiplies wall-clock time. One task still never completed even at 2.5 hours: bench-circuit-debugger scored 0.29 after 82 minutes. **Zen's lift requires both the right tools (Claude Code's surface) AND enough time budget** -- increase the time limit and GLM-5.1 + zen lands competitive. Methodology note: discarding timeout artifacts from orchestrators that prove capable-given-time is how we treat "failure to finish" vs "failure to solve"; see also `crush-qwen3coder-local-meditate` where similar timeout replacement lifted scores +2.8pp.
+
+Forge Code is the TermBench 2.0 leader but ties Claude Code on this suite. Forge + Qwen3.6 scored **69.9%** vs Claude Code + Qwen3.6 at 70.3% -- a wash (-0.4pp overall, +1.1pp hard). Forge + GPT-5.4 scored **66.3%** -- no lift from the more capable model. The TermBench 2.0 leaderboard rewards different properties (tool-call patterns, agentic subroutines, command-generation) than our suite rewards (test-coverage-plus-implementation-correctness on open-ended greenfield). Forge's real win here is speed: most tasks completed in 3-6 min vs Claude Code's ~10 min, and a full 19-task suite at parallel=19 wrapped in ~30 min wall-clock. **Different harnesses are optimized for different benchmark shapes**; TermBench 2.0 leadership does not automatically translate to score lift on programming tasks with rich test suites and hidden validators.
 
 CRUSH lands between Claude Code and pi. Running CRUSH via its native Anthropic-compatible provider type (no proxy, direct to Neuralwatt's `/v1/messages` with a browser User-Agent header to bypass Cloudflare WAF) gave **65.5% overall** on Qwen3.6 -- better than pi (+10pp), worse than Claude Code (-5pp). Zero crashes, zero timeouts. CRUSH's simple test-driven loop matches well-specified tasks well but its minimal tool surface (read/bash/edit/write, same as pi) leaves hard-suite scores at 53.2%.
 
