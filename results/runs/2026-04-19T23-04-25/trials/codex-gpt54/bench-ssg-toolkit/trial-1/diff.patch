@@ -1,0 +1,637 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..dcdfad6
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,9 @@
++{
++  "input_tokens": 0,
++  "output_tokens": 0,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 0,
++  "duration_ms": 140000,
++  "total_cost_usd": 0.0
++}
+\ No newline at end of file
+diff --git a/.thunderdome-output.jsonl b/.thunderdome-output.jsonl
+new file mode 100644
+index 0000000..c5fb960
+--- /dev/null
++++ b/.thunderdome-output.jsonl
+@@ -0,0 +1,53 @@
++{"type":"thread.started","thread_id":"019da7fc-fa05-7d50-8489-7246ceb742ad"}
++{"type":"turn.started"}
++{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’m inspecting the toolkit structure, plugin interface, and the plugin test expectations first. Then I’ll implement the plugins against the existing core without breaking the current test suite."}}
++{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc 'rg --files /workspace'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc 'rg --files /workspace'","aggregated_output":"/workspace/tsconfig.json\n/workspace/vitest.config.ts\n/workspace/package.json\n/workspace/TASK.md\n/workspace/tests/core.test.ts\n/workspace/tests/plugins/syntax-highlight.test.ts\n/workspace/tests/plugins/markdown-ext.test.ts\n/workspace/tests/plugins/taxonomy.test.ts\n/workspace/tests/plugins/asset-pipeline.test.ts\n/workspace/tests/plugins/dev-server.test.ts\n/workspace/tests/plugins/sitemap.test.ts\n/workspace/tests/plugins/rss-feed.test.ts\n/workspace/tests/plugins/search-index.test.ts\n/workspace/package-lock.json\n/workspace/src/core/index.ts\n/workspace/src/core/engine.ts\n/workspace/src/core/templates.ts\n/workspace/src/core/types.ts\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_2","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,220p' /workspace/src/core/types.ts\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_2","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,220p' /workspace/src/core/types.ts\"","aggregated_output":"export interface SiteConfig {\n  title: string;\n  baseUrl: string;\n  outputDir: string;\n  contentDir: string;\n  templateDir: string;\n}\n\nexport interface ContentFile {\n  slug: string;\n  title: string;\n  content: string;        // raw content (markdown or html)\n  metadata: Record<string, unknown>;\n  date?: string;\n  tags?: string[];\n  template?: string;\n}\n\nexport interface BuildContext {\n  config: SiteConfig;\n  files: ContentFile[];\n  output: Map<string, string>;  // output path -> rendered content\n  assets: Map<string, Buffer>;  // output path -> binary data\n  data: Map<string, unknown>;   // shared plugin data store\n}\n\nexport interface PluginHooks {\n  beforeBuild?: (ctx: BuildContext) => Promise<void> | void;\n  transformContent?: (file: ContentFile, ctx: BuildContext) => Promise<ContentFile> | ContentFile;\n  afterBuild?: (ctx: BuildContext) => Promise<void> | void;\n}\n\nexport interface Plugin {\n  name: string;\n  version: string;\n  dependencies: string[];  // names of plugins this depends on\n  hooks: PluginHooks;\n}\n\nexport interface Template {\n  name: string;\n  render: (content: string, data: Record<string, unknown>) => string;\n}\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_3","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,260p' /workspace/tests/core.test.ts\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_3","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,260p' /workspace/tests/core.test.ts\"","aggregated_output":"import { describe, it, expect } from 'vitest';\nimport { BuildEngine, createDefaultTemplate, createListTemplate } from '../src/core/index.js';\nimport { ContentFile, Plugin, SiteConfig } from '../src/core/types.js';\n\nconst testConfig: SiteConfig = {\n  title: 'Test Site',\n  baseUrl: 'https://example.com',\n  outputDir: './dist',\n  contentDir: './content',\n  templateDir: './templates',\n};\n\nfunction makeFile(overrides: Partial<ContentFile> = {}): ContentFile {\n  return {\n    slug: 'test-post',\n    title: 'Test Post',\n    content: '<p>Hello world</p>',\n    metadata: {},\n    ...overrides,\n  };\n}\n\nfunction makePlugin(overrides: Partial<Plugin> = {}): Plugin {\n  return {\n    name: 'test-plugin',\n    version: '1.0.0',\n    dependencies: [],\n    hooks: {},\n    ...overrides,\n  };\n}\n\ndescribe('BuildEngine', () => {\n  it('registers plugins', () => {\n    const engine = new BuildEngine(testConfig);\n    const plugin = makePlugin({ name: 'my-plugin' });\n    engine.registerPlugin(plugin);\n    expect(engine.getPlugins()).toHaveLength(1);\n    expect(engine.getPlugins()[0].name).toBe('my-plugin');\n  });\n\n  it('registers templates', () => {\n    const engine = new BuildEngine(testConfig);\n    const template = createDefaultTemplate();\n    engine.registerTemplate(template);\n    expect(engine.getTemplates().has('default')).toBe(true);\n  });\n\n  it('builds with default template and renders HTML', async () => {\n    const engine = new BuildEngine(testConfig);\n    engine.registerTemplate(createDefaultTemplate());\n    const file = makeFile({ title: 'My Post', content: '<p>Content here</p>' });\n    const ctx = await engine.build([file]);\n    const output = ctx.output.get('test-post.html')!;\n    expect(output).toContain('<!DOCTYPE html>');\n    expect(output).toContain('My Post');\n    expect(output).toContain('<p>Content here</p>');\n    expect(output).toContain('Test Site');\n  });\n\n  it('builds with list template and renders list HTML', async () => {\n    const engine = new BuildEngine(testConfig);\n    engine.registerTemplate(createListTemplate());\n    const file = makeFile({ title: 'My List', content: '<ul><li>Item</li></ul>', template: 'list' });\n    const ctx = await engine.build([file]);\n    const output = ctx.output.get('test-post.html')!;\n    expect(output).toContain('<!DOCTYPE html>');\n    expect(output).toContain('My List');\n    expect(output).toContain('<div class=\"list\">');\n    expect(output).toContain('<ul><li>Item</li></ul>');\n  });\n\n  it('outputs raw content when no matching template', async () => {\n    const engine = new BuildEngine(testConfig);\n    const file = makeFile({ content: '<p>Raw content</p>' });\n    const ctx = await engine.build([file]);\n    expect(ctx.output.get('test-post.html')).toBe('<p>Raw content</p>');\n  });\n\n  it('calls plugin beforeBuild hook', async () => {\n    const engine = new BuildEngine(testConfig);\n    let called = false;\n    engine.registerPlugin(makePlugin({\n      hooks: {\n        beforeBuild: () => { called = true; },\n      },\n    }));\n    await engine.build([]);\n    expect(called).toBe(true);\n  });\n\n  it('calls plugin transformContent hook to transform files', async () => {\n    const engine = new BuildEngine(testConfig);\n    engine.registerPlugin(makePlugin({\n      hooks: {\n        transformContent: (file) => ({\n          ...file,\n          content: file.content.toUpperCase(),\n        }),\n      },\n    }));\n    const ctx = await engine.build([makeFile({ content: 'hello' })]);\n    expect(ctx.files[0].content).toBe('HELLO');\n  });\n\n  it('calls plugin afterBuild hook', async () => {\n    const engine = new BuildEngine(testConfig);\n    let called = false;\n    engine.registerPlugin(makePlugin({\n      hooks: {\n        afterBuild: () => { called = true; },\n      },\n    }));\n    await engine.build([]);\n    expect(called).toBe(true);\n  });\n\n  it('executes plugins in dependency order', () => {\n    const engine = new BuildEngine(testConfig);\n    engine.registerPlugin(makePlugin({ name: 'b', dependencies: ['a'] }));\n    engine.registerPlugin(makePlugin({ name: 'a', dependencies: [] }));\n    const order = engine.resolvePluginOrder();\n    expect(order.map(p => p.name)).toEqual(['a', 'b']);\n  });\n\n  it('throws on circular dependency', () => {\n    const engine = new BuildEngine(testConfig);\n    engine.registerPlugin(makePlugin({ name: 'a', dependencies: ['b'] }));\n    engine.registerPlugin(makePlugin({ name: 'b', dependencies: ['a'] }));\n    expect(() => engine.resolvePluginOrder()).toThrow('Circular dependency');\n  });\n\n  it('throws on missing dependency', () => {\n    const engine = new BuildEngine(testConfig);\n    engine.registerPlugin(makePlugin({ name: 'a', dependencies: ['missing'] }));\n    expect(() => engine.resolvePluginOrder()).toThrow('Missing dependency');\n  });\n\n  it('applies multiple plugins transformContent in order', async () => {\n    const engine = new BuildEngine(testConfig);\n    engine.registerPlugin(makePlugin({\n      name: 'first',\n      hooks: {\n        transformContent: (file) => ({\n          ...file,\n          content: file.content + ' [first]',\n        }),\n      },\n    }));\n    engine.registerPlugin(makePlugin({\n      name: 'second',\n      hooks: {\n        transformContent: (file) => ({\n          ...file,\n          content: file.content + ' [second]',\n        }),\n      },\n    }));\n    const ctx = await engine.build([makeFile({ content: 'start' })]);\n    expect(ctx.files[0].content).toBe('start [first] [second]');\n  });\n\n  it('provides shared data store in build context', async () => {\n    const engine = new BuildEngine(testConfig);\n    engine.registerPlugin(makePlugin({\n      hooks: {\n        beforeBuild: (ctx) => { ctx.data.set('key', 'value'); },\n      },\n    }));\n    const ctx = await engine.build([]);\n    expect(ctx.data.get('key')).toBe('value');\n  });\n\n  it('retains file metadata through build', async () => {\n    const engine = new BuildEngine(testConfig);\n    const file = makeFile({\n      metadata: { author: 'Alice', category: 'tech' },\n      date: '2024-01-01',\n      tags: ['js', 'node'],\n    });\n    const ctx = await engine.build([file]);\n    expect(ctx.files[0].metadata).toEqual({ author: 'Alice', category: 'tech' });\n    expect(ctx.files[0].date).toBe('2024-01-01');\n    expect(ctx.files[0].tags).toEqual(['js', 'node']);\n  });\n\n  it('produces empty output for empty file list', async () => {\n    const engine = new BuildEngine(testConfig);\n    engine.registerTemplate(createDefaultTemplate());\n    const ctx = await engine.build([]);\n    expect(ctx.output.size).toBe(0);\n    expect(ctx.files).toHaveLength(0);\n  });\n});\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_4","type":"command_execution","command":"/bin/bash -lc \"find /workspace/tests/plugins -maxdepth 1 -type f | sort | xargs -I{} sh -c \\\"printf 'FILE %s\\\\n' '{}' ; sed -n '1,260p' '{}'\\\"\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_4","type":"command_execution","command":"/bin/bash -lc \"find /workspace/tests/plugins -maxdepth 1 -type f | sort | xargs -I{} sh -c \\\"printf 'FILE %s\\\\n' '{}' ; sed -n '1,260p' '{}'\\\"\"","aggregated_output":"FILE /workspace/tests/plugins/asset-pipeline.test.ts\nimport { describe, it, expect } from 'vitest';\nimport { createAssetPipelinePlugin } from '../../src/plugins/asset-pipeline.js';\nimport { BuildContext, ContentFile, SiteConfig } from '../../src/core/types.js';\n\nconst testConfig: SiteConfig = {\n  title: 'Test Site',\n  baseUrl: 'https://example.com',\n  outputDir: './dist',\n  contentDir: './content',\n  templateDir: './templates',\n};\n\nfunction makeCtx(): BuildContext {\n  return {\n    config: testConfig,\n    files: [],\n    output: new Map(),\n    assets: new Map(),\n    data: new Map(),\n  };\n}\n\nfunction makeFile(overrides: Partial<ContentFile> = {}): ContentFile {\n  return {\n    slug: 'test',\n    title: 'Test',\n    content: '',\n    metadata: {},\n    ...overrides,\n  };\n}\n\ndescribe('asset-pipeline plugin', () => {\n  const plugin = createAssetPipelinePlugin();\n\n  it('rewrites relative image URLs to /assets/ path', async () => {\n    const file = makeFile({ content: '<img src=\"./image.png\" alt=\"test\">' });\n    const ctx = makeCtx();\n    const result = await plugin.hooks.transformContent!(file, ctx);\n    expect(result.content).toContain('src=\"/assets/image.png\"');\n    expect(result.content).not.toContain('src=\"./image.png\"');\n  });\n\n  it('rewrites relative link URLs to /assets/ path', async () => {\n    const file = makeFile({ content: '<a href=\"./doc.pdf\">Download</a>' });\n    const ctx = makeCtx();\n    const result = await plugin.hooks.transformContent!(file, ctx);\n    expect(result.content).toContain('href=\"/assets/doc.pdf\"');\n    expect(result.content).not.toContain('href=\"./doc.pdf\"');\n  });\n\n  it('leaves absolute URLs unchanged', async () => {\n    const file = makeFile({ content: '<img src=\"https://cdn.example.com/image.png\">' });\n    const ctx = makeCtx();\n    const result = await plugin.hooks.transformContent!(file, ctx);\n    expect(result.content).toContain('src=\"https://cdn.example.com/image.png\"');\n  });\n\n  it('generates asset manifest in ctx.data', async () => {\n    const file = makeFile({ content: '<img src=\"./photo.jpg\">' });\n    const ctx = makeCtx();\n    await plugin.hooks.transformContent!(file, ctx);\n    const manifest = ctx.data.get('asset-manifest') as { assets: string[] };\n    expect(manifest).toBeDefined();\n    expect(manifest.assets).toContain('photo.jpg');\n  });\n\n  it('handles files with no asset references', async () => {\n    const file = makeFile({ content: '<p>No assets here</p>' });\n    const ctx = makeCtx();\n    const result = await plugin.hooks.transformContent!(file, ctx);\n    expect(result.content).toBe('<p>No assets here</p>');\n  });\n\n  it('handles multiple assets in one file', async () => {\n    const file = makeFile({\n      content: '<img src=\"./a.png\"><img src=\"./b.jpg\"><a href=\"./c.pdf\">link</a>',\n    });\n    const ctx = makeCtx();\n    await plugin.hooks.transformContent!(file, ctx);\n    const manifest = ctx.data.get('asset-manifest') as { assets: string[] };\n    expect(manifest.assets).toContain('a.png');\n    expect(manifest.assets).toContain('b.jpg');\n    expect(manifest.assets).toContain('c.pdf');\n  });\n\n  it('asset manifest includes all discovered assets', async () => {\n    const ctx = makeCtx();\n    const file1 = makeFile({ content: '<img src=\"./one.png\">' });\n    const file2 = makeFile({ content: '<img src=\"./two.png\">' });\n    await plugin.hooks.transformContent!(file1, ctx);\n    await plugin.hooks.transformContent!(file2, ctx);\n    const manifest = ctx.data.get('asset-manifest') as { assets: string[] };\n    expect(manifest.assets).toHaveLength(2);\n    expect(manifest.assets).toContain('one.png');\n    expect(manifest.assets).toContain('two.png');\n  });\n\n  it('does not double-process already-rewritten URLs', async () => {\n    const file = makeFile({ content: '<img src=\"/assets/image.png\">' });\n    const ctx = makeCtx();\n    const result = await plugin.hooks.transformContent!(file, ctx);\n    expect(result.content).toBe('<img src=\"/assets/image.png\">');\n    const manifest = ctx.data.get('asset-manifest') as { assets: string[] } | undefined;\n    expect(!manifest || manifest.assets.length === 0).toBe(true);\n  });\n});\nFILE /workspace/tests/plugins/dev-server.test.ts\nimport { describe, it, expect } from 'vitest';\nimport { createDevServerPlugin } from '../../src/plugins/dev-server.js';\nimport { BuildContext, SiteConfig } from '../../src/core/types.js';\n\nconst testConfig: SiteConfig = {\n  title: 'Test Site',\n  baseUrl: 'https://example.com',\n  outputDir: './dist',\n  contentDir: './content',\n  templateDir: './templates',\n};\n\ninterface DevServerConfig {\n  port: number;\n  routes: Array<{ path: string; handler: string }>;\n  assetPaths: string[];\n  searchIndexPath: string;\n}\n\nfunction makeCtx(\n  output?: Map<string, string>,\n  data?: Map<string, unknown>\n): BuildContext {\n  return {\n    config: testConfig,\n    files: [],\n    output: output || new Map(),\n    assets: new Map(),\n    data: data || new Map(),\n  };\n}\n\ndescribe('dev-server plugin', () => {\n  const plugin = createDevServerPlugin();\n\n  it('stores dev-server-config in ctx.data', async () => {\n    const ctx = makeCtx();\n    await plugin.hooks.afterBuild!(ctx);\n    expect(ctx.data.has('dev-server-config')).toBe(true);\n  });\n\n  it('config includes port setting', async () => {\n    const ctx = makeCtx();\n    await plugin.hooks.afterBuild!(ctx);\n    const config = ctx.data.get('dev-server-config') as DevServerConfig;\n    expect(config.port).toBeDefined();\n    expect(typeof config.port).toBe('number');\n  });\n\n  it('config includes asset routes from asset-pipeline', async () => {\n    const data = new Map<string, unknown>();\n    data.set('asset-manifest', { assets: ['image.png', 'style.css'] });\n    const ctx = makeCtx(new Map(), data);\n    await plugin.hooks.afterBuild!(ctx);\n    const config = ctx.data.get('dev-server-config') as DevServerConfig;\n    expect(config.assetPaths).toContain('image.png');\n    expect(config.assetPaths).toContain('style.css');\n    const assetRoutes = config.routes.filter(r => r.handler === 'asset');\n    expect(assetRoutes.length).toBeGreaterThanOrEqual(2);\n  });\n\n  it('config includes search index path', async () => {\n    const output = new Map<string, string>();\n    output.set('search-index.json', '[]');\n    const ctx = makeCtx(output);\n    await plugin.hooks.afterBuild!(ctx);\n    const config = ctx.data.get('dev-server-config') as DevServerConfig;\n    expect(config.searchIndexPath).toBe('/search-index.json');\n  });\n\n  it('config includes content routes', async () => {\n    const output = new Map<string, string>();\n    output.set('post-1.html', '<html></html>');\n    output.set('post-2.html', '<html></html>');\n    const ctx = makeCtx(output);\n    await plugin.hooks.afterBuild!(ctx);\n    const config = ctx.data.get('dev-server-config') as DevServerConfig;\n    const contentRoutes = config.routes.filter(r => r.handler === 'static');\n    expect(contentRoutes.length).toBe(2);\n  });\n\n  it('default port is 3000', async () => {\n    const ctx = makeCtx();\n    await plugin.hooks.afterBuild!(ctx);\n    const config = ctx.data.get('dev-server-config') as DevServerConfig;\n    expect(config.port).toBe(3000);\n  });\n\n  it('handles missing asset-pipeline data gracefully', async () => {\n    const ctx = makeCtx();\n    await plugin.hooks.afterBuild!(ctx);\n    const config = ctx.data.get('dev-server-config') as DevServerConfig;\n    expect(config.assetPaths).toEqual([]);\n  });\n});\nFILE /workspace/tests/plugins/markdown-ext.test.ts\nimport { describe, it, expect } from 'vitest';\nimport { createMarkdownExtPlugin } from '../../src/plugins/markdown-ext.js';\nimport { BuildContext, ContentFile, SiteConfig } from '../../src/core/types.js';\n\nconst testConfig: SiteConfig = {\n  title: 'Test Site',\n  baseUrl: 'https://example.com',\n  outputDir: './dist',\n  contentDir: './content',\n  templateDir: './templates',\n};\n\nfunction makeCtx(): BuildContext {\n  return {\n    config: testConfig,\n    files: [],\n    output: new Map(),\n    assets: new Map(),\n    data: new Map(),\n  };\n}\n\nfunction makeFile(overrides: Partial<ContentFile> = {}): ContentFile {\n  return {\n    slug: 'test',\n    title: 'Test',\n    content: '',\n    metadata: {},\n    ...overrides,\n  };\n}\n\ndescribe('markdown-ext plugin', () => {\n  const plugin = createMarkdownExtPlugin();\n\n  it('converts basic markdown to HTML', async () => {\n    const file = makeFile({ content: '# Hello\\n\\nThis is a **bold** paragraph.' });\n    const result = await plugin.hooks.transformContent!(file, makeCtx());\n    expect(result.content).toContain('<h1>');\n    expect(result.content).toContain('Hello');\n    expect(result.content).toContain('<strong>bold</strong>');\n  });\n\n  it('handles footnotes with [^1] syntax', async () => {\n    const file = makeFile({ content: 'Some text[^1] here.\\n\\n[^1]: This is the footnote.' });\n    const result = await plugin.hooks.transformContent!(file, makeCtx());\n    expect(result.content).toContain('<sup><a href=\"#fn-1\">1</a></sup>');\n  });\n\n  it('renders footnote section at bottom of content', async () => {\n    const file = makeFile({ content: 'Text[^1] and more[^2].\\n\\n[^1]: First note.\\n[^2]: Second note.' });\n    const result = await plugin.hooks.transformContent!(file, makeCtx());\n    expect(result.content).toContain('<section class=\"footnotes\">');\n    expect(result.content).toContain('<li id=\"fn-1\">First note.</li>');\n    expect(result.content).toContain('<li id=\"fn-2\">Second note.</li>');\n  });\n\n  it('converts :::note container to admonition div', async () => {\n    const file = makeFile({ content: ':::note\\nThis is a note.\\n:::' });\n    const result = await plugin.hooks.transformContent!(file, makeCtx());\n    expect(result.content).toContain('<div class=\"admonition admonition-note\">');\n    expect(result.content).toContain('This is a note.');\n  });\n\n  it('converts :::warning container to admonition div', async () => {\n    const file = makeFile({ content: ':::warning\\nBe careful!\\n:::' });\n    const result = await plugin.hooks.transformContent!(file, makeCtx());\n    expect(result.content).toContain('<div class=\"admonition admonition-warning\">');\n    expect(result.content).toContain('Be careful!');\n  });\n\n  it('converts :::tip container to admonition div', async () => {\n    const file = makeFile({ content: ':::tip\\nHelpful hint.\\n:::' });\n    const result = await plugin.hooks.transformContent!(file, makeCtx());\n    expect(result.content).toContain('<div class=\"admonition admonition-tip\">');\n    expect(result.content).toContain('Helpful hint.');\n  });\n\n  it('preserves existing HTML in content', async () => {\n    const file = makeFile({ content: '<div class=\"custom\">Already HTML</div>' });\n    const result = await plugin.hooks.transformContent!(file, makeCtx());\n    expect(result.content).toContain('Already HTML');\n  });\n\n  it('handles empty content', async () => {\n    const file = makeFile({ content: '' });\n    const result = await plugin.hooks.transformContent!(file, makeCtx());\n    expect(result.content).toBeDefined();\n  });\n});\nFILE /workspace/tests/plugins/rss-feed.test.ts\nimport { describe, it, expect } from 'vitest';\nimport { createRssFeedPlugin } from '../../src/plugins/rss-feed.js';\nimport { BuildContext, ContentFile, SiteConfig } from '../../src/core/types.js';\n\nconst testConfig: SiteConfig = {\n  title: 'Test Site',\n  baseUrl: 'https://example.com',\n  outputDir: './dist',\n  contentDir: './content',\n  templateDir: './templates',\n};\n\nfunction makeCtx(files: ContentFile[] = [], data?: Map<string, unknown>): BuildContext {\n  return {\n    config: testConfig,\n    files,\n    output: new Map(),\n    assets: new Map(),\n    data: data || new Map(),\n  };\n}\n\nfunction makeFile(overrides: Partial<ContentFile> = {}): ContentFile {\n  return {\n    slug: 'test',\n    title: 'Test',\n    content: '<p>HTML content</p>',\n    metadata: {},\n    ...overrides,\n  };\n}\n\ndescribe('rss-feed plugin', () => {\n  const plugin = createRssFeedPlugin();\n\n  it('generates valid RSS 2.0 XML', async () => {\n    const files = [makeFile({ slug: 'post-1', title: 'Post 1', date: '2024-01-01' })];\n    const ctx = makeCtx(files);\n    await plugin.hooks.afterBuild!(ctx);\n    const feed = ctx.output.get('feed.xml')!;\n    expect(feed).toContain('<?xml version=\"1.0\"');\n    expect(feed).toContain('<rss version=\"2.0\">');\n    expect(feed).toContain('<channel>');\n    expect(feed).toContain('<item>');\n    expect(feed).toContain('</rss>');\n  });\n\n  it('feed items contain HTML content not raw markdown', async () => {\n    const files = [\n      makeFile({\n        slug: 'post-1',\n        title: 'Post 1',\n        content: '<p>This is <strong>HTML</strong> content</p>',\n        date: '2024-01-01',\n      }),\n    ];\n    const ctx = makeCtx(files);\n    await plugin.hooks.afterBuild!(ctx);\n    const feed = ctx.output.get('feed.xml')!;\n    expect(feed).toContain('<![CDATA[<p>This is <strong>HTML</strong> content</p>]]>');\n  });\n\n  it('feed items include category tags from taxonomy', async () => {\n    const files = [\n      makeFile({ slug: 'post-1', title: 'Post 1', tags: ['javascript'], date: '2024-01-01' }),\n    ];\n    const tagMap = new Map<string, ContentFile[]>();\n    tagMap.set('javascript', [files[0]]);\n    const data = new Map<string, unknown>();\n    data.set('taxonomy-tags', tagMap);\n    const ctx = makeCtx(files, data);\n    await plugin.hooks.afterBuild!(ctx);\n    const feed = ctx.output.get('feed.xml')!;\n    expect(feed).toContain('<category>javascript</category>');\n  });\n\n  it('feed includes channel title from config', async () => {\n    const files = [makeFile({ slug: 'post-1', title: 'Post 1' })];\n    const ctx = makeCtx(files);\n    await plugin.hooks.afterBuild!(ctx);\n    const feed = ctx.output.get('feed.xml')!;\n    expect(feed).toContain('<title>Test Site</title>');\n  });\n\n  it('feed items sorted by date newest first', async () => {\n    const files = [\n      makeFile({ slug: 'old', title: 'Old Post', date: '2023-01-01' }),\n      makeFile({ slug: 'new', title: 'New Post', date: '2024-06-15' }),\n      makeFile({ slug: 'mid', title: 'Mid Post', date: '2024-01-01' }),\n    ];\n    const ctx = makeCtx(files);\n    await plugin.hooks.afterBuild!(ctx);\n    const feed = ctx.output.get('feed.xml')!;\n    const newIdx = feed.indexOf('New Post');\n    const midIdx = feed.indexOf('Mid Post');\n    const oldIdx = feed.indexOf('Old Post');\n    expect(newIdx).toBeLessThan(midIdx);\n    expect(midIdx).toBeLessThan(oldIdx);\n  });\n\n  it('handles files without dates', async () => {\n    const files = [\n      makeFile({ slug: 'no-date', title: 'No Date Post', content: '<p>No date</p>' }),\n    ];\n    const ctx = makeCtx(files);\n    await plugin.hooks.afterBuild!(ctx);\n    const feed = ctx.output.get('feed.xml')!;\n    expect(feed).toContain('No Date Post');\n    expect(feed).not.toContain('<pubDate>undefined</pubDate>');\n  });\n\n  it('feed link uses baseUrl from config', async () => {\n    const files = [makeFile({ slug: 'post-1', title: 'Post 1' })];\n    const ctx = makeCtx(files);\n    await plugin.hooks.afterBuild!(ctx);\n    const feed = ctx.output.get('feed.xml')!;\n    expect(feed).toContain('<link>https://example.com</link>');\n    expect(feed).toContain('<link>https://example.com/post-1.html</link>');\n  });\n});\nFILE /workspace/tests/plugins/search-index.test.ts\nimport { describe, it, expect } from 'vitest';\nimport { createSearchIndexPlugin } from '../../src/plugins/search-index.js';\nimport { BuildContext, ContentFile, SiteConfig } from '../../src/core/types.js';\n\nconst testConfig: SiteConfig = {\n  title: 'Test Site',\n  baseUrl: 'https://example.com',\n  outputDir: './dist',\n  contentDir: './content',\n  templateDir: './templates',\n};\n\nfunction makeCtx(files: ContentFile[] = []): BuildContext {\n  return {\n    config: testConfig,\n    files,\n    output: new Map(),\n    assets: new Map(),\n    data: new Map(),\n  };\n}\n\nfunction makeFile(overrides: Partial<ContentFile> = {}): ContentFile {\n  return {\n    slug: 'test',\n    title: 'Test',\n    content: '',\n    metadata: {},\n    ...overrides,\n  };\n}\n\ndescribe('search-index plugin', () => {\n  const plugin = createSearchIndexPlugin();\n\n  it('generates search-index.json in ctx.output', async () => {\n    const files = [makeFile({ slug: 'post-1', title: 'Post 1', content: '<p>Hello</p>' })];\n    const ctx = makeCtx(files);\n    await plugin.hooks.afterBuild!(ctx);\n    expect(ctx.output.has('search-index.json')).toBe(true);\n  });\n\n  it('index entries have title, slug, and plain text content', async () => {\n    const files = [makeFile({ slug: 'my-post', title: 'My Post', content: '<p>Some text here</p>' })];\n    const ctx = makeCtx(files);\n    await plugin.hooks.afterBuild!(ctx);\n    const index = JSON.parse(ctx.output.get('search-index.json')!);\n    expect(index[0].slug).toBe('my-post');\n    expect(index[0].title).toBe('My Post');\n    expect(index[0].content).toBe('Some text here');\n  });\n\n  it('HTML tags stripped from indexed content', async () => {\n    const files = [\n      makeFile({\n        slug: 'post',\n        title: 'Post',\n        content: '<h1>Title</h1><p>This is <strong>bold</strong> text.</p>',\n      }),\n    ];\n    const ctx = makeCtx(files);\n    await plugin.hooks.afterBuild!(ctx);\n    const index = JSON.parse(ctx.output.get('search-index.json')!);\n    expect(index[0].content).not.toContain('<');\n    expect(index[0].content).not.toContain('>');\n    expect(index[0].content).toContain('bold');\n    expect(index[0].content).toContain('text');\n  });\n\n  it('code blocks included in searchable text', async () => {\n    const files = [\n      makeFile({\n        slug: 'post',\n        title: 'Code Post',\n        content: '<p>Example:</p><pre><code class=\"language-js\">const x = 1;</code></pre>',\n      }),\n    ];\n    const ctx = makeCtx(files);\n    await plugin.hooks.afterBuild!(ctx);\n    const index = JSON.parse(ctx.output.get('search-index.json')!);\n    expect(index[0].content).toContain('const x = 1;');\n  });\n\n  it('handles empty file list', async () => {\n    const ctx = makeCtx([]);\n    await plugin.hooks.afterBuild!(ctx);\n    const index = JSON.parse(ctx.output.get('search-index.json')!);\n    expect(index).toEqual([]);\n  });\n\n  it('search index is valid JSON', async () => {\n    const files = [\n      makeFile({ slug: 'post-1', title: 'Post 1', content: '<p>Content</p>' }),\n      makeFile({ slug: 'post-2', title: 'Post 2', content: '<p>More</p>' }),\n    ];\n    const ctx = makeCtx(files);\n    await plugin.hooks.afterBuild!(ctx);\n    const raw = ctx.output.get('search-index.json')!;\n    expect(() => JSON.parse(raw)).not.toThrow();\n    const index = JSON.parse(raw);\n    expect(Array.isArray(index)).toBe(true);\n    expect(index).toHaveLength(2);\n  });\n\n  it('index entries include tags if present', async () => {\n    const files = [\n      makeFile({ slug: 'post', title: 'Tagged Post', content: '<p>Text</p>', tags: ['js', 'web'] }),\n    ];\n    const ctx = makeCtx(files);\n    await plugin.hooks.afterBuild!(ctx);\n    const index = JSON.parse(ctx.output.get('search-index.json')!);\n    expect(index[0].tags).toEqual(['js', 'web']);\n  });\n});\nFILE /workspace/tests/plugins/sitemap.test.ts\nimport { describe, it, expect } from 'vitest';\nimport { createSitemapPlugin } from '../../src/plugins/sitemap.js';\nimport { BuildContext, ContentFile, SiteConfig } from '../../src/core/types.js';\n\nconst testConfig: SiteConfig = {\n  title: 'Test Site',\n  baseUrl: 'https://example.com',\n  outputDir: './dist',\n  contentDir: './content',\n  templateDir: './templates',\n};\n\nfunction makeCtx(\n  output?: Map<string, string>,\n  data?: Map<string, unknown>\n): BuildContext {\n  return {\n    config: testConfig,\n    files: [],\n    output: output || new Map(),\n    assets: new Map(),\n    data: data || new Map(),\n  };\n}\n\ndescribe('sitemap plugin', () => {\n  const plugin = createSitemapPlugin();\n\n  it('generates sitemap.xml in ctx.output', async () => {\n    const output = new Map<string, string>();\n    output.set('post-1.html', '<html></html>');\n    const ctx = makeCtx(output);\n    await plugin.hooks.afterBuild!(ctx);\n    expect(ctx.output.has('sitemap.xml')).toBe(true);\n  });\n\n  it('includes all content page URLs', async () => {\n    const output = new Map<string, string>();\n    output.set('post-1.html', '<html></html>');\n    output.set('post-2.html', '<html></html>');\n    const ctx = makeCtx(output);\n    await plugin.hooks.afterBuild!(ctx);\n    const sitemap = ctx.output.get('sitemap.xml')!;\n    expect(sitemap).toContain('https://example.com/post-1.html');\n    expect(sitemap).toContain('https://example.com/post-2.html');\n  });\n\n  it('includes taxonomy tag page URLs', async () => {\n    const output = new Map<string, string>();\n    output.set('tags/javascript.html', '<html>js tag page</html>');\n    const tagMap = new Map<string, ContentFile[]>();\n    tagMap.set('javascript', []);\n    const data = new Map<string, unknown>();\n    data.set('taxonomy-tags', tagMap);\n    const ctx = makeCtx(output, data);\n    await plugin.hooks.afterBuild!(ctx);\n    const sitemap = ctx.output.get('sitemap.xml')!;\n    expect(sitemap).toContain('https://example.com/tags/javascript.html');\n  });\n\n  it('includes feed.xml URL', async () => {\n    const output = new Map<string, string>();\n    output.set('feed.xml', '<rss></rss>');\n    const ctx = makeCtx(output);\n    await plugin.hooks.afterBuild!(ctx);\n    const sitemap = ctx.output.get('sitemap.xml')!;\n    expect(sitemap).toContain('https://example.com/feed.xml');\n  });\n\n  it('URLs use baseUrl from config', async () => {\n    const output = new Map<string, string>();\n    output.set('about.html', '<html></html>');\n    const ctx = makeCtx(output);\n    await plugin.hooks.afterBuild!(ctx);\n    const sitemap = ctx.output.get('sitemap.xml')!;\n    expect(sitemap).toContain('https://example.com/about.html');\n  });\n\n  it('sitemap is valid XML structure', async () => {\n    const output = new Map<string, string>();\n    output.set('post.html', '<html></html>');\n    const ctx = makeCtx(output);\n    await plugin.hooks.afterBuild!(ctx);\n    const sitemap = ctx.output.get('sitemap.xml')!;\n    expect(sitemap).toContain('<?xml version=\"1.0\"');\n    expect(sitemap).toContain('<urlset');\n    expect(sitemap).toContain('</urlset>');\n    expect(sitemap).toContain('<url>');\n    expect(sitemap).toContain('<loc>');\n  });\n\n  it('handles site with no tag pages', async () => {\n    const output = new Map<string, string>();\n    output.set('post.html', '<html></html>');\n    const ctx = makeCtx(output);\n    await plugin.hooks.afterBuild!(ctx);\n    const sitemap = ctx.output.get('sitemap.xml')!;\n    expect(sitemap).toContain('https://example.com/post.html');\n    expect(sitemap).not.toContain('/tags/');\n  });\n});\nFILE /workspace/tests/plugins/syntax-highlight.test.ts\nimport { describe, it, expect } from 'vitest';\nimport { createSyntaxHighlightPlugin } from '../../src/plugins/syntax-highlight.js';\nimport { BuildContext, ContentFile, SiteConfig } from '../../src/core/types.js';\n\nconst testConfig: SiteConfig = {\n  title: 'Test Site',\n  baseUrl: 'https://example.com',\n  outputDir: './dist',\n  contentDir: './content',\n  templateDir: './templates',\n};\n\nfunction makeCtx(): BuildContext {\n  return {\n    config: testConfig,\n    files: [],\n    output: new Map(),\n    assets: new Map(),\n    data: new Map(),\n  };\n}\n\nfunction makeFile(overrides: Partial<ContentFile> = {}): ContentFile {\n  return {\n    slug: 'test',\n    title: 'Test',\n    content: '',\n    metadata: {},\n    ...overrides,\n  };\n}\n\ndescribe('syntax-highlight plugin', () => {\n  const plugin = createSyntaxHighlightPlugin();\n\n  it('adds language class to code blocks', async () => {\n    const file = makeFile({\n      content: '<pre><code class=\"language-javascript\">const x = 1;</code></pre>',\n    });\n    const result = await plugin.hooks.transformContent!(file, makeCtx());\n    expect(result.content).toContain('class=\"language-javascript highlighted\"');\n  });\n\n  it('adds data-language attribute to pre tags', async () => {\n    const file = makeFile({\n      content: '<pre><code class=\"language-python\">print(\"hi\")</code></pre>',\n    });\n    const result = await plugin.hooks.transformContent!(file, makeCtx());\n    expect(result.content).toContain('data-language=\"python\"');\n  });\n\n  it('handles multiple code blocks in one file', async () => {\n    const file = makeFile({\n      content:\n        '<pre><code class=\"language-js\">let a = 1;</code></pre>' +\n        '<p>Some text</p>' +\n        '<pre><code class=\"language-py\">x = 2</code></pre>',\n    });\n    const result = await plugin.hooks.transformContent!(file, makeCtx());\n    expect(result.content).toContain('data-language=\"js\"');\n    expect(result.content).toContain('data-language=\"py\"');\n  });\n\n  it('handles code block with no language specified', async () => {\n    const file = makeFile({\n      content: '<pre><code>plain code</code></pre>',\n    });\n    const result = await plugin.hooks.transformContent!(file, makeCtx());\n    // Should not add highlighted class or data-language to blocks without language\n    expect(result.content).toBe('<pre><code>plain code</code></pre>');\n    expect(result.content).not.toContain('highlighted');\n  });\n\n  it('adds highlighted class to processed blocks', async () => {\n    const file = makeFile({\n      content: '<pre><code class=\"language-rust\">fn main() {}</code></pre>',\n    });\n    const result = await plugin.hooks.transformContent!(file, makeCtx());\n    expect(result.content).toContain('highlighted');\n  });\n\n  it('preserves code block content', async () => {\n    const file = makeFile({\n      content: '<pre><code class=\"language-ts\">const x: number = 42;</code></pre>',\n    });\n    const result = await plugin.hooks.transformContent!(file, makeCtx());\n    expect(result.content).toContain('const x: number = 42;');\n  });\n\n  it('handles empty code blocks', async () => {\n    const file = makeFile({\n      content: '<pre><code class=\"language-js\"></code></pre>',\n    });\n    const result = await plugin.hooks.transformContent!(file, makeCtx());\n    expect(result.content).toContain('data-language=\"js\"');\n    expect(result.content).toContain('highlighted');\n  });\n\n  it('does not modify inline code', async () => {\n    const file = makeFile({\n      content: '<p>Use <code>console.log()</code> for debugging.</p>',\n    });\n    const result = await plugin.hooks.transformContent!(file, makeCtx());\n    expect(result.content).toBe('<p>Use <code>console.log()</code> for debugging.</p>');\n    expect(result.content).not.toContain('highlighted');\n  });\n});\nFILE /workspace/tests/plugins/taxonomy.test.ts\nimport { describe, it, expect } from 'vitest';\nimport { createTaxonomyPlugin } from '../../src/plugins/taxonomy.js';\nimport { BuildContext, ContentFile, SiteConfig } from '../../src/core/types.js';\n\nconst testConfig: SiteConfig = {\n  title: 'Test Site',\n  baseUrl: 'https://example.com',\n  outputDir: './dist',\n  contentDir: './content',\n  templateDir: './templates',\n};\n\nfunction makeCtx(files: ContentFile[] = []): BuildContext {\n  return {\n    config: testConfig,\n    files,\n    output: new Map(),\n    assets: new Map(),\n    data: new Map(),\n  };\n}\n\nfunction makeFile(overrides: Partial<ContentFile> = {}): ContentFile {\n  return {\n    slug: 'test',\n    title: 'Test',\n    content: '<p>content</p>',\n    metadata: {},\n    ...overrides,\n  };\n}\n\ndescribe('taxonomy plugin', () => {\n  const plugin = createTaxonomyPlugin();\n\n  it('builds tag index from file tags', async () => {\n    const files = [\n      makeFile({ slug: 'post-1', title: 'Post 1', tags: ['javascript', 'node'] }),\n      makeFile({ slug: 'post-2', title: 'Post 2', tags: ['javascript'] }),\n    ];\n    const ctx = makeCtx(files);\n    await plugin.hooks.beforeBuild!(ctx);\n    const tagMap = ctx.data.get('taxonomy-tags') as Map<string, ContentFile[]>;\n    expect(tagMap).toBeDefined();\n    expect(tagMap.get('javascript')).toHaveLength(2);\n    expect(tagMap.get('node')).toHaveLength(1);\n  });\n\n  it('generates tag listing pages in ctx.output', async () => {\n    const files = [\n      makeFile({ slug: 'post-1', title: 'Post 1', tags: ['javascript'] }),\n    ];\n    const ctx = makeCtx(files);\n    await plugin.hooks.beforeBuild!(ctx);\n    await plugin.hooks.afterBuild!(ctx);\n    expect(ctx.output.has('tags/javascript.html')).toBe(true);\n    expect(ctx.output.get('tags/javascript.html')).toContain('Post 1');\n  });\n\n  it('handles files with no tags', async () => {\n    const files = [\n      makeFile({ slug: 'post-1', title: 'Post 1' }),\n    ];\n    const ctx = makeCtx(files);\n    await plugin.hooks.beforeBuild!(ctx);\n    const tagMap = ctx.data.get('taxonomy-tags') as Map<string, ContentFile[]>;\n    expect(tagMap.size).toBe(0);\n  });\n\n  it('handles files with multiple tags', async () => {\n    const files = [\n      makeFile({ slug: 'post-1', title: 'Post 1', tags: ['js', 'node', 'web'] }),\n    ];\n    const ctx = makeCtx(files);\n    await plugin.hooks.beforeBuild!(ctx);\n    const tagMap = ctx.data.get('taxonomy-tags') as Map<string, ContentFile[]>;\n    expect(tagMap.size).toBe(3);\n    expect(tagMap.has('js')).toBe(true);\n    expect(tagMap.has('node')).toBe(true);\n    expect(tagMap.has('web')).toBe(true);\n  });\n\n  it('tag pages list all files with that tag', async () => {\n    const files = [\n      makeFile({ slug: 'post-1', title: 'First Post', tags: ['tech'] }),\n      makeFile({ slug: 'post-2', title: 'Second Post', tags: ['tech'] }),\n    ];\n    const ctx = makeCtx(files);\n    await plugin.hooks.beforeBuild!(ctx);\n    await plugin.hooks.afterBuild!(ctx);\n    const tagPage = ctx.output.get('tags/tech.html')!;\n    expect(tagPage).toContain('First Post');\n    expect(tagPage).toContain('Second Post');\n  });\n\n  it('stores tag map in ctx.data', async () => {\n    const files = [\n      makeFile({ slug: 'post-1', title: 'Post 1', tags: ['alpha'] }),\n    ];\n    const ctx = makeCtx(files);\n    await plugin.hooks.beforeBuild!(ctx);\n    expect(ctx.data.has('taxonomy-tags')).toBe(true);\n  });\n\n  it('handles empty file list', async () => {\n    const ctx = makeCtx([]);\n    await plugin.hooks.beforeBuild!(ctx);\n    await plugin.hooks.afterBuild!(ctx);\n    const tagMap = ctx.data.get('taxonomy-tags') as Map<string, ContentFile[]>;\n    expect(tagMap.size).toBe(0);\n  });\n\n  it('tags are case-normalized to lowercase', async () => {\n    const files = [\n      makeFile({ slug: 'post-1', title: 'Post 1', tags: ['JavaScript'] }),\n      makeFile({ slug: 'post-2', title: 'Post 2', tags: ['JAVASCRIPT'] }),\n    ];\n    const ctx = makeCtx(files);\n    await plugin.hooks.beforeBuild!(ctx);\n    const tagMap = ctx.data.get('taxonomy-tags') as Map<string, ContentFile[]>;\n    expect(tagMap.has('javascript')).toBe(true);\n    expect(tagMap.get('javascript')).toHaveLength(2);\n    expect(tagMap.has('JavaScript')).toBe(false);\n    expect(tagMap.has('JAVASCRIPT')).toBe(false);\n  });\n});\n","exit_code":0,"status":"completed"}}
++{"type":"item.completed","item":{"id":"item_5","type":"agent_message","text":"I’ve got the test surface now. Next I’m checking the engine flow and exports so the plugins slot into the existing lifecycle cleanly and compile under the current TS config."}}
++{"type":"item.started","item":{"id":"item_6","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,260p' /workspace/src/core/engine.ts\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_6","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,260p' /workspace/src/core/engine.ts\"","aggregated_output":"import { BuildContext, ContentFile, Plugin, SiteConfig, Template } from './types.js';\n\nexport class BuildEngine {\n  private plugins: Plugin[] = [];\n  private templates: Map<string, Template> = new Map();\n\n  constructor(private config: SiteConfig) {}\n\n  registerPlugin(plugin: Plugin): void {\n    this.plugins.push(plugin);\n  }\n\n  registerTemplate(template: Template): void {\n    this.templates.set(template.name, template);\n  }\n\n  // Resolve plugin execution order using topological sort\n  resolvePluginOrder(): Plugin[] {\n    const sorted: Plugin[] = [];\n    const visited = new Set<string>();\n    const visiting = new Set<string>();\n    const pluginMap = new Map(this.plugins.map(p => [p.name, p]));\n\n    const visit = (name: string) => {\n      if (visited.has(name)) return;\n      if (visiting.has(name)) {\n        throw new Error(`Circular dependency detected: ${name}`);\n      }\n      visiting.add(name);\n      const plugin = pluginMap.get(name);\n      if (plugin) {\n        for (const dep of plugin.dependencies) {\n          if (!pluginMap.has(dep)) {\n            throw new Error(`Missing dependency: ${name} requires ${dep}`);\n          }\n          visit(dep);\n        }\n      }\n      visiting.delete(name);\n      visited.add(name);\n      if (plugin) sorted.push(plugin);\n    };\n\n    for (const plugin of this.plugins) {\n      visit(plugin.name);\n    }\n    return sorted;\n  }\n\n  async build(files: ContentFile[]): Promise<BuildContext> {\n    const ctx: BuildContext = {\n      config: this.config,\n      files: [...files],\n      output: new Map(),\n      assets: new Map(),\n      data: new Map(),\n    };\n\n    const orderedPlugins = this.resolvePluginOrder();\n\n    // beforeBuild hooks\n    for (const plugin of orderedPlugins) {\n      if (plugin.hooks.beforeBuild) {\n        await plugin.hooks.beforeBuild(ctx);\n      }\n    }\n\n    // transformContent hooks (applied to each file in plugin order)\n    for (const plugin of orderedPlugins) {\n      if (plugin.hooks.transformContent) {\n        const transformed: ContentFile[] = [];\n        for (const file of ctx.files) {\n          transformed.push(await plugin.hooks.transformContent(file, ctx));\n        }\n        ctx.files = transformed;\n      }\n    }\n\n    // Render templates\n    for (const file of ctx.files) {\n      const templateName = file.template || 'default';\n      const template = this.templates.get(templateName);\n      if (template) {\n        const rendered = template.render(file.content, {\n          title: file.title,\n          slug: file.slug,\n          date: file.date,\n          tags: file.tags,\n          ...file.metadata,\n          siteTitle: this.config.title,\n          baseUrl: this.config.baseUrl,\n        });\n        ctx.output.set(`${file.slug}.html`, rendered);\n      } else {\n        ctx.output.set(`${file.slug}.html`, file.content);\n      }\n    }\n\n    // afterBuild hooks\n    for (const plugin of orderedPlugins) {\n      if (plugin.hooks.afterBuild) {\n        await plugin.hooks.afterBuild(ctx);\n      }\n    }\n\n    return ctx;\n  }\n\n  getPlugins(): Plugin[] {\n    return [...this.plugins];\n  }\n\n  getTemplates(): Map<string, Template> {\n    return new Map(this.templates);\n  }\n}\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_7","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,260p' /workspace/src/core/index.ts\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_7","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,260p' /workspace/src/core/index.ts\"","aggregated_output":"export { BuildEngine } from './engine.js';\nexport { createDefaultTemplate, createListTemplate } from './templates.js';\nexport type { BuildContext, ContentFile, Plugin, PluginHooks, SiteConfig, Template } from './types.js';\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_8","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,260p' /workspace/src/core/templates.ts\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_8","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,260p' /workspace/src/core/templates.ts\"","aggregated_output":"import { Template } from './types.js';\n\nexport function createDefaultTemplate(): Template {\n  return {\n    name: 'default',\n    render: (content: string, data: Record<string, unknown>) => {\n      return `<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\">\n  <title>${data.title || ''} | ${data.siteTitle || ''}</title>\n</head>\n<body>\n  <article>\n    <h1>${data.title || ''}</h1>\n    ${data.date ? `<time>${data.date}</time>` : ''}\n    <div class=\"content\">${content}</div>\n  </article>\n</body>\n</html>`;\n    }\n  };\n}\n\nexport function createListTemplate(): Template {\n  return {\n    name: 'list',\n    render: (content: string, data: Record<string, unknown>) => {\n      return `<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\">\n  <title>${data.title || ''} | ${data.siteTitle || ''}</title>\n</head>\n<body>\n  <h1>${data.title || ''}</h1>\n  <div class=\"list\">${content}</div>\n</body>\n</html>`;\n    }\n  };\n}\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_9","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/tsconfig.json'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_9","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/tsconfig.json'","aggregated_output":"{\n  \"compilerOptions\": {\n    \"strict\": true,\n    \"target\": \"ES2022\",\n    \"module\": \"Node16\",\n    \"moduleResolution\": \"Node16\",\n    \"outDir\": \"./dist\",\n    \"rootDir\": \"./src\",\n    \"declaration\": true,\n    \"esModuleInterop\": true,\n    \"skipLibCheck\": true\n  },\n  \"include\": [\"src/**/*\"]\n}\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_10","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/package.json'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_10","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/package.json'","aggregated_output":"{\n  \"name\": \"bench-ssg-toolkit\",\n  \"version\": \"1.0.0\",\n  \"description\": \"SSG Toolkit benchmark - static site generator with DAG plugin system\",\n  \"main\": \"dist/core/index.js\",\n  \"scripts\": {\n    \"build\": \"tsc\",\n    \"lint\": \"eslint src/ tests/\",\n    \"test\": \"vitest run\"\n  },\n  \"keywords\": [],\n  \"author\": \"\",\n  \"license\": \"ISC\",\n  \"type\": \"module\",\n  \"devDependencies\": {\n    \"@typescript-eslint/eslint-plugin\": \"^7.18.0\",\n    \"@typescript-eslint/parser\": \"^7.18.0\",\n    \"eslint\": \"^8.57.1\",\n    \"typescript\": \"^5.9.3\",\n    \"vitest\": \"^2.1.9\"\n  },\n  \"dependencies\": {\n    \"@types/express\": \"^5.0.6\",\n    \"@types/marked\": \"^5.0.2\",\n    \"express\": \"^5.2.1\",\n    \"marked\": \"^17.0.2\"\n  }\n}\n","exit_code":0,"status":"completed"}}
++{"type":"item.completed","item":{"id":"item_11","type":"agent_message","text":"The core is simple: `beforeBuild`, ordered transforms, template render, then `afterBuild`. I’m reading the task brief for any extra constraints beyond the tests, then I’ll patch in all eight plugin modules and wire any shared helpers minimally."}}
++{"type":"item.started","item":{"id":"item_12","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,260p' /workspace/TASK.md\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_12","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,260p' /workspace/TASK.md\"","aggregated_output":"# T9: SSG Toolkit\n\nAdd 8 plugins to an existing Static Site Generator toolkit.\n\n## Starting State\n- `src/core/` contains the build engine, types, and templates (~600 lines)\n- 15 existing tests in `tests/core.test.ts` — these must continue to pass\n- Plugin test files in `tests/plugins/` define the expected behavior\n\n## Requirements\n\nBuild 8 plugins in `src/plugins/`, each implementing the `Plugin` interface from `src/core/types.ts`.\n\n### Wave 1 (no dependencies)\n1. **markdown-ext** — Markdown → HTML with footnotes and admonition containers\n2. **asset-pipeline** — Rewrite asset URLs and generate manifest\n3. **syntax-highlight** — Add language classes to code blocks\n4. **taxonomy** — Build tag/category indices and generate tag pages\n\n### Wave 2 (depend on Wave 1)\n5. **rss-feed** — Generate RSS 2.0 feed (depends: markdown-ext, taxonomy)\n6. **search-index** — Generate search index JSON (depends: markdown-ext, syntax-highlight)\n\n### Wave 3 (depend on Wave 2)\n7. **sitemap** — Generate sitemap XML (depends: taxonomy, rss-feed)\n8. **dev-server** — Generate dev server config (depends: asset-pipeline, search-index)\n\n### Plugin Interface\nEach plugin must export a `createXxxPlugin()` factory function that returns a `Plugin` object.\n\n## Validation\n- `npm test` — all tests must pass (15 existing + 60 new)\n- `npm run build` — must compile\n- `npm run lint` — must be clean\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_13","type":"command_execution","command":"/bin/bash -lc 'ls -la /workspace/src && find /workspace/src -maxdepth 2 -type f | sort'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_13","type":"command_execution","command":"/bin/bash -lc 'ls -la /workspace/src && find /workspace/src -maxdepth 2 -type f | sort'","aggregated_output":"total 16\ndrwxrwxr-x 4 node node 4096 Apr 19 23:04 .\ndrwxrwxr-x 6 node node 4096 Apr 19 23:04 ..\ndrwxrwxr-x 2 node node 4096 Apr 19 23:04 core\ndrwxrwxr-x 2 node node 4096 Apr 19 23:04 plugins\n/workspace/src/core/engine.ts\n/workspace/src/core/index.ts\n/workspace/src/core/templates.ts\n/workspace/src/core/types.ts\n/workspace/src/plugins/.gitkeep\n","exit_code":0,"status":"completed"}}
++{"type":"item.completed","item":{"id":"item_14","type":"agent_message","text":"I have enough context to implement. Plan:\n1. Add eight plugin modules under `src/plugins/` with the exact factory exports and dependency metadata.\n2. Keep logic intentionally small and deterministic: regex-based transforms where sufficient, shared helper functions only where it reduces duplication.\n3. Run `npm test`, then fix compile/lint issues, then run `npm run build` and `npm run lint` to finish verification."}}
++{"type":"item.started","item":{"id":"item_15","type":"command_execution","command":"/bin/bash -lc \"find /workspace -maxdepth 2 \\\\( -name '.eslintrc*' -o -name 'eslint.config.*' \\\\) -type f -print -exec sed -n '1,240p' {} \\\\;\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_15","type":"command_execution","command":"/bin/bash -lc \"find /workspace -maxdepth 2 \\\\( -name '.eslintrc*' -o -name 'eslint.config.*' \\\\) -type f -print -exec sed -n '1,240p' {} \\\\;\"","aggregated_output":"/workspace/.eslintrc.cjs\nmodule.exports = {\n  parser: '@typescript-eslint/parser',\n  plugins: ['@typescript-eslint'],\n  extends: [\n    'eslint:recommended',\n    'plugin:@typescript-eslint/recommended',\n  ],\n  parserOptions: {\n    ecmaVersion: 2022,\n    sourceType: 'module',\n  },\n  rules: {\n    '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],\n  },\n  env: {\n    node: true,\n    es2022: true,\n  },\n};\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_16","type":"command_execution","command":"/bin/bash -lc \"node -e \\\"import('marked').then(m=>console.log(Object.keys(m)))\\\"\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_16","type":"command_execution","command":"/bin/bash -lc \"node -e \\\"import('marked').then(m=>console.log(Object.keys(m)))\\\"\"","aggregated_output":"node:internal/modules/esm/resolve:873\n  throw new ERR_MODULE_NOT_FOUND(packageName, fileURLToPath(base), null);\n        ^\n\nError [ERR_MODULE_NOT_FOUND]: Cannot find package 'marked' imported from /workspace/[eval]\n    at packageResolve (node:internal/modules/esm/resolve:873:9)\n    at moduleResolve (node:internal/modules/esm/resolve:946:18)\n    at defaultResolve (node:internal/modules/esm/resolve:1188:11)\n    at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:708:12)\n    at #cachedDefaultResolve (node:internal/modules/esm/loader:657:25)\n    at ModuleLoader.resolve (node:internal/modules/esm/loader:640:38)\n    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:264:38)\n    at ModuleLoader.import (node:internal/modules/esm/loader:605:34)\n    at importModuleDynamically (node:internal/process/execution:105:37)\n    at importModuleDynamicallyWrapper (node:internal/vm/module:434:21) {\n  code: 'ERR_MODULE_NOT_FOUND'\n}\n\nNode.js v20.20.2\n","exit_code":1,"status":"failed"}}
++{"type":"item.completed","item":{"id":"item_17","type":"agent_message","text":"I’m starting file edits now. The implementation will stay conservative: only the behavior the tests and task imply, plus a few low-risk outputs like manifest/config files where they align with the plugin purpose."}}
++{"type":"item.started","item":{"id":"item_18","type":"file_change","changes":[{"path":"/workspace/src/plugins/asset-pipeline.ts","kind":"add"},{"path":"/workspace/src/plugins/dev-server.ts","kind":"add"},{"path":"/workspace/src/plugins/index.ts","kind":"add"},{"path":"/workspace/src/plugins/markdown-ext.ts","kind":"add"},{"path":"/workspace/src/plugins/rss-feed.ts","kind":"add"},{"path":"/workspace/src/plugins/search-index.ts","kind":"add"},{"path":"/workspace/src/plugins/sitemap.ts","kind":"add"},{"path":"/workspace/src/plugins/syntax-highlight.ts","kind":"add"},{"path":"/workspace/src/plugins/taxonomy.ts","kind":"add"},{"path":"/workspace/src/plugins/utils.ts","kind":"add"}],"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_18","type":"file_change","changes":[{"path":"/workspace/src/plugins/asset-pipeline.ts","kind":"add"},{"path":"/workspace/src/plugins/dev-server.ts","kind":"add"},{"path":"/workspace/src/plugins/index.ts","kind":"add"},{"path":"/workspace/src/plugins/markdown-ext.ts","kind":"add"},{"path":"/workspace/src/plugins/rss-feed.ts","kind":"add"},{"path":"/workspace/src/plugins/search-index.ts","kind":"add"},{"path":"/workspace/src/plugins/sitemap.ts","kind":"add"},{"path":"/workspace/src/plugins/syntax-highlight.ts","kind":"add"},{"path":"/workspace/src/plugins/taxonomy.ts","kind":"add"},{"path":"/workspace/src/plugins/utils.ts","kind":"add"}],"status":"completed"}}
++{"type":"item.completed","item":{"id":"item_19","type":"agent_message","text":"The first pass is in place. I’m running the test suite now to catch behavioral mismatches before I touch build or lint."}}
++{"type":"item.started","item":{"id":"item_20","type":"command_execution","command":"/bin/bash -lc 'test -d /workspace/node_modules && echo present || echo missing'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_20","type":"command_execution","command":"/bin/bash -lc 'test -d /workspace/node_modules && echo present || echo missing'","aggregated_output":"missing\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_21","type":"command_execution","command":"/bin/bash -lc 'npm test'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_21","type":"command_execution","command":"/bin/bash -lc 'npm test'","aggregated_output":"\n> bench-ssg-toolkit@1.0.0 test\n> vitest run\n\nsh: 1: vitest: not found\n","exit_code":127,"status":"failed"}}
++{"type":"item.completed","item":{"id":"item_22","type":"agent_message","text":"The workspace doesn’t have dependencies installed, so the test command can’t run yet. I’m installing from `package-lock.json` and then rerunning tests, build, and lint against the actual toolchain."}}
++{"type":"item.started","item":{"id":"item_23","type":"command_execution","command":"/bin/bash -lc 'npm ci'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_23","type":"command_execution","command":"/bin/bash -lc 'npm ci'","aggregated_output":"npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported\nnpm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.\nnpm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me\nnpm warn deprecated @humanwhocodes/object-schema@2.0.3: Use @eslint/object-schema instead\nnpm warn deprecated @humanwhocodes/config-array@0.13.0: Use @eslint/config-array instead\nnpm warn deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.\n\nadded 247 packages, and audited 248 packages in 4s\n\n69 packages are looking for funding\n  run `npm fund` for details\n\n13 vulnerabilities (1 low, 7 moderate, 5 high)\n\nTo address issues that do not require attention, run:\n  npm audit fix\n\nTo address all issues (including breaking changes), run:\n  npm audit fix --force\n\nRun `npm audit` for details.\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_24","type":"command_execution","command":"/bin/bash -lc 'npm test'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_24","type":"command_execution","command":"/bin/bash -lc 'npm test'","aggregated_output":"\n RUN  v2.1.9 /workspace\n\n ✓ tests/plugins/syntax-highlight.test.ts (8 tests) 6ms\n ✓ tests/plugins/dev-server.test.ts (7 tests) 9ms\n ✓ tests/plugins/markdown-ext.test.ts (8 tests) 8ms\n ✓ tests/plugins/asset-pipeline.test.ts (8 tests) 7ms\n ✓ tests/plugins/taxonomy.test.ts (8 tests) 7ms\n ✓ tests/plugins/sitemap.test.ts (7 tests) 5ms\n ✓ tests/plugins/rss-feed.test.ts (7 tests) 6ms\n ✓ tests/plugins/search-index.test.ts (7 tests) 8ms\n ✓ tests/core.test.ts (15 tests) 10ms\n\n Test Files  9 passed (9)\n      Tests  75 passed (75)\n   Start at  23:06:33\n   Duration  1.81s (transform 610ms, setup 0ms, collect 1.10s, tests 66ms, environment 2ms, prepare 640ms)\n\n","exit_code":0,"status":"completed"}}
++{"type":"item.completed","item":{"id":"item_25","type":"agent_message","text":"The suite is running now. If anything fails, I’ll use the failing assertions to tighten the transforms rather than broadening the implementation blindly."}}
++{"type":"item.completed","item":{"id":"item_26","type":"agent_message","text":"The behavior matches the full visible suite: 75 tests are green. I’m checking TypeScript build and ESLint next, which is where stricter typing and formatting issues usually surface."}}
++{"type":"item.started","item":{"id":"item_27","type":"command_execution","command":"/bin/bash -lc 'npm run build'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.started","item":{"id":"item_28","type":"command_execution","command":"/bin/bash -lc 'npm run lint'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_27","type":"command_execution","command":"/bin/bash -lc 'npm run build'","aggregated_output":"","exit_code":0,"status":"completed"}}
++{"type":"item.completed","item":{"id":"item_28","type":"command_execution","command":"/bin/bash -lc 'npm run lint'","aggregated_output":"","exit_code":0,"status":"completed"}}
++{"type":"item.completed","item":{"id":"item_29","type":"agent_message","text":"Implemented all 8 plugins under `src/plugins/` and added a small shared helper module in [utils.ts](/workspace/src/plugins/utils.ts). The new factories are in [markdown-ext.ts](/workspace/src/plugins/markdown-ext.ts), [asset-pipeline.ts](/workspace/src/plugins/asset-pipeline.ts), [syntax-highlight.ts](/workspace/src/plugins/syntax-highlight.ts), [taxonomy.ts](/workspace/src/plugins/taxonomy.ts), [rss-feed.ts](/workspace/src/plugins/rss-feed.ts), [search-index.ts](/workspace/src/plugins/search-index.ts), [sitemap.ts](/workspace/src/plugins/sitemap.ts), and [dev-server.ts](/workspace/src/plugins/dev-server.ts). I also added [index.ts](/workspace/src/plugins/index.ts) to re-export them.\n\nValidation is clean after installing dependencies with `npm ci`: `npm test` passed all 75 tests, `npm run build` succeeded, and `npm run lint` succeeded."}}
++{"type":"turn.completed","usage":{"input_tokens":388013,"cached_input_tokens":372864,"output_tokens":9737}}
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..1d17d4b
+--- /dev/null
++++ b/.thunderdome-stderr.log
+@@ -0,0 +1,2 @@
++WARNING: proceeding, even though we could not update PATH: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/.codex"))
++Reading additional input from stdin...
+diff --git a/src/plugins/asset-pipeline.ts b/src/plugins/asset-pipeline.ts
+new file mode 100644
+index 0000000..a3303ff
+--- /dev/null
++++ b/src/plugins/asset-pipeline.ts
+@@ -0,0 +1,62 @@
++import { BuildContext, ContentFile, Plugin } from '../core/types.js';
++
++interface AssetManifest {
++  assets: string[];
++}
++
++function getAssetManifest(ctx: BuildContext): AssetManifest {
++  const existing = ctx.data.get('asset-manifest') as AssetManifest | undefined;
++  if (existing) {
++    return existing;
++  }
++
++  const manifest: AssetManifest = { assets: [] };
++  ctx.data.set('asset-manifest', manifest);
++  return manifest;
++}
++
++function addAsset(ctx: BuildContext, assetPath: string): void {
++  const manifest = getAssetManifest(ctx);
++  if (!manifest.assets.includes(assetPath)) {
++    manifest.assets.push(assetPath);
++  }
++}
++
++function rewriteAssetUrl(url: string): string {
++  const normalized = url.replace(/^\.?\//, '').replace(/^(\.\.\/)+/, '');
++  return `/assets/${normalized}`;
++}
++
++export function createAssetPipelinePlugin(): Plugin {
++  return {
++    name: 'asset-pipeline',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      transformContent: (file: ContentFile, ctx: BuildContext) => {
++        const content = file.content.replace(
++          /\b(src|href)="([^"]+)"/g,
++          (match, attribute: string, url: string) => {
++            if (!/^(?:\.\/|\.\.\/)/.test(url)) {
++              return match;
++            }
++
++            const assetPath = url.replace(/^\.?\//, '').replace(/^(\.\.\/)+/, '');
++            addAsset(ctx, assetPath);
++            return `${attribute}="${rewriteAssetUrl(url)}"`;
++          },
++        );
++
++        return {
++          ...file,
++          content,
++        };
++      },
++      afterBuild: (ctx: BuildContext) => {
++        const manifest = getAssetManifest(ctx);
++        ctx.output.set('asset-manifest.json', JSON.stringify(manifest, null, 2));
++      },
++    },
++  };
++}
++
+diff --git a/src/plugins/dev-server.ts b/src/plugins/dev-server.ts
+new file mode 100644
+index 0000000..0ba286d
+--- /dev/null
++++ b/src/plugins/dev-server.ts
+@@ -0,0 +1,53 @@
++import { BuildContext, Plugin } from '../core/types.js';
++
++interface AssetManifest {
++  assets: string[];
++}
++
++interface DevServerRoute {
++  path: string;
++  handler: string;
++}
++
++interface DevServerConfig {
++  port: number;
++  routes: DevServerRoute[];
++  assetPaths: string[];
++  searchIndexPath: string;
++}
++
++export function createDevServerPlugin(): Plugin {
++  return {
++    name: 'dev-server',
++    version: '1.0.0',
++    dependencies: ['asset-pipeline', 'search-index'],
++    hooks: {
++      afterBuild: (ctx: BuildContext) => {
++        const manifest = ctx.data.get('asset-manifest') as AssetManifest | undefined;
++        const assetPaths = manifest?.assets ?? [];
++        const routes: DevServerRoute[] = [];
++
++        for (const path of ctx.output.keys()) {
++          if (path.endsWith('.html')) {
++            routes.push({ path: `/${path}`, handler: 'static' });
++          }
++        }
++
++        for (const assetPath of assetPaths) {
++          routes.push({ path: `/assets/${assetPath}`, handler: 'asset' });
++        }
++
++        const config: DevServerConfig = {
++          port: 3000,
++          routes,
++          assetPaths,
++          searchIndexPath: ctx.output.has('search-index.json') ? '/search-index.json' : '',
++        };
++
++        ctx.data.set('dev-server-config', config);
++        ctx.output.set('dev-server.json', JSON.stringify(config, null, 2));
++      },
++    },
++  };
++}
++
+diff --git a/src/plugins/index.ts b/src/plugins/index.ts
+new file mode 100644
+index 0000000..11e7e63
+--- /dev/null
++++ b/src/plugins/index.ts
+@@ -0,0 +1,8 @@
++export { createAssetPipelinePlugin } from './asset-pipeline.js';
++export { createDevServerPlugin } from './dev-server.js';
++export { createMarkdownExtPlugin } from './markdown-ext.js';
++export { createRssFeedPlugin } from './rss-feed.js';
++export { createSearchIndexPlugin } from './search-index.js';
++export { createSitemapPlugin } from './sitemap.js';
++export { createSyntaxHighlightPlugin } from './syntax-highlight.js';
++export { createTaxonomyPlugin } from './taxonomy.js';
+diff --git a/src/plugins/markdown-ext.ts b/src/plugins/markdown-ext.ts
+new file mode 100644
+index 0000000..d9148c1
+--- /dev/null
++++ b/src/plugins/markdown-ext.ts
+@@ -0,0 +1,90 @@
++import { ContentFile, Plugin } from '../core/types.js';
++
++type Footnotes = Map<string, string>;
++
++function renderInline(content: string): string {
++  return content
++    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
++    .replace(/\[\^([^\]]+)\]/g, '<sup><a href="#fn-$1">$1</a></sup>');
++}
++
++function renderBlocks(markdown: string): string {
++  const blocks = markdown
++    .split(/\n\s*\n/)
++    .map((block) => block.trim())
++    .filter(Boolean);
++
++  return blocks.map((block) => renderBlock(block)).join('\n');
++}
++
++function renderBlock(block: string): string {
++  if (block.startsWith('<')) {
++    return block;
++  }
++
++  const headingMatch = block.match(/^(#{1,6})\s+([^\n]+)$/);
++  if (headingMatch) {
++    const level = headingMatch[1].length;
++    return `<h${level}>${renderInline(headingMatch[2].trim())}</h${level}>`;
++  }
++
++  return `<p>${renderInline(block.replace(/\n+/g, ' ').trim())}</p>`;
++}
++
++function extractFootnotes(markdown: string): { content: string; footnotes: Footnotes } {
++  const footnotes: Footnotes = new Map();
++  const content = markdown.replace(/^\[\^([^\]]+)\]:\s*(.+)$/gm, (_match, id: string, note: string) => {
++    footnotes.set(id, renderInline(note.trim()));
++    return '';
++  });
++
++  return { content, footnotes };
++}
++
++function renderAdmonitions(markdown: string): string {
++  return markdown.replace(
++    /^:::(note|warning|tip)\n([\s\S]*?)\n:::(?=\n|$)/gm,
++    (_match, type: string, body: string) => {
++      const renderedBody = renderBlocks(body.trim());
++      return `<div class="admonition admonition-${type}">\n${renderedBody}\n</div>`;
++    },
++  );
++}
++
++function renderFootnotes(footnotes: Footnotes): string {
++  if (footnotes.size === 0) {
++    return '';
++  }
++
++  const items = [...footnotes.entries()]
++    .map(([id, note]) => `<li id="fn-${id}">${note}</li>`)
++    .join('');
++
++  return `\n<section class="footnotes"><ol>${items}</ol></section>`;
++}
++
++function renderMarkdown(content: string): string {
++  if (!content.trim()) {
++    return '';
++  }
++
++  const { content: withoutFootnotes, footnotes } = extractFootnotes(content.replace(/\r\n/g, '\n'));
++  const withAdmonitions = renderAdmonitions(withoutFootnotes).trim();
++  const html = renderBlocks(withAdmonitions);
++  return `${html}${renderFootnotes(footnotes)}`;
++}
++
++export function createMarkdownExtPlugin(): Plugin {
++  return {
++    name: 'markdown-ext',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      transformContent: (file: ContentFile) => ({
++        ...file,
++        content: renderMarkdown(file.content),
++      }),
++    },
++  };
++}
++
+diff --git a/src/plugins/rss-feed.ts b/src/plugins/rss-feed.ts
+new file mode 100644
+index 0000000..181142a
+--- /dev/null
++++ b/src/plugins/rss-feed.ts
+@@ -0,0 +1,55 @@
++import { BuildContext, ContentFile, Plugin } from '../core/types.js';
++import { escapeXml, normalizeBaseUrl } from './utils.js';
++
++function toTimestamp(file: ContentFile): number {
++  if (!file.date) {
++    return Number.NEGATIVE_INFINITY;
++  }
++
++  const timestamp = Date.parse(file.date);
++  return Number.isNaN(timestamp) ? Number.NEGATIVE_INFINITY : timestamp;
++}
++
++function toCdata(value: string): string {
++  return value.replace(/]]>/g, ']]]]><![CDATA[>');
++}
++
++export function createRssFeedPlugin(): Plugin {
++  return {
++    name: 'rss-feed',
++    version: '1.0.0',
++    dependencies: ['markdown-ext', 'taxonomy'],
++    hooks: {
++      afterBuild: (ctx: BuildContext) => {
++        const baseUrl = normalizeBaseUrl(ctx.config.baseUrl);
++        const items = [...ctx.files]
++          .sort((a, b) => toTimestamp(b) - toTimestamp(a))
++          .map((file) => {
++            const itemUrl = `${baseUrl}/${file.slug}.html`;
++            const categories = (file.tags ?? [])
++              .map((tag) => `<category>${escapeXml(tag.toLowerCase())}</category>`)
++              .join('');
++            const pubDate = file.date && !Number.isNaN(Date.parse(file.date))
++              ? `<pubDate>${new Date(file.date).toUTCString()}</pubDate>`
++              : '';
++
++            return `<item><title>${escapeXml(file.title)}</title><link>${escapeXml(itemUrl)}</link><guid>${escapeXml(itemUrl)}</guid>${pubDate}${categories}<description><![CDATA[${toCdata(file.content)}]]></description></item>`;
++          })
++          .join('');
++
++        const feed = `<?xml version="1.0" encoding="UTF-8"?>
++<rss version="2.0">
++<channel>
++<title>${escapeXml(ctx.config.title)}</title>
++<link>${escapeXml(baseUrl)}</link>
++<description>${escapeXml(ctx.config.title)}</description>
++${items}
++</channel>
++</rss>`;
++
++        ctx.output.set('feed.xml', feed);
++      },
++    },
++  };
++}
++
+diff --git a/src/plugins/search-index.ts b/src/plugins/search-index.ts
+new file mode 100644
+index 0000000..01e2890
+--- /dev/null
++++ b/src/plugins/search-index.ts
+@@ -0,0 +1,30 @@
++import { BuildContext, Plugin } from '../core/types.js';
++import { stripHtml } from './utils.js';
++
++interface SearchIndexEntry {
++  slug: string;
++  title: string;
++  content: string;
++  tags?: string[];
++}
++
++export function createSearchIndexPlugin(): Plugin {
++  return {
++    name: 'search-index',
++    version: '1.0.0',
++    dependencies: ['markdown-ext', 'syntax-highlight'],
++    hooks: {
++      afterBuild: (ctx: BuildContext) => {
++        const index: SearchIndexEntry[] = ctx.files.map((file) => ({
++          slug: file.slug,
++          title: file.title,
++          content: stripHtml(file.content),
++          ...(file.tags && file.tags.length > 0 ? { tags: file.tags } : {}),
++        }));
++
++        ctx.output.set('search-index.json', JSON.stringify(index, null, 2));
++      },
++    },
++  };
++}
++
+diff --git a/src/plugins/sitemap.ts b/src/plugins/sitemap.ts
+new file mode 100644
+index 0000000..fa63921
+--- /dev/null
++++ b/src/plugins/sitemap.ts
+@@ -0,0 +1,30 @@
++import { BuildContext, Plugin } from '../core/types.js';
++import { escapeXml, normalizeBaseUrl } from './utils.js';
++
++export function createSitemapPlugin(): Plugin {
++  return {
++    name: 'sitemap',
++    version: '1.0.0',
++    dependencies: ['taxonomy', 'rss-feed'],
++    hooks: {
++      afterBuild: (ctx: BuildContext) => {
++        const baseUrl = normalizeBaseUrl(ctx.config.baseUrl);
++        const paths = [...ctx.output.keys()]
++          .filter((path) => path !== 'sitemap.xml')
++          .filter((path) => path.endsWith('.html') || path.endsWith('.xml'));
++
++        const urls = paths
++          .map((path) => `<url><loc>${escapeXml(`${baseUrl}/${path}`)}</loc></url>`)
++          .join('');
++
++        const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
++<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
++${urls}
++</urlset>`;
++
++        ctx.output.set('sitemap.xml', sitemap);
++      },
++    },
++  };
++}
++
+diff --git a/src/plugins/syntax-highlight.ts b/src/plugins/syntax-highlight.ts
+new file mode 100644
+index 0000000..d6f8bc6
+--- /dev/null
++++ b/src/plugins/syntax-highlight.ts
+@@ -0,0 +1,28 @@
++import { ContentFile, Plugin } from '../core/types.js';
++
++export function createSyntaxHighlightPlugin(): Plugin {
++  return {
++    name: 'syntax-highlight',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      transformContent: (file: ContentFile) => ({
++        ...file,
++        content: file.content.replace(
++          /<pre([^>]*)><code([^>]*)class="([^"]*\blanguage-([a-z0-9_-]+)\b[^"]*)"([^>]*)>/gi,
++          (_match, preAttrs: string, beforeClassAttrs: string, classValue: string, language: string, afterClassAttrs: string) => {
++            const highlightedClass = /\bhighlighted\b/.test(classValue)
++              ? classValue
++              : `${classValue} highlighted`;
++            const normalizedPreAttrs = /\bdata-language=/.test(preAttrs)
++              ? preAttrs
++              : `${preAttrs} data-language="${language}"`;
++
++            return `<pre${normalizedPreAttrs}><code${beforeClassAttrs}class="${highlightedClass}"${afterClassAttrs}>`;
++          },
++        ),
++      }),
++    },
++  };
++}
++
+diff --git a/src/plugins/taxonomy.ts b/src/plugins/taxonomy.ts
+new file mode 100644
+index 0000000..a5042e0
+--- /dev/null
++++ b/src/plugins/taxonomy.ts
+@@ -0,0 +1,77 @@
++import { BuildContext, ContentFile, Plugin } from '../core/types.js';
++import { renderTaxonomyPage, toTaxonomySlug } from './utils.js';
++
++type TaxonomyMap = Map<string, ContentFile[]>;
++
++function addToMap(map: TaxonomyMap, key: string, file: ContentFile): void {
++  const normalizedKey = key.trim().toLowerCase();
++  if (!normalizedKey) {
++    return;
++  }
++
++  const files = map.get(normalizedKey) ?? [];
++  files.push(file);
++  map.set(normalizedKey, files);
++}
++
++function getCategoryValues(file: ContentFile): string[] {
++  const category = file.metadata.category;
++  const categories = file.metadata.categories;
++  const values: string[] = [];
++
++  if (typeof category === 'string') {
++    values.push(category);
++  }
++
++  if (Array.isArray(categories)) {
++    values.push(...categories.filter((item): item is string => typeof item === 'string'));
++  }
++
++  return values;
++}
++
++export function createTaxonomyPlugin(): Plugin {
++  return {
++    name: 'taxonomy',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      beforeBuild: (ctx: BuildContext) => {
++        const tagMap: TaxonomyMap = new Map();
++        const categoryMap: TaxonomyMap = new Map();
++
++        for (const file of ctx.files) {
++          for (const tag of file.tags ?? []) {
++            addToMap(tagMap, tag, file);
++          }
++
++          for (const category of getCategoryValues(file)) {
++            addToMap(categoryMap, category, file);
++          }
++        }
++
++        ctx.data.set('taxonomy-tags', tagMap);
++        ctx.data.set('taxonomy-categories', categoryMap);
++      },
++      afterBuild: (ctx: BuildContext) => {
++        const tagMap = (ctx.data.get('taxonomy-tags') as TaxonomyMap | undefined) ?? new Map();
++        const categoryMap = (ctx.data.get('taxonomy-categories') as TaxonomyMap | undefined) ?? new Map();
++
++        for (const [tag, files] of tagMap.entries()) {
++          ctx.output.set(
++            `tags/${toTaxonomySlug(tag)}.html`,
++            renderTaxonomyPage('Tag', tag, files, ctx.config.title),
++          );
++        }
++
++        for (const [category, files] of categoryMap.entries()) {
++          ctx.output.set(
++            `categories/${toTaxonomySlug(category)}.html`,
++            renderTaxonomyPage('Category', category, files, ctx.config.title),
++          );
++        }
++      },
++    },
++  };
++}
++
+diff --git a/src/plugins/utils.ts b/src/plugins/utils.ts
+new file mode 100644
+index 0000000..efdfaaf
+--- /dev/null
++++ b/src/plugins/utils.ts
+@@ -0,0 +1,61 @@
++import { ContentFile } from '../core/types.js';
++
++export function normalizeBaseUrl(baseUrl: string): string {
++  return baseUrl.replace(/\/+$/, '');
++}
++
++export function escapeHtml(value: string): string {
++  return value
++    .replace(/&/g, '&amp;')
++    .replace(/</g, '&lt;')
++    .replace(/>/g, '&gt;')
++    .replace(/"/g, '&quot;')
++    .replace(/'/g, '&#39;');
++}
++
++export function escapeXml(value: string): string {
++  return escapeHtml(value);
++}
++
++export function stripHtml(value: string): string {
++  return value
++    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
++    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
++    .replace(/<[^>]+>/g, ' ')
++    .replace(/&nbsp;/g, ' ')
++    .replace(/&amp;/g, '&')
++    .replace(/&lt;/g, '<')
++    .replace(/&gt;/g, '>')
++    .replace(/&quot;/g, '"')
++    .replace(/&#39;/g, '\'')
++    .replace(/\s+/g, ' ')
++    .trim();
++}
++
++export function toTaxonomySlug(value: string): string {
++  return value.trim().toLowerCase().replace(/\s+/g, '-');
++}
++
++export function renderTaxonomyPage(
++  label: string,
++  value: string,
++  files: ContentFile[],
++  siteTitle: string,
++): string {
++  const items = files
++    .map((file) => `<li><a href="/${escapeHtml(file.slug)}.html">${escapeHtml(file.title)}</a></li>`)
++    .join('');
++
++  return `<!DOCTYPE html>
++<html>
++<head>
++  <meta charset="utf-8">
++  <title>${escapeHtml(label)}: ${escapeHtml(value)} | ${escapeHtml(siteTitle)}</title>
++</head>
++<body>
++  <h1>${escapeHtml(label)}: ${escapeHtml(value)}</h1>
++  <ul>${items}</ul>
++</body>
++</html>`;
++}
++
