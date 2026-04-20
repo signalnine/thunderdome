@@ -2,7 +2,7 @@
 
 Two agents enter, one agent leaves.
 
-Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 6,076 scored trials across 162 orchestrator variants (9,081 total including crashes).
+Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 6,097 scored trials across 163 orchestrator variants (9,102 total including crashes).
 
 ## Results
 
@@ -45,6 +45,7 @@ Same harness with different models, or same model through different harnesses. T
 | [Forge Code](https://forgecode.dev) + GPT-5.4 | **66.3%** | 72.6% | 59.9% | 20 | -- | GPT-5.4 via Forge (TermBench 2.0 leader); fast but no lift on this suite |
 | [Codex](https://github.com/openai/codex) + GPT-5.4 | **74.2%** | 79.6% | 68.7% | 20 | $0.21 | GPT-5.4 via OpenAI's Codex CLI (+7.9pp over Forge on same model) |
 | [Forge Code](https://forgecode.dev) + Gemini 3.1 Pro | **61.1%** | 66.3% | 55.8% | 20 | -- | Gemini 3.1 Pro via Forge; worst Forge variant (Google Gemini CLI on 2.5 Pro beats it at 80.9%) |
+| [Forge Code](https://forgecode.dev) + Claude Sonnet 4.6 | **72.4%** | 85.4% | 59.4% | 20 | -- | Sonnet 4.6 via Forge (best Forge variant; but -16pp below Conclave v8 + Sonnet at 88.6%) |
 | [Amplifier](https://github.com/microsoft/amplifier) (Gemini 2.5 Flash) | **75.7%** | 78.7% | 72.7% | 17 | $0.02 | Gemini 2.5 Flash |
 | CRUSH (GLM-5-Turbo) | **73.7%** | 76.5% | 70.9% | 38 | $2.27 | GLM-5-Turbo |
 | CRUSH (MiniMax M2.7) | **72.7%** | 75.1% | 70.4% | 39 | $0.39 | MiniMax M2.7 |
@@ -286,6 +287,8 @@ Forge Code is the TermBench 2.0 leader but ties Claude Code on this suite. Forge
 
 Forge + Gemini 3.1 Pro landed lower than Forge on any other model we tried: **61.1%** overall (66.3% std, 55.8% hard). Gemini 3.1 Pro is the flagship preview and T1 smoke scored 0.83 -- but on greenfield hard tasks (reactive-spreadsheet, factory-reset, beam-splitter) it collapsed to 0.20-0.22. Google's own Gemini CLI runs the same-class Gemini 2.5 Pro at **80.9%** on this suite -- a +19.8pp gap for the same model family. Forge's architecture clearly doesn't cooperate with Gemini 3.x's tool-calling conventions.
 
+Forge + Sonnet is the best Forge variant we've measured but still leaves 16pp on the table vs Conclave v8 + Sonnet. **Forge + Claude Sonnet 4.6: 72.4% (85.4% std, 59.4% hard)**. Standard tasks near-perfect -- 5 at 1.00, phantom-invoice at 0.98, ecommerce/time-tracker/plugin-marketplace at 0.91-0.96. Hard suite collapsed on 4 tasks at 0.20 (factory-reset, circuit-debugger, structural-merge, task-queue). Same Sonnet model runs at **88.6% in Conclave v8** on the same suite -- a 16pp gap from methodology alone. Pattern: Forge finishes fast (most tasks 3-6 min) but doesn't iterate enough on reasoning-heavy hard tasks where Conclave's test-first-then-verify loop pays off. **Forge × Sonnet confirms the earlier finding**: TB2.0 leadership doesn't translate to this suite regardless of which model you put in.
+
 Terminal-Bench 2.0 leaderboard harnesses underperform on this suite. We tested three Qwen3.6 harnesses from the TB2.0 rankings that we hadn't seen before: OpenHands (ex-OpenDevin, TB2.0 #50), Mini-SWE-Agent (Princeton, #68), and Goose (Block/AAIF, #45). All three landed below Claude Code + Qwen3.6 (70.3%): **OpenHands 60.5%, Mini-SWE 58.5%, Goose 54.4%**. The pattern is consistent with our earlier finding that TB2.0 rewards different properties than this suite (test-coverage-plus-hidden-validators) -- harnesses optimized for TB2.0's command-generation tasks don't automatically transfer. Goose was the weakest: 0.00 agent-tests coverage on multiple greenfield tasks, same failure mode as aider's single-pass edit style. All three were easy to get running (pip / tar.bz2 binary install), so the regression isn't about config tuning -- it's about how they drive tools.
 
 Codex outperforms Forge on the same model. OpenAI's official Codex CLI scored **74.2% with GPT-5.4** -- **+7.9pp over Forge + GPT-5.4** (66.3%). Both are fast (Codex averaged 3 min per task including reasoning) and both use GPT-5.4's native responses API, but Codex writes more tests on greenfield tasks, which this suite's greenfield scoring rewards heavily (agent_tests x coverage is 31% of greenfield weight). The gap is entirely harness behavior -- same model, same endpoint. Caveat: one task (reactive-spreadsheet) hung at the 60-minute timeout scoring 0.20; without that Codex would have been ~76.3%. Still, $0.21/task average cost with extensive prompt caching (usually ~80% cache hit rate on Codex's second turn onward) makes GPT-5.4 via Codex a viable budget frontier option at $0.21 -- between Gemini CLI ($0.14, 80.9%) and Qwen+Sonnet-verify ($0.51, 83.3%).
@@ -360,6 +363,7 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | Hermes MiMo (prompted) | 64.9% | $0.18 | |
 | Codex + GPT-5.4 | 74.2% | $0.21 | |
 | Forge + Gemini 3.1 Pro | 61.1% | - | |
+| Forge + Sonnet 4.6 | 72.4% | - | |
 | FL Supervisor (Opus) | 44.0% | $0.26 | |
 | CRUSH (MiniMax M2.7) | 72.7% | $0.39 | |
 | CRUSH (Kimi K2.5) | 66.3% | $0.47 | |

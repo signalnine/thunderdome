@@ -56,6 +56,7 @@ _LOCAL_INFERENCE = {o for o in (
     "openhands-qwen36-neuralwatt",
     "mini-swe-qwen36-neuralwatt",
     "goose-qwen36-neuralwatt",
+    "forge-sonnet",
     # Codex trials that timed out have cost=0 because tokens aren't billed
     # on incomplete runs; use duration-based crash filter instead.
     "codex-gpt54",
