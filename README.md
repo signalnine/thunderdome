@@ -2,7 +2,7 @@
 
 Two agents enter, one agent leaves.
 
-Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 5,979 scored trials across 158 orchestrator variants (8,959 total including crashes).
+Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 6,076 scored trials across 162 orchestrator variants (9,081 total including crashes).
 
 ## Results
 
@@ -44,6 +44,7 @@ Same harness with different models, or same model through different harnesses. T
 | [CRUSH](https://github.com/charmbracelet/crush) + GLM-5.1-fast (Neuralwatt) | **64.9%** | 76.9% | 52.8% | 20 | -- | GLM-5.1-FP8 via CRUSH native Anthropic endpoint (-10.8pp vs Claude Code harness) |
 | [Forge Code](https://forgecode.dev) + GPT-5.4 | **66.3%** | 72.6% | 59.9% | 20 | -- | GPT-5.4 via Forge (TermBench 2.0 leader); fast but no lift on this suite |
 | [Codex](https://github.com/openai/codex) + GPT-5.4 | **74.2%** | 79.6% | 68.7% | 20 | $0.21 | GPT-5.4 via OpenAI's Codex CLI (+7.9pp over Forge on same model) |
+| [Forge Code](https://forgecode.dev) + Gemini 3.1 Pro | **61.1%** | 66.3% | 55.8% | 20 | -- | Gemini 3.1 Pro via Forge; worst Forge variant (Google Gemini CLI on 2.5 Pro beats it at 80.9%) |
 | [Amplifier](https://github.com/microsoft/amplifier) (Gemini 2.5 Flash) | **75.7%** | 78.7% | 72.7% | 17 | $0.02 | Gemini 2.5 Flash |
 | CRUSH (GLM-5-Turbo) | **73.7%** | 76.5% | 70.9% | 38 | $2.27 | GLM-5-Turbo |
 | CRUSH (MiniMax M2.7) | **72.7%** | 75.1% | 70.4% | 39 | $0.39 | MiniMax M2.7 |
@@ -70,6 +71,9 @@ Models that run on a single RTX 5090 via llama.cpp or vLLM, plus Qwen3.6-35B-A3B
 | [Forge Code](https://forgecode.dev) + Qwen3.6 (Neuralwatt) | **69.9%** | 75.9% | 64.0% | 20 | ~$0.03 | Qwen3.6-35B-A3B via Forge (TermBench 2.0 leader, tied with Claude Code on this suite) |
 | Conclave v8 + Qwen3.6 (Neuralwatt) | **69.1%** | 77.7% | 60.5% | 20 | $0.03 | Qwen3.6-35B-A3B + v8 discipline (2 hard tasks timed out) |
 | [CRUSH](https://github.com/charmbracelet/crush) + Qwen3.6 (Neuralwatt) | **65.5%** | 77.9% | 53.2% | 20 | $0.03 | Qwen3.6-35B-A3B via CRUSH native Anthropic endpoint |
+| [OpenHands](https://github.com/All-Hands-AI/OpenHands) + Qwen3.6 (Neuralwatt) | **60.5%** | 66.1% | 54.8% | 20 | -- | OpenHands CLI + Qwen3.6 via LiteLLM anthropic/ route |
+| [Mini-SWE-Agent](https://github.com/SWE-agent/mini-swe-agent) + Qwen3.6 (Neuralwatt) | **58.5%** | 64.5% | 52.6% | 19 | -- | Princeton's minimalist agent + Qwen3.6 |
+| [Goose](https://github.com/aaif-goose/goose) + Qwen3.6 (Neuralwatt) | **54.4%** | 64.6% | 44.3% | 20 | -- | Block/AAIF Goose + Qwen3.6 (worst Qwen3.6 harness except aider) |
 | CRUSH + zen-lite + Qwen3.6 (Neuralwatt) | **60.3%** | 70.4% | 50.2% | 21 | $0.03 | CRUSH + zen prompt -- zen does NOT transfer (-5.2pp vs CRUSH vanilla) |
 | CRUSH Meditation (Qwen3-Coder 30B Q4_K_S) | **59.8%** | 72.2% | 47.3% | 76 | $0 | Qwen3-Coder 30B Q4_K_S (llama.cpp) |
 | CRUSH (Qwen3-Coder 30B Q4_K_S) | **57.0%** | 68.7% | 45.3% | 76 | $0 | Qwen3-Coder 30B Q4_K_S (llama.cpp) |
@@ -280,6 +284,10 @@ Zen on GLM-5.1 is a time-budget story, not a quality story. GLM-5.1 + zen-lite i
 
 Forge Code is the TermBench 2.0 leader but ties Claude Code on this suite. Forge + Qwen3.6 scored **69.9%** vs Claude Code + Qwen3.6 at 70.3% -- a wash (-0.4pp overall, +1.1pp hard). Forge + GPT-5.4 scored **66.3%** -- no lift from the more capable model. The TermBench 2.0 leaderboard rewards different properties (tool-call patterns, agentic subroutines, command-generation) than our suite rewards (test-coverage-plus-implementation-correctness on open-ended greenfield). Forge's real win here is speed: most tasks completed in 3-6 min vs Claude Code's ~10 min, and a full 19-task suite at parallel=19 wrapped in ~30 min wall-clock. **Different harnesses are optimized for different benchmark shapes**; TermBench 2.0 leadership does not automatically translate to score lift on programming tasks with rich test suites and hidden validators.
 
+Forge + Gemini 3.1 Pro landed lower than Forge on any other model we tried: **61.1%** overall (66.3% std, 55.8% hard). Gemini 3.1 Pro is the flagship preview and T1 smoke scored 0.83 -- but on greenfield hard tasks (reactive-spreadsheet, factory-reset, beam-splitter) it collapsed to 0.20-0.22. Google's own Gemini CLI runs the same-class Gemini 2.5 Pro at **80.9%** on this suite -- a +19.8pp gap for the same model family. Forge's architecture clearly doesn't cooperate with Gemini 3.x's tool-calling conventions.
+
+Terminal-Bench 2.0 leaderboard harnesses underperform on this suite. We tested three Qwen3.6 harnesses from the TB2.0 rankings that we hadn't seen before: OpenHands (ex-OpenDevin, TB2.0 #50), Mini-SWE-Agent (Princeton, #68), and Goose (Block/AAIF, #45). All three landed below Claude Code + Qwen3.6 (70.3%): **OpenHands 60.5%, Mini-SWE 58.5%, Goose 54.4%**. The pattern is consistent with our earlier finding that TB2.0 rewards different properties than this suite (test-coverage-plus-hidden-validators) -- harnesses optimized for TB2.0's command-generation tasks don't automatically transfer. Goose was the weakest: 0.00 agent-tests coverage on multiple greenfield tasks, same failure mode as aider's single-pass edit style. All three were easy to get running (pip / tar.bz2 binary install), so the regression isn't about config tuning -- it's about how they drive tools.
+
 Codex outperforms Forge on the same model. OpenAI's official Codex CLI scored **74.2% with GPT-5.4** -- **+7.9pp over Forge + GPT-5.4** (66.3%). Both are fast (Codex averaged 3 min per task including reasoning) and both use GPT-5.4's native responses API, but Codex writes more tests on greenfield tasks, which this suite's greenfield scoring rewards heavily (agent_tests x coverage is 31% of greenfield weight). The gap is entirely harness behavior -- same model, same endpoint. Caveat: one task (reactive-spreadsheet) hung at the 60-minute timeout scoring 0.20; without that Codex would have been ~76.3%. Still, $0.21/task average cost with extensive prompt caching (usually ~80% cache hit rate on Codex's second turn onward) makes GPT-5.4 via Codex a viable budget frontier option at $0.21 -- between Gemini CLI ($0.14, 80.9%) and Qwen+Sonnet-verify ($0.51, 83.3%).
 
 CRUSH lands between Claude Code and pi. Running CRUSH via its native Anthropic-compatible provider type (no proxy, direct to Neuralwatt's `/v1/messages` with a browser User-Agent header to bypass Cloudflare WAF) gave **65.5% overall** on Qwen3.6 -- better than pi (+10pp), worse than Claude Code (-5pp). Zero crashes, zero timeouts. CRUSH's simple test-driven loop matches well-specified tasks well but its minimal tool surface (read/bash/edit/write, same as pi) leaves hard-suite scores at 53.2%.
@@ -351,6 +359,7 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | FL Supervisor Pro | 45.0% | $0.16 | |
 | Hermes MiMo (prompted) | 64.9% | $0.18 | |
 | Codex + GPT-5.4 | 74.2% | $0.21 | |
+| Forge + Gemini 3.1 Pro | 61.1% | - | |
 | FL Supervisor (Opus) | 44.0% | $0.26 | |
 | CRUSH (MiniMax M2.7) | 72.7% | $0.39 | |
 | CRUSH (Kimi K2.5) | 66.3% | $0.47 | |
