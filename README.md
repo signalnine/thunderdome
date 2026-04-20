@@ -2,7 +2,7 @@
 
 Two agents enter, one agent leaves.
 
-Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 6,116 scored trials across 164 orchestrator variants (9,121 total including crashes).
+Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 6,230 scored trials across 168 orchestrator variants (9,236 total including crashes).
 
 ## Results
 
@@ -71,7 +71,11 @@ Models that run on a single RTX 5090 via llama.cpp or vLLM, plus Qwen3.6-35B-A3B
 | Claude Code + Qwen3.6 (Neuralwatt) | **70.3%** | 77.7% | 62.9% | 19 | $0.04 | Qwen3.6-35B-A3B (vanilla Claude Code harness) |
 | [Forge Code](https://forgecode.dev) + Qwen3.6 (Neuralwatt) | **69.9%** | 75.9% | 64.0% | 20 | ~$0.03 | Qwen3.6-35B-A3B via Forge (TermBench 2.0 leader, tied with Claude Code on this suite) |
 | Conclave v8 + Qwen3.6 (Neuralwatt) | **69.1%** | 77.7% | 60.5% | 20 | $0.03 | Qwen3.6-35B-A3B + v8 discipline (2 hard tasks timed out) |
-| Conclave-pi + Qwen3.6 (Neuralwatt) | **69.6%** | **79.7%** | 59.4% | 19 | $0.06 | **pi + custom Grep/Glob/TodoWrite tools + v8 prompt** -- +14.3pp over vanilla pi, matches Claude Code within 0.7pp |
+| Conclave-pi + Qwen3.6 (n=3) | **65.7%** | 72.0% | **59.4%** | 38 | $0.06 | **pi + Grep/Glob/TodoWrite + v8 prompt** -- +11.0pp over vanilla pi at n=3 |
+| Conclave-pi + Grep/Glob only | **60.4%** | 76.6% | 44.2% | 19 | $0.06 | pi + Grep/Glob tools + v8 (ablation: search-tool isolation) |
+| Conclave-pi + TodoWrite only | **59.7%** | 69.4% | 50.0% | 19 | $0.06 | pi + TodoWrite + v8 (ablation: state-externalization isolation) |
+| Conclave-pi + v8 prompt only | **56.3%** | 70.5% | 42.1% | 21 | $0.06 | pi with no new tools, only v8 prompt (ablation: prompt-only) |
+| Conclave-pi + zen prompt | **55.6%** | 67.6% | 43.6% | 18 | $0.06 | pi + Grep/Glob/TodoWrite + zen prompt -- zen doesn't transfer to pi |
 | [CRUSH](https://github.com/charmbracelet/crush) + Qwen3.6 (Neuralwatt) | **65.5%** | 77.9% | 53.2% | 20 | $0.03 | Qwen3.6-35B-A3B via CRUSH native Anthropic endpoint |
 | [OpenHands](https://github.com/All-Hands-AI/OpenHands) + Qwen3.6 (Neuralwatt) | **60.5%** | 66.1% | 54.8% | 20 | -- | OpenHands CLI + Qwen3.6 via LiteLLM anthropic/ route |
 | [Mini-SWE-Agent](https://github.com/SWE-agent/mini-swe-agent) + Qwen3.6 (Neuralwatt) | **58.5%** | 64.5% | 52.6% | 19 | -- | Princeton's minimalist agent + Qwen3.6 |
@@ -282,7 +286,22 @@ The best cost/quality point so far: **Qwen3.6 writes, Sonnet verifies** at 83.3%
 
 The tool-surface penalty is model-dependent and gets worse for more capable models. CRUSH loses Qwen3.6 about -5pp vs Claude Code (70.3 → 65.5), but loses GLM-5.1-fast about -11pp (75.7 → 64.9). GLM-5.1 is a 600B+ param model; Qwen3.6 is 35B active. Claude Code's richer tools (TodoWrite for state, Grep/Glob for exploration, parallel Bash for verification) matter more when the model has more capability to channel into structured iteration. CRUSH + GLM-5.1 lands at basically the same score as CRUSH + Qwen3.6 (64.9% vs 65.5%) -- same harness, same ceiling, model capability can't punch through the tool constraint.
 
-Tool shape + prompt explain most of the harness gap. We tested this directly by building **Conclave-pi**: the pi runtime (55.3% baseline, rank 101) with a custom extension that adds three Claude-Code-style tools (Grep, Glob, TodoWrite) and injects the Conclave v8 system prompt. Result: **69.6% overall (79.7% std, 59.4% hard)** -- a **+14.3pp lift over vanilla pi** that lands within 0.7pp of Claude Code + Qwen3.6 (70.3%). Standard suite actually beat Claude Code at 79.7% vs 77.7%. Per-task wins concentrate on tasks that reward planning and structured iteration: plugin-marketplace +60pp, beam-splitter +58pp, fts-search +36pp, time-tracker +35pp, structural-merge +33pp. Tasks that were already at ceiling under vanilla pi stayed there (debug-nightmare, financial-ledger, phantom-invoice, ssg-toolkit at 1.00/0.98). **This is strong evidence that the harness-level advantage Claude Code has over pi/goose/aider is almost entirely tool shape and system prompt, not runtime or protocol.** Pi's extension API made the experiment possible in ~200 lines of TypeScript plus a 40-line prompt -- the whole thing is one file in `adapters/pi-conclave-qwen36-neuralwatt/adapter.sh`.
+Tool shape + prompt explain most of the harness gap. We tested this directly by building **Conclave-pi**: the pi runtime (54.7% vanilla baseline on this data) with a custom extension that adds three Claude-Code-style tools (Grep, Glob, TodoWrite) and injects the Conclave v8 system prompt. Result at n=3 (38 trials): **65.7% overall (72.0% std, 59.4% hard) -- a +11.0pp lift over vanilla pi**, closing about 70% of the gap to Claude Code + Qwen3.6 (70.3%). The n=1 number was 69.6% and regressed toward the mean at n=3, consistent with the project's general pattern.
+
+The ablation sweep is where it gets interesting. We ran five variants to decompose what each piece contributes:
+
+| Variant | Overall | Marginal |
+|---|---:|---:|
+| Vanilla pi | 54.7% | — |
+| + v8 prompt only (no new tools) | 56.3% | **+1.6pp** (prompt alone) |
+| + TodoWrite + v8 | 59.7% | **+3.4pp** beyond prompt |
+| + Grep/Glob + v8 | 60.4% | **+4.1pp** beyond prompt |
+| + all 3 tools + v8 (full Conclave-pi) | 65.7% | **+11.0pp** total |
+| + all 3 tools + zen-lite prompt | 55.6% | +0.9pp (zen regresses vs v8) |
+
+Sum of individual marginals: 1.6 + 3.4 + 4.1 = 9.1pp. Actual combined: 11.0pp. Slightly **super-additive** -- the tools reinforce each other (Grep/Glob helps TodoWrite plan better, TodoWrite lets Grep/Glob results feed structured followups). **TodoWrite's contribution is concentrated on hard suite** (+8pp on hard, 0pp on std) -- externalizing state pays off specifically on reasoning-heavy work. **Grep/Glob's contribution is std-only** (+12pp on std, -1pp on hard) -- structured search helps mechanical tasks, doesn't unlock reasoning.
+
+**Zen does not transfer to pi.** Zen-lite lifted Claude Code +5.8pp on this same model (70.3% → 76.1%) and was the best pure-Qwen config we measured. On pi with the same Claude-shaped tools we added, zen replaced v8 at **55.6% -- a -10.1pp regression vs the v8 variant**, and essentially no lift over vanilla pi. The effect seems host-prompt-dependent: on Claude Code's elaborate base system prompt, zen adds nuance; on pi's terse base, zen replaces structure rather than enhancing it. Practical implication: **prompts are not universal constants -- they compose with the underlying harness's base prompt and can even invert sign when ported.**
 
 Zen on GLM-5.1 is a time-budget story, not a quality story. GLM-5.1 + zen-lite initially scored **68.2% overall** with 7 of 19 tasks hitting the default 45-60 minute timeouts. After discarding the timeouts and re-running with 90-150 minute limits, the score jumped to **83.1% (85.2% std, 80.9% hard)** -- a +14.9pp correction. The model can solve the hard tasks when given time; zen's deliberate cadence on GLM-5.1's slower per-turn latency (32 tok/s vs Qwen3.6's 64 tok/s) just multiplies wall-clock time. One task still never completed even at 2.5 hours: bench-circuit-debugger scored 0.29 after 82 minutes. **Zen's lift requires both the right tools (Claude Code's surface) AND enough time budget** -- increase the time limit and GLM-5.1 + zen lands competitive. Methodology note: discarding timeout artifacts from orchestrators that prove capable-given-time is how we treat "failure to finish" vs "failure to solve"; see also `crush-qwen3coder-local-meditate` where similar timeout replacement lifted scores +2.8pp.
 

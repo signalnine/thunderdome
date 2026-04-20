@@ -58,6 +58,10 @@ _LOCAL_INFERENCE = {o for o in (
     "goose-qwen36-neuralwatt",
     "forge-sonnet",
     "pi-conclave-qwen36-neuralwatt",
+    "pi-v8prompt-qwen36",
+    "pi-todowrite-qwen36",
+    "pi-grepglob-qwen36",
+    "pi-conclave-zen-qwen36",
     # Codex trials that timed out have cost=0 because tokens aren't billed
     # on incomplete runs; use duration-based crash filter instead.
     "codex-gpt54",
