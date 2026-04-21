@@ -2,7 +2,7 @@
 
 Two agents enter, one agent leaves.
 
-Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 6,251 scored trials across 169 orchestrator variants (9,258 total including crashes).
+Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 6,306 scored trials across 172 orchestrator variants (9,313 total including crashes).
 
 ## Results
 
@@ -76,7 +76,10 @@ Models that run on a single RTX 5090 via llama.cpp or vLLM, plus Qwen3.6-35B-A3B
 | Conclave-pi + TodoWrite only | **59.7%** | 69.4% | 50.0% | 19 | $0.06 | pi + TodoWrite + v8 (ablation: state-externalization isolation) |
 | Conclave-pi + v8 prompt only | **56.3%** | 70.5% | 42.1% | 21 | $0.06 | pi with no new tools, only v8 prompt (ablation: prompt-only) |
 | Conclave-pi + zen prompt | **55.6%** | 67.6% | 43.6% | 18 | $0.06 | pi + Grep/Glob/TodoWrite + zen prompt -- zen doesn't transfer to pi |
-| pi-bigtools (6 tools + v8) | **47.5%** | 50.7% | 44.4% | 19 | $0.03 | pi + Grep/Glob/TodoWrite + **RunTests + ApplyPatch + VerifyContract** -- -18.2pp regression from pi-conclave |
+| pi-bigtools (6 tools + v8) | **50.1%** | 55.7% | 44.4% | 20 | $0.03 | pi + Grep/Glob/TodoWrite + **RunTests + ApplyPatch + VerifyContract** -- -14.6pp regression from pi-conclave |
+| pi-plus-RunTests only | **63.2%** | 65.9% | 60.6% | 18 | $0.04 | Conclave-pi + RunTests (ablation: near-neutral, shifts profile +hard/-std) |
+| pi-plus-VerifyContract only | **59.1%** | 73.1% | 45.2% | 17 | $0.04 | Conclave-pi + VerifyContract (ablation: -5.6pp) |
+| pi-plus-ApplyPatch only | **53.4%** | 72.1% | 34.8% | 18 | $0.05 | Conclave-pi + ApplyPatch (ablation: **-11.3pp; hard suite crashed from 57.4% → 34.8%**, biggest individual culprit) |
 | [CRUSH](https://github.com/charmbracelet/crush) + Qwen3.6 (Neuralwatt) | **65.5%** | 77.9% | 53.2% | 20 | $0.03 | Qwen3.6-35B-A3B via CRUSH native Anthropic endpoint |
 | [OpenHands](https://github.com/All-Hands-AI/OpenHands) + Qwen3.6 (Neuralwatt) | **60.5%** | 66.1% | 54.8% | 20 | -- | OpenHands CLI + Qwen3.6 via LiteLLM anthropic/ route |
 | [Mini-SWE-Agent](https://github.com/SWE-agent/mini-swe-agent) + Qwen3.6 (Neuralwatt) | **58.5%** | 64.5% | 52.6% | 19 | -- | Princeton's minimalist agent + Qwen3.6 |
@@ -304,7 +307,19 @@ Sum of individual marginals: 1.6 + 3.4 + 4.1 = 9.1pp. Actual combined: 11.0pp. S
 
 **Zen does not transfer to pi.** Zen-lite lifted Claude Code +5.8pp on this same model (70.3% → 76.1%) and was the best pure-Qwen config we measured. On pi with the same Claude-shaped tools we added, zen replaced v8 at **55.6% -- a -10.1pp regression vs the v8 variant**, and essentially no lift over vanilla pi. The effect seems host-prompt-dependent: on Claude Code's elaborate base system prompt, zen adds nuance; on pi's terse base, zen replaces structure rather than enhancing it. Practical implication: **prompts are not universal constants -- they compose with the underlying harness's base prompt and can even invert sign when ported.**
 
-**More tools is not always better.** We stacked three richer tools on top of Conclave-pi -- **RunTests** (structured test output with parsed pass/fail counts), **ApplyPatch** (atomic multi-file edit with rollback), and **VerifyContract** (mechanically runs each CONTRACT.md checkbox). Theoretical case was strong: RunTests attacks the test-feedback-churn failure mode, ApplyPatch attacks multi-file desync, VerifyContract mechanizes the v8 verify step. T1 smoke was 0.88 (highest pi-variant smoke we measured). **Full suite result: 47.5% -- a -18.2pp regression vs pi-conclave (65.7%), worse than vanilla pi (54.7%).** 16 of 19 tasks got worse, with massive drops on beam-splitter (-0.74), plugin-marketplace (-0.56 incl. a full timeout), fts-search (-0.40), ecommerce-backend (-0.34). Likely mechanism: **tool overload.** Qwen3.6 at 35B can handle a compact tool menu well but spirals when the menu gets too long -- RunTests overlaps Bash, ApplyPatch overlaps Edit, and the expanded system-prompt description nudges the model toward tools it doesn't need, producing thrash. Also plausible: one specific tool's output format confuses the model on second/third invocation and it gets stuck. The practical lesson: **tool-surface improvements hit diminishing returns fast, and adding tools has a cost (choice-space dilution) that can exceed their benefit** for mid-range models.
+**More tools is not always better.** We stacked three richer tools on top of Conclave-pi -- **RunTests** (structured test output with parsed pass/fail counts), **ApplyPatch** (atomic multi-file edit with rollback), and **VerifyContract** (mechanically runs each CONTRACT.md checkbox). Theoretical case was strong: RunTests attacks the test-feedback-churn failure mode, ApplyPatch attacks multi-file desync, VerifyContract mechanizes the v8 verify step. **Full suite result: 50.1% -- a -14.6pp regression vs pi-conclave (64.7%), worse than vanilla pi (54.7%).** 16 of 19 tasks got worse, with massive drops on beam-splitter (-0.74), plugin-marketplace (-0.56 incl. a full timeout), fts-search (-0.40), ecommerce-backend (-0.34).
+
+We decomposed the regression with single-tool ablations:
+
+| Variant | Overall | Std | Hard | Δ from baseline |
+|---|---:|---:|---:|---:|
+| pi-conclave (baseline) | 64.7% | 72.0% | 57.4% | — |
+| + RunTests only | 63.2% | 65.9% | **60.6%** | **-1.5pp** (near-neutral) |
+| + VerifyContract only | 59.1% | 73.1% | 45.2% | **-5.6pp** |
+| + ApplyPatch only | 53.4% | 72.1% | **34.8%** | **-11.3pp** |
+| + all 3 (pi-bigtools) | 50.1% | 55.7% | 44.4% | **-14.6pp** |
+
+**ApplyPatch is the biggest individual culprit** -- on its own it took **-22.6pp off hard-suite scores** (57.4% → 34.8%) while leaving std unchanged. Hypothesis: Qwen3.6 reached for ApplyPatch on tasks that were really single-file edits, got rejected (non-unique old_string), lost progress, and thrashed. Edit worked fine alone; ApplyPatch was an attractive nuisance. **RunTests alone was essentially neutral** -- interestingly it shifted the profile (+3.2pp hard, -6.1pp std) rather than lifting overall, suggesting parsed test feedback helps reasoning-heavy tasks but distracts on mechanical ones. **VerifyContract alone** took -5.6pp, and combined with the others exhibits super-additive regression: 14.6pp total loss exceeds the sum of individual losses (11.3 + 5.6 + 1.5 = 18.4pp). Practical lesson: **tool additions are not free -- each new tool has choice-space-dilution cost, and adding tools that overlap existing ones (ApplyPatch overlaps Edit; RunTests overlaps Bash) can actively hurt mid-range models.** Before adding a tool, measure single-tool in isolation first; the combined effect is not a monotonic function of individual effects.
 
 Zen on GLM-5.1 is a time-budget story, not a quality story. GLM-5.1 + zen-lite initially scored **68.2% overall** with 7 of 19 tasks hitting the default 45-60 minute timeouts. After discarding the timeouts and re-running with 90-150 minute limits, the score jumped to **83.1% (85.2% std, 80.9% hard)** -- a +14.9pp correction. The model can solve the hard tasks when given time; zen's deliberate cadence on GLM-5.1's slower per-turn latency (32 tok/s vs Qwen3.6's 64 tok/s) just multiplies wall-clock time. One task still never completed even at 2.5 hours: bench-circuit-debugger scored 0.29 after 82 minutes. **Zen's lift requires both the right tools (Claude Code's surface) AND enough time budget** -- increase the time limit and GLM-5.1 + zen lands competitive. Methodology note: discarding timeout artifacts from orchestrators that prove capable-given-time is how we treat "failure to finish" vs "failure to solve"; see also `crush-qwen3coder-local-meditate` where similar timeout replacement lifted scores +2.8pp.
 

@@ -63,6 +63,9 @@ _LOCAL_INFERENCE = {o for o in (
     "pi-grepglob-qwen36",
     "pi-conclave-zen-qwen36",
     "pi-bigtools-qwen36",
+    "pi-plus-runtests-qwen36",
+    "pi-plus-applypatch-qwen36",
+    "pi-plus-verifycontract-qwen36",
     # Codex trials that timed out have cost=0 because tokens aren't billed
     # on incomplete runs; use duration-based crash filter instead.
     "codex-gpt54",
