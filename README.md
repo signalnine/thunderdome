@@ -2,7 +2,7 @@
 
 Two agents enter, one agent leaves.
 
-Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 6,306 scored trials across 172 orchestrator variants (9,313 total including crashes).
+Agentic Thunderdome benchmarks AI coding tools against 19 standardized programming tasks in isolated Docker containers. Each orchestrator gets a task prompt, a workspace, and a time limit. Scoring is deterministic -- automated tests and static analysis, no LLM judges. The dataset spans 6,329 scored trials across 175 orchestrator variants (9,337 total including crashes).
 
 ## Results
 
@@ -80,6 +80,9 @@ Models that run on a single RTX 5090 via llama.cpp or vLLM, plus Qwen3.6-35B-A3B
 | pi-plus-RunTests only | **63.2%** | 65.9% | 60.6% | 18 | $0.04 | Conclave-pi + RunTests (ablation: near-neutral, shifts profile +hard/-std) |
 | pi-plus-VerifyContract only | **59.1%** | 73.1% | 45.2% | 17 | $0.04 | Conclave-pi + VerifyContract (ablation: -5.6pp) |
 | pi-plus-ApplyPatch only | **53.4%** | 72.1% | 34.8% | 18 | $0.05 | Conclave-pi + ApplyPatch (ablation: **-11.3pp; hard suite crashed from 57.4% → 34.8%**, biggest individual culprit) |
+| pi-plus-TypeCheck only (7-task subset) | **+3.2pp** vs baseline | -- | -- | 7 | -- | Conclave-pi + TypeCheck tool. **Only tool addition that lifts overall.** T16 reactive-spreadsheet +55pp standout win |
+| pi-plus-GitDiff only (7-task subset) | -5.8pp vs baseline | -- | -- | 6 | -- | Conclave-pi + GitDiff tool (ablation: regresses despite being orthogonal) |
+| pi-verbose (7-task subset, verbose tool descriptions) | **-30.4pp** vs baseline | -- | -- | 5 | -- | Conclave-pi with Claude-Code-style verbose tool descriptions. **Catastrophic regression -- longer descriptions hurt Qwen3.6.** |
 | [CRUSH](https://github.com/charmbracelet/crush) + Qwen3.6 (Neuralwatt) | **65.5%** | 77.9% | 53.2% | 20 | $0.03 | Qwen3.6-35B-A3B via CRUSH native Anthropic endpoint |
 | [OpenHands](https://github.com/All-Hands-AI/OpenHands) + Qwen3.6 (Neuralwatt) | **60.5%** | 66.1% | 54.8% | 20 | -- | OpenHands CLI + Qwen3.6 via LiteLLM anthropic/ route |
 | [Mini-SWE-Agent](https://github.com/SWE-agent/mini-swe-agent) + Qwen3.6 (Neuralwatt) | **58.5%** | 64.5% | 52.6% | 19 | -- | Princeton's minimalist agent + Qwen3.6 |
@@ -320,6 +323,18 @@ We decomposed the regression with single-tool ablations:
 | + all 3 (pi-bigtools) | 50.1% | 55.7% | 44.4% | **-14.6pp** |
 
 **ApplyPatch is the biggest individual culprit** -- on its own it took **-22.6pp off hard-suite scores** (57.4% → 34.8%) while leaving std unchanged. Hypothesis: Qwen3.6 reached for ApplyPatch on tasks that were really single-file edits, got rejected (non-unique old_string), lost progress, and thrashed. Edit worked fine alone; ApplyPatch was an attractive nuisance. **RunTests alone was essentially neutral** -- interestingly it shifted the profile (+3.2pp hard, -6.1pp std) rather than lifting overall, suggesting parsed test feedback helps reasoning-heavy tasks but distracts on mechanical ones. **VerifyContract alone** took -5.6pp, and combined with the others exhibits super-additive regression: 14.6pp total loss exceeds the sum of individual losses (11.3 + 5.6 + 1.5 = 18.4pp). Practical lesson: **tool additions are not free -- each new tool has choice-space-dilution cost, and adding tools that overlap existing ones (ApplyPatch overlaps Edit; RunTests overlaps Bash) can actively hurt mid-range models.** Before adding a tool, measure single-tool in isolation first; the combined effect is not a monotonic function of individual effects.
+
+Tier 2 tool experiments (7-task subset): **TypeCheck is the one winner.** We tested three hypothesized "orthogonal" tool additions: TypeCheck (parsed `tsc --noEmit` errors), GitDiff (structured git-diff for self-review), and a counter-experiment rewriting tool descriptions to be verbose Claude-Code-style behavior-nudging paragraphs. On a 7-task mid-range subset against pi-conclave baseline:
+
+| Variant | Paired Δ on 7 subset | Verdict |
+|---:|---:|---|
+| +TypeCheck | **+3.2pp** | Only lift measured. Standout: reactive-spreadsheet 0.30 → 0.85 (+55pp) |
+| +GitDiff | -5.8pp | Regresses |
+| Verbose descriptions | **-30.4pp** | Catastrophic. Constraint-scheduler 0.65 → 0.00 |
+
+The verbose-descriptions result is the most surprising. The hypothesis was that Claude Code's "secret sauce" is verbose tool descriptions that function as behavior-nudging micro-prompts on every turn. **The opposite is true for Qwen3.6**: longer descriptions significantly hurt. Plausible mechanism: each tool description is tokens the model re-reads every turn; in a long-description world, the model spends more attention on reading tool specs than executing the task. For Claude models trained on Anthropic's own verbose tool schemas, verbose descriptions align with training and help. For Qwen3.6, they're overhead.
+
+TypeCheck's lift (+3.2pp) is the first tool addition we've measured that doesn't regress. It's orthogonal to existing tools (no existing pi tool parses TypeScript errors), and on the benchmark's TypeScript-heavy tasks it provides genuinely new information. Worth confirming on the full 19-task suite. **Revised framing**: the pi+Qwen3.6 ceiling is ~65-68% with careful tool curation, not the 64.7% we thought. Adding the right single orthogonal tool nudges the ceiling up, but every other direction (more overlapping tools, verbose descriptions, zen prompt, broader tool sets) regresses.
 
 Zen on GLM-5.1 is a time-budget story, not a quality story. GLM-5.1 + zen-lite initially scored **68.2% overall** with 7 of 19 tasks hitting the default 45-60 minute timeouts. After discarding the timeouts and re-running with 90-150 minute limits, the score jumped to **83.1% (85.2% std, 80.9% hard)** -- a +14.9pp correction. The model can solve the hard tasks when given time; zen's deliberate cadence on GLM-5.1's slower per-turn latency (32 tok/s vs Qwen3.6's 64 tok/s) just multiplies wall-clock time. One task still never completed even at 2.5 hours: bench-circuit-debugger scored 0.29 after 82 minutes. **Zen's lift requires both the right tools (Claude Code's surface) AND enough time budget** -- increase the time limit and GLM-5.1 + zen lands competitive. Methodology note: discarding timeout artifacts from orchestrators that prove capable-given-time is how we treat "failure to finish" vs "failure to solve"; see also `crush-qwen3coder-local-meditate` where similar timeout replacement lifted scores +2.8pp.
 
