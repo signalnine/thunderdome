@@ -18,6 +18,8 @@ RUN git config --global user.name "Thunderdome" && \
 COPY headless-handler.js /opt/headless-handler.js
 COPY anthropic_proxy.py /usr/local/bin/anthropic_proxy.py
 RUN chmod +x /usr/local/bin/anthropic_proxy.py
+COPY anth2openai_proxy.py /usr/local/bin/anth2openai_proxy.py
+RUN chmod +x /usr/local/bin/anth2openai_proxy.py
 
 WORKDIR /workspace
 CMD ["/bin/bash", "/adapter.sh"]

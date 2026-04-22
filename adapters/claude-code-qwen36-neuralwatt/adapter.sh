@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
 
-# --- Claude Code + Qwen/Qwen3.6-35B-A3B via Neuralwatt Anthropic endpoint ---
+# --- Claude Code + Qwen/Qwen3.6-35B-A3B via Neuralwatt ---
+# Neuralwatt dropped their Anthropic endpoint 2026-04-22; we now bridge
+# via anth2openai_proxy.py (Anthropic in, OpenAI-chat-completions out).
 
 [[ -f "$TASK_DESCRIPTION" ]] || { echo "Task file not found: $TASK_DESCRIPTION" >&2; exit 2; }
 
@@ -10,11 +12,11 @@ cd "$TASK_DIR"
 PROXY_PORT=18900
 PROXY_LOG=/workspace/.anthropic-proxy.jsonl
 
-python3 /usr/local/bin/anthropic_proxy.py \
+python3 /usr/local/bin/anth2openai_proxy.py \
   --port $PROXY_PORT \
   --log "$PROXY_LOG" \
-  --upstream "https://api.neuralwatt.com" \
-  --model-rewrite "claude=Qwen/Qwen3.6-35B-A3B" \
+  --upstream "https://api.neuralwatt.com/v1" \
+  --model "Qwen/Qwen3.6-35B-A3B" \
   --api-key "$NEURALWATT_API_KEY" &
 PROXY_PID=$!
 
@@ -32,10 +34,16 @@ OUTPUT_FILE=/workspace/.thunderdome-output.jsonl
 echo "=== Claude Code (Qwen3.6-35B-A3B via Neuralwatt): Starting ==="
 
 set +e
+# --disallowed-tools Task: Neuralwatt rate-limits Qwen3.6 to 2 concurrent
+# requests per model. Claude Code's Task tool spawns sub-agents that fire
+# parallel LLM calls, so one trial can briefly burst to 3+ concurrent and
+# trigger 429 cascades. Disabling Task keeps us at 1 concurrent call per
+# trial so parallel=2 stays within the budget.
 claude -p \
   --output-format stream-json \
   --verbose \
   --dangerously-skip-permissions \
+  --disallowed-tools "Task" \
   -- "$TASK_PROMPT" \
   > "$OUTPUT_FILE" 2>/workspace/.thunderdome-stderr.log
 CLAUDE_EXIT=$?
@@ -45,7 +53,7 @@ echo "Claude Code exited: $CLAUDE_EXIT"
 kill $PROXY_PID 2>/dev/null || true
 
 # Neuralwatt Qwen3.6-35B-A3B: energy-based pricing.
-# $5.00/kWh × 121.97 mWh per request = ~$0.00061/turn.
+# $5.00/kWh x 121.97 mWh per request = ~$0.00061/turn.
 python3 -c "
 import json, os
 
@@ -62,7 +70,7 @@ if os.path.exists(log):
             turns += 1
         except: pass
 
-cost = turns * 0.00061  # 121.97 mWh/req × \$5/kWh = \$0.00061/turn
+cost = turns * 0.00061
 
 metrics = {
     'input_tokens': input_t,
