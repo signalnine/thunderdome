@@ -68,15 +68,22 @@ func RunCodeMetrics(workDir string) (*CodeMetricsResult, error) {
 	}
 	// Also check __tests__ and src/**/*.test.ts patterns
 	filepath.Walk(workDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+		if err != nil {
 			return nil
 		}
 		rel, _ := filepath.Rel(workDir, path)
-		// Skip validation-tests and node_modules
-		if strings.HasPrefix(rel, "validation-tests") || strings.HasPrefix(rel, "node_modules") {
+		// Skip validation-tests and node_modules. Match the directory itself
+		// (rel == name) or anything under it (rel starts with "name/") so we
+		// don't accidentally prune sibling dirs like "validation-tests-extra".
+		if rel == "validation-tests" || rel == "node_modules" ||
+			strings.HasPrefix(rel, "validation-tests"+string(filepath.Separator)) ||
+			strings.HasPrefix(rel, "node_modules"+string(filepath.Separator)) {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
+			return nil
+		}
+		if info.IsDir() {
 			return nil
 		}
 		if strings.Contains(rel, "__tests__") || strings.Contains(rel, ".test.") || strings.Contains(rel, ".spec.") {
