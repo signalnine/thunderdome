@@ -9,6 +9,23 @@ import (
 	"github.com/signalnine/thunderdome/internal/gitops"
 )
 
+func TestShortHashDoesNotPanicOnShortInput(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"", ""},
+		{"abc", "abc"},
+		{"abcdefgh", "abcdefgh"},
+		{"abcdefghi", "abcdefgh"},
+		{"abcdef1234567890", "abcdef12"},
+	}
+	for _, tc := range cases {
+		if got := gitops.ShortHashForTest(tc.in); got != tc.want {
+			t.Errorf("ShortHashForTest(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 func createTestRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()

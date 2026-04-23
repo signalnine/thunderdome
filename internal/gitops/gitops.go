@@ -185,7 +185,17 @@ func CaptureChanges(repoDir string) ([]byte, error) {
 	diff.Dir = repoDir
 	out, err := diff.Output()
 	if err != nil {
-		return nil, fmt.Errorf("git diff %s..HEAD: %w", root[:8], err)
+		return nil, fmt.Errorf("git diff %s..HEAD: %w", shortHash(root), err)
 	}
 	return out, nil
+}
+
+// shortHash returns the first 8 characters of a commit hash, or the whole
+// string if it is shorter. Used only for human-readable error messages, so
+// it must never panic on unexpectedly short input.
+func shortHash(h string) string {
+	if len(h) <= 8 {
+		return h
+	}
+	return h[:8]
 }
