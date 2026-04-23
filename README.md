@@ -70,6 +70,7 @@ Models that run on a single RTX 5090 via llama.cpp or vLLM, plus Qwen3.6-35B-A3B
 | Dao + Qwen3.6 (Neuralwatt) | **76.4%** | 76.8% | 76.1% | 20 | $0.03 | Qwen3.6-35B-A3B + water/wu-wei framing |
 | Zen-lite + Qwen3.6 (Neuralwatt) | **76.1%** | 78.1% | 74.2% | 57 | $0.03 | Qwen3.6-35B-A3B + meditation + TDD (best pure-Qwen config, n=3) |
 | Claude Code + Qwen3.6 (Neuralwatt) | **70.3%** | 77.7% | 62.9% | 19 | $0.04 | Qwen3.6-35B-A3B (vanilla Claude Code harness). Last valid 2026-04-17; Neuralwatt dropped Anthropic endpoint + added 2-concurrent-per-model cap 2026-04-22, making revival runs untenable at parallel>=2 (see "Neuralwatt rate-limit regime change" below) |
+| Claude Code + Qwen3.6-27B-NVFP4 (local vLLM) | **46.5%** | 80.4% | 30.8% | 19 | $0 | Qwen3.6-27B dense 4-bit (NVFP4) on local haight vLLM via anth2openai_proxy. Standard tasks +2.7pp vs 35B-A3B but hard tasks collapse -32.1pp -- 4-bit dense 27B halves reasoning performance vs MoE 35B-A3B in bf16 |
 | [Forge Code](https://forgecode.dev) + Qwen3.6 (Neuralwatt) | **69.9%** | 75.9% | 64.0% | 20 | ~$0.03 | Qwen3.6-35B-A3B via Forge (TermBench 2.0 leader, tied with Claude Code on this suite) |
 | Conclave v8 + Qwen3.6 (Neuralwatt) | **69.1%** | 77.7% | 60.5% | 20 | $0.03 | Qwen3.6-35B-A3B + v8 discipline (2 hard tasks timed out) |
 | Conclave-pi + Qwen3.6 (n=3) | **65.7%** | 72.0% | **59.4%** | 38 | $0.06 | **pi + Grep/Glob/TodoWrite + v8 prompt** -- +11.0pp over vanilla pi at n=3 |
