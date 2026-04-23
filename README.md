@@ -225,6 +225,7 @@ The bare variant is revealing: even with no methodology beyond "understand first
 | v8 Ralph (Sonnet) | **87.9%** | 86.5% | 89.4% | 21 | $0.93 | Control for eval variant |
 | v8 Zen (Opus) | **88.5%** | 99.7% | 83.4% | 19 | $1.66 | v8 combined + persistence-rules framing appended. Paired -0.8pp vs v8-combined (excluding baseline crashes) -- persistence framing does not stack on Opus+v8 |
 | v10 Routed (Opus 4.7 Fast) | **81.0%** | 93.0% | 75.5% | 19 | $3.56 | v10 Haiku routing with Opus 4.7 + fastMode=true on hard, Sonnet 4.6 on easy. -9.4pp vs v10 Routed baseline (Opus 4.6 at 90.4%) at 2.9x the cost. Confirms the prior finding that Opus 4.7 regresses even with discipline |
+| v10 Routed (Sonnet 4.6 Fast) | **86.2%** | 99.7% | 80.0% | 19 | $0.85 | v10 Haiku routing with Sonnet 4.6 + fastMode=true on both paths (routing no-op). +5.2pp vs v10 Opus 4.7 Fast at 1/4 the cost, but -2.4pp vs v8 Sonnet (88.6% / $0.82) at similar cost. Routing adds no value when both paths collapse to one model; v8 prompt without routing overhead remains the right Sonnet config |
 | v8 Contract (Opus) | **87.5%** | 86.7% | 88.3% | 38 | $1.60 | Contract emphasis, weaker TDD |
 | v8 Eval (Sonnet) | **87.2%** | 86.6% | 87.7% | 38 | $0.78 | Two-pass with evaluator diagnosis |
 | v8 No-Review Ralph (Sonnet) | **87.2%** | 89.5% | 85.0% | 43 | $0.83 | No-Review + fresh-context retry loop |
