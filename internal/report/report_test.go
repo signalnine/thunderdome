@@ -2,6 +2,7 @@ package report_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -40,6 +41,79 @@ func TestGenerateTable(t *testing.T) {
 	}
 	if !bytes.Contains([]byte(output), []byte("orch-b")) {
 		t.Error("expected orch-b in output")
+	}
+}
+
+func TestGreenfieldMeansNotDilutedByNonGreenfield(t *testing.T) {
+	base := t.TempDir()
+	runDir := filepath.Join(base, "runs", "test-run")
+
+	// Mixed orchestrator: 2 greenfield trials (HiddenTests=0.8, AgentTests=0.6,
+	// Coverage=0.5, CodeMetrics=0.4) and 2 non-greenfield trials (all zero
+	// greenfield fields). The greenfield means must be the average over the
+	// 2 greenfield trials, not the 4 total trials.
+	metas := []*result.TrialMeta{
+		{
+			Orchestrator: "mixed-orch", Task: "green-1", Trial: 1,
+			CompositeScore: 0.7, ExitReason: "completed",
+			Scores: result.Scores{HiddenTests: 0.8, AgentTests: 0.6, Coverage: 0.5, CodeMetrics: 0.4},
+		},
+		{
+			Orchestrator: "mixed-orch", Task: "green-1", Trial: 2,
+			CompositeScore: 0.7, ExitReason: "completed",
+			Scores: result.Scores{HiddenTests: 0.8, AgentTests: 0.6, Coverage: 0.5, CodeMetrics: 0.4},
+		},
+		{
+			Orchestrator: "mixed-orch", Task: "std-1", Trial: 1,
+			CompositeScore: 0.9, ExitReason: "completed",
+			Scores: result.Scores{Tests: 0.9, StaticAnalysis: 0.8},
+		},
+		{
+			Orchestrator: "mixed-orch", Task: "std-1", Trial: 2,
+			CompositeScore: 0.9, ExitReason: "completed",
+			Scores: result.Scores{Tests: 0.9, StaticAnalysis: 0.8},
+		},
+	}
+
+	for _, m := range metas {
+		dir := result.TrialDir(runDir, m.Orchestrator, m.Task, m.Trial)
+		if err := result.WriteTrialMeta(dir, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := report.Generate(runDir, "json", &buf); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	var got []report.OrchestratorSummary
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 summary, got %d", len(got))
+	}
+	s := got[0]
+	if !s.HasGreenfield {
+		t.Fatal("expected HasGreenfield=true")
+	}
+
+	const eps = 1e-9
+	checks := []struct {
+		name string
+		got  float64
+		want float64
+	}{
+		{"MeanHiddenTests", s.MeanHiddenTests, 0.8},
+		{"MeanAgentTests", s.MeanAgentTests, 0.6},
+		{"MeanCoverage", s.MeanCoverage, 0.5},
+		{"MeanCodeMetrics", s.MeanCodeMetrics, 0.4},
+	}
+	for _, c := range checks {
+		if c.got < c.want-eps || c.got > c.want+eps {
+			t.Errorf("%s: got %f, want %f (means must be averaged over greenfield trials only, not diluted by non-greenfield trials)", c.name, c.got, c.want)
+		}
 	}
 }
 

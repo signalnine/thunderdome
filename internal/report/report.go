@@ -86,6 +86,7 @@ func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 		agentTests       float64
 		coverage         float64
 		codeMetrics      float64
+		greenCount       int
 		hasGreenfield    bool
 	}
 	byOrch := map[string]*accum{}
@@ -112,6 +113,7 @@ func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 		// Track greenfield-specific scores
 		if m.Scores.HiddenTests > 0 || m.Scores.AgentTests > 0 || m.Scores.CodeMetrics > 0 {
 			a.hasGreenfield = true
+			a.greenCount++
 			a.hiddenTests += m.Scores.HiddenTests
 			a.agentTests += m.Scores.AgentTests
 			a.coverage += m.Scores.Coverage
@@ -133,12 +135,13 @@ func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 		if a.countFiltered > 0 {
 			s.MeanScoreFiltered = a.scoreFiltered / float64(a.countFiltered)
 		}
-		if a.hasGreenfield {
+		if a.hasGreenfield && a.greenCount > 0 {
 			s.HasGreenfield = true
-			s.MeanHiddenTests = a.hiddenTests / float64(a.count)
-			s.MeanAgentTests = a.agentTests / float64(a.count)
-			s.MeanCoverage = a.coverage / float64(a.count)
-			s.MeanCodeMetrics = a.codeMetrics / float64(a.count)
+			n := float64(a.greenCount)
+			s.MeanHiddenTests = a.hiddenTests / n
+			s.MeanAgentTests = a.agentTests / n
+			s.MeanCoverage = a.coverage / n
+			s.MeanCodeMetrics = a.codeMetrics / n
 		}
 		summaries = append(summaries, s)
 	}
