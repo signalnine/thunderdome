@@ -95,6 +95,26 @@ func TestParseExitZeroWithOutput(t *testing.T) {
 	}
 }
 
+// "0 passed" bare format (no total, no "failed" count) is an explicit
+// zero-pass signal and should score 0.0, not fall through to the
+// exitCode==0 "assume all passed" fallback.
+func TestParseZeroPassedBareFormat(t *testing.T) {
+	result := validation.ParseTestResults("0 passed", 0)
+	if result.Score != 0.0 {
+		t.Errorf("score: got %f, want 0.0", result.Score)
+	}
+}
+
+// Mirrors the vitest-format behavior for "Tests 0 passed (0)" where
+// the current code already returns 0.0. The plain-format strategy
+// must agree.
+func TestParseZeroPassedZeroFailed(t *testing.T) {
+	result := validation.ParseTestResults("0 passed, 0 failed", 0)
+	if result.Score != 0.0 {
+		t.Errorf("score: got %f, want 0.0", result.Score)
+	}
+}
+
 func TestParseLintOutput(t *testing.T) {
 	result := validation.ParseLintResults("5 warnings, 2 errors", 1, 3)
 	if result.NetNewIssues < 0 {

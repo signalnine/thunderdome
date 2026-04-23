@@ -102,6 +102,10 @@ func parsePassRate(output string) float64 {
 			if total > 0 {
 				return float64(passed) / float64(total)
 			}
+			// Matched "N passed" with N=0 (and M=0 if present) -- explicit
+			// zero-pass signal, not "no parseable output". Matches the
+			// vitest-format branch which returns 0.0 when total is 0.
+			return 0.0
 		}
 	}
 	return -1 // no test results found
