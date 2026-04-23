@@ -61,12 +61,18 @@ func ParseTestResults(output string, exitCode int) *TestResult {
 	return &TestResult{Score: score, Output: output, ExitCode: exitCode}
 }
 
-// vitestSummaryRe matches vitest summary lines like:
+// vitestSummaryRe matches the summary wrapper, capturing the inner
+// status components and the total. The components are pipe-separated
+// in any order: "N failed", "N passed", "N skipped", "N todo". Examples:
 //
 //	"Tests  9 failed | 31 passed (40)"
 //	"Tests  40 passed (40)"
 //	"Tests  5 failed (5)"
-var vitestSummaryRe = regexp.MustCompile(`Tests\s+(?:(\d+)\s+failed\s*\|?\s*)?(?:(\d+)\s+passed)?\s*\((\d+)\)`)
+//	"Tests  3 failed | 21 passed | 42 skipped (66)"
+var vitestSummaryRe = regexp.MustCompile(`Tests\s+([^()]+?)\s*\((\d+)\)`)
+
+// vitestCountRe pulls "N <status>" pairs out of the summary's inner text.
+var vitestCountRe = regexp.MustCompile(`(\d+)\s+(passed|failed|skipped|todo)`)
 
 // parsePassRate extracts pass/fail counts from test output.
 // Returns -1 if no test results could be parsed (distinguishes "no output" from "0 passed").
@@ -77,19 +83,24 @@ func parsePassRate(output string) float64 {
 
 	lines := strings.Split(output, "\n")
 
-	// Strategy 1: Look for vitest summary format "Tests  N failed | N passed (total)"
+	// Strategy 1: Look for vitest summary format "Tests  ... (total)"
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if m := vitestSummaryRe.FindStringSubmatch(line); m != nil {
-			var failed, passed, total int
-			fmt.Sscanf(m[1], "%d", &failed)
-			fmt.Sscanf(m[2], "%d", &passed)
-			fmt.Sscanf(m[3], "%d", &total)
-			if total > 0 {
-				return float64(passed) / float64(total)
-			}
-			return 0.0
+		m := vitestSummaryRe.FindStringSubmatch(line)
+		if m == nil {
+			continue
 		}
+		var total, passed int
+		fmt.Sscanf(m[2], "%d", &total)
+		for _, cm := range vitestCountRe.FindAllStringSubmatch(m[1], -1) {
+			if cm[2] == "passed" {
+				fmt.Sscanf(cm[1], "%d", &passed)
+			}
+		}
+		if total > 0 {
+			return float64(passed) / float64(total)
+		}
+		return 0.0
 	}
 
 	// Strategy 2: Original format "N passed" or "N passed, N failed"

@@ -115,6 +115,49 @@ func TestParseZeroPassedZeroFailed(t *testing.T) {
 	}
 }
 
+// Vitest summary line can include a "skipped" count, which the original
+// regex didn't anticipate. Seen in real runs as:
+//   "Tests  3 failed | 21 passed | 42 skipped (66)"
+// Score must be passed/total, consistent with the other vitest variants.
+func TestParseVitestWithSkipped(t *testing.T) {
+	output := ` Test Files  1 failed (1)
+      Tests  3 failed | 21 passed | 42 skipped (66)
+   Duration  2.52s`
+	result := validation.ParseTestResults(output, 1)
+	want := 21.0 / 66.0
+	if absf(result.Score-want) > 0.001 {
+		t.Errorf("score: got %f, want %f", result.Score, want)
+	}
+}
+
+// No failures, just passed + skipped.
+func TestParseVitestPassedAndSkipped(t *testing.T) {
+	output := `      Tests  21 passed | 42 skipped (63)`
+	result := validation.ParseTestResults(output, 0)
+	want := 21.0 / 63.0
+	if absf(result.Score-want) > 0.001 {
+		t.Errorf("score: got %f, want %f", result.Score, want)
+	}
+}
+
+// All skipped — no passes — scores 0.0 under passed/total convention.
+func TestParseVitestAllSkipped(t *testing.T) {
+	output := `      Tests  42 skipped (42)`
+	result := validation.ParseTestResults(output, 0)
+	if result.Score != 0.0 {
+		t.Errorf("score: got %f, want 0.0", result.Score)
+	}
+}
+
+// Failed + skipped with no passes.
+func TestParseVitestFailedAndSkipped(t *testing.T) {
+	output := `      Tests  5 failed | 10 skipped (15)`
+	result := validation.ParseTestResults(output, 1)
+	if result.Score != 0.0 {
+		t.Errorf("score: got %f, want 0.0", result.Score)
+	}
+}
+
 func TestParseLintOutput(t *testing.T) {
 	result := validation.ParseLintResults("5 warnings, 2 errors", 1, 3)
 	if result.NetNewIssues < 0 {
