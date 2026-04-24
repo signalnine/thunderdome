@@ -132,27 +132,32 @@ var testsuiteOpenRe = regexp.MustCompile(`<testsuite(\s[^>]*)?/?>`)
 var testsuitesRootRe = regexp.MustCompile(`<testsuites(\s[^>]*)?>`)
 
 func parseJUnitXML(output string) float64 {
-	var tests, failures, errors int
+	var tests, failures, errors, skipped int
 	for _, m := range testsuiteOpenRe.FindAllString(output, -1) {
-		var t, f, e int
+		var t, f, e, s int
 		fmt.Sscanf(extractAttr(m, "tests"), "%d", &t)
 		fmt.Sscanf(extractAttr(m, "failures"), "%d", &f)
 		fmt.Sscanf(extractAttr(m, "errors"), "%d", &e)
+		fmt.Sscanf(extractAttr(m, "skipped"), "%d", &s)
 		tests += t
 		failures += f
 		errors += e
+		skipped += s
 	}
 	if tests == 0 {
 		if agg := testsuitesRootRe.FindString(output); agg != "" {
 			fmt.Sscanf(extractAttr(agg, "tests"), "%d", &tests)
 			fmt.Sscanf(extractAttr(agg, "failures"), "%d", &failures)
 			fmt.Sscanf(extractAttr(agg, "errors"), "%d", &errors)
+			fmt.Sscanf(extractAttr(agg, "skipped"), "%d", &skipped)
 		}
 	}
 	if tests <= 0 {
 		return 0.0
 	}
-	passed := tests - failures - errors
+	// Skipped tests are not passes -- match the vitest line-format parser,
+	// which counts skipped against the score (passed/total).
+	passed := tests - failures - errors - skipped
 	if passed < 0 {
 		passed = 0
 	}

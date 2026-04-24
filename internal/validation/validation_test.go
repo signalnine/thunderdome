@@ -89,6 +89,54 @@ func TestParseJUnitAggregateOnly(t *testing.T) {
 	}
 }
 
+// Skipped tests must not count as passed -- this matches the vitest line
+// format which scores "3 failed | 21 passed | 42 skipped (66)" as 21/66.
+// JUnit emits the same data as tests=66, failures=3, skipped=42, and the
+// score must be the same regardless of which output format the same run
+// produces.
+func TestParseJUnitWithSkipped(t *testing.T) {
+	output := `<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="tests" tests="66" failures="3" errors="0" skipped="42" time="2.52">
+</testsuite>`
+	result := validation.ParseTestResults(output, 1)
+	want := 21.0 / 66.0
+	if absf(result.Score-want) > 0.001 {
+		t.Errorf("score: got %f, want %f", result.Score, want)
+	}
+}
+
+// Skipped aggregates across multiple <testsuite> elements, just like
+// failures and errors do.
+func TestParseJUnitMultipleTestsuitesWithSkipped(t *testing.T) {
+	// 5 tests (1 fail, 1 skipped) + 10 tests (2 fail, 1 error, 3 skipped)
+	// = 15 total, 7 passed.
+	output := `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+<testsuite name="a" tests="5" failures="1" errors="0" skipped="1">
+</testsuite>
+<testsuite name="b" tests="10" failures="2" errors="1" skipped="3">
+</testsuite>
+</testsuites>`
+	result := validation.ParseTestResults(output, 1)
+	want := 7.0 / 15.0
+	if absf(result.Score-want) > 0.001 {
+		t.Errorf("score: got %f, want %f", result.Score, want)
+	}
+}
+
+// When only the aggregate <testsuites tests="N"> root carries counts,
+// the skipped attribute on the root must be honored too.
+func TestParseJUnitAggregateOnlyWithSkipped(t *testing.T) {
+	output := `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="all" tests="10" failures="2" errors="0" skipped="3">
+</testsuites>`
+	result := validation.ParseTestResults(output, 1)
+	want := 5.0 / 10.0
+	if absf(result.Score-want) > 0.001 {
+		t.Errorf("score: got %f, want %f", result.Score, want)
+	}
+}
+
 // Vitest format: "Tests  N failed | N passed (total)"
 func TestParseVitestFormat(t *testing.T) {
 	output := ` Test Files  1 failed (1)
