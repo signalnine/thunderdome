@@ -133,6 +133,20 @@ func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
 				Source: geminiDir, Target: "/tmp/.gemini-host", ReadOnly: true,
 			})
 		}
+
+		// Mount host ~/.codex/auth.json and config.toml for Codex CLI ChatGPT OAuth.
+		codexAuth := filepath.Join(home, ".codex", "auth.json")
+		if _, err := os.Stat(codexAuth); err == nil {
+			extraMounts = append(extraMounts, docker.Mount{
+				Source: codexAuth, Target: "/tmp/.codex-auth.json", ReadOnly: true,
+			})
+		}
+		codexConfig := filepath.Join(home, ".codex", "config.toml")
+		if _, err := os.Stat(codexConfig); err == nil {
+			extraMounts = append(extraMounts, docker.Mount{
+				Source: codexConfig, Target: "/tmp/.codex-config.toml", ReadOnly: true,
+			})
+		}
 	}
 
 	containerResult, err := docker.RunContainer(ctx, &docker.RunOpts{

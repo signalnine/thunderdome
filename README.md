@@ -44,6 +44,7 @@ Same harness with different models, or same model through different harnesses. T
 | [CRUSH](https://github.com/charmbracelet/crush) + GLM-5.1-fast (Neuralwatt) | **64.9%** | 76.9% | 52.8% | 20 | -- | GLM-5.1-FP8 via CRUSH native Anthropic endpoint (-10.8pp vs Claude Code harness) |
 | [Forge Code](https://forgecode.dev) + GPT-5.4 | **66.3%** | 72.6% | 59.9% | 20 | -- | GPT-5.4 via Forge (TermBench 2.0 leader); fast but no lift on this suite |
 | [Codex](https://github.com/openai/codex) + GPT-5.4 | **74.2%** | 79.6% | 68.7% | 20 | $0.21 | GPT-5.4 via OpenAI's Codex CLI (+7.9pp over Forge on same model) |
+| [Codex](https://github.com/openai/codex) + GPT-5.5 (ChatGPT OAuth) | **75.0%** | 77.1% | 72.9% | 39 | $0.21 | GPT-5.5 via Codex CLI 0.124 w/ ChatGPT Plus OAuth (API-gated at release). +0.8pp overall vs 5.4 (+4.2pp hard, -2.5pp std) — inside noise. Codex harness is the ceiling, not the model generation |
 | [Forge Code](https://forgecode.dev) + Gemini 3.1 Pro | **61.1%** | 66.3% | 55.8% | 20 | -- | Gemini 3.1 Pro via Forge; worst Forge variant (Google Gemini CLI on 2.5 Pro beats it at 80.9%) |
 | Claude Code + Gemini 3.1 Pro (LiteLLM proxy) | **53.3%** | 86.5% | 26.8% | 9 | $0.17 | Gemini 3.1 Pro via LiteLLM Anthropic->Gemini translation. 10/19 crashed on Gemini free-tier 250 req/day quota (partial run). Same std/hard bimodal pattern as Forge |
 | [Forge Code](https://forgecode.dev) + Claude Sonnet 4.6 | **72.4%** | 85.4% | 59.4% | 20 | -- | Sonnet 4.6 via Forge (best Forge variant; but -16pp below Conclave v8 + Sonnet at 88.6%) |
@@ -443,6 +444,7 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | FL Supervisor Pro | 45.0% | $0.16 | |
 | Hermes MiMo (prompted) | 64.9% | $0.18 | |
 | Codex + GPT-5.4 | 74.2% | $0.21 | |
+| Codex + GPT-5.5 (OAuth) | 75.0% | $0.21 | |
 | Forge + Gemini 3.1 Pro | 61.1% | - | |
 | Forge + Sonnet 4.6 | 72.4% | - | |
 | FL Supervisor (Opus) | 44.0% | $0.26 | |
