@@ -44,7 +44,9 @@ Same harness with different models, or same model through different harnesses. T
 | [CRUSH](https://github.com/charmbracelet/crush) + GLM-5.1-fast (Neuralwatt) | **64.9%** | 76.9% | 52.8% | 20 | -- | GLM-5.1-FP8 via CRUSH native Anthropic endpoint (-10.8pp vs Claude Code harness) |
 | [Forge Code](https://forgecode.dev) + GPT-5.4 | **66.3%** | 72.6% | 59.9% | 20 | -- | GPT-5.4 via Forge (TermBench 2.0 leader); fast but no lift on this suite |
 | [Codex](https://github.com/openai/codex) + GPT-5.4 | **74.2%** | 79.6% | 68.7% | 20 | $0.21 | GPT-5.4 via OpenAI's Codex CLI (+7.9pp over Forge on same model) |
-| [Codex](https://github.com/openai/codex) + GPT-5.5 (ChatGPT OAuth) | **75.0%** | 77.1% | 72.9% | 39 | $0.21 | GPT-5.5 via Codex CLI 0.124 w/ ChatGPT Plus OAuth (API-gated at release). +0.8pp overall vs 5.4 (+4.2pp hard, -2.5pp std) — inside noise. Codex harness is the ceiling, not the model generation |
+| [Codex](https://github.com/openai/codex) + GPT-5.5 (ChatGPT OAuth) | **75.0%** | 77.1% | 72.9% | 39 | $0.21 | GPT-5.5 via Codex CLI 0.124 w/ ChatGPT Plus OAuth (API-gated at release). +0.8pp overall vs 5.4 (+4.2pp hard, -2.5pp std) -- inside noise. Codex harness is the ceiling, not the model generation |
+| [Codex](https://github.com/openai/codex) + GPT-5.4-mini | **69.1%** | 73.4% | 64.7% | 19 | $0.06 | GPT-5.4-mini via Codex CLI. -5pp vs full GPT-5.4 but ~3.5x cheaper (1153 pts/$ vs 353). Cheap-tier baseline for Gemini 3 Flash comparison |
+| Gemini CLI + Gemini 3 Flash | **79.9%** | 79.3% | 80.6% | 19 | $0.11 | Gemini 3 Flash via native gemini-cli (paid API key). Matches gemini-cli on 2.5 Pro (80.9%) at 20% lower cost. +4.2pp over same model on Amplifier harness. New best value pick for score >=75% |
 | [Forge Code](https://forgecode.dev) + Gemini 3.1 Pro | **61.1%** | 66.3% | 55.8% | 20 | -- | Gemini 3.1 Pro via Forge; worst Forge variant (Google Gemini CLI on 2.5 Pro beats it at 80.9%) |
 | Claude Code + Gemini 3.1 Pro (LiteLLM proxy) | **53.3%** | 86.5% | 26.8% | 9 | $0.17 | Gemini 3.1 Pro via LiteLLM Anthropic->Gemini translation. 10/19 crashed on Gemini free-tier 250 req/day quota (partial run). Same std/hard bimodal pattern as Forge |
 | [Forge Code](https://forgecode.dev) + Claude Sonnet 4.6 | **72.4%** | 85.4% | 59.4% | 20 | -- | Sonnet 4.6 via Forge (best Forge variant; but -16pp below Conclave v8 + Sonnet at 88.6%) |
@@ -401,7 +403,7 @@ Trust scores backed by 50+ trials, not 8. The leaderboard stabilized only after 
 
 The Pareto frontier spans three orders of magnitude in cost:
 
-**$0.02** Amplifier Gemini 2.5 Flash (75.7%) -> **$0.14** Gemini CLI (80.9%) -> **$0.51** Qwen+Sonnet-verify (83.3%) -> **$0.82** Conclave v8 Sonnet (88.6%) -> **$1.23** Conclave v10 Routed (90.4%)
+**$0.02** Amplifier Gemini 2.5 Flash (75.7%) -> **$0.11** Gemini CLI + Gemini 3 Flash (79.9%) -> **$0.14** Gemini CLI 2.5 Pro (80.9%) -> **$0.51** Qwen+Sonnet-verify (83.3%) -> **$0.82** Conclave v8 Sonnet (88.1%) -> **$1.26** Conclave v10 Routed (90.2%)
 
 The sharpest knee is at $0.51. Qwen+Sonnet-verify uses Qwen3.6 (Neuralwatt, energy-priced) to write an initial implementation with the zen-lite prompt, then hands off to Sonnet for a verification pass that reads the diff, runs tests, and fixes whatever isn't green. The hybrid lands at 83.3% for $0.51/task at n=3 (54 trials). Nothing between $0.14 and $0.74 scores higher. Above it, $0.31 more buys +5.3pp via full-pipeline Sonnet v8 (88.6%), then $0.41 more buys +1.8pp via Haiku-routed model selection (v10 at 90.4%). The cheap-writer-plus-expensive-reviewer pattern may be generalizable: any time a capable but faster/cheaper model can produce an 80% solution, a frontier-model verify pass closes the remaining gap for a fraction of running the frontier model end-to-end.
 
@@ -439,7 +441,9 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | pi + Qwen3.6 (Neuralwatt) | 55.3% | $0.03 | |
 | Zen-lite + Qwen3.6 (Neuralwatt) | 76.1% | $0.03 | |
 | Claude Code + Qwen3.6 (Neuralwatt) | 70.3% | $0.04 | |
-| **Gemini CLI** | **80.9%** | **$0.14** | **best <$0.51** |
+| Codex + GPT-5.4-mini | 69.1% | $0.06 | |
+| **Gemini CLI + Gemini 3 Flash** | **79.9%** | **$0.11** | **best <$0.51** |
+| Gemini CLI (2.5 Pro) | 80.9% | $0.14 | |
 | Hermes MiMo | 64.3% | $0.16 | |
 | FL Supervisor Pro | 45.0% | $0.16 | |
 | Hermes MiMo (prompted) | 64.9% | $0.18 | |
@@ -468,7 +472,7 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | Conclave v8 No-Review (Sonnet) | 87.1% | $0.78 | |
 | Conclave v8 No-TDD (Sonnet) | 87.6% | $0.80 | |
 | Conclave v8 High Effort (Sonnet) | 87.3% | $0.80 | |
-| **Conclave v8 (Sonnet)** | **88.6%** | **$0.82** | **best <$1.23** |
+| **Conclave v8 (Sonnet)** | **88.1%** | **$0.82** | **best <$1.26** |
 | Claude Code + GLM-5.1-fast (Neuralwatt) | 76.3% | $0.83 | |
 | Conclave v8 No-Review Ralph (Sonnet) | 87.2% | $0.83 | |
 | Conclave v8 TDD-Hard (Sonnet) | 86.4% | $0.84 | |
@@ -487,15 +491,15 @@ All leaderboard orchestrators sorted by cost. **Bold** = Pareto-optimal (no orch
 | Conclave v6 (Sonnet) | 86.5% | $1.11 | |
 | GSD | 82.9% | $1.13 | |
 | Sonnet Plans+gstack | 86.7% | $1.17 | |
-| Claude Code (Opus) | 84.0% | $1.18 | |
-| **Conclave v10 Routed** | **90.4%** | **$1.23** | **best overall** |
+| Claude Code (Opus) | 83.3% | $1.14 | |
+| **Conclave v10 Routed** | **90.2%** | **$1.26** | **best overall** |
 | Self-Review (Opus) | 81.9% | $1.23 | |
 | Plans (Opus) | 87.6% | $1.26 | |
 | gstack | 86.3% | $1.32 | |
 | Ralph Fresh (Opus) | 87.2% | $1.34 | |
 | Conclave v7 Lite (Opus) | 85.6% | $1.36 | |
 | Conclave Design | 84.0% | $1.45 | |
-| Conclave v8 (Opus) | 88.7% | $1.45 | |
+| Conclave v8 (Opus) | 88.5% | $1.49 | |
 | Stacked | 86.8% | $1.58 | |
 | Conclave v9 Review Slim (Sonnet) | 87.5% | $1.72 | |
 | Conclave v8 Contract (Opus) | 87.5% | $1.60 | |
