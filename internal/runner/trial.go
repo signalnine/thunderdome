@@ -286,6 +286,11 @@ func validateStandard(ctx context.Context, trialDir, workDir string, meta *resul
 // validateGreenfield runs the greenfield validation pipeline.
 // Agent tests + coverage run BEFORE hidden test injection to avoid interference.
 func validateGreenfield(ctx context.Context, trialDir, workDir string, meta *result.TrialMeta, task *config.Task, gatewayURL string) (*result.TrialMeta, error) {
+	// Mark this trial as greenfield so the reporter can average all greenfield
+	// trials (including fully-failed ones with all-zero scores), not just the
+	// ones that happened to score > 0 on some component.
+	meta.Greenfield = true
+
 	// 1. Run agent's own tests BEFORE injecting hidden tests
 	if task.TestCmd != "" {
 		agentTestResult, err := validation.RunTests(ctx, workDir, task.ValidationImage, task.InstallCmd, task.TestCmd)

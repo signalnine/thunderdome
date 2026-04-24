@@ -110,8 +110,14 @@ func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 			a.scoreFiltered += m.CompositeScore
 			a.countFiltered++
 		}
-		// Track greenfield-specific scores
-		if m.Scores.HiddenTests > 0 || m.Scores.AgentTests > 0 || m.Scores.CodeMetrics > 0 {
+		// Track greenfield-specific scores. Use the explicit Greenfield flag
+		// rather than score-presence heuristics so that fully-failed greenfield
+		// trials (all components scored 0) still contribute to the means
+		// instead of being silently dropped and biasing the averages upward.
+		// Older runs without the flag fall back to the score-presence check.
+		isGreen := m.Greenfield ||
+			m.Scores.HiddenTests > 0 || m.Scores.AgentTests > 0 || m.Scores.CodeMetrics > 0
+		if isGreen {
 			a.hasGreenfield = true
 			a.greenCount++
 			a.hiddenTests += m.Scores.HiddenTests

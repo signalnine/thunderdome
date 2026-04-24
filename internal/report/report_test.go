@@ -117,6 +117,74 @@ func TestGreenfieldMeansNotDilutedByNonGreenfield(t *testing.T) {
 	}
 }
 
+// Regression: a greenfield trial that fails on every greenfield component
+// (HiddenTests=0, AgentTests=0, CodeMetrics=0, Coverage=0) is indistinguishable
+// from a non-greenfield trial under the old "any score > 0" heuristic, so it
+// was excluded from greenCount and the greenfield means were biased upward by
+// dropping the worst trials. With an explicit Greenfield flag on TrialMeta,
+// failed greenfield trials must still contribute zeros to the greenfield means.
+func TestGreenfieldMeansIncludeFailedTrials(t *testing.T) {
+	base := t.TempDir()
+	runDir := filepath.Join(base, "runs", "test-run")
+
+	// Two greenfield trials: one fully passing, one fully failed (all zeros).
+	// Mean should be the average over both -- 0.4 for HiddenTests, etc. -- not
+	// 0.8 (the passing trial alone, with the failed one silently excluded).
+	metas := []*result.TrialMeta{
+		{
+			Orchestrator: "fail-orch", Task: "green-1", Trial: 1,
+			CompositeScore: 0.7, ExitReason: "completed", Greenfield: true,
+			Scores: result.Scores{HiddenTests: 0.8, AgentTests: 0.6, Coverage: 0.5, CodeMetrics: 0.4},
+		},
+		{
+			Orchestrator: "fail-orch", Task: "green-1", Trial: 2,
+			CompositeScore: 0.0, ExitReason: "crashed", Greenfield: true,
+			Scores: result.Scores{HiddenTests: 0, AgentTests: 0, Coverage: 0, CodeMetrics: 0},
+		},
+	}
+
+	for _, m := range metas {
+		dir := result.TrialDir(runDir, m.Orchestrator, m.Task, m.Trial)
+		if err := result.WriteTrialMeta(dir, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := report.Generate(runDir, "json", &buf); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	var got []report.OrchestratorSummary
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 summary, got %d", len(got))
+	}
+	s := got[0]
+	if !s.HasGreenfield {
+		t.Fatal("expected HasGreenfield=true")
+	}
+
+	const eps = 1e-9
+	checks := []struct {
+		name string
+		got  float64
+		want float64
+	}{
+		{"MeanHiddenTests", s.MeanHiddenTests, 0.4},
+		{"MeanAgentTests", s.MeanAgentTests, 0.3},
+		{"MeanCoverage", s.MeanCoverage, 0.25},
+		{"MeanCodeMetrics", s.MeanCodeMetrics, 0.2},
+	}
+	for _, c := range checks {
+		if c.got < c.want-eps || c.got > c.want+eps {
+			t.Errorf("%s: got %f, want %f (failed greenfield trials must be averaged in, not silently excluded)", c.name, c.got, c.want)
+		}
+	}
+}
+
 func TestNoContributionReport(t *testing.T) {
 	base := t.TempDir()
 	runDir := filepath.Join(base, "runs", "test-run")

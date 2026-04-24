@@ -9,6 +9,7 @@ type TrialMeta struct {
 	ExitCode            int     `json:"exit_code"`
 	ExitReason          string  `json:"exit_reason"`
 	NoAgentContribution bool    `json:"no_agent_contribution,omitempty"`
+	Greenfield          bool    `json:"greenfield,omitempty"`
 	Scores              Scores  `json:"scores"`
 	CompositeScore      float64 `json:"composite_score"`
 	TotalTokens         int     `json:"total_tokens"`
