@@ -92,6 +92,11 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	return err
 }
 
+// coreDumpRe matches core-dump basenames like "core.12345" on a diff --git
+// header. It requires the path to end at the dumped PID (numeric suffix), so
+// it does not match legitimate source files such as core.ts / core.js.
+var coreDumpRe = regexp.MustCompile(`[ /]core\.\d+(\s|$)`)
+
 // stripNonRepoHunks removes diff hunks for files that are runtime artifacts
 // (e.g. .thunderdome-output.jsonl, core dumps) and would cause git apply to fail.
 func stripNonRepoHunks(diff []byte) []byte {
@@ -106,12 +111,14 @@ func stripNonRepoHunks(diff []byte) []byte {
 				".thunderdome-output.jsonl",
 				".thunderdome-metrics.json",
 				".amplifier-stdout.log",
-				"core.",
 			} {
 				if strings.Contains(line, pattern) {
 					skip = true
 					break
 				}
+			}
+			if !skip && coreDumpRe.MatchString(line) {
+				skip = true
 			}
 		}
 		if !skip {

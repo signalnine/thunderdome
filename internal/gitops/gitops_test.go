@@ -1,6 +1,7 @@
 package gitops_test
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -8,6 +9,63 @@ import (
 
 	"github.com/signalnine/thunderdome/internal/gitops"
 )
+
+// stripNonRepoHunks used Contains(line, "core.") to drop core-dump hunks, but
+// that pattern also matches legitimate source files whose basename begins with
+// "core." (e.g. core.ts, core.js). An agent that creates or edits such a file
+// would have its diff silently dropped during workspace reconstruction. The
+// detector must only fire for core-dump paths (basename "core.<numeric-pid>").
+func TestStripNonRepoHunks_keepsLegitimateCoreSourceFiles(t *testing.T) {
+	diff := []byte(`diff --git a/src/core.ts b/src/core.ts
+index 1111111..2222222 100644
+--- a/src/core.ts
++++ b/src/core.ts
+@@ -1 +1 @@
+-export const old = 1;
++export const newer = 2;
+diff --git a/core.js b/core.js
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/core.js
+@@ -0,0 +1 @@
++module.exports = {};
+`)
+	out := gitops.StripNonRepoHunksForTest(diff)
+	if !bytes.Contains(out, []byte("src/core.ts")) {
+		t.Errorf("legitimate src/core.ts hunk was stripped:\n%s", out)
+	}
+	if !bytes.Contains(out, []byte("export const newer")) {
+		t.Errorf("content of src/core.ts hunk was stripped:\n%s", out)
+	}
+	if !bytes.Contains(out, []byte("b/core.js")) {
+		t.Errorf("top-level core.js hunk was stripped:\n%s", out)
+	}
+}
+
+// Core-dump hunks (core.<pid>) must still be removed so git apply doesn't
+// choke on binary crash dumps.
+func TestStripNonRepoHunks_dropsCoreDumpPaths(t *testing.T) {
+	diff := []byte(`diff --git a/core.12345 b/core.12345
+new file mode 100644
+index 0000000..4444444
+Binary files /dev/null and b/core.12345 differ
+diff --git a/src/app.ts b/src/app.ts
+index 5555555..6666666 100644
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -1 +1 @@
+-const x = 1;
++const x = 2;
+`)
+	out := gitops.StripNonRepoHunksForTest(diff)
+	if bytes.Contains(out, []byte("core.12345")) {
+		t.Errorf("core-dump hunk was not stripped:\n%s", out)
+	}
+	if !bytes.Contains(out, []byte("src/app.ts")) {
+		t.Errorf("legitimate src/app.ts hunk was stripped:\n%s", out)
+	}
+}
 
 func TestShortHashDoesNotPanicOnShortInput(t *testing.T) {
 	cases := []struct {
