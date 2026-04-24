@@ -135,6 +135,16 @@ func runRescore(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// applyTaskMetaUpdates syncs fields on meta that should always reflect the
+// task config. Used by rescore so older meta.json files written before a
+// flag was tracked (notably Greenfield, added in commit fc63c47b) get the
+// flag backfilled when their trial is re-validated. Without this, the
+// report aggregator drops fully-failed greenfield trials from greenfield
+// means via its score-presence fallback, biasing the means upward.
+func applyTaskMetaUpdates(meta *result.TrialMeta, task *config.Task) {
+	meta.Greenfield = task.Greenfield
+}
+
 // rescoreTestsOnly re-runs only test commands and recomputes composite scores.
 // Keeps existing lint, coverage, and code_metrics scores unchanged.
 func rescoreTestsOnly(ctx context.Context, trialDir string, task *config.Task) error {
@@ -142,6 +152,7 @@ func rescoreTestsOnly(ctx context.Context, trialDir string, task *config.Task) e
 	if err != nil {
 		return fmt.Errorf("reading meta: %w", err)
 	}
+	applyTaskMetaUpdates(meta, task)
 
 	workDir, cleanup, err := reconstructToTempDir(trialDir, task)
 	if err != nil {
@@ -215,6 +226,7 @@ func rescoreFull(ctx context.Context, trialDir string, task *config.Task) error 
 	if err != nil {
 		return fmt.Errorf("reading meta: %w", err)
 	}
+	applyTaskMetaUpdates(meta, task)
 
 	if task.Greenfield {
 		// Re-run full greenfield pipeline
