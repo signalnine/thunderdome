@@ -57,16 +57,10 @@ func RunCodeMetrics(workDir string) (*CodeMetricsResult, error) {
 		return result, err
 	}
 
-	// Check for agent-written tests
-	testsDir := filepath.Join(workDir, "tests")
-	if entries, err := os.ReadDir(testsDir); err == nil {
-		for _, e := range entries {
-			if !e.IsDir() && (strings.HasSuffix(e.Name(), ".test.ts") || strings.HasSuffix(e.Name(), ".spec.ts")) {
-				result.TestFileCount++
-			}
-		}
-	}
-	// Also check __tests__ and src/**/*.test.ts patterns
+	// Count agent-written tests by walking the whole workspace. Matches
+	// tests/**, __tests__/**, and inline src/**/*.test.ts (and .js variants).
+	// Nested tests/ subdirs (tests/unit, tests/integration) must be counted
+	// too — the earlier non-recursive tests/ read missed them.
 	filepath.Walk(workDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
@@ -88,10 +82,7 @@ func RunCodeMetrics(workDir string) (*CodeMetricsResult, error) {
 		}
 		if strings.Contains(rel, "__tests__") || strings.Contains(rel, ".test.") || strings.Contains(rel, ".spec.") {
 			if strings.HasSuffix(info.Name(), ".ts") || strings.HasSuffix(info.Name(), ".js") {
-				// Don't double-count files already found in tests/
-				if !strings.HasPrefix(rel, "tests"+string(filepath.Separator)) {
-					result.TestFileCount++
-				}
+				result.TestFileCount++
 			}
 		}
 		return nil

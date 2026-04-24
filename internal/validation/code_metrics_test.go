@@ -113,6 +113,30 @@ func TestRunCodeMetricsEmptyWorkspaceScoresZero(t *testing.T) {
 	}
 }
 
+// Regression: agents often organize tests in subdirectories
+// (tests/unit/foo.test.ts, tests/integration/bar.test.ts). The old
+// implementation read tests/ non-recursively (phase 1) and then skipped
+// anything under tests/ in the walk (phase 2, to avoid double-counting),
+// so nested tests fell through both phases and TestFileCount stayed 0.
+func TestRunCodeMetricsCountsNestedTestsDir(t *testing.T) {
+	work := t.TempDir()
+	writeFile(t, filepath.Join(work, "src", "main.ts"), "export const x = 1;\n")
+	writeFile(t, filepath.Join(work, "tests", "unit", "a.test.ts"), "test('a', () => {});\n")
+	writeFile(t, filepath.Join(work, "tests", "unit", "b.spec.ts"), "test('b', () => {});\n")
+	writeFile(t, filepath.Join(work, "tests", "integration", "c.test.ts"), "test('c', () => {});\n")
+
+	res, err := validation.RunCodeMetrics(work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.TestFileCount != 3 {
+		t.Errorf("TestFileCount = %d, want 3 (all nested test files under tests/)", res.TestFileCount)
+	}
+	if !res.HasTests {
+		t.Errorf("HasTests = false, want true")
+	}
+}
+
 // A single small source file should still get the "no monolithic" bonus
 // plus the single-file organization credit, so scoring 0.0 on an empty
 // workspace must not come at the cost of the small-single-file case.
