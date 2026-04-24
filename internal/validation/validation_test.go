@@ -45,6 +45,50 @@ func TestParseTestOutputJUnit(t *testing.T) {
 	}
 }
 
+// JUnit XML output frequently contains one <testsuite> per test file,
+// optionally wrapped in a <testsuites> root. The parser must aggregate
+// counts across all individual suites, not return after the first match.
+// Inputs: 5 tests (1 fail) + 10 tests (3 fail, 1 error) = 15 total, 10 passed.
+// First-suite-only bug would yield 4/5=0.8, very different from 10/15.
+func TestParseJUnitMultipleTestsuites(t *testing.T) {
+	output := `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+<testsuite name="a" tests="5" failures="1" errors="0">
+</testsuite>
+<testsuite name="b" tests="10" failures="3" errors="1">
+</testsuite>
+</testsuites>`
+	result := validation.ParseTestResults(output, 1)
+	want := 10.0 / 15.0
+	if absf(result.Score-want) > 0.001 {
+		t.Errorf("score: got %f, want %f", result.Score, want)
+	}
+}
+
+// Same multi-suite XML, but emitted on a single line (no whitespace
+// between elements). Aggregation must still find every <testsuite>.
+func TestParseJUnitMultipleTestsuitesSingleLine(t *testing.T) {
+	output := `<testsuites><testsuite name="a" tests="5" failures="1"/><testsuite name="b" tests="10" failures="3" errors="1"/></testsuites>`
+	result := validation.ParseTestResults(output, 1)
+	want := 10.0 / 15.0
+	if absf(result.Score-want) > 0.001 {
+		t.Errorf("score: got %f, want %f", result.Score, want)
+	}
+}
+
+// Tools that emit only an aggregate <testsuites tests="N"> root with no
+// individual <testsuite> children must still produce a score (fall back
+// to the aggregate). 7 of 10 passed.
+func TestParseJUnitAggregateOnly(t *testing.T) {
+	output := `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="all" tests="10" failures="2" errors="1">
+</testsuites>`
+	result := validation.ParseTestResults(output, 1)
+	if absf(result.Score-0.7) > 0.001 {
+		t.Errorf("score: got %f, want 0.7", result.Score)
+	}
+}
+
 // Vitest format: "Tests  N failed | N passed (total)"
 func TestParseVitestFormat(t *testing.T) {
 	output := ` Test Files  1 failed (1)

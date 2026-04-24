@@ -122,24 +122,41 @@ func parsePassRate(output string) float64 {
 	return -1 // no test results found
 }
 
+// testsuiteOpenRe matches an individual <testsuite> opening tag (and
+// self-closing <testsuite ... />). Anchored so it does not match the
+// plural <testsuites> aggregate root.
+var testsuiteOpenRe = regexp.MustCompile(`<testsuite(\s[^>]*)?/?>`)
+
+// testsuitesRootRe matches the aggregate <testsuites> root tag, used as
+// a fallback when no individual <testsuite> children carry counts.
+var testsuitesRootRe = regexp.MustCompile(`<testsuites(\s[^>]*)?>`)
+
 func parseJUnitXML(output string) float64 {
 	var tests, failures, errors int
-	for _, line := range strings.Split(output, "\n") {
-		if !strings.Contains(line, "<testsuite") {
-			continue
-		}
-		fmt.Sscanf(extractAttr(line, "tests"), "%d", &tests)
-		fmt.Sscanf(extractAttr(line, "failures"), "%d", &failures)
-		fmt.Sscanf(extractAttr(line, "errors"), "%d", &errors)
-		if tests > 0 {
-			passed := tests - failures - errors
-			if passed < 0 {
-				passed = 0
-			}
-			return float64(passed) / float64(tests)
+	for _, m := range testsuiteOpenRe.FindAllString(output, -1) {
+		var t, f, e int
+		fmt.Sscanf(extractAttr(m, "tests"), "%d", &t)
+		fmt.Sscanf(extractAttr(m, "failures"), "%d", &f)
+		fmt.Sscanf(extractAttr(m, "errors"), "%d", &e)
+		tests += t
+		failures += f
+		errors += e
+	}
+	if tests == 0 {
+		if agg := testsuitesRootRe.FindString(output); agg != "" {
+			fmt.Sscanf(extractAttr(agg, "tests"), "%d", &tests)
+			fmt.Sscanf(extractAttr(agg, "failures"), "%d", &failures)
+			fmt.Sscanf(extractAttr(agg, "errors"), "%d", &errors)
 		}
 	}
-	return 0.0
+	if tests <= 0 {
+		return 0.0
+	}
+	passed := tests - failures - errors
+	if passed < 0 {
+		passed = 0
+	}
+	return float64(passed) / float64(tests)
 }
 
 func extractAttr(line, attr string) string {
