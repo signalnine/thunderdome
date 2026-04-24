@@ -76,6 +76,9 @@ type coverageDetail struct {
 }
 
 // flexFloat can unmarshal a JSON number or string into a float64.
+// Istanbul/v8 emit the literal string "Unknown" for any pct whose total is 0
+// (e.g. a project with no branches), so a non-numeric string must decode to 0
+// rather than fail the whole summary parse.
 type flexFloat float64
 
 func (f *flexFloat) UnmarshalJSON(data []byte) error {
@@ -96,7 +99,9 @@ func (f *flexFloat) UnmarshalJSON(data []byte) error {
 	}
 	var val float64
 	if _, err := fmt.Sscanf(s, "%f", &val); err != nil {
-		return err
+		// Non-numeric string (e.g. "Unknown" for zero-total metrics) -> 0.
+		*f = 0
+		return nil
 	}
 	*f = flexFloat(val)
 	return nil
