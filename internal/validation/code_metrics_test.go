@@ -93,3 +93,42 @@ func TestRunCodeMetricsSkipsNodeModulesSubtree(t *testing.T) {
 		t.Errorf("TestFileCount = %d, want 1", res.TestFileCount)
 	}
 }
+
+// Regression: an empty workspace (agent produced zero source files) was
+// scoring 0.3 on code_metrics because the "no monolithic files" branch
+// fires whenever MaxFileLOC <= 200, which is always true when MaxFileLOC
+// is 0. This silently rewarded no-contribution trials and inflated the
+// greenfield composite. An empty workspace must score 0.0.
+func TestRunCodeMetricsEmptyWorkspaceScoresZero(t *testing.T) {
+	work := t.TempDir()
+	res, err := validation.RunCodeMetrics(work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.FileCount != 0 {
+		t.Fatalf("FileCount = %d, want 0", res.FileCount)
+	}
+	if res.Score != 0.0 {
+		t.Errorf("Score = %f, want 0.0 for empty workspace", res.Score)
+	}
+}
+
+// A single small source file should still get the "no monolithic" bonus
+// plus the single-file organization credit, so scoring 0.0 on an empty
+// workspace must not come at the cost of the small-single-file case.
+func TestRunCodeMetricsSingleSmallFileKeepsBonus(t *testing.T) {
+	work := t.TempDir()
+	writeFile(t, filepath.Join(work, "src", "a.ts"), "export const a = 1;\n")
+
+	res, err := validation.RunCodeMetrics(work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.FileCount != 1 {
+		t.Fatalf("FileCount = %d, want 1", res.FileCount)
+	}
+	// 0.1 (1 file) + 0.3 (MaxFileLOC <= 200) + 0 (no tests) = 0.4
+	if res.Score < 0.39 || res.Score > 0.41 {
+		t.Errorf("Score = %f, want 0.4 for single small file", res.Score)
+	}
+}

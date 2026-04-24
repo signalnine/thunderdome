@@ -110,6 +110,13 @@ func RunCodeMetrics(workDir string) (*CodeMetricsResult, error) {
 func computeMetricsScore(m *CodeMetricsResult) float64 {
 	score := 0.0
 
+	// An empty workspace earns nothing. Otherwise the "no monolithic files"
+	// branch below (MaxFileLOC <= 200) fires for MaxFileLOC == 0 and
+	// silently rewards no-contribution trials.
+	if m.FileCount == 0 {
+		return 0.0
+	}
+
 	// File organization: multiple files preferred over monolith (0-0.4)
 	if m.FileCount >= 3 {
 		score += 0.4
