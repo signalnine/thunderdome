@@ -123,8 +123,24 @@ func parseCoverageSummary(path, output string) (*CoverageResult, error) {
 	functions := float64(summary.Total.Functions.Pct)
 	statements := float64(summary.Total.Statements.Pct)
 
-	// Score is average of line and branch coverage, normalized to 0-1
-	score := (lines + branches) / 200.0
+	// Score is the average of line and branch coverage, normalized to 0-1.
+	// A metric with total==0 is not applicable to this project (e.g. a project
+	// with no branching code) and is excluded from the average rather than
+	// counted as 0%, which would unfairly penalize simple codebases.
+	var sum float64
+	var n int
+	if summary.Total.Lines.Total > 0 {
+		sum += lines
+		n++
+	}
+	if summary.Total.Branches.Total > 0 {
+		sum += branches
+		n++
+	}
+	var score float64
+	if n > 0 {
+		score = sum / (float64(n) * 100.0)
+	}
 	if score > 1.0 {
 		score = 1.0
 	}
