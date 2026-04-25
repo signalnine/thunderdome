@@ -262,6 +262,7 @@ func validateStandard(ctx context.Context, trialDir, workDir string, meta *resul
 	testResult, err := validation.RunTests(ctx, workDir, task.ValidationImage, task.InstallCmd, task.TestCmd)
 	if err != nil {
 		log.Printf("warning: tests failed for %s trial %d: %v", meta.Task, meta.Trial, err)
+		meta.ValidationErrors = append(meta.ValidationErrors, fmt.Sprintf("tests: %v", err))
 	} else {
 		meta.Scores.Tests = testResult.Score
 	}
@@ -270,6 +271,7 @@ func validateStandard(ctx context.Context, trialDir, workDir string, meta *resul
 	lintResult, err := validation.RunLint(ctx, workDir, task.ValidationImage, task.LintCmd, 0)
 	if err != nil {
 		log.Printf("warning: lint failed for %s trial %d: %v", meta.Task, meta.Trial, err)
+		meta.ValidationErrors = append(meta.ValidationErrors, fmt.Sprintf("lint: %v", err))
 	} else {
 		meta.Scores.StaticAnalysis = lintResult.Score
 	}
@@ -296,6 +298,7 @@ func validateGreenfield(ctx context.Context, trialDir, workDir string, meta *res
 		agentTestResult, err := validation.RunTests(ctx, workDir, task.ValidationImage, task.InstallCmd, task.TestCmd)
 		if err != nil {
 			log.Printf("warning: agent tests failed for %s trial %d: %v", meta.Task, meta.Trial, err)
+			meta.ValidationErrors = append(meta.ValidationErrors, fmt.Sprintf("agent_tests: %v", err))
 		} else {
 			meta.Scores.AgentTests = agentTestResult.Score
 		}
@@ -305,6 +308,7 @@ func validateGreenfield(ctx context.Context, trialDir, workDir string, meta *res
 	coverageResult, err := validation.RunCoverage(ctx, workDir, task.ValidationImage, task.InstallCmd)
 	if err != nil {
 		log.Printf("warning: coverage failed for %s trial %d: %v", meta.Task, meta.Trial, err)
+		meta.ValidationErrors = append(meta.ValidationErrors, fmt.Sprintf("coverage: %v", err))
 	} else {
 		meta.Scores.Coverage = coverageResult.Score
 	}
@@ -313,6 +317,7 @@ func validateGreenfield(ctx context.Context, trialDir, workDir string, meta *res
 	metricsResult, err := validation.RunCodeMetrics(workDir)
 	if err != nil {
 		log.Printf("warning: code metrics failed for %s trial %d: %v", meta.Task, meta.Trial, err)
+		meta.ValidationErrors = append(meta.ValidationErrors, fmt.Sprintf("code_metrics: %v", err))
 	} else {
 		meta.Scores.CodeMetrics = metricsResult.Score
 	}
@@ -321,6 +326,7 @@ func validateGreenfield(ctx context.Context, trialDir, workDir string, meta *res
 	lintResult, err := validation.RunLint(ctx, workDir, task.ValidationImage, task.LintCmd, 0)
 	if err != nil {
 		log.Printf("warning: lint failed for %s trial %d: %v", meta.Task, meta.Trial, err)
+		meta.ValidationErrors = append(meta.ValidationErrors, fmt.Sprintf("lint: %v", err))
 	} else {
 		meta.Scores.StaticAnalysis = lintResult.Score
 	}
@@ -329,11 +335,13 @@ func validateGreenfield(ctx context.Context, trialDir, workDir string, meta *res
 	cleanup, err := validation.InjectHiddenTests(task.Repo, task.ValidationTag, workDir)
 	if err != nil {
 		log.Printf("warning: could not inject hidden tests for %s trial %d: %v", meta.Task, meta.Trial, err)
+		meta.ValidationErrors = append(meta.ValidationErrors, fmt.Sprintf("hidden_tests_inject: %v", err))
 	} else {
 		defer cleanup()
 		hiddenResult, err := validation.RunHiddenTests(ctx, workDir, task.ValidationImage, task.InstallCmd)
 		if err != nil {
 			log.Printf("warning: hidden tests failed for %s trial %d: %v", meta.Task, meta.Trial, err)
+			meta.ValidationErrors = append(meta.ValidationErrors, fmt.Sprintf("hidden_tests: %v", err))
 		} else {
 			meta.Scores.HiddenTests = hiddenResult.Score
 		}

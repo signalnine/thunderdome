@@ -1,9 +1,26 @@
 package validation
 
 import (
+	"math"
+
 	"github.com/signalnine/thunderdome/internal/config"
 	"github.com/signalnine/thunderdome/internal/result"
 )
+
+// safeScore clamps NaN/Inf to 0 and >1 to 1. Returning NaN/Inf would later
+// fail json.Marshal and silently lose the trial's meta.json.
+func safeScore(x float64) float64 {
+	if math.IsNaN(x) || math.IsInf(x, 0) {
+		return 0
+	}
+	if x < 0 {
+		return 0
+	}
+	if x > 1 {
+		return 1
+	}
+	return x
+}
 
 var DefaultWeights = config.ValidationWeights{
 	Tests:          0.7,
@@ -25,8 +42,8 @@ func CompositeScore(scores result.Scores, weights config.ValidationWeights) floa
 	if total == 0 {
 		return 0
 	}
-	return (scores.Tests*weights.Tests +
-		scores.StaticAnalysis*weights.StaticAnalysis) / total
+	return safeScore((scores.Tests*weights.Tests +
+		scores.StaticAnalysis*weights.StaticAnalysis) / total)
 }
 
 // GreenfieldCompositeScore computes a weighted score for greenfield tasks.
@@ -51,8 +68,8 @@ func GreenfieldCompositeScore(scores result.Scores, gw config.GreenWeights) floa
 	// We combine build (1.0 if builds, 0 if not) with lint.
 	buildLintScore := scores.StaticAnalysis // lint score; build pass is implicit if tests ran
 
-	return (scores.HiddenTests*gw.HiddenTests +
+	return safeScore((scores.HiddenTests*gw.HiddenTests +
 		agentTestScore*gw.AgentTests +
 		buildLintScore*gw.BuildLint +
-		scores.CodeMetrics*gw.CodeMetrics) / total
+		scores.CodeMetrics*gw.CodeMetrics) / total)
 }

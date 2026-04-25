@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -118,10 +119,19 @@ func parseCoverageSummary(path, output string) (*CoverageResult, error) {
 		return &CoverageResult{Score: 0, Output: output}, fmt.Errorf("parsing coverage summary: %w", err)
 	}
 
-	lines := float64(summary.Total.Lines.Pct)
-	branches := float64(summary.Total.Branches.Pct)
-	functions := float64(summary.Total.Functions.Pct)
-	statements := float64(summary.Total.Statements.Pct)
+	// Vitest can emit NaN for pct when a category has no items (e.g. zero
+	// branches in a tiny module). Clamp to 0 so downstream json.Marshal
+	// doesn't fail and silently lose the whole trial's meta.json.
+	clean := func(x float64) float64 {
+		if math.IsNaN(x) || math.IsInf(x, 0) || x < 0 {
+			return 0
+		}
+		return x
+	}
+	lines := clean(float64(summary.Total.Lines.Pct))
+	branches := clean(float64(summary.Total.Branches.Pct))
+	functions := clean(float64(summary.Total.Functions.Pct))
+	statements := clean(float64(summary.Total.Statements.Pct))
 
 	// Score is the average of line and branch coverage, normalized to 0-1.
 	// A metric with total==0 is not applicable to this project (e.g. a project

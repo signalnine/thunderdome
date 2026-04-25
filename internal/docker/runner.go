@@ -117,25 +117,71 @@ func RunContainer(ctx context.Context, opts *RunOpts) (*RunResult, error) {
 	waitResult := cli.ContainerWait(timeoutCtx, containerID, client.ContainerWaitOptions{
 		Condition: container.WaitConditionNotRunning,
 	})
+	// killAndDump is shared cleanup for ctx-cancel / timeout / error paths.
+	killAndDump := func(label string) {
+		cli.ContainerKill(context.Background(), containerID, client.ContainerKillOptions{Signal: "SIGKILL"})
+		logReader, _ := cli.ContainerLogs(context.Background(), containerID, client.ContainerLogsOptions{ShowStdout: true, ShowStderr: true})
+		if logReader != nil {
+			logData, _ := io.ReadAll(logReader)
+			logReader.Close()
+			fmt.Fprintf(os.Stderr, "Container logs (%s):\n%s\n", label, string(logData))
+		}
+	}
+
 	for {
 		select {
-		case err := <-waitResult.Error:
-			if err != nil {
-				cli.ContainerKill(context.Background(), containerID, client.ContainerKillOptions{Signal: "SIGKILL"})
-				logReader, _ := cli.ContainerLogs(context.Background(), containerID, client.ContainerLogsOptions{ShowStdout: true, ShowStderr: true})
-				if logReader != nil {
-					logData, _ := io.ReadAll(logReader)
-					logReader.Close()
-					fmt.Fprintf(os.Stderr, "Container logs (timeout):\n%s\n", string(logData))
-				}
+		case <-ctx.Done():
+			// Parent ctx cancelled (Ctrl+C, batch shutdown). Kill container.
+			killAndDump("parent-ctx-cancelled")
+			return &RunResult{
+				ExitCode: 130,
+				TimedOut: false,
+				Duration: time.Since(start),
+			}, ctx.Err()
+		case <-timeoutCtx.Done():
+			// Trial timeout fired but no result/error came through the wait channels
+			// (Docker daemon hiccup, channel never delivers). Force kill so we
+			// don't spin forever on a closed Error channel.
+			if timeoutCtx.Err() == context.DeadlineExceeded {
+				killAndDump("trial-timeout")
 				return &RunResult{
 					ExitCode: 124,
 					TimedOut: true,
 					Duration: time.Since(start),
 				}, nil
 			}
-			// nil error means no error on this channel; wait for result
-		case status := <-waitResult.Result:
+		case err, ok := <-waitResult.Error:
+			if !ok {
+				// Channel closed without delivering a value — Docker SDK
+				// signalling end-of-stream. Don't spin; force kill and bail.
+				killAndDump("wait-error-channel-closed")
+				return &RunResult{
+					ExitCode: 125,
+					TimedOut: false,
+					Duration: time.Since(start),
+				}, fmt.Errorf("docker wait error channel closed without value")
+			}
+			if err != nil {
+				killAndDump("wait-error")
+				return &RunResult{
+					ExitCode: 124,
+					TimedOut: true,
+					Duration: time.Since(start),
+				}, nil
+			}
+			// nil error received on an open channel; loop and wait for result
+		case status, ok := <-waitResult.Result:
+			if !ok {
+				// Result channel closed without value — Docker SDK signalling
+				// end-of-stream without ever delivering a status. Bail rather
+				// than re-loop into the closed-channel zero-value.
+				killAndDump("wait-result-channel-closed")
+				return &RunResult{
+					ExitCode: 125,
+					TimedOut: false,
+					Duration: time.Since(start),
+				}, fmt.Errorf("docker wait result channel closed without value")
+			}
 			// Capture container logs for debugging
 			logReader, _ := cli.ContainerLogs(context.Background(), containerID, client.ContainerLogsOptions{ShowStdout: true, ShowStderr: true, Tail: "100"})
 			if logReader != nil {
