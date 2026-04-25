@@ -185,6 +185,74 @@ func TestGreenfieldMeansIncludeFailedTrials(t *testing.T) {
 	}
 }
 
+func TestMarkdownGreenfieldBreakdown(t *testing.T) {
+	base := t.TempDir()
+	runDir := filepath.Join(base, "runs", "test-run")
+
+	metas := []*result.TrialMeta{
+		{
+			Orchestrator: "green-orch", Task: "green-1", Trial: 1,
+			CompositeScore: 0.7, ExitReason: "completed", Greenfield: true,
+			Scores: result.Scores{HiddenTests: 0.8, AgentTests: 0.6, Coverage: 0.5, CodeMetrics: 0.4},
+		},
+		{
+			Orchestrator: "green-orch", Task: "green-1", Trial: 2,
+			CompositeScore: 0.7, ExitReason: "completed", Greenfield: true,
+			Scores: result.Scores{HiddenTests: 0.8, AgentTests: 0.6, Coverage: 0.5, CodeMetrics: 0.4},
+		},
+	}
+
+	for _, m := range metas {
+		dir := result.TrialDir(runDir, m.Orchestrator, m.Task, m.Trial)
+		if err := result.WriteTrialMeta(dir, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := report.Generate(runDir, "markdown", &buf); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	output := buf.String()
+
+	if !strings.Contains(output, "Greenfield Breakdown") {
+		t.Errorf("expected 'Greenfield Breakdown' header in markdown output, got:\n%s", output)
+	}
+	for _, col := range []string{"Hidden Tests", "Agent Tests", "Coverage", "Code Metrics"} {
+		if !strings.Contains(output, col) {
+			t.Errorf("expected column %q in markdown greenfield section, got:\n%s", col, output)
+		}
+	}
+	for _, val := range []string{"0.800", "0.600", "0.500", "0.400"} {
+		if !strings.Contains(output, val) {
+			t.Errorf("expected value %q in markdown greenfield section, got:\n%s", val, output)
+		}
+	}
+}
+
+func TestMarkdownOmitsGreenfieldWhenAbsent(t *testing.T) {
+	base := t.TempDir()
+	runDir := filepath.Join(base, "runs", "test-run")
+
+	metas := []*result.TrialMeta{
+		{Orchestrator: "std-orch", Task: "task-1", Trial: 1, CompositeScore: 0.9, ExitReason: "completed"},
+	}
+	for _, m := range metas {
+		dir := result.TrialDir(runDir, m.Orchestrator, m.Task, m.Trial)
+		if err := result.WriteTrialMeta(dir, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := report.Generate(runDir, "markdown", &buf); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if strings.Contains(buf.String(), "Greenfield Breakdown") {
+		t.Errorf("did not expect greenfield section when no summary has greenfield results, got:\n%s", buf.String())
+	}
+}
+
 func TestNoContributionReport(t *testing.T) {
 	base := t.TempDir()
 	runDir := filepath.Join(base, "runs", "test-run")

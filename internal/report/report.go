@@ -248,6 +248,48 @@ func writeMarkdown(summaries []OrchestratorSummary, w io.Writer) error {
 		fmt.Fprintf(w, "| %s | %d | %.0f%% | %.3f | %.0f | $%.2f |\n",
 			s.Name, s.Trials, s.PassRate*100, s.MeanScore, s.MeanTokens, s.MeanCostUSD)
 	}
+
+	hasNoContrib := false
+	for _, s := range summaries {
+		if s.NoContributionTrials > 0 {
+			hasNoContrib = true
+			break
+		}
+	}
+	if hasNoContrib {
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, "### No-Contribution Trials (agent crashed/failed before doing work)")
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, "| Orchestrator | Flagged | Total | Mean Score (filtered) |")
+		fmt.Fprintln(w, "|---|---|---|---|")
+		for _, s := range summaries {
+			if s.NoContributionTrials > 0 {
+				fmt.Fprintf(w, "| %s | %d | %d | %.3f |\n",
+					s.Name, s.NoContributionTrials, s.Trials, s.MeanScoreFiltered)
+			}
+		}
+	}
+
+	hasGreen := false
+	for _, s := range summaries {
+		if s.HasGreenfield {
+			hasGreen = true
+			break
+		}
+	}
+	if hasGreen {
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, "### Greenfield Breakdown")
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, "| Orchestrator | Hidden Tests | Agent Tests | Coverage | Code Metrics |")
+		fmt.Fprintln(w, "|---|---|---|---|---|")
+		for _, s := range summaries {
+			if s.HasGreenfield {
+				fmt.Fprintf(w, "| %s | %.3f | %.3f | %.3f | %.3f |\n",
+					s.Name, s.MeanHiddenTests, s.MeanAgentTests, s.MeanCoverage, s.MeanCodeMetrics)
+			}
+		}
+	}
 	return nil
 }
 
