@@ -48,6 +48,12 @@ func ParseLintResults(output string, exitCode int, baselineIssues int) *LintResu
 			totalIssues++
 		}
 	}
+	// Nonzero exit with no parseable issues means the linter itself failed
+	// (crashed, missing binary, misconfigured). Score 0 instead of rewarding
+	// the failure with a perfect score.
+	if exitCode != 0 && totalIssues == 0 {
+		return &LintResult{Score: 0, Output: output, ExitCode: exitCode}
+	}
 	netNew := totalIssues - baselineIssues
 	if netNew < 0 {
 		netNew = 0

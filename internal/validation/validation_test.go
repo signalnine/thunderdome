@@ -263,3 +263,27 @@ func TestParseLintOutputClean(t *testing.T) {
 		t.Errorf("score: got %f, want 1.0", result.Score)
 	}
 }
+
+// A lint command that exited non-zero with no parseable output (crashed
+// linter, OOM, missing binary, misconfigured eslint) must NOT score 1.0.
+// Previously the loop counted 0 issues and netNew clamped to 0, silently
+// rewarding the failure with a perfect score.
+func TestParseLintCrashedEmptyOutput(t *testing.T) {
+	result := validation.ParseLintResults("", 1, 0)
+	if result.Score >= 1.0 {
+		t.Errorf("crashed lint with empty output should not score 1.0, got %f", result.Score)
+	}
+	if result.ExitCode != 1 {
+		t.Errorf("expected ExitCode=1, got %d", result.ExitCode)
+	}
+}
+
+// Same crash signal but with output that has no parseable issues.
+// A nonzero exit with output that the parser can't decode should also
+// not be rewarded with a perfect score.
+func TestParseLintCrashedUnparseableOutput(t *testing.T) {
+	result := validation.ParseLintResults("docker: command not found\n", 127, 0)
+	if result.Score >= 1.0 {
+		t.Errorf("crashed lint should not score 1.0, got %f", result.Score)
+	}
+}
