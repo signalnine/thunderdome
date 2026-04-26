@@ -25,6 +25,8 @@ claude -p \
   --output-format stream-json \
   --verbose \
   --dangerously-skip-permissions \
+  --setting-sources '' \
+  --strict-mcp-config \
   -- "$TASK_PROMPT" \
   > "$OUTPUT_FILE" 2>/workspace/.thunderdome-stderr.log
 CLAUDE_EXIT=$?
