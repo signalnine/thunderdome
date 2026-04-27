@@ -62,7 +62,7 @@ func DetectNoAgentContribution(exitReason string, durationS int, totalTokens int
 	return false
 }
 
-func BuildAdapterCommand(orch *config.Orchestrator, taskDir, taskDesc, proxyURL string) []string {
+func BuildAdapterCommand() []string {
 	return []string{"bash", "/adapter.sh"}
 }
 
@@ -151,7 +151,7 @@ func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
 
 	containerResult, err := docker.RunContainer(ctx, &docker.RunOpts{
 		Image:       opts.Orchestrator.Image,
-		Command:     BuildAdapterCommand(opts.Orchestrator, "/workspace", "/task.md", opts.GatewayURL),
+		Command:     BuildAdapterCommand(),
 		WorkDir:     workDir,
 		Env:         env,
 		Timeout:     opts.Timeout,

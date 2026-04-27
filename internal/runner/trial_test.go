@@ -3,7 +3,6 @@ package runner_test
 import (
 	"testing"
 
-	"github.com/signalnine/thunderdome/internal/config"
 	"github.com/signalnine/thunderdome/internal/runner"
 )
 
@@ -59,12 +58,7 @@ func TestNoAgentContributionDetection(t *testing.T) {
 }
 
 func TestBuildAdapterCommand(t *testing.T) {
-	orch := &config.Orchestrator{
-		Name:    "test",
-		Adapter: "./adapters/test.sh",
-		Env:     map[string]string{"FOO": "bar"},
-	}
-	cmd := runner.BuildAdapterCommand(orch, "/workspace", "/task.md", "http://localhost:8080")
+	cmd := runner.BuildAdapterCommand()
 	if len(cmd) == 0 {
 		t.Fatal("expected non-empty command")
 	}
