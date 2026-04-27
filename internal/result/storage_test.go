@@ -57,6 +57,53 @@ func TestCreateRunDir(t *testing.T) {
 	}
 }
 
+// Regression: CreateRunDir formatted the run timestamp at second precision
+// and unconditionally overwrote results/latest. Two runs started in the
+// same wall-clock second collided into the same dir; the latest symlink
+// also raced.
+func TestCreateRunDirSameSecondProducesDistinctDirs(t *testing.T) {
+	base := t.TempDir()
+	a, err := result.CreateRunDir(base)
+	if err != nil {
+		t.Fatalf("CreateRunDir #1: %v", err)
+	}
+	b, err := result.CreateRunDir(base)
+	if err != nil {
+		t.Fatalf("CreateRunDir #2: %v", err)
+	}
+	if a == b {
+		t.Fatalf("two CreateRunDir calls produced the same dir: %s", a)
+	}
+	if _, err := os.Stat(a); err != nil {
+		t.Errorf("first run dir missing: %v", err)
+	}
+	if _, err := os.Stat(b); err != nil {
+		t.Errorf("second run dir missing: %v", err)
+	}
+	// latest must point to the most recent (b)
+	target, err := os.Readlink(filepath.Join(base, "latest"))
+	if err != nil {
+		t.Fatalf("readlink latest: %v", err)
+	}
+	if target != b {
+		t.Errorf("latest = %q, want %q", target, b)
+	}
+}
+
+// If results/latest is a real directory (not a symlink) - say a user
+// accidentally created it - CreateRunDir must surface a clear error
+// instead of silently failing on Symlink with EEXIST.
+func TestCreateRunDirRejectsLatestRealDirectory(t *testing.T) {
+	base := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(base, "latest"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := result.CreateRunDir(base)
+	if err == nil {
+		t.Fatal("CreateRunDir succeeded with real-directory latest, want error")
+	}
+}
+
 func TestTrialDir(t *testing.T) {
 	base := t.TempDir()
 	dir := result.TrialDir(base, "my-orch", "my-task", 3)

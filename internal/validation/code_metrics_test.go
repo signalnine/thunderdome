@@ -137,6 +137,46 @@ func TestRunCodeMetricsCountsNestedTestsDir(t *testing.T) {
 	}
 }
 
+// Regression: countLOC treated any line whose trimmed prefix was '/*' as a
+// comment, even when '/* ... */' closed mid-line and was followed by real
+// code. The trailing code was silently dropped from the LOC count, biasing
+// MaxFileLOC and TotalLOC downward.
+func TestRunCodeMetricsCountsCodeAfterInlineBlockComment(t *testing.T) {
+	work := t.TempDir()
+	body := "/* one-liner */ export const realCode = () => 1;\n"
+	writeFile(t, filepath.Join(work, "src", "a.ts"), body)
+
+	res, err := validation.RunCodeMetrics(work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.TotalLOC < 1 {
+		t.Errorf("TotalLOC = %d, want >= 1 for line with code after /* */", res.TotalLOC)
+	}
+	if res.MaxFileLOC < 1 {
+		t.Errorf("MaxFileLOC = %d, want >= 1", res.MaxFileLOC)
+	}
+}
+
+// A line that is entirely a same-line block comment (or block comment
+// followed by a line comment / whitespace) must still be skipped.
+func TestRunCodeMetricsSkipsPureInlineBlockComment(t *testing.T) {
+	work := t.TempDir()
+	body := "/* whole-line comment */\n" +
+		"/* trailing ws */   \n" +
+		"/* then line comment */ // tail\n" +
+		"export const x = 1;\n"
+	writeFile(t, filepath.Join(work, "src", "a.ts"), body)
+
+	res, err := validation.RunCodeMetrics(work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.TotalLOC != 1 {
+		t.Errorf("TotalLOC = %d, want 1 (only export line counts)", res.TotalLOC)
+	}
+}
+
 // A single small source file should still get the "no monolithic" bonus
 // plus the single-file organization credit, so scoring 0.0 on an empty
 // workspace must not come at the cost of the small-single-file case.

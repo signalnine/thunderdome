@@ -163,10 +163,15 @@ func countLOC(path string) int {
 			continue
 		}
 		if strings.HasPrefix(trimmed, "/*") {
-			inBlockComment = true
-			if strings.Contains(trimmed, "*/") {
-				inBlockComment = false
+			if idx := strings.Index(trimmed, "*/"); idx >= 0 {
+				rest := strings.TrimSpace(trimmed[idx+2:])
+				if rest == "" || strings.HasPrefix(rest, "//") {
+					continue
+				}
+				count++
+				continue
 			}
+			inBlockComment = true
 			continue
 		}
 		if strings.HasPrefix(trimmed, "//") {
