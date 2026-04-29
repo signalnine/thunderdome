@@ -18,7 +18,9 @@ Usage:
 """
 
 import argparse
+import base64
 import json
+import re
 import sys
 import time
 import uuid
@@ -26,11 +28,37 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 
+
+# Claude Code validates tool_use IDs against ^toolu_[A-Za-z0-9_]+$ and silently
+# drops tool calls whose IDs don't match. Some upstream models (e.g. Kimi K2)
+# emit IDs like "Read:0" or "functions.TodoWrite:0" that fail the check, which
+# stalls the agentic loop. We rewrite IDs on the response side and decode them
+# back on the request side. Encoding is base32 so the result fits the regex.
+def _encode_tool_id(orig):
+    if not orig:
+        return f"toolu_{uuid.uuid4().hex[:24]}"
+    if re.fullmatch(r"toolu_[A-Za-z0-9_]+", orig):
+        return orig
+    enc = base64.b32encode(orig.encode("utf-8")).decode("ascii").rstrip("=").lower()
+    return f"toolu_orig_{enc}"
+
+
+def _decode_tool_id(anth_id):
+    if not isinstance(anth_id, str) or not anth_id.startswith("toolu_orig_"):
+        return anth_id
+    enc = anth_id[len("toolu_orig_"):].upper()
+    pad = "=" * (-len(enc) % 8)
+    try:
+        return base64.b32decode(enc + pad).decode("utf-8")
+    except Exception:
+        return anth_id
+
 UPSTREAM = None
 API_KEY = None
 DEFAULT_MODEL = None
 MIN_MAX_TOKENS = 0  # floor on max_tokens (thinking models need a minimum budget)
 LOG_PATH = None
+TRACE_PATH = None
 
 
 def translate_request(body):
@@ -58,14 +86,28 @@ def translate_request(body):
         text_parts = []
         tool_calls = []
         tool_results = []
+        # Captured `thinking` blocks (from prior turns of reasoning models).
+        # OpenRouter / OpenAI-compatible thinking-model APIs preserve chain-of-thought
+        # across turns when the assistant message includes `reasoning_details`. Without
+        # this, thinking models lose their thread mid-conversation and end_turn early
+        # (observed with Kimi K2.6 -- gave up after one tool call).
+        reasoning_details = []
 
         for block in content or []:
             btype = block.get("type")
             if btype == "text":
                 text_parts.append(block.get("text", ""))
+            elif btype == "thinking":
+                # Anthropic-format thinking block from a prior assistant turn.
+                # Translate back to OpenRouter's reasoning_details so the model
+                # sees its own prior chain-of-thought.
+                reasoning_details.append({
+                    "type": "reasoning.text",
+                    "text": block.get("thinking", ""),
+                })
             elif btype == "tool_use":
                 tool_calls.append({
-                    "id": block.get("id"),
+                    "id": _decode_tool_id(block.get("id")),
                     "type": "function",
                     "function": {
                         "name": block.get("name"),
@@ -82,7 +124,7 @@ def translate_request(body):
                     rc_text = rc or ""
                 tool_results.append({
                     "role": "tool",
-                    "tool_call_id": block.get("tool_use_id"),
+                    "tool_call_id": _decode_tool_id(block.get("tool_use_id")),
                     "content": rc_text,
                 })
 
@@ -98,6 +140,8 @@ def translate_request(body):
             m["content"] = text if text else None
             if tool_calls:
                 m["tool_calls"] = tool_calls
+            if reasoning_details:
+                m["reasoning_details"] = reasoning_details
             messages.append(m)
 
     out["messages"] = messages
@@ -142,6 +186,14 @@ def translate_request(body):
                 "function": {"name": tc.get("name")},
             }
 
+    # Anthropic clients send `thinking: {type: enabled, budget_tokens: N}` to
+    # request extended thinking; OpenRouter accepts the same shape.
+    if "thinking" in body:
+        out["reasoning"] = {"enabled": True}
+        bt = body["thinking"].get("budget_tokens") if isinstance(body["thinking"], dict) else None
+        if bt:
+            out["reasoning"]["max_tokens"] = bt
+
     out["stream"] = False  # always buffer upstream
     return out
 
@@ -164,6 +216,15 @@ def translate_response(openai_resp, requested_model):
 
     content_blocks = []
 
+    # Note: reasoning content from OpenRouter (reasoning_details / reasoning)
+    # is intentionally dropped here. Tried surfacing it as Anthropic `thinking`
+    # blocks but Claude Code 2.1.119 hangs when it sees thinking blocks without
+    # the cryptographic signature Anthropic's real API supplies. The chain-of-
+    # thought is therefore not preserved across turns for thinking models routed
+    # through this proxy. If the upstream supports it, set the request body's
+    # reasoning.encrypted=true and we could pass an opaque blob through the
+    # `signature` slot, but OpenRouter doesn't currently expose that.
+
     text = message.get("content")
     if text:
         content_blocks.append({"type": "text", "text": text})
@@ -176,7 +237,7 @@ def translate_response(openai_resp, requested_model):
             args = {"_raw_arguments": fn.get("arguments", "")}
         content_blocks.append({
             "type": "tool_use",
-            "id": tc.get("id") or f"toolu_{uuid.uuid4().hex[:24]}",
+            "id": _encode_tool_id(tc.get("id")),
             "name": fn.get("name", ""),
             "input": args,
         })
@@ -267,6 +328,23 @@ def emit_sse(wfile, anth_resp):
                 "type": "content_block_stop",
                 "index": idx,
             })
+        elif block["type"] == "thinking":
+            send("content_block_start", {
+                "type": "content_block_start",
+                "index": idx,
+                "content_block": {"type": "thinking", "thinking": ""},
+            })
+            text = block.get("thinking", "")
+            for i in range(0, max(len(text), 1), 120):
+                send("content_block_delta", {
+                    "type": "content_block_delta",
+                    "index": idx,
+                    "delta": {"type": "thinking_delta", "thinking": text[i:i + 120]},
+                })
+            send("content_block_stop", {
+                "type": "content_block_stop",
+                "index": idx,
+            })
 
     send("message_delta", {
         "type": "message_delta",
@@ -341,6 +419,32 @@ class Handler(BaseHTTPRequestHandler):
             self._anth_err(500, "api_error", f"response translation failed: {e}")
             return
 
+        # Trace dump: capture full request + response shape for debugging
+        # (only when --trace flag set; off by default to keep logs small).
+        if TRACE_PATH:
+            try:
+                with open(TRACE_PATH, "a") as tf:
+                    tf.write(json.dumps({
+                        "ts": time.time(),
+                        "anth_request_summary": {
+                            "msg_count": len(req.get("messages", [])),
+                            "msg_role_blocks": [
+                                (m.get("role"), [b.get("type") if isinstance(b, dict) else type(b).__name__
+                                                 for b in (m.get("content") if isinstance(m.get("content"), list) else [])])
+                                for m in req.get("messages", [])
+                            ],
+                        },
+                        "openai_request_summary": {
+                            "msg_count": len(openai_req.get("messages", [])),
+                            "msg_roles": [m.get("role") for m in openai_req.get("messages", [])],
+                            "tool_count": len(openai_req.get("tools", []) or []),
+                        },
+                        "openai_response": openai_resp,
+                        "anth_response": anth_resp,
+                    }) + "\n")
+            except Exception:
+                pass
+
         if LOG_PATH:
             try:
                 u = anth_resp["usage"]
@@ -384,7 +488,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global UPSTREAM, API_KEY, DEFAULT_MODEL, MIN_MAX_TOKENS, LOG_PATH
+    global UPSTREAM, API_KEY, DEFAULT_MODEL, MIN_MAX_TOKENS, LOG_PATH, TRACE_PATH
     p = argparse.ArgumentParser()
     p.add_argument("--port", type=int, default=18900)
     p.add_argument("--host", default="127.0.0.1")
@@ -397,6 +501,8 @@ def main():
                    help="Floor on max_tokens. Thinking models (Qwen3.x) burn tokens on reasoning and return empty content if the budget is too small. 2048 is a reasonable floor.")
     p.add_argument("--log", default=None,
                    help="Append one jsonl line per request with usage counters (for thunderdome metrics).")
+    p.add_argument("--trace", default=None,
+                   help="Append full request+response trace dumps (debugging).")
     args = p.parse_args()
 
     UPSTREAM = args.upstream
@@ -404,6 +510,7 @@ def main():
     DEFAULT_MODEL = args.model
     MIN_MAX_TOKENS = args.min_max_tokens
     LOG_PATH = args.log
+    TRACE_PATH = args.trace
 
     print(f"anth2openai-proxy listening on http://{args.host}:{args.port}", flush=True)
     print(f"  upstream: {UPSTREAM}", flush=True)

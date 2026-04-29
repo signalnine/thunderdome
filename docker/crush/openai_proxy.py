@@ -23,6 +23,7 @@ max_tokens_clamp = 0  # 0 = no clamping
 auth_override = None  # if set, replace Authorization header with this key
 no_think = False  # if set, inject enable_thinking=false into chat requests
 reasoning_effort_override = None  # if set, inject reasoning_effort into chat requests
+exclude_reasoning = False  # if set, inject reasoning.exclude=true (OpenRouter)
 
 
 class ProxyHandler(BaseHTTPRequestHandler):
@@ -37,10 +38,16 @@ class ProxyHandler(BaseHTTPRequestHandler):
         if body:
             try:
                 data = json.loads(body)
-                # Rewrite model name if configured
+                # Rewrite model name if configured. Also support a wildcard
+                # entry under key "*" so the proxy can force a model regardless
+                # of what the client sends.
                 model = data.get("model", "")
                 if model in model_rewrites:
                     data["model"] = model_rewrites[model]
+                elif "*" in model_rewrites:
+                    data["model"] = model_rewrites["*"]
+                if data.get("model") != model:
+                    print(f"  Model: {model} -> {data.get('model')}", flush=True)
                 # Clamp max_tokens if configured
                 if max_tokens_clamp and "max_tokens" in data:
                     if data["max_tokens"] > max_tokens_clamp:
@@ -50,6 +57,22 @@ class ProxyHandler(BaseHTTPRequestHandler):
                     data["enable_thinking"] = False
                 if reasoning_effort_override and is_chat:
                     data["reasoning_effort"] = reasoning_effort_override
+                # Exclude reasoning chunks (OpenRouter-specific). Thinking
+                # models like Kimi K2.6 stream `delta.reasoning` chunks that
+                # OpenAI-compatible clients (crush) can't parse, causing
+                # "unexpected end of JSON input". exclude=true makes the
+                # upstream behave as a regular non-thinking model.
+                if exclude_reasoning and is_chat:
+                    r = data.get("reasoning") or {}
+                    if isinstance(r, dict):
+                        # exclude=true hides reasoning chunks from the stream
+                        # but the model still spends time thinking, which
+                        # delays time-to-first-token past crush's tolerance.
+                        # enabled=false disables reasoning entirely on
+                        # OpenRouter for models that support that switch.
+                        r["exclude"] = True
+                        r["enabled"] = False
+                        data["reasoning"] = r
                 # Some clients (e.g. pi-coding-agent) use OpenAI's newer
                 # `"role": "developer"` for system instructions. Older
                 # OpenAI-compatible servers (vLLM) return 400 on that; rewrite
@@ -260,7 +283,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
 
 def main():
-    global upstream_url, log_path, model_rewrites, max_tokens_clamp, auth_override, no_think, reasoning_effort_override
+    global upstream_url, log_path, model_rewrites, max_tokens_clamp, auth_override, no_think, reasoning_effort_override, exclude_reasoning
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--log", required=True)
@@ -275,6 +298,8 @@ def main():
                         help="Inject enable_thinking=false into chat requests")
     parser.add_argument("--reasoning-effort", default=None, choices=["low", "medium", "high"],
                         help="Inject reasoning_effort into chat requests")
+    parser.add_argument("--exclude-reasoning", action="store_true", default=False,
+                        help="Inject reasoning.exclude=true (OpenRouter) so thinking-model chunks don't reach the client")
     args = parser.parse_args()
     upstream_url = args.upstream.rstrip("/")
     log_path = args.log
@@ -282,6 +307,7 @@ def main():
     auth_override = args.auth_key
     no_think = args.no_think
     reasoning_effort_override = args.reasoning_effort
+    exclude_reasoning = args.exclude_reasoning
     if no_think:
         print("  Thinking disabled (enable_thinking=false)", flush=True)
     if reasoning_effort_override:
