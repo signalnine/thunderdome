@@ -5,3 +5,6 @@ var ShortHashForTest = shortHash
 
 // StripNonRepoHunksForTest exposes the unexported stripNonRepoHunks helper.
 var StripNonRepoHunksForTest = stripNonRepoHunks
+
+// CleanupTmpDirForTest exposes the unexported cleanupTmpDir helper.
+var CleanupTmpDirForTest = cleanupTmpDir

@@ -3,6 +3,7 @@ package gitops
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -135,10 +136,7 @@ func ReconstructFromDiff(repo, tag string, diff []byte) (string, func(), error) 
 	if err != nil {
 		return "", nil, err
 	}
-	cleanup := func() {
-		// Docker containers create root-owned files; os.RemoveAll can't delete them.
-		exec.Command("sudo", "rm", "-rf", tmpDir).Run()
-	}
+	cleanup := func() { cleanupTmpDir(tmpDir) }
 
 	if len(diff) == 0 {
 		return tmpDir, cleanup, nil
@@ -195,6 +193,23 @@ func CaptureChanges(repoDir string) ([]byte, error) {
 		return nil, fmt.Errorf("git diff %s..HEAD: %w", shortHash(root), err)
 	}
 	return out, nil
+}
+
+// cleanupTmpDir removes a temp directory created during reconstruction.
+// Docker containers can create root-owned files inside the workdir; if
+// os.RemoveAll cannot remove them, we fall back to 'sudo -n rm -rf' (only
+// when sudo exists on PATH). Failures are logged so leaks are visible.
+func cleanupTmpDir(tmpDir string) {
+	if err := os.RemoveAll(tmpDir); err == nil {
+		return
+	}
+	if _, err := exec.LookPath("sudo"); err != nil {
+		log.Printf("warning: cleanup of %s failed and sudo not available; leaking temp dir", tmpDir)
+		return
+	}
+	if out, err := exec.Command("sudo", "-n", "rm", "-rf", tmpDir).CombinedOutput(); err != nil {
+		log.Printf("warning: cleanup of %s failed: %s: %v", tmpDir, strings.TrimSpace(string(out)), err)
+	}
 }
 
 // shortHash returns the first 8 characters of a commit hash, or the whole

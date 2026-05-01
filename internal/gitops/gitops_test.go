@@ -161,6 +161,40 @@ func TestCloneRejectsInvalidTag(t *testing.T) {
 	}
 }
 
+// cleanupTmpDir previously shelled out to 'sudo rm -rf' unconditionally. On
+// hosts without passwordless sudo (developer laptops), that silently failed
+// and leaked /tmp/thunderdome-validation-* dirs. The cleanup must try
+// os.RemoveAll first and only escalate to sudo when regular removal fails.
+func TestCleanupTmpDir_doesNotInvokeSudoForRemovableDirs(t *testing.T) {
+	fakeBin := t.TempDir()
+	markerDir := t.TempDir()
+	sudoMarker := filepath.Join(markerDir, "sudo-was-called")
+	fakeSudo := filepath.Join(fakeBin, "sudo")
+	script := "#!/bin/sh\ntouch " + sudoMarker + "\n/bin/rm -rf \"$@\"\nexit 0\n"
+	if err := os.WriteFile(fakeSudo, []byte(script), 0o755); err != nil {
+		t.Fatalf("writing fake sudo: %v", err)
+	}
+
+	t.Setenv("PATH", fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	target := filepath.Join(t.TempDir(), "subject")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "f.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	gitops.CleanupTmpDirForTest(target)
+
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Errorf("expected tmpDir to be removed, got stat err: %v", err)
+	}
+	if _, err := os.Stat(sudoMarker); err == nil {
+		t.Errorf("sudo was invoked for a regular removable directory")
+	}
+}
+
 func TestCaptureChangesNoChanges(t *testing.T) {
 	repo := createTestRepo(t)
 	dest := t.TempDir()
