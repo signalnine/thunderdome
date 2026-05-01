@@ -2,6 +2,8 @@ package docker_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,6 +11,54 @@ import (
 
 	"github.com/signalnine/thunderdome/internal/docker"
 )
+
+// TestClassifyWaitError is a regression test for td-7ty.
+// context.DeadlineExceeded received on the wait error channel must be
+// classified as a timeout (ExitCode 124, TimedOut=true), not a crash.
+// Generic Docker SDK errors must be classified as crashes (ExitCode 125,
+// TimedOut=false) and the error must be surfaced to the caller.
+func TestClassifyWaitError(t *testing.T) {
+	dur := 5 * time.Second
+
+	t.Run("DeadlineExceeded -> timeout", func(t *testing.T) {
+		res, err := docker.ClassifyWaitError(context.DeadlineExceeded, dur)
+		if err != nil {
+			t.Fatalf("unexpected returned err: %v", err)
+		}
+		if res.ExitCode != 124 || !res.TimedOut {
+			t.Errorf("got ExitCode=%d TimedOut=%v, want 124/true", res.ExitCode, res.TimedOut)
+		}
+	})
+
+	t.Run("wrapped DeadlineExceeded -> timeout", func(t *testing.T) {
+		wrapped := fmt.Errorf("wait failed: %w", context.DeadlineExceeded)
+		res, err := docker.ClassifyWaitError(wrapped, dur)
+		if err != nil {
+			t.Fatalf("unexpected returned err: %v", err)
+		}
+		if res.ExitCode != 124 || !res.TimedOut {
+			t.Errorf("got ExitCode=%d TimedOut=%v, want 124/true", res.ExitCode, res.TimedOut)
+		}
+	})
+
+	t.Run("generic error -> crashed and surfaced", func(t *testing.T) {
+		boom := errors.New("daemon disconnected")
+		res, err := docker.ClassifyWaitError(boom, dur)
+		if res.ExitCode != 125 || res.TimedOut {
+			t.Errorf("got ExitCode=%d TimedOut=%v, want 125/false", res.ExitCode, res.TimedOut)
+		}
+		if err == nil || !errors.Is(err, boom) {
+			t.Errorf("expected returned err to wrap %v, got %v", boom, err)
+		}
+	})
+
+	t.Run("Canceled -> crashed (not timeout)", func(t *testing.T) {
+		res, _ := docker.ClassifyWaitError(context.Canceled, dur)
+		if res.TimedOut {
+			t.Errorf("Canceled should not be classified as timeout")
+		}
+	})
+}
 
 func TestRunContainer(t *testing.T) {
 	if os.Getenv("THUNDERDOME_DOCKER_TESTS") == "" {

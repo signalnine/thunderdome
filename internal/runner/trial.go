@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -93,6 +95,44 @@ func BuildAdapterCommand() []string {
 	return []string{"bash", "/adapter.sh"}
 }
 
+// RewriteGatewayURLForContainer rewrites loopback hosts (localhost, 127.0.0.1,
+// ::1, or any 127.0.0.0/8 / ::1 address) to host.docker.internal so the
+// container can reach the gateway running on the host's netns. Empty input
+// returns empty. Unparseable input or non-loopback hosts are returned as-is.
+func RewriteGatewayURLForContainer(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	host := u.Hostname()
+	if !isLoopbackHost(host) {
+		return rawURL
+	}
+	if port := u.Port(); port != "" {
+		u.Host = net.JoinHostPort("host.docker.internal", port)
+	} else {
+		u.Host = "host.docker.internal"
+	}
+	return u.String()
+}
+
+func isLoopbackHost(host string) bool {
+	if host == "" {
+		return false
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback()
+}
+
 func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
 	trialDir := result.TrialDir(opts.RunDir, opts.Orchestrator.Name, TaskName(opts.Task), opts.TrialNum)
 	if err := os.MkdirAll(trialDir, 0o755); err != nil {
@@ -121,12 +161,7 @@ func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
 		return nil, fmt.Errorf("resolving adapter path: %w", err)
 	}
 
-	// Replace localhost with host.docker.internal so the container can
-	// reach the gateway running on the host.
-	containerGatewayURL := ""
-	if opts.GatewayURL != "" {
-		containerGatewayURL = strings.Replace(opts.GatewayURL, "localhost", "host.docker.internal", 1)
-	}
+	containerGatewayURL := RewriteGatewayURLForContainer(opts.GatewayURL)
 	env := map[string]string{
 		"TASK_DIR":         "/workspace",
 		"TASK_DESCRIPTION": "/task.md",
@@ -206,8 +241,7 @@ func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
 	if opts.GatewayUsageLog != "" {
 		records, err := gateway.ParseUsageLogs(opts.GatewayUsageLog)
 		if err == nil {
-			inTok, outTok := gateway.TotalUsage(records)
-			totalTokens = inTok + outTok
+			totalTokens = gateway.TotalTokens(records)
 			totalCostUSD = gateway.EstimateCost(records)
 		}
 	}

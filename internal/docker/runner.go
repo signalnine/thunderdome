@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,26 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/client"
 )
+
+// ClassifyWaitError converts an error received on the Docker wait channel
+// into a RunResult and an outbound error. context.DeadlineExceeded means the
+// wait deadline expired -- a real timeout (ExitCode=124, TimedOut=true).
+// Anything else is an infrastructure crash (ExitCode=125, TimedOut=false)
+// that callers should surface in logs and meta.json.
+func ClassifyWaitError(waitErr error, duration time.Duration) (*RunResult, error) {
+	if errors.Is(waitErr, context.DeadlineExceeded) {
+		return &RunResult{
+			ExitCode: 124,
+			TimedOut: true,
+			Duration: duration,
+		}, nil
+	}
+	return &RunResult{
+		ExitCode: 125,
+		TimedOut: false,
+		Duration: duration,
+	}, fmt.Errorf("docker wait error: %w", waitErr)
+}
 
 type RunOpts struct {
 	Image       string
@@ -142,7 +163,7 @@ func RunContainer(ctx context.Context, opts *RunOpts) (*RunResult, error) {
 			// Trial timeout fired but no result/error came through the wait channels
 			// (Docker daemon hiccup, channel never delivers). Force kill so we
 			// don't spin forever on a closed Error channel.
-			if timeoutCtx.Err() == context.DeadlineExceeded {
+			if errors.Is(timeoutCtx.Err(), context.DeadlineExceeded) {
 				killAndDump("trial-timeout")
 				return &RunResult{
 					ExitCode: 124,
@@ -150,6 +171,17 @@ func RunContainer(ctx context.Context, opts *RunOpts) (*RunResult, error) {
 					Duration: time.Since(start),
 				}, nil
 			}
+			// timeoutCtx was canceled because the parent ctx was canceled
+			// (Ctrl+C, batch shutdown). The parent-ctx case will fire on the
+			// next iteration, but Done() is permanently ready -- without an
+			// explicit return here, select can keep picking this case in a
+			// busy spin. Treat it as a parent-cancel.
+			killAndDump("parent-ctx-cancelled-via-timeoutctx")
+			return &RunResult{
+				ExitCode: 130,
+				TimedOut: false,
+				Duration: time.Since(start),
+			}, ctx.Err()
 		case err, ok := <-waitResult.Error:
 			if !ok {
 				// Channel closed without delivering a value — Docker SDK
@@ -162,16 +194,13 @@ func RunContainer(ctx context.Context, opts *RunOpts) (*RunResult, error) {
 				}, fmt.Errorf("docker wait error channel closed without value")
 			}
 			if err != nil {
-				// Docker SDK error during wait (daemon hiccup, container removed
-				// out-of-band, socket glitch). This is an infrastructure crash,
-				// not a wall-clock timeout — surface it as such so meta.json
+				// Docker SDK error during wait. context.DeadlineExceeded means
+				// the trial wait deadline expired -- a real timeout. Anything
+				// else (daemon hiccup, container removed out-of-band, socket
+				// glitch) is an infrastructure crash; surface it so meta.json
 				// classifies the trial as crashed rather than timed out.
 				killAndDump("wait-error")
-				return &RunResult{
-					ExitCode: 125,
-					TimedOut: false,
-					Duration: time.Since(start),
-				}, fmt.Errorf("docker wait error: %w", err)
+				return ClassifyWaitError(err, time.Since(start))
 			}
 			// nil error received on an open channel; loop and wait for result
 		case status, ok := <-waitResult.Result:

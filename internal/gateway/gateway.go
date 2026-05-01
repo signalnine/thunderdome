@@ -9,7 +9,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/signalnine/thunderdome/internal/pricing"
 )
 
 type Gateway struct {
@@ -81,18 +84,63 @@ func Start(ctx context.Context, opts *StartOpts) (*Gateway, error) {
 	return &Gateway{Port: port, cmd: cmd, logFile: logFile, UsageLogPath: usageLogPath}, nil
 }
 
+// proxyScriptSearchDirsOverride lets tests inject extra search roots.
+var proxyScriptSearchDirsOverride []string
+
+// SetProxyScriptSearchDirsForTest lets tests inject the search roots used by
+// findProxyScript. Pass nil to clear.
+func SetProxyScriptSearchDirsForTest(dirs []string) {
+	proxyScriptSearchDirsOverride = dirs
+}
+
+// FindProxyScriptForTest exposes findProxyScript to tests in other packages.
+func FindProxyScriptForTest() (string, error) {
+	return findProxyScript()
+}
+
 func findProxyScript() (string, error) {
-	// Look relative to the working directory (repo root).
-	candidates := []string{
-		"internal/gateway/proxy.py",
+	const rel = "internal/gateway/proxy.py"
+
+	var roots []string
+	roots = append(roots, proxyScriptSearchDirsOverride...)
+
+	// 1. Walk up from the binary's directory looking for the repo layout.
+	if exe, err := os.Executable(); err == nil {
+		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+			exe = resolved
+		}
+		roots = append(roots, exe) // walkUp will Dir() this
 	}
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			abs, _ := filepath.Abs(c)
-			return abs, nil
+
+	// 2. Fall back to cwd (preserves the original behavior when running
+	// the binary from the repo root during local dev).
+	if cwd, err := os.Getwd(); err == nil {
+		roots = append(roots, cwd)
+	}
+
+	tried := make([]string, 0, len(roots))
+	for _, root := range roots {
+		// Allow either a directory or a file -- if it's a file, start at its
+		// parent. Walk up until we hit the filesystem root.
+		dir := root
+		if info, err := os.Stat(dir); err == nil && !info.IsDir() {
+			dir = filepath.Dir(dir)
+		}
+		for {
+			candidate := filepath.Join(dir, rel)
+			tried = append(tried, candidate)
+			if _, err := os.Stat(candidate); err == nil {
+				abs, _ := filepath.Abs(candidate)
+				return abs, nil
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
 		}
 	}
-	return "", fmt.Errorf("proxy.py not found in %v", candidates)
+	return "", fmt.Errorf("proxy.py not found (searched %v)", tried)
 }
 
 func (g *Gateway) Stop() error {
@@ -145,33 +193,113 @@ func TotalUsage(records []UsageRecord) (inputTokens, outputTokens int) {
 	return
 }
 
-// EstimateCost calculates approximate USD cost from usage records using
-// Anthropic's published per-token pricing (as of 2025-05).
-func EstimateCost(records []UsageRecord) float64 {
-	var total float64
+// TotalTokens sums all four token types (input, output, cache creation, cache
+// read) across records. This matches the adapter-metrics fallback definition
+// in trial.go so MeanTokens is comparable across trials regardless of which
+// usage source captured the data. With Anthropic prompt caching, cache reads
+// commonly dominate the sum -- omitting them understates real token volume by
+// 10-100x.
+func TotalTokens(records []UsageRecord) int {
+	var total int
 	for _, r := range records {
-		inputPrice, outputPrice, cacheWritePrice, cacheReadPrice := modelPricing(r.Model)
-		total += float64(r.InputTokens) * inputPrice / 1e6
-		total += float64(r.OutputTokens) * outputPrice / 1e6
-		total += float64(r.CacheCreationTokens) * cacheWritePrice / 1e6
-		total += float64(r.CacheReadTokens) * cacheReadPrice / 1e6
+		total += r.InputTokens + r.OutputTokens + r.CacheCreationTokens + r.CacheReadTokens
 	}
 	return total
 }
 
-// modelPricing returns per-million-token prices: (input, output, cacheWrite, cacheRead).
-func modelPricing(model string) (float64, float64, float64, float64) {
-	switch {
-	case strings.Contains(model, "opus"):
-		return 15.0, 75.0, 18.75, 1.50
-	case strings.Contains(model, "sonnet"):
-		return 3.0, 15.0, 3.75, 0.30
-	case strings.Contains(model, "haiku"):
-		return 0.80, 4.0, 1.0, 0.08
-	default:
-		// Default to Sonnet pricing
-		return 3.0, 15.0, 3.75, 0.30
+var (
+	pricingMu     sync.RWMutex
+	pricingTable  *pricing.Table
+	pricingLoaded bool
+)
+
+// LoadPricing loads pricing data from the given pricing.yaml. Pass an empty
+// path to clear the cached table (used by tests). Subsequent calls to
+// EstimateCost will use this table. Calling EstimateCost without a prior
+// LoadPricing causes one lazy lookup attempt; if pricing.yaml can't be found
+// EstimateCost returns 0.
+func LoadPricing(path string) error {
+	pricingMu.Lock()
+	defer pricingMu.Unlock()
+	if path == "" {
+		pricingTable = nil
+		pricingLoaded = false
+		return nil
 	}
+	t, err := pricing.Load(path)
+	if err != nil {
+		return err
+	}
+	pricingTable = t
+	pricingLoaded = true
+	return nil
+}
+
+func getPricingTable() *pricing.Table {
+	pricingMu.RLock()
+	if pricingLoaded {
+		t := pricingTable
+		pricingMu.RUnlock()
+		return t
+	}
+	pricingMu.RUnlock()
+
+	pricingMu.Lock()
+	defer pricingMu.Unlock()
+	if pricingLoaded {
+		return pricingTable
+	}
+	pricingLoaded = true
+	if path, err := findPricingFile(); err == nil {
+		if t, err := pricing.Load(path); err == nil {
+			pricingTable = t
+		}
+	}
+	return pricingTable
+}
+
+func findPricingFile() (string, error) {
+	const rel = "pricing.yaml"
+	var roots []string
+	if exe, err := os.Executable(); err == nil {
+		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+			exe = resolved
+		}
+		roots = append(roots, filepath.Dir(exe))
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		roots = append(roots, cwd)
+	}
+	for _, root := range roots {
+		dir := root
+		for {
+			candidate := filepath.Join(dir, rel)
+			if _, err := os.Stat(candidate); err == nil {
+				return candidate, nil
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+	return "", fmt.Errorf("pricing.yaml not found")
+}
+
+// EstimateCost calculates approximate USD cost from usage records using
+// per-token prices loaded from pricing.yaml (the canonical source). Returns
+// 0 if pricing.yaml can't be found or a record's provider/model isn't listed.
+func EstimateCost(records []UsageRecord) float64 {
+	t := getPricingTable()
+	if t == nil {
+		return 0
+	}
+	var total float64
+	for _, r := range records {
+		total += t.Cost(r.Provider, r.Model, r.InputTokens, r.OutputTokens, r.CacheCreationTokens, r.CacheReadTokens)
+	}
+	return total
 }
 
 func waitForPort(port int, timeout time.Duration) error {

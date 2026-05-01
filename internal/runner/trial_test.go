@@ -106,3 +106,33 @@ func TestBuildAdapterCommand(t *testing.T) {
 		t.Fatal("expected non-empty command")
 	}
 }
+
+// TestRewriteGatewayURLForContainer is a regression test for td-8nq.
+// Containers cannot reach loopback addresses on the host's netns, so any
+// loopback host (localhost, 127.0.0.1, ::1) must be rewritten to
+// host.docker.internal. The previous implementation only matched the literal
+// string "localhost".
+func TestRewriteGatewayURLForContainer(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"empty", "", ""},
+		{"localhost", "http://localhost:8080", "http://host.docker.internal:8080"},
+		{"127.0.0.1", "http://127.0.0.1:8080", "http://host.docker.internal:8080"},
+		{"ipv6 loopback", "http://[::1]:8080", "http://host.docker.internal:8080"},
+		{"localhost no port", "http://localhost/x", "http://host.docker.internal/x"},
+		{"non-loopback host untouched", "http://gateway.internal:8080", "http://gateway.internal:8080"},
+		{"localhost in path not rewritten", "http://gateway.internal:8080/localhost", "http://gateway.internal:8080/localhost"},
+		{"preserves path and query", "http://localhost:8080/v1/messages?x=1", "http://host.docker.internal:8080/v1/messages?x=1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := runner.RewriteGatewayURLForContainer(tt.in)
+			if got != tt.want {
+				t.Errorf("RewriteGatewayURLForContainer(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
