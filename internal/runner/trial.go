@@ -46,14 +46,41 @@ func ExitReasonFromCode(code int, timedOut bool) string {
 	}
 }
 
+// adapterMetricsFile is written by the adapter itself, so it can appear
+// in the diff even when the agent did no real work. HasWorkspaceChanges
+// ignores it.
+const adapterMetricsFile = ".thunderdome-metrics.json"
+
+// HasWorkspaceChanges reports whether the captured diff includes changes
+// to any file other than the adapter-written metrics file. Empty input
+// (no diff at all) returns false.
+func HasWorkspaceChanges(diff []byte) bool {
+	if len(diff) == 0 {
+		return false
+	}
+	for _, line := range strings.Split(string(diff), "\n") {
+		if !strings.HasPrefix(line, "diff --git ") {
+			continue
+		}
+		if !strings.Contains(line, adapterMetricsFile) {
+			return true
+		}
+	}
+	return false
+}
+
 // DetectNoAgentContribution returns true when the agent didn't meaningfully
 // contribute to the workspace. This happens when the adapter crashes
 // immediately (auth failure, startup error) -- the workspace still has
 // starter code that gets scored, inflating means.
 //
-// Detection: zero tokens OR (non-success exit in under 30s).
-func DetectNoAgentContribution(exitReason string, durationS int, totalTokens int) bool {
-	if totalTokens == 0 {
+// Detection uses workspace state (empty diff) as the primary signal,
+// because totalTokens is unreliable when usage tracking isn't wired up
+// (e.g. gateway: none with an adapter that doesn't write metrics, or
+// writes them in a stale schema). The early-crash heuristic catches
+// adapters that crash before producing any output at all.
+func DetectNoAgentContribution(exitReason string, durationS int, hasChanges bool) bool {
+	if !hasChanges {
 		return true
 	}
 	if exitReason != "completed" && exitReason != "timeout" && durationS < 30 {
@@ -219,7 +246,7 @@ func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
 		TotalCostUSD: totalCostUSD,
 	}
 
-	meta.NoAgentContribution = DetectNoAgentContribution(exitReason, durationS, totalTokens)
+	meta.NoAgentContribution = DetectNoAgentContribution(exitReason, durationS, HasWorkspaceChanges(diff))
 	if err := result.WriteTrialMeta(trialDir, meta); err != nil {
 		return nil, fmt.Errorf("writing meta: %w", err)
 	}

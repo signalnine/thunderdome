@@ -31,30 +31,70 @@ func TestExitReasonFromCode(t *testing.T) {
 
 func TestNoAgentContributionDetection(t *testing.T) {
 	tests := []struct {
-		name        string
-		exitReason  string
-		durationS   int
-		totalTokens int
-		want        bool
+		name       string
+		exitReason string
+		durationS  int
+		hasChanges bool
+		want       bool
 	}{
-		{"crashed fast no tokens", "crashed", 2, 0, true},
-		{"crashed fast with tokens", "crashed", 2, 500, true},
-		{"crashed slow with tokens", "crashed", 120, 5000, false},
-		{"completed fast no tokens", "completed", 5, 0, true},
-		{"completed normal", "completed", 60, 10000, false},
-		{"timeout with tokens", "timeout", 600, 50000, false},
-		{"timeout no tokens", "timeout", 600, 0, true},
-		{"gave_up fast", "gave_up", 3, 0, true},
-		{"gave_up slow with work", "gave_up", 60, 8000, false},
-		{"crashed at 29s", "crashed", 29, 1000, true},
-		{"crashed at 31s", "crashed", 31, 1000, false},
+		{"crashed fast no diff", "crashed", 2, false, true},
+		{"crashed fast with diff", "crashed", 2, true, true},
+		{"crashed slow with diff", "crashed", 120, true, false},
+		{"completed fast no diff", "completed", 5, false, true},
+		{"completed normal with diff", "completed", 60, true, false},
+		{"timeout with diff", "timeout", 600, true, false},
+		{"timeout no diff", "timeout", 600, false, true},
+		{"gave_up fast no diff", "gave_up", 3, false, true},
+		{"gave_up slow with diff", "gave_up", 60, true, false},
+		{"crashed at 29s with diff", "crashed", 29, true, true},
+		{"crashed at 31s with diff", "crashed", 31, true, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := runner.DetectNoAgentContribution(tt.exitReason, tt.durationS, tt.totalTokens)
+			got := runner.DetectNoAgentContribution(tt.exitReason, tt.durationS, tt.hasChanges)
 			if got != tt.want {
-				t.Errorf("DetectNoAgentContribution(%q, %d, %d) = %v, want %v",
-					tt.exitReason, tt.durationS, tt.totalTokens, got, tt.want)
+				t.Errorf("DetectNoAgentContribution(%q, %d, %v) = %v, want %v",
+					tt.exitReason, tt.durationS, tt.hasChanges, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHasWorkspaceChanges(t *testing.T) {
+	tests := []struct {
+		name string
+		diff string
+		want bool
+	}{
+		{"empty", "", false},
+		{
+			"only metrics file",
+			"diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json\n" +
+				"new file mode 100644\n@@ -0,0 +1 @@\n+{}\n",
+			false,
+		},
+		{
+			"real source change",
+			"diff --git a/src/main.ts b/src/main.ts\n@@ -1 +1 @@\n-old\n+new\n",
+			true,
+		},
+		{
+			"metrics plus real change",
+			"diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json\n@@ -0,0 +1 @@\n+{}\n" +
+				"diff --git a/src/main.ts b/src/main.ts\n@@ -1 +1 @@\n-x\n+y\n",
+			true,
+		},
+		{
+			"diff with no git header",
+			"some random non-diff text",
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := runner.HasWorkspaceChanges([]byte(tt.diff))
+			if got != tt.want {
+				t.Errorf("HasWorkspaceChanges(%q) = %v, want %v", tt.diff, got, tt.want)
 			}
 		})
 	}

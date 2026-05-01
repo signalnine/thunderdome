@@ -207,6 +207,31 @@ func TestParseZeroPassedZeroFailed(t *testing.T) {
 	}
 }
 
+// Bare line format "N passed, M failed, K skipped" must score the same as
+// the equivalent JUnit XML. Previously Strategy 2 dropped skipped from the
+// denominator, inflating scores relative to Strategies 1 and 3.
+func TestParseBareLineWithSkippedMatchesJUnit(t *testing.T) {
+	bare := validation.ParseTestResults("5 passed, 3 failed, 2 skipped", 1)
+	junit := validation.ParseTestResults(
+		`<testsuite name="t" tests="10" failures="3" errors="0" skipped="2"></testsuite>`, 1)
+	want := 5.0 / 10.0
+	if absf(bare.Score-want) > 0.001 {
+		t.Errorf("bare score: got %f, want %f", bare.Score, want)
+	}
+	if absf(bare.Score-junit.Score) > 0.001 {
+		t.Errorf("bare and junit disagree: bare=%f junit=%f", bare.Score, junit.Score)
+	}
+}
+
+// Bare line with skipped but no failures.
+func TestParseBareLinePassedAndSkipped(t *testing.T) {
+	result := validation.ParseTestResults("21 passed, 42 skipped", 0)
+	want := 21.0 / 63.0
+	if absf(result.Score-want) > 0.001 {
+		t.Errorf("score: got %f, want %f", result.Score, want)
+	}
+}
+
 // Vitest summary line can include a "skipped" count, which the original
 // regex didn't anticipate. Seen in real runs as:
 //   "Tests  3 failed | 21 passed | 42 skipped (66)"

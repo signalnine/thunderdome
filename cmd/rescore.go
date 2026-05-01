@@ -198,8 +198,11 @@ func rescoreTestsOnly(ctx context.Context, trialDir string, task *config.Task) e
 		meta.CompositeScore = validation.CompositeScore(meta.Scores, task.Weights)
 	}
 
-	// Recompute no-contribution flag for existing trials
-	meta.NoAgentContribution = runner.DetectNoAgentContribution(meta.ExitReason, meta.DurationS, meta.TotalTokens)
+	// Recompute no-contribution flag from the captured diff.patch.
+	// Read errors are non-fatal -- treat a missing/unreadable diff as no
+	// changes, which matches the spirit of "we can't tell, assume worst".
+	diffData, _ := os.ReadFile(filepath.Join(trialDir, "diff.patch"))
+	meta.NoAgentContribution = runner.DetectNoAgentContribution(meta.ExitReason, meta.DurationS, runner.HasWorkspaceChanges(diffData))
 
 	return result.WriteTrialMeta(trialDir, meta)
 }
@@ -285,8 +288,11 @@ func rescoreFull(ctx context.Context, trialDir string, task *config.Task) error 
 		meta.CompositeScore = validation.CompositeScore(meta.Scores, task.Weights)
 	}
 
-	// Recompute no-contribution flag for existing trials
-	meta.NoAgentContribution = runner.DetectNoAgentContribution(meta.ExitReason, meta.DurationS, meta.TotalTokens)
+	// Recompute no-contribution flag from the captured diff.patch.
+	// Read errors are non-fatal -- treat a missing/unreadable diff as no
+	// changes, which matches the spirit of "we can't tell, assume worst".
+	diffData, _ := os.ReadFile(filepath.Join(trialDir, "diff.patch"))
+	meta.NoAgentContribution = runner.DetectNoAgentContribution(meta.ExitReason, meta.DurationS, runner.HasWorkspaceChanges(diffData))
 
 	return result.WriteTrialMeta(trialDir, meta)
 }

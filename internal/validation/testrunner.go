@@ -71,7 +71,9 @@ func ParseTestResults(output string, exitCode int) *TestResult {
 //	"Tests  3 failed | 21 passed | 42 skipped (66)"
 var vitestSummaryRe = regexp.MustCompile(`Tests\s+([^()]+?)\s*\((\d+)\)`)
 
-// vitestCountRe pulls "N <status>" pairs out of the summary's inner text.
+// vitestCountRe pulls "N <status>" pairs out of a status summary line --
+// either the inner text of a vitest summary or a bare line like
+// "5 passed, 3 failed, 2 skipped".
 var vitestCountRe = regexp.MustCompile(`(\d+)\s+(passed|failed|skipped|todo)`)
 
 // parsePassRate extracts pass/fail counts from test output.
@@ -103,21 +105,36 @@ func parsePassRate(output string) float64 {
 		return 0.0
 	}
 
-	// Strategy 2: Original format "N passed" or "N passed, N failed"
+	// Strategy 2: Bare line format like "N passed", "N passed, M failed",
+	// or "N passed, M failed, K skipped". Skipped tests count toward the
+	// denominator to match Strategies 1 (vitest summary) and 3 (JUnit).
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		var passed, failed int
-		if n, _ := fmt.Sscanf(line, "%d passed", &passed); n == 1 {
-			fmt.Sscanf(line, "%d passed, %d failed", &passed, &failed)
-			total := passed + failed
-			if total > 0 {
-				return float64(passed) / float64(total)
-			}
-			// Matched "N passed" with N=0 (and M=0 if present) -- explicit
-			// zero-pass signal, not "no parseable output". Matches the
-			// vitest-format branch which returns 0.0 when total is 0.
-			return 0.0
+		var lead int
+		if n, _ := fmt.Sscanf(line, "%d passed", &lead); n != 1 {
+			continue
 		}
+		var passed, failed, skipped int
+		for _, cm := range vitestCountRe.FindAllStringSubmatch(line, -1) {
+			var v int
+			fmt.Sscanf(cm[1], "%d", &v)
+			switch cm[2] {
+			case "passed":
+				passed = v
+			case "failed":
+				failed = v
+			case "skipped":
+				skipped = v
+			}
+		}
+		total := passed + failed + skipped
+		if total > 0 {
+			return float64(passed) / float64(total)
+		}
+		// Matched "N passed" with N=0 (and any other counts zero) -- explicit
+		// zero-pass signal, not "no parseable output". Matches the vitest
+		// summary branch which returns 0.0 when total is 0.
+		return 0.0
 	}
 	return -1 // no test results found
 }
@@ -155,8 +172,8 @@ func parseJUnitXML(output string) float64 {
 	if tests <= 0 {
 		return 0.0
 	}
-	// Skipped tests are not passes -- match the vitest line-format parser,
-	// which counts skipped against the score (passed/total).
+	// Skipped tests are not passes -- they count in the denominator (total)
+	// but not the numerator. All three strategies agree on this convention.
 	passed := tests - failures - errors - skipped
 	if passed < 0 {
 		passed = 0
