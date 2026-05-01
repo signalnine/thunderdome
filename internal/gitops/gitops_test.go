@@ -195,6 +195,24 @@ func TestCleanupTmpDir_doesNotInvokeSudoForRemovableDirs(t *testing.T) {
 	}
 }
 
+// cleanupTmpDir must refuse to operate on empty or non-temp paths so a future
+// refactor that loses the os.MkdirTemp guarantee can't escalate into rm -rf /.
+func TestCleanupTmpDir_refusesUnsafePaths(t *testing.T) {
+	for _, p := range []string{"", "/", "/etc", "/home", "relative/path"} {
+		if gitops.IsSafeTmpDirForTest(p) {
+			t.Errorf("isSafeTmpDir(%q) returned true; expected false", p)
+		}
+	}
+	tmpChild := filepath.Join(os.TempDir(), "thunderdome-safe-check")
+	if err := os.MkdirAll(tmpChild, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(tmpChild) })
+	if !gitops.IsSafeTmpDirForTest(tmpChild) {
+		t.Errorf("isSafeTmpDir(%q) returned false; expected true", tmpChild)
+	}
+}
+
 func TestCaptureChangesNoChanges(t *testing.T) {
 	repo := createTestRepo(t)
 	dest := t.TempDir()

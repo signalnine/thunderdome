@@ -17,6 +17,9 @@ func TestExitReasonFromCode(t *testing.T) {
 		{2, false, "gave_up"},
 		{124, true, "timeout"},
 		{42, false, "crashed"},
+		// Docker SDK wait error: code 125 + TimedOut=false should not be
+		// classified as a timeout (regression for agentic-thunderdome-001).
+		{125, false, "crashed"},
 	}
 	for _, tt := range tests {
 		got := runner.ExitReasonFromCode(tt.code, tt.timedOut)

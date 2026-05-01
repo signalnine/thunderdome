@@ -8,3 +8,6 @@ var StripNonRepoHunksForTest = stripNonRepoHunks
 
 // CleanupTmpDirForTest exposes the unexported cleanupTmpDir helper.
 var CleanupTmpDirForTest = cleanupTmpDir
+
+// IsSafeTmpDirForTest exposes the unexported isSafeTmpDir guard.
+var IsSafeTmpDirForTest = isSafeTmpDir

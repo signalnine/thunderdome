@@ -65,6 +65,9 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 
 	orchestrators := filterOrchestrators(cfg.Orchestrators, flagOrchestrator)
 	tasks := filterTasks(cfg.Tasks, flagTask, flagCategory)
+	if err := validateFilterResults(len(orchestrators), len(tasks), flagOrchestrator, flagTask, flagCategory); err != nil {
+		return err
+	}
 
 	runDir, err := result.CreateRunDir(cfg.Results.Dir)
 	if err != nil {
@@ -186,14 +189,52 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 }
 
 func cleanupDocker() {
-	// Best-effort cleanup of thunderdome-labeled containers and images
+	// Best-effort cleanup of thunderdome-labeled containers and images.
+	// The image step is scoped to thunderdome-prefixed tags so unrelated
+	// dangling images on the host (e.g. other projects' build caches) are
+	// not destroyed. A bare 'docker image prune -f' would do that.
 	fmt.Println("Cleaning up Docker artifacts...")
 	run := func(args ...string) {
 		cmd := newExecCmd(args...)
 		cmd.Run()
 	}
 	run("docker", "container", "prune", "-f", "--filter", "label=thunderdome=true")
-	run("docker", "image", "prune", "-f")
+	removeThunderdomeImages()
+}
+
+// removeThunderdomeImages enumerates images whose repository starts with
+// "thunderdome/" and removes them by ID. We avoid 'docker image prune' here
+// because its only filter is dangling/age, neither of which targets our
+// artifacts -- our images are tagged, so prune wouldn't catch them anyway.
+func removeThunderdomeImages() {
+	listCmd := newExecCmd("docker", "images", "--format", "{{.ID}}", "thunderdome/*")
+	out, err := listCmd.Output()
+	if err != nil {
+		return
+	}
+	ids := strings.Fields(string(out))
+	if len(ids) == 0 {
+		return
+	}
+	args := append([]string{"docker", "rmi", "-f"}, ids...)
+	newExecCmd(args...).Run()
+}
+
+// validateFilterResults returns a non-nil error when a non-empty --orchestrator,
+// --task, or --category filter matched nothing. Without this guard, the run
+// completes silently with zero trials and an empty results table, hiding typos
+// in filter values.
+func validateFilterResults(orchCount, taskCount int, orchFilter, taskFilter, catFilter string) error {
+	if orchFilter != "" && orchCount == 0 {
+		return fmt.Errorf("no orchestrator matches %q (run 'thunderdome list' to see configured orchestrators)", orchFilter)
+	}
+	if taskFilter != "" && taskCount == 0 {
+		return fmt.Errorf("no task matches %q (run 'thunderdome list' to see configured tasks)", taskFilter)
+	}
+	if catFilter != "" && taskCount == 0 {
+		return fmt.Errorf("no task matches category %q (run 'thunderdome list' to see configured tasks)", catFilter)
+	}
+	return nil
 }
 
 func filterOrchestrators(orchs []config.Orchestrator, name string) []config.Orchestrator {

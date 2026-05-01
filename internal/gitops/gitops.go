@@ -210,6 +210,14 @@ func CaptureChanges(repoDir string) ([]byte, error) {
 // os.RemoveAll cannot remove them, we fall back to 'sudo -n rm -rf' (only
 // when sudo exists on PATH). Failures are logged so leaks are visible.
 func cleanupTmpDir(tmpDir string) {
+	// Defensive guard: never invoke rm -rf on an empty path or a path that
+	// escaped the system temp dir. CloneTag generates the path via
+	// os.MkdirTemp so this should always hold; the check exists to keep
+	// future refactors from accidentally widening the blast radius.
+	if !isSafeTmpDir(tmpDir) {
+		log.Printf("warning: refusing to clean up unsafe path %q (must be a non-empty descendant of %s)", tmpDir, os.TempDir())
+		return
+	}
 	if err := os.RemoveAll(tmpDir); err == nil {
 		return
 	}
@@ -220,6 +228,30 @@ func cleanupTmpDir(tmpDir string) {
 	if out, err := exec.Command("sudo", "-n", "rm", "-rf", tmpDir).CombinedOutput(); err != nil {
 		log.Printf("warning: cleanup of %s failed: %s: %v", tmpDir, strings.TrimSpace(string(out)), err)
 	}
+}
+
+// isSafeTmpDir reports whether path is a non-empty, absolute path located
+// strictly under os.TempDir(). Used as a guard before any rm -rf invocation.
+func isSafeTmpDir(path string) bool {
+	if path == "" || path == "/" {
+		return false
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	tmpRoot, err := filepath.Abs(os.TempDir())
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(tmpRoot, abs)
+	if err != nil {
+		return false
+	}
+	if rel == "." || rel == "" || strings.HasPrefix(rel, "..") {
+		return false
+	}
+	return true
 }
 
 // shortHash returns the first 8 characters of a commit hash, or the whole

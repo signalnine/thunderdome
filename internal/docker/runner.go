@@ -162,12 +162,16 @@ func RunContainer(ctx context.Context, opts *RunOpts) (*RunResult, error) {
 				}, fmt.Errorf("docker wait error channel closed without value")
 			}
 			if err != nil {
+				// Docker SDK error during wait (daemon hiccup, container removed
+				// out-of-band, socket glitch). This is an infrastructure crash,
+				// not a wall-clock timeout — surface it as such so meta.json
+				// classifies the trial as crashed rather than timed out.
 				killAndDump("wait-error")
 				return &RunResult{
-					ExitCode: 124,
-					TimedOut: true,
+					ExitCode: 125,
+					TimedOut: false,
 					Duration: time.Since(start),
-				}, nil
+				}, fmt.Errorf("docker wait error: %w", err)
 			}
 			// nil error received on an open channel; loop and wait for result
 		case status, ok := <-waitResult.Result:

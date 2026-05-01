@@ -93,6 +93,36 @@ func TestMatchCategory(t *testing.T) {
 	}
 }
 
+func TestValidateFilterResults(t *testing.T) {
+	tests := []struct {
+		name       string
+		orchCount  int
+		taskCount  int
+		orchFilter string
+		taskFilter string
+		catFilter  string
+		wantErr    bool
+	}{
+		{"no filters, results found", 3, 5, "", "", "", false},
+		{"no filters, no results", 0, 0, "", "", "", false},
+		{"orch filter matches", 1, 5, "alpha", "", "", false},
+		{"orch filter no match", 0, 5, "typo", "", "", true},
+		{"task filter matches", 3, 1, "", "T1", "", false},
+		{"task filter no match", 3, 0, "", "typo", "", true},
+		{"category filter matches", 3, 2, "", "", "greenfield/*", false},
+		{"category filter no match", 3, 0, "", "", "marathon/*", true},
+		{"both task filters no match", 3, 0, "", "typo", "greenfield/*", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateFilterResults(tt.orchCount, tt.taskCount, tt.orchFilter, tt.taskFilter, tt.catFilter)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateFilterResults() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestTimeoutForTask(t *testing.T) {
 	tests := []struct {
 		name string
