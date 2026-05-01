@@ -338,6 +338,7 @@ func validateGreenfield(ctx context.Context, trialDir, workDir string, meta *res
 		meta.ValidationErrors = append(meta.ValidationErrors, fmt.Sprintf("coverage: %v", err))
 	} else {
 		meta.Scores.Coverage = coverageResult.Score
+		meta.Scores.CoverageMeasured = true
 	}
 
 	// 3. Code metrics (doesn't depend on test injection order)

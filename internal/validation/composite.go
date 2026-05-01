@@ -58,9 +58,16 @@ func GreenfieldCompositeScore(scores result.Scores, gw config.GreenWeights) floa
 		return 0
 	}
 
-	// AgentTests score = agent test pass rate × coverage
-	// If agent wrote no tests, agentTestScore = 0
+	// AgentTests score = agent test pass rate × coverage.
+	// If agent wrote no tests, agentTestScore = 0.
+	// If coverage couldn't be measured (e.g. @vitest/coverage-v8 install
+	// failed for environmental reasons), drop the multiplier — otherwise an
+	// infrastructure failure would zero out 30.8% of the greenfield composite
+	// even when the agent's tests passed cleanly.
 	agentTestScore := scores.AgentTests * scores.Coverage
+	if !scores.CoverageMeasured {
+		agentTestScore = scores.AgentTests
+	}
 
 	// BuildLint = average of build success (from StaticAnalysis) — we reuse Tests for build
 	// Actually: build success is binary (pass/fail) and lint is a score.

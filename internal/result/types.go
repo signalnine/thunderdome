@@ -25,4 +25,9 @@ type Scores struct {
 	AgentTests     float64 `json:"agent_tests,omitempty"`
 	Coverage       float64 `json:"coverage,omitempty"`
 	CodeMetrics    float64 `json:"code_metrics,omitempty"`
+	// CoverageMeasured is true when RunCoverage produced a numeric result.
+	// When false (e.g. environmental failure to install @vitest/coverage-v8),
+	// GreenfieldCompositeScore drops the coverage multiplier so the AgentTests
+	// component isn't zeroed out by something the agent can't control.
+	CoverageMeasured bool `json:"coverage_measured,omitempty"`
 }

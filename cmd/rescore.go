@@ -143,6 +143,23 @@ func runRescore(cmd *cobra.Command, args []string) error {
 // means via its score-presence fallback, biasing the means upward.
 func applyTaskMetaUpdates(meta *result.TrialMeta, task *config.Task) {
 	meta.Greenfield = task.Greenfield
+	// Backfill CoverageMeasured for meta.json files written before the field
+	// existed. A nonzero Coverage score is only producible by a successful
+	// measurement, and a zero score with no "coverage:" entry in
+	// ValidationErrors means RunCoverage returned cleanly with zero coverage.
+	// Either way the multiplier in GreenfieldCompositeScore should apply.
+	if !meta.Scores.CoverageMeasured {
+		coverageFailed := false
+		for _, e := range meta.ValidationErrors {
+			if strings.HasPrefix(e, "coverage:") {
+				coverageFailed = true
+				break
+			}
+		}
+		if !coverageFailed {
+			meta.Scores.CoverageMeasured = true
+		}
+	}
 }
 
 // rescoreTestsOnly re-runs only test commands and recomputes composite scores.
@@ -244,8 +261,10 @@ func rescoreFull(ctx context.Context, trialDir string, task *config.Task) error 
 		coverageResult, err := validation.RunCoverage(ctx, wsDir, task.ValidationImage, task.InstallCmd)
 		if err != nil {
 			log.Printf("  warning: coverage: %v", err)
+			meta.Scores.CoverageMeasured = false
 		} else {
 			meta.Scores.Coverage = coverageResult.Score
+			meta.Scores.CoverageMeasured = true
 		}
 		metricsResult, err := validation.RunCodeMetrics(wsDir)
 		if err != nil {
