@@ -207,3 +207,61 @@ func TestCaptureChangesNoChanges(t *testing.T) {
 		t.Errorf("expected empty diff, got %d bytes", len(diff))
 	}
 }
+
+// CaptureChanges must produce a complete diff even when the host git has no
+// user.email/user.name configured. Previously the temp commit silently failed
+// in that env, leaving HEAD at v1 and producing an empty diff that hid all
+// agent work.
+func TestCaptureChangesWithoutGitIdentity(t *testing.T) {
+	repo := createTestRepo(t)
+	dest := t.TempDir()
+	if err := gitops.CloneAndCheckout(repo, "v1", dest); err != nil {
+		t.Fatalf("CloneAndCheckout: %v", err)
+	}
+
+	// Strip any local identity that the clone might have inherited.
+	for _, key := range []string{"user.email", "user.name"} {
+		c := exec.Command("git", "config", "--unset-all", key)
+		c.Dir = dest
+		c.Run() // ignore: may not be set
+	}
+
+	// Point git at empty HOME and a writable but blank global config so it
+	// cannot fall back to the developer's real ~/.gitconfig.
+	emptyHome := t.TempDir()
+	emptyGlobal := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(emptyGlobal, []byte{}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", emptyHome)
+	t.Setenv("XDG_CONFIG_HOME", emptyHome)
+	t.Setenv("GIT_CONFIG_GLOBAL", emptyGlobal)
+	t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+	// Unset any author/committer overrides inherited from the parent process so
+	// git really has nowhere to find an identity (this is the bug scenario).
+	for _, k := range []string{"GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "EMAIL"} {
+		if _, ok := os.LookupEnv(k); ok {
+			prev := os.Getenv(k)
+			os.Unsetenv(k)
+			t.Cleanup(func() { os.Setenv(k, prev) })
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(dest, "hello.txt"), []byte("modified"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dest, "new.txt"), []byte("new file"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	diff, err := gitops.CaptureChanges(dest)
+	if err != nil {
+		t.Fatalf("CaptureChanges: %v", err)
+	}
+	if len(diff) == 0 {
+		t.Fatal("expected non-empty diff with no host git identity, got empty")
+	}
+	if !bytes.Contains(diff, []byte("new file")) && !bytes.Contains(diff, []byte("new.txt")) {
+		t.Errorf("expected diff to mention agent changes, got:\n%s", diff)
+	}
+}

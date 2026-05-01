@@ -287,3 +287,42 @@ func TestParseLintCrashedUnparseableOutput(t *testing.T) {
 		t.Errorf("crashed lint should not score 1.0, got %f", result.Score)
 	}
 }
+
+// ESLint's default 'stylish' formatter prints diagnostics as
+// "  line:col  error  message  rule" -- whitespace separated, no colon
+// after "error" or "warning". The parser must count these as issues.
+// Sample contains 1 error and 1 warning -> totalIssues >= 2; score < 1.0.
+func TestParseLintESLintStylishFormat(t *testing.T) {
+	output := `/workspace/src/foo.ts
+  3:5  error    'x' is defined but never used  no-unused-vars
+  8:1  warning  Unexpected console statement   no-console
+
+` + "✖" + ` 2 problems (1 error, 1 warning)
+`
+	result := validation.ParseLintResults(output, 0, 0)
+	if result.NetNewIssues < 2 {
+		t.Errorf("expected NetNewIssues >= 2 for two stylish diagnostics, got %d", result.NetNewIssues)
+	}
+	if result.Score >= 1.0 {
+		t.Errorf("expected score < 1.0 with two new issues, got %f", result.Score)
+	}
+}
+
+// Warnings-only ESLint stylish output (lint exits 0 because warnings
+// are under the --max-warnings threshold). The parser must still count
+// them so score reflects the agent-introduced warnings.
+func TestParseLintESLintStylishWarningsOnly(t *testing.T) {
+	output := `/workspace/src/foo.ts
+  8:1  warning  Unexpected console statement  no-console
+  9:1  warning  Missing semicolon              semi
+
+` + "✖" + ` 2 problems (0 errors, 2 warnings)
+`
+	result := validation.ParseLintResults(output, 0, 0)
+	if result.NetNewIssues < 2 {
+		t.Errorf("expected NetNewIssues >= 2 for two stylish warnings, got %d", result.NetNewIssues)
+	}
+	if result.Score >= 1.0 {
+		t.Errorf("expected score < 1.0 for warning-only output, got %f", result.Score)
+	}
+}

@@ -4,8 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 )
+
+// eslintStylishRe matches a single diagnostic line in ESLint's default
+// 'stylish' formatter, e.g. "  3:5  error  'x' is defined  no-unused-vars".
+var eslintStylishRe = regexp.MustCompile(`^\s*\d+:\d+\s+(error|warning)\b`)
 
 type LintResult struct {
 	Score        float64
@@ -47,9 +52,18 @@ func ParseLintResults(output string, exitCode int, baselineIssues int) *LintResu
 		return &LintResult{Score: 1.0, Output: output, ExitCode: exitCode}
 	}
 	totalIssues := 0
-	for _, line := range strings.Split(output, "\n") {
-		line = strings.TrimSpace(line)
-		if line != "" && (strings.Contains(line, ": error") || strings.Contains(line, ": warning") || strings.Contains(line, "Error:") || strings.Contains(line, "Warning:")) {
+	for _, raw := range strings.Split(output, "\n") {
+		line := strings.TrimRight(raw, "\r")
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.Contains(trimmed, ": error") || strings.Contains(trimmed, ": warning") ||
+			strings.Contains(trimmed, "Error:") || strings.Contains(trimmed, "Warning:") {
+			totalIssues++
+			continue
+		}
+		if eslintStylishRe.MatchString(line) {
 			totalIssues++
 		}
 	}
