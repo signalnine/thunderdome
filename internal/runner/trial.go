@@ -239,8 +239,12 @@ func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
 	var totalTokens int
 	var totalCostUSD float64
 	if opts.GatewayUsageLog != "" {
-		records, err := gateway.ParseUsageLogs(opts.GatewayUsageLog)
+		records, malformed, err := gateway.ParseUsageLogs(opts.GatewayUsageLog)
 		if err == nil {
+			if malformed > 0 {
+				log.Printf("gateway: %d malformed line(s) in usage log %s -- token totals may understate actual usage",
+					malformed, opts.GatewayUsageLog)
+			}
 			totalTokens = gateway.TotalTokens(records)
 			totalCostUSD = gateway.EstimateCost(records)
 		}

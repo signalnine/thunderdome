@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -167,9 +168,12 @@ func enrichCosts(runDir string, metas []*result.TrialMeta, pricingPath string) {
 			result.TrialDir(runDir, m.Orchestrator, m.Task, m.Trial),
 			"proxy-log.jsonl",
 		)
-		records, err := gateway.ParseUsageLogs(logPath)
+		records, malformed, err := gateway.ParseUsageLogs(logPath)
 		if err != nil {
 			continue
+		}
+		if malformed > 0 {
+			log.Printf("report: %d malformed line(s) in %s -- cost may understate actual spend", malformed, logPath)
 		}
 		var totalCost float64
 		for _, r := range records {

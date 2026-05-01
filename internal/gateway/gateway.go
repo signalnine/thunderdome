@@ -164,25 +164,38 @@ type UsageRecord struct {
 	Timestamp               float64 `json:"timestamp"`
 }
 
-func ParseUsageLogs(logPath string) ([]UsageRecord, error) {
+// ParseUsageLogs reads a proxy usage JSONL log. It returns parsed records,
+// the count of malformed JSON lines that were skipped, and any read error.
+// A final line lacking a trailing newline is treated as a possibly-truncated
+// write from a still-running proxy and is NOT counted as malformed; every
+// other unmarshal failure is. Callers can use the count to distinguish a
+// transient truncation from persistent proxy/version corruption.
+func ParseUsageLogs(logPath string) ([]UsageRecord, int, error) {
 	data, err := os.ReadFile(logPath)
 	if err != nil {
-		return nil, fmt.Errorf("reading gateway log: %w", err)
+		return nil, 0, fmt.Errorf("reading gateway log: %w", err)
 	}
+	lines := splitLines(data)
+	lastUnterminated := len(data) > 0 && data[len(data)-1] != '\n'
 	var records []UsageRecord
-	for _, line := range splitLines(data) {
+	var malformed int
+	for i, line := range lines {
 		if len(line) == 0 {
 			continue
 		}
 		var rec UsageRecord
 		if err := json.Unmarshal(line, &rec); err != nil {
+			if i == len(lines)-1 && lastUnterminated {
+				continue
+			}
+			malformed++
 			continue
 		}
 		if rec.Model != "" {
 			records = append(records, rec)
 		}
 	}
-	return records, nil
+	return records, malformed, nil
 }
 
 func TotalUsage(records []UsageRecord) (inputTokens, outputTokens int) {

@@ -41,12 +41,15 @@ some non-json startup noise
 `
 	logPath := filepath.Join(dir, "proxy-log.jsonl")
 	os.WriteFile(logPath, []byte(logContent), 0o644)
-	records, err := gateway.ParseUsageLogs(logPath)
+	records, malformed, err := gateway.ParseUsageLogs(logPath)
 	if err != nil {
 		t.Fatalf("ParseUsageLogs: %v", err)
 	}
 	if len(records) != 2 {
 		t.Fatalf("expected 2 records, got %d", len(records))
+	}
+	if malformed != 1 {
+		t.Errorf("malformed: got %d, want 1", malformed)
 	}
 	inTok, outTok := gateway.TotalUsage(records)
 	if inTok != 5200 {
@@ -54,6 +57,75 @@ some non-json startup noise
 	}
 	if outTok != 2300 {
 		t.Errorf("output tokens: got %d, want 2300", outTok)
+	}
+}
+
+// Regression for td-16w: ParseUsageLogs must surface the count of malformed
+// JSON lines so a proxy version mismatch or persistent corruption can't
+// silently zero out token totals.
+func TestParseUsageLogsReportsMalformedCount(t *testing.T) {
+	dir := t.TempDir()
+	logContent := `{"model":"claude-opus-4-6","provider":"anthropic","input_tokens":100,"output_tokens":50}
+garbage line one
+{"model":"codex-max","provider":"openai","input_tokens":10,"output_tokens":5}
+also garbage
+{"this":"is":"not":"valid"}
+`
+	logPath := filepath.Join(dir, "proxy-log.jsonl")
+	os.WriteFile(logPath, []byte(logContent), 0o644)
+	records, malformed, err := gateway.ParseUsageLogs(logPath)
+	if err != nil {
+		t.Fatalf("ParseUsageLogs: %v", err)
+	}
+	if len(records) != 2 {
+		t.Errorf("records: got %d, want 2", len(records))
+	}
+	if malformed != 3 {
+		t.Errorf("malformed: got %d, want 3", malformed)
+	}
+}
+
+// Regression for td-16w: A final line lacking a trailing newline is
+// considered a possibly-truncated write from a still-running proxy and
+// must NOT be counted as malformed.
+func TestParseUsageLogsAllowsTruncatedFinalLine(t *testing.T) {
+	dir := t.TempDir()
+	// Note: no trailing newline; the final JSON object is cut off mid-write.
+	logContent := `{"model":"claude-opus-4-6","provider":"anthropic","input_tokens":100,"output_tokens":50}
+{"model":"codex-max","provider":"open`
+	logPath := filepath.Join(dir, "proxy-log.jsonl")
+	os.WriteFile(logPath, []byte(logContent), 0o644)
+	records, malformed, err := gateway.ParseUsageLogs(logPath)
+	if err != nil {
+		t.Fatalf("ParseUsageLogs: %v", err)
+	}
+	if len(records) != 1 {
+		t.Errorf("records: got %d, want 1", len(records))
+	}
+	if malformed != 0 {
+		t.Errorf("malformed: got %d, want 0 (truncated final line is OK)", malformed)
+	}
+}
+
+// Regression for td-16w: blank lines must not be counted as malformed.
+func TestParseUsageLogsIgnoresBlankLines(t *testing.T) {
+	dir := t.TempDir()
+	logContent := `{"model":"claude-opus-4-6","provider":"anthropic","input_tokens":100,"output_tokens":50}
+
+{"model":"codex-max","provider":"openai","input_tokens":10,"output_tokens":5}
+
+`
+	logPath := filepath.Join(dir, "proxy-log.jsonl")
+	os.WriteFile(logPath, []byte(logContent), 0o644)
+	records, malformed, err := gateway.ParseUsageLogs(logPath)
+	if err != nil {
+		t.Fatalf("ParseUsageLogs: %v", err)
+	}
+	if len(records) != 2 {
+		t.Errorf("records: got %d, want 2", len(records))
+	}
+	if malformed != 0 {
+		t.Errorf("malformed: got %d, want 0", malformed)
 	}
 }
 
