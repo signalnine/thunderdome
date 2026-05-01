@@ -173,7 +173,7 @@ func enrichCosts(runDir string, metas []*result.TrialMeta, pricingPath string) {
 		}
 		var totalCost float64
 		for _, r := range records {
-			totalCost += table.Cost(r.Provider, r.Model, r.InputTokens, r.OutputTokens)
+			totalCost += table.Cost(r.Provider, r.Model, r.InputTokens, r.OutputTokens, r.CacheCreationTokens, r.CacheReadTokens)
 		}
 		m.TotalCostUSD = totalCost
 	}

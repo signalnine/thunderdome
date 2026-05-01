@@ -2,6 +2,7 @@ package validation
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"strings"
 )
@@ -30,6 +31,10 @@ func RunLint(ctx context.Context, workDir, validationImage, lintCmd string, base
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode = exitErr.ExitCode()
+		} else {
+			// docker daemon unreachable, image pull failure, context cancellation
+			// before exec, etc. Don't silently fall through to a Score=1.0 perfect.
+			return nil, fmt.Errorf("running lint: %s: %w", string(out), err)
 		}
 	}
 

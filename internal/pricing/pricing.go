@@ -8,8 +8,10 @@ import (
 )
 
 type ModelPricing struct {
-	Input  float64 `yaml:"input"`
-	Output float64 `yaml:"output"`
+	Input      float64 `yaml:"input"`
+	Output     float64 `yaml:"output"`
+	CacheWrite float64 `yaml:"cache_write"`
+	CacheRead  float64 `yaml:"cache_read"`
 }
 
 type Table struct {
@@ -29,7 +31,9 @@ func Load(path string) (*Table, error) {
 }
 
 // Cost calculates total cost for a request. Prices are per 1K tokens.
-func (t *Table) Cost(provider, model string, inputTokens, outputTokens int) float64 {
+// cacheCreationTokens and cacheReadTokens cover Anthropic-style prompt
+// caching; passing 0 for either is fine for providers without caching.
+func (t *Table) Cost(provider, model string, inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens int) float64 {
 	if t.Providers == nil {
 		return 0
 	}
@@ -41,5 +45,8 @@ func (t *Table) Cost(provider, model string, inputTokens, outputTokens int) floa
 	if !ok {
 		return 0
 	}
-	return (float64(inputTokens)/1000.0)*p.Input + (float64(outputTokens)/1000.0)*p.Output
+	return (float64(inputTokens)/1000.0)*p.Input +
+		(float64(outputTokens)/1000.0)*p.Output +
+		(float64(cacheCreationTokens)/1000.0)*p.CacheWrite +
+		(float64(cacheReadTokens)/1000.0)*p.CacheRead
 }

@@ -67,8 +67,13 @@ func RunHiddenTests(ctx context.Context, workDir, validationImage, installCmd st
 		}
 	}
 
-	// Run validation tests with the separate vitest config
-	testCmd := "npx vitest run --config validation-vitest.config.ts"
+	// Run validation tests. Use the separate vitest config only if it was
+	// actually injected into the workspace -- some benchmarks ship hidden
+	// tests without a dedicated config.
+	testCmd := "npx vitest run"
+	if _, err := os.Stat(filepath.Join(workDir, "validation-vitest.config.ts")); err == nil {
+		testCmd = "npx vitest run --config validation-vitest.config.ts"
+	}
 	cmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--init", seccomp, apparmor,
 		"-v", workDir+":/workspace", "-w", "/workspace",
 		validationImage, "sh", "-c", testCmd)

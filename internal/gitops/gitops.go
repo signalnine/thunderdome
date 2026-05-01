@@ -164,10 +164,20 @@ func CaptureChanges(repoDir string) ([]byte, error) {
 		return nil, fmt.Errorf("git add -A: %s: %w", out, err)
 	}
 
-	// Create a temporary commit so all changes are reachable
-	commit := exec.Command("git", "commit", "--allow-empty", "-m", "thunderdome-capture")
+	// Create a temporary commit so all changes are reachable. Set identity
+	// inline so this works even when the workspace clone has no configured
+	// user.email/user.name (e.g. fresh CI containers); --allow-empty handles
+	// the no-changes case. Any error here means the staged index will be
+	// dropped from the v1..HEAD diff, so propagate instead of swallowing.
+	commit := exec.Command("git",
+		"-c", "user.name=thunderdome",
+		"-c", "user.email=thunderdome@invalid",
+		"commit", "--allow-empty", "-m", "thunderdome-capture",
+	)
 	commit.Dir = repoDir
-	commit.CombinedOutput() // ignore error (nothing to commit is fine)
+	if out, err := commit.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("git commit: %s: %w", out, err)
+	}
 
 	// Find the initial commit (the v1 tag clone point)
 	revList := exec.Command("git", "rev-list", "--max-parents=0", "HEAD")
