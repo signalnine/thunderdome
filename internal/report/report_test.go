@@ -3,6 +3,7 @@ package report_test
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -297,5 +298,59 @@ func TestNoContributionReport(t *testing.T) {
 	}
 	if !strings.Contains(jsonBuf.String(), "mean_score_filtered") {
 		t.Error("expected mean_score_filtered in JSON output")
+	}
+}
+
+// Regression: enrichCosts unconditionally overwrote m.TotalCostUSD with the
+// proxy-log-derived cost, including when the proxy log was present but
+// contained zero parseable records (a common state when the agent bypassed
+// PROXY_URL but the proxy still wrote startup noise to its log file).
+// This silently zeroed adapter-recorded costs that came from
+// .thunderdome-metrics.json. enrichCosts must preserve the adapter-recorded
+// value when the proxy log yields no records.
+func TestGenerateDoesNotZeroAdapterCostOnEmptyProxyLog(t *testing.T) {
+	base := t.TempDir()
+	runDir := filepath.Join(base, "runs", "test-run")
+	pricingPath := filepath.Join(base, "pricing.yaml")
+	if err := os.WriteFile(pricingPath, []byte("anthropic:\n  claude-sonnet-4-5: { input: 0.003, output: 0.015, cache_write: 0.00375, cache_read: 0.0003 }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	meta := &result.TrialMeta{
+		Orchestrator:   "adapter-only",
+		Task:           "task-1",
+		Trial:          1,
+		CompositeScore: 0.9,
+		TotalTokens:    5000,
+		TotalCostUSD:   1.23,
+		ExitReason:     "completed",
+	}
+	dir := result.TrialDir(runDir, meta.Orchestrator, meta.Task, meta.Trial)
+	if err := result.WriteTrialMeta(dir, meta); err != nil {
+		t.Fatalf("WriteTrialMeta: %v", err)
+	}
+	// Empty proxy log file -- present but no records (agent bypassed proxy).
+	logPath := filepath.Join(dir, "proxy-log.jsonl")
+	if err := os.WriteFile(logPath, []byte{}, 0o644); err != nil {
+		t.Fatalf("write empty proxy log: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := report.Generate(runDir, "json", &buf, pricingPath); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	var parsed []struct {
+		Name        string  `json:"name"`
+		MeanCostUSD float64 `json:"mean_cost_usd"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
+		t.Fatalf("unmarshal: %v\noutput: %s", err, buf.String())
+	}
+	if len(parsed) != 1 {
+		t.Fatalf("got %d orchestrators, want 1", len(parsed))
+	}
+	if got := parsed[0].MeanCostUSD; got != 1.23 {
+		t.Errorf("MeanCostUSD = %v, want 1.23 (adapter cost should not be zeroed by empty proxy log)", got)
 	}
 }

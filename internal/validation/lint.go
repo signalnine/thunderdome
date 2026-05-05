@@ -12,6 +12,16 @@ import (
 // 'stylish' formatter, e.g. "  3:5  error  'x' is defined  no-unused-vars".
 var eslintStylishRe = regexp.MustCompile(`^\s*\d+:\d+\s+(error|warning)\b`)
 
+// eslintCompactRe matches the ESLint compact / clang-style formatter
+// "<path>:<line>:<col>: error|warning ..." which most CI lint commands
+// emit when run with --format=compact or via tsc/golangci-lint clones.
+var eslintCompactRe = regexp.MustCompile(`^\S.*:\d+:\d+:\s+(error|warning)\b`)
+
+// tscRe matches the TypeScript compiler's diagnostic shape
+// "<path>(<line>,<col>): error TSxxxx: ..." (also "warning"). Used when
+// 'tsc --noEmit' is bundled into the lint command.
+var tscRe = regexp.MustCompile(`^\S.*\(\d+,\d+\):\s+(error|warning)\b`)
+
 type LintResult struct {
 	Score        float64
 	Output       string
@@ -58,8 +68,7 @@ func ParseLintResults(output string, exitCode int, baselineIssues int) *LintResu
 		if trimmed == "" {
 			continue
 		}
-		if strings.Contains(trimmed, ": error") || strings.Contains(trimmed, ": warning") ||
-			strings.Contains(trimmed, "Error:") || strings.Contains(trimmed, "Warning:") {
+		if eslintCompactRe.MatchString(trimmed) || tscRe.MatchString(trimmed) {
 			totalIssues++
 			continue
 		}

@@ -333,6 +333,69 @@ func TestParseLintESLintStylishFormat(t *testing.T) {
 	}
 }
 
+// Regression for agentic-thunderdome-69g: ParseLintResults previously
+// counted any line containing the substring "Error:" or "Warning:" (or
+// ": error" / ": warning") as a lint diagnostic. That over-counts on:
+//   - npm install warnings emitted before the lint output
+//   - Node.js exception stack traces piped into the lint stream
+//   - lint diagnostics that quote user code which prints "Error:" / "Warning:"
+// Each false positive drops the score by 0.1, saturating to 0 with ten hits.
+// Diagnostics must be matched by their file:line:col shape, not by loose
+// substrings.
+func TestParseLintIgnoresNpmWarning(t *testing.T) {
+	output := "npm WARN deprecated foo@1.0.0\n" +
+		"Warning: a peer dependency is missing\n"
+	result := validation.ParseLintResults(output, 0, 0)
+	if result.NetNewIssues != 0 {
+		t.Errorf("npm/peer-dep warnings must not count as lint issues, got NetNewIssues=%d", result.NetNewIssues)
+	}
+}
+
+func TestParseLintIgnoresNodeStackTrace(t *testing.T) {
+	output := "Error: Cannot find module 'eslint-plugin-foo'\n" +
+		"    at Function.Module._resolveFilename (node:internal/modules/cjs/loader:1075:15)\n"
+	result := validation.ParseLintResults(output, 0, 0)
+	if result.NetNewIssues != 0 {
+		t.Errorf("Node.js stack trace must not count as lint issues, got NetNewIssues=%d", result.NetNewIssues)
+	}
+}
+
+func TestParseLintIgnoresConsoleStringContents(t *testing.T) {
+	output := `/workspace/src/foo.ts
+  10:5  warning  Unexpected console statement: 'Warning: do not log this'  no-console
+
+` + "✖" + ` 1 problem (0 errors, 1 warning)
+`
+	result := validation.ParseLintResults(output, 0, 0)
+	// Exactly one diagnostic: the eslint stylish line. The literal
+	// "Warning:" inside the message string must not double-count.
+	if result.NetNewIssues != 1 {
+		t.Errorf("substring 'Warning:' inside diagnostic message must not double-count, got NetNewIssues=%d", result.NetNewIssues)
+	}
+}
+
+// ESLint compact formatter ("file:line:col: severity message") must still
+// be recognized as a diagnostic now that the loose substring rules are gone.
+func TestParseLintESLintCompactFormat(t *testing.T) {
+	output := "/workspace/src/foo.ts:10:5: error: 'x' is defined but never used (no-unused-vars)\n" +
+		"/workspace/src/foo.ts:11:1: warning: Unexpected console statement (no-console)\n"
+	result := validation.ParseLintResults(output, 1, 0)
+	if result.NetNewIssues < 2 {
+		t.Errorf("expected NetNewIssues >= 2 for two compact-format diagnostics, got %d", result.NetNewIssues)
+	}
+}
+
+// TypeScript compiler ("tsc") emits "file(line,col): error TSxxxx: ..." which
+// is a real diagnostic that must count.
+func TestParseLintTscFormat(t *testing.T) {
+	output := "src/foo.ts(10,5): error TS2304: Cannot find name 'x'.\n" +
+		"src/foo.ts(11,1): error TS7006: Parameter 'y' implicitly has an 'any' type.\n"
+	result := validation.ParseLintResults(output, 1, 0)
+	if result.NetNewIssues < 2 {
+		t.Errorf("expected NetNewIssues >= 2 for two tsc diagnostics, got %d", result.NetNewIssues)
+	}
+}
+
 // Warnings-only ESLint stylish output (lint exits 0 because warnings
 // are under the --max-warnings threshold). The parser must still count
 // them so score reflects the agent-introduced warnings.

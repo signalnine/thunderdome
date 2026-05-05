@@ -175,6 +175,13 @@ func enrichCosts(runDir string, metas []*result.TrialMeta, pricingPath string) {
 		if malformed > 0 {
 			log.Printf("report: %d malformed line(s) in %s -- cost may understate actual spend", malformed, logPath)
 		}
+		// Skip overwriting when the proxy log yielded no records -- the agent
+		// likely bypassed the proxy and m.TotalCostUSD was set from the
+		// adapter-written .thunderdome-metrics.json. Overwriting would zero
+		// out a real cost.
+		if len(records) == 0 {
+			continue
+		}
 		var totalCost float64
 		for _, r := range records {
 			totalCost += table.Cost(r.Provider, r.Model, r.InputTokens, r.OutputTokens, r.CacheCreationTokens, r.CacheReadTokens)

@@ -1,11 +1,50 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/signalnine/thunderdome/internal/config"
 	"github.com/signalnine/thunderdome/internal/result"
 )
+
+// Regression for agentic-thunderdome-ud8: rescoreFull's old workspace cleanup
+// invoked 'sudo rm -rf' without -n, which can hang on a TTY when sudo prompts
+// for a password. The cleanup must (a) succeed without sudo when files are
+// owned by the running uid (the common case post-hostUID fix) and (b) never
+// invoke sudo without -n.
+func TestRemoveWorkspaceDirRemovesOwnedDir(t *testing.T) {
+	trialDir := t.TempDir()
+	wsDir := filepath.Join(trialDir, "workspace")
+	if err := os.MkdirAll(filepath.Join(wsDir, "subdir"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wsDir, "subdir", "f.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := removeWorkspaceDir(wsDir); err != nil {
+		t.Fatalf("removeWorkspaceDir: %v", err)
+	}
+	if _, err := os.Stat(wsDir); !os.IsNotExist(err) {
+		t.Errorf("wsDir still exists after cleanup: stat err = %v", err)
+	}
+}
+
+func TestRemoveWorkspaceDirNoOpOnMissing(t *testing.T) {
+	trialDir := t.TempDir()
+	wsDir := filepath.Join(trialDir, "workspace")
+	if err := removeWorkspaceDir(wsDir); err != nil {
+		t.Errorf("removeWorkspaceDir on missing dir should be no-op, got %v", err)
+	}
+}
+
+func TestRemoveWorkspaceDirRefusesEmptyPath(t *testing.T) {
+	if err := removeWorkspaceDir(""); err == nil {
+		t.Error("removeWorkspaceDir(\"\") should refuse, got nil error")
+	}
+}
 
 // Regression: validateGreenfield sets meta.Greenfield=true for greenfield
 // trials (commit fc63c47b), but the rescore command did not, so a meta.json

@@ -224,6 +224,36 @@ func rescoreTestsOnly(ctx context.Context, trialDir string, task *config.Task) e
 	return result.WriteTrialMeta(trialDir, meta)
 }
 
+// removeWorkspaceDir removes a trial's reconstructed workspace before rescore
+// re-creates it. Trial workspaces written by RunContainer are owned by the
+// host uid (see trial.go hostUID), so os.RemoveAll succeeds without
+// privileges in the common case. We fall back to 'sudo -n' (non-interactive)
+// only if a stray root-owned file blocks removal -- never plain sudo, which
+// can hang waiting for a TTY password prompt. A failed cleanup returns an
+// error so the caller can avoid silently rescoring against a stale workspace.
+func removeWorkspaceDir(wsDir string) error {
+	if wsDir == "" {
+		return fmt.Errorf("refusing to clean empty workspace path")
+	}
+	if _, err := os.Stat(wsDir); os.IsNotExist(err) {
+		return nil
+	}
+	if err := os.RemoveAll(wsDir); err == nil {
+		return nil
+	}
+	if _, err := exec.LookPath("sudo"); err != nil {
+		return fmt.Errorf("os.RemoveAll failed and sudo not available")
+	}
+	out, err := exec.Command("sudo", "-n", "rm", "-rf", wsDir).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("sudo -n rm -rf: %s: %w", strings.TrimSpace(string(out)), err)
+	}
+	if _, err := os.Stat(wsDir); err == nil {
+		return fmt.Errorf("workspace %s still present after cleanup", wsDir)
+	}
+	return nil
+}
+
 // rescoreFull re-runs the entire validation pipeline via runner.ValidateAndScore.
 func rescoreFull(ctx context.Context, trialDir string, task *config.Task) error {
 	workDir, cleanup, err := reconstructToTempDir(trialDir, task)
@@ -234,7 +264,9 @@ func rescoreFull(ctx context.Context, trialDir string, task *config.Task) error 
 
 	// Point the trial workspace at our reconstructed dir
 	wsDir := filepath.Join(trialDir, "workspace")
-	exec.Command("sudo", "rm", "-rf", wsDir).Run()
+	if err := removeWorkspaceDir(wsDir); err != nil {
+		return fmt.Errorf("clean workspace %s: %w", wsDir, err)
+	}
 	if err := os.Symlink(workDir, wsDir); err != nil {
 		// Fall back to copy if symlink fails
 		if err := gitops.CopyDir(workDir, wsDir); err != nil {

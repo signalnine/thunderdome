@@ -158,6 +158,45 @@ func TestRunCodeMetricsCountsCodeAfterInlineBlockComment(t *testing.T) {
 	}
 }
 
+// Regression: countLOC dropped any code following the closing '*/' of a
+// multi-line block comment. Same bug class as the inline case above, but on
+// the closing line of a multi-line comment.
+func TestRunCodeMetricsCountsCodeAfterMultiLineBlockComment(t *testing.T) {
+	work := t.TempDir()
+	body := "/* multi\nline */ export const realCode = () => 1;\n"
+	writeFile(t, filepath.Join(work, "src", "a.ts"), body)
+
+	res, err := validation.RunCodeMetrics(work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.TotalLOC < 1 {
+		t.Errorf("TotalLOC = %d, want >= 1 for code after closing */ on multi-line comment", res.TotalLOC)
+	}
+	if res.MaxFileLOC < 1 {
+		t.Errorf("MaxFileLOC = %d, want >= 1", res.MaxFileLOC)
+	}
+}
+
+// A multi-line block comment whose closing line has no trailing code (or only
+// whitespace / a line comment) should still be fully skipped.
+func TestRunCodeMetricsSkipsMultiLineBlockCommentWithNoTrailingCode(t *testing.T) {
+	work := t.TempDir()
+	body := "/* multi\nline */\n" +
+		"/* multi2\nline2 */   \n" +
+		"/* multi3\nline3 */ // tail\n" +
+		"export const x = 1;\n"
+	writeFile(t, filepath.Join(work, "src", "a.ts"), body)
+
+	res, err := validation.RunCodeMetrics(work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.TotalLOC != 1 {
+		t.Errorf("TotalLOC = %d, want 1 (only export line counts)", res.TotalLOC)
+	}
+}
+
 // A line that is entirely a same-line block comment (or block comment
 // followed by a line comment / whitespace) must still be skipped.
 func TestRunCodeMetricsSkipsPureInlineBlockComment(t *testing.T) {
