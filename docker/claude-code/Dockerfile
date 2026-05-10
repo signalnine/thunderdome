@@ -19,6 +19,13 @@ RUN npm install -g --ignore-scripts @anthropic-ai/claude-code@2.1.119 && \
     cd /usr/local/lib/node_modules/@anthropic-ai/claude-code && \
     bash -c "node install.cjs"
 
+# claude-code-router (ccr): community proxy that translates Claude Code's
+# Anthropic protocol to OpenAI/other shapes via per-provider transformers.
+# This is the path Neuralwatt recommends for using third-party inference
+# with Claude Code -- avoids the tool_result-followup hang that breaks
+# our hand-rolled anth2openai_proxy on non-Anthropic models.
+RUN npm install -g @musistudio/claude-code-router
+
 # Git config (Claude Code needs this for tool use)
 RUN git config --global user.name "Thunderdome" && \
     git config --global user.email "bench@localhost"
