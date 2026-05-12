@@ -84,6 +84,18 @@ def is_crash(meta):
         return dur < 15
     return cost is None or cost == 0
 
+# Orchestrator aliases -- map a directory name onto a canonical leaderboard name.
+# Used when two adapter dirs run the same conceptual orchestrator on different
+# suites (e.g. one for standard via OpenRouter, one for hard via native API)
+# and we want a single combined leaderboard entry.
+_ORCH_ALIASES = {
+    # DeepSeek v4 Pro: std suite ran via OpenRouter Anthropic endpoint,
+    # hard suite ran via DeepSeek's native /anthropic (cheaper due to caching).
+    # Both are the same model + same Claude Code harness; merge under the
+    # OpenRouter name as the canonical.
+    "claude-code-deepseek-v4-pro-native": "claude-code-deepseek-v4-pro",
+}
+
 # Load all meta.json
 files = glob.glob("results/runs/*/trials/*/bench-*/trial-*/meta.json")
 all_metas = []
@@ -91,7 +103,8 @@ for f in files:
     try:
         m = json.load(open(f))
         parts = f.split("/")
-        m["_orch"] = parts[4]
+        raw_orch = parts[4]
+        m["_orch"] = _ORCH_ALIASES.get(raw_orch, raw_orch)
         m["_task"] = parts[5]
         all_metas.append(m)
     except:

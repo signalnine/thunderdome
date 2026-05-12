@@ -45,22 +45,30 @@ echo "=== Routing: classifying task complexity (3-way) ===" >&2
 
 ROUTING_PROMPT="You are a task complexity classifier. Read the task description below and classify it as TRIVIAL, EASY, or HARD.
 
-A task is TRIVIAL if ALL of these hold:
-- The spec is concrete and unambiguous
-- Implementation is straightforward (CRUD, formatting, well-known patterns)
-- Few interacting components; simple data flow
-- A capable junior engineer could finish it without research
-- Examples: write a small library with documented API, implement standard search/index, fix bugs with clear repro steps
+**Crucial heuristic: a simple data model does NOT mean the task is easy. If the task asks you to FIND a minimum/optimal/smallest configuration subject to constraints, that is algorithmic search and is HARD even when the data structures are basic arrays.**
 
 A task is HARD if it has ANY of these characteristics:
-- Algorithmic reasoning requiring careful logic (constraint solving, graph analysis, structural pattern recognition)
+- Algorithmic reasoning requiring careful logic (constraint solving, graph analysis, structural pattern recognition, SAT-like search, linear algebra over GF(2))
+- Find-the-minimum / find-the-shortest / find-the-smallest under constraints (set cover, subset sum, scheduling, XOR puzzles, button-toggle puzzles)
 - Concurrent or async operations with ordering constraints that must be reasoned about
 - Deeply ambiguous specifications requiring significant inference
 - Edge-case-rich numeric work (decimals, overflow, financial precision)
 - Multiple subsystems that must coordinate under invariants (real-time + persistence + protocol)
-- Reverse-engineering circuit/system structure from behavior
+- Reverse-engineering circuit/system structure from behavior, including detecting swapped wires/components from observed behavior
+- Beam splitters, gate networks, signal propagation puzzles
+- 'Factory reset' / 'machine recovery' / 'rebuild from scratch' style tasks that demand stateful reconstruction
 
-A task is EASY if it falls between -- non-trivial but not algorithmically hard. Multiple components, some state, but follows established patterns.
+A task is TRIVIAL if ALL of these hold:
+- The spec is concrete and unambiguous
+- Implementation is straightforward (CRUD, formatting, well-known patterns, small libraries with documented API)
+- Few interacting components; simple data flow
+- A capable junior engineer could finish it without research
+- No 'find minimum' or 'find configuration' under constraints
+- Examples: a small time-tracking library, a simple search/index endpoint, a bugfix with clear repro steps
+
+A task is EASY if it falls between -- multiple components, real state, but follows established patterns. CRUD APIs with relationships, feature-add work with clear behavioral specs.
+
+**When in doubt between EASY and HARD, choose HARD.** The cost of routing a hard task to Sonnet is ~5pp on hard suite; the cost of routing an easy task to Opus is only ~\$0.50. Asymmetric.
 
 Respond with ONLY one of these three words: TRIVIAL, EASY, or HARD. Nothing else.
 
@@ -68,18 +76,24 @@ Respond with ONLY one of these three words: TRIVIAL, EASY, or HARD. Nothing else
 $TASK_PROMPT"
 
 # Call Haiku via OAuth (cheapest)
+# Default to HARD on parse failure / garbled output: over-spending $0.50 on
+# Opus for an easy task is much cheaper than a Sonnet timeout on a hard one.
 ROUTING_RESULT=$(claude -p \
   --model claude-haiku-4-5-20251001 \
   --max-turns 1 \
-  -- "$ROUTING_PROMPT" 2>/dev/null || echo "EASY")
+  -- "$ROUTING_PROMPT" 2>/dev/null || echo "HARD")
 
-# Parse the classification (default to EASY on garbled output)
+# Parse the classification. Check HARD first (most expensive misclassification
+# avoided), then TRIVIAL, then default to EASY (middle option).
 if echo "$ROUTING_RESULT" | grep -qi "HARD"; then
   ROUTING_DECISION="HARD"
 elif echo "$ROUTING_RESULT" | grep -qi "TRIVIAL"; then
   ROUTING_DECISION="TRIVIAL"
-else
+elif echo "$ROUTING_RESULT" | grep -qi "EASY"; then
   ROUTING_DECISION="EASY"
+else
+  # Garbled output -- default to HARD per the asymmetric-cost note above
+  ROUTING_DECISION="HARD"
 fi
 
 echo "  Haiku said: $ROUTING_RESULT" >&2
