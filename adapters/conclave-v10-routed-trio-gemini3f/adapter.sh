@@ -44,39 +44,45 @@ read -r -d '' ROUTING_INSTRUCTIONS <<'EOF' || true
 You are routing a coding task to one of three AI model tiers. Pick the cheapest tier that can reliably complete the task.
 
 TIERS:
-- TRIVIAL: Cheap fast model (DeepSeek). Handles concrete CRUD, formatting, basic feature additions with clear specs, simple bugfixes with obvious repro.
-- EASY: Mid-tier model (Sonnet). Handles real state and multiple files, well-specified features with relationships, debugging where the issue requires investigation but follows standard patterns.
-- HARD: Top-tier model (Opus). Handles algorithmic search under constraints (find-min/find-optimal), structural reasoning from behavior (reverse-engineer circuits/protocols), and tasks requiring careful invariant-preserving logic.
+- TRIVIAL: Cheap fast model. Concrete CRUD, formatting, simple bugfixes, well-specified small features.
+- EASY: Mid-tier model. Multi-file work, real state, debugging, and ALMOST ALL algorithmic work that allows iterative refinement (build, run tests, fix, repeat). This includes most "hard-sounding" tasks: constraint solving, graph algorithms, dependency resolution, reconstruction from logs, structural diffs, permission systems, financial precision, marathon multi-phase work. The mid-tier can iterate.
+- HARD: Top-tier model. Reserve for combinatorial reverse-engineering where you must commit to one global structural answer and partial progress is hard to verify locally -- specifically, detecting swapped or mislabeled components from observed system behavior across many interacting parts.
+
+KEY HEURISTIC: When in doubt, pick EASY. The mid-tier handles iteration well -- it can fail a test, look at output, adjust, and converge. HARD is only worth the 3-4x cost when iteration doesn't help.
 
 CALIBRATION EXAMPLES:
 
 Task: "Build a CLI time tracker with start/stop/list commands, storing entries in a JSON file."
 Tier: TRIVIAL
-Reason: Concrete CRUD, well-defined data model, no algorithmic search.
+Reason: Concrete CRUD, well-defined data model.
 
-Task: "Add a full-text search endpoint with stemming, ranking by BM25, and case-insensitive prefix matching."
+Task: "Add a full-text search endpoint with stemming, BM25 ranking, and case-insensitive prefix matching."
 Tier: TRIVIAL
-Reason: Search library work with documented patterns; spec is unambiguous.
+Reason: Library work, documented patterns.
 
-Task: "Build a plugin marketplace API with installations, dependency resolution by semver, and offline cache."
+Task: "Build a plugin marketplace API with installations, semver dependency resolution, and offline cache."
 Tier: EASY
-Reason: Multiple components and real state, but follows established patterns; semver resolution is standard.
+Reason: Multi-component but follows established patterns.
 
-Task: "Build a reactive spreadsheet where cell formula changes propagate through dependencies, detect cycles, and recompute only dirty cells."
+Task: "Build a reactive spreadsheet with formula dependency tracking, cycle detection, and dirty propagation."
 Tier: EASY
-Reason: Dependency graph + dirty propagation; standard reactive pattern.
+Reason: Standard reactive pattern; iterative test-and-fix works.
 
-Task: "Given observed circuit behavior with two swapped wires, identify which wires were swapped and produce the corrected wiring."
-Tier: HARD
-Reason: Structural reverse-engineering from behavior -- requires careful reasoning about gate semantics.
+Task: "Given a corrupted factory state with missing config and partial production logs, rebuild the configuration."
+Tier: EASY
+Reason: Reconstruction is iterative -- propose, check against logs, refine. Mid-tier converges.
 
-Task: "Find the minimum set of button presses that toggles all N lights to ON, given each button toggles a fixed subset of lights."
-Tier: HARD
-Reason: Algorithmic search under constraints (set cover / XOR over GF(2)).
+Task: "Find the minimum set of button presses that toggles all N lights to ON, given each button toggles a fixed subset."
+Tier: EASY
+Reason: Set cover / XOR over GF(2) is a standard algorithmic pattern; mid-tier can implement and test.
 
-Task: "Given a corrupted factory state with missing config and partial production logs, rebuild the configuration that explains all observed log entries."
+Task: "Implement a scheduler that finds a valid assignment of N tasks to M workers under capacity and dependency constraints."
+Tier: EASY
+Reason: Constraint solving with iterative testing.
+
+Task: "Given observed input/output behavior of a circuit with 200 gates, two wires are swapped somewhere -- identify the specific swap and produce corrected wiring."
 Tier: HARD
-Reason: Stateful reconstruction from incomplete evidence; requires invariant reasoning.
+Reason: Combinatorial reverse-engineering with global invariants. Must commit to a single answer about which two specific wires; partial guesses are hard to verify locally.
 
 INSTRUCTION: Read the task below. Respond with one word only: TRIVIAL, EASY, or HARD. No explanation.
 
