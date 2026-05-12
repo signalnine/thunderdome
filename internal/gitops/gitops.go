@@ -98,6 +98,30 @@ func copyFile(src, dst string, mode os.FileMode) error {
 // it does not match legitimate source files such as core.ts / core.js.
 var coreDumpRe = regexp.MustCompile(`[ /]core\.\d+(\s|$)`)
 
+// runtimeArtifactPatterns lists basenames that adapters write into the
+// workspace during a trial but that are not part of agent contribution.
+// Kept in sync with the artifacts produced by adapters/*/adapter.sh.
+var runtimeArtifactPatterns = []string{
+	".thunderdome-output.jsonl",
+	".thunderdome-metrics.json",
+	".amplifier-stdout.log",
+}
+
+// IsRuntimeArtifactDiffHeader reports whether a `diff --git` header line
+// points to a runtime artifact (adapter log, metrics, core dump) rather
+// than agent-authored source. Lines that aren't diff headers return false.
+func IsRuntimeArtifactDiffHeader(line string) bool {
+	if !strings.HasPrefix(line, "diff --git ") {
+		return false
+	}
+	for _, pattern := range runtimeArtifactPatterns {
+		if strings.Contains(line, pattern) {
+			return true
+		}
+	}
+	return coreDumpRe.MatchString(line)
+}
+
 // stripNonRepoHunks removes diff hunks for files that are runtime artifacts
 // (e.g. .thunderdome-output.jsonl, core dumps) and would cause git apply to fail.
 func stripNonRepoHunks(diff []byte) []byte {
@@ -106,21 +130,7 @@ func stripNonRepoHunks(diff []byte) []byte {
 	skip := false
 	for _, line := range lines {
 		if strings.HasPrefix(line, "diff --git ") {
-			skip = false
-			// Skip hunks for known runtime artifacts and binary files
-			for _, pattern := range []string{
-				".thunderdome-output.jsonl",
-				".thunderdome-metrics.json",
-				".amplifier-stdout.log",
-			} {
-				if strings.Contains(line, pattern) {
-					skip = true
-					break
-				}
-			}
-			if !skip && coreDumpRe.MatchString(line) {
-				skip = true
-			}
+			skip = IsRuntimeArtifactDiffHeader(line)
 		}
 		if !skip {
 			out = append(out, line)

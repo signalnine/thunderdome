@@ -89,6 +89,53 @@ func TestHasWorkspaceChanges(t *testing.T) {
 			"some random non-diff text",
 			false,
 		},
+		// Regression cases for agentic-thunderdome-5a6: runtime artifact files
+		// other than .thunderdome-metrics.json (notably .thunderdome-output.jsonl
+		// from ~60 adapters, .amplifier-stdout.log from the amplifier family,
+		// and core dumps) must not be treated as agent contribution.
+		{
+			"only thunderdome-output.jsonl",
+			"diff --git a/.thunderdome-output.jsonl b/.thunderdome-output.jsonl\n" +
+				"new file mode 100644\n@@ -0,0 +1 @@\n+{\"x\":1}\n",
+			false,
+		},
+		{
+			"only amplifier-stdout.log",
+			"diff --git a/.amplifier-stdout.log b/.amplifier-stdout.log\n" +
+				"new file mode 100644\n@@ -0,0 +1 @@\n+log line\n",
+			false,
+		},
+		{
+			"only core dump",
+			"diff --git a/core.12345 b/core.12345\n" +
+				"new file mode 100644\n@@ -0,0 +1 @@\n+binary noise\n",
+			false,
+		},
+		{
+			"all artifacts together",
+			"diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json\n@@ -0,0 +1 @@\n+{}\n" +
+				"diff --git a/.thunderdome-output.jsonl b/.thunderdome-output.jsonl\n@@ -0,0 +1 @@\n+{}\n" +
+				"diff --git a/.amplifier-stdout.log b/.amplifier-stdout.log\n@@ -0,0 +1 @@\n+log\n" +
+				"diff --git a/core.999 b/core.999\n@@ -0,0 +1 @@\n+dump\n",
+			false,
+		},
+		{
+			"output.jsonl plus real change",
+			"diff --git a/.thunderdome-output.jsonl b/.thunderdome-output.jsonl\n@@ -0,0 +1 @@\n+log\n" +
+				"diff --git a/src/main.ts b/src/main.ts\n@@ -1 +1 @@\n-x\n+y\n",
+			true,
+		},
+		{
+			"amplifier log plus real change",
+			"diff --git a/.amplifier-stdout.log b/.amplifier-stdout.log\n@@ -0,0 +1 @@\n+log\n" +
+				"diff --git a/lib/foo.ts b/lib/foo.ts\n@@ -1 +1 @@\n-a\n+b\n",
+			true,
+		},
+		{
+			"core.ts source file is not a core dump",
+			"diff --git a/src/core.ts b/src/core.ts\n@@ -1 +1 @@\n-x\n+y\n",
+			true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

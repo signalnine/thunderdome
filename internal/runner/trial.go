@@ -48,14 +48,11 @@ func ExitReasonFromCode(code int, timedOut bool) string {
 	}
 }
 
-// adapterMetricsFile is written by the adapter itself, so it can appear
-// in the diff even when the agent did no real work. HasWorkspaceChanges
-// ignores it.
-const adapterMetricsFile = ".thunderdome-metrics.json"
-
 // HasWorkspaceChanges reports whether the captured diff includes changes
-// to any file other than the adapter-written metrics file. Empty input
-// (no diff at all) returns false.
+// to any file that is not a runtime artifact written by the adapter
+// (metrics file, stdout NDJSON capture, amplifier log, core dumps).
+// Empty input (no diff at all) returns false. Uses the same artifact
+// set as gitops.stripNonRepoHunks so the two stay aligned.
 func HasWorkspaceChanges(diff []byte) bool {
 	if len(diff) == 0 {
 		return false
@@ -64,7 +61,7 @@ func HasWorkspaceChanges(diff []byte) bool {
 		if !strings.HasPrefix(line, "diff --git ") {
 			continue
 		}
-		if !strings.Contains(line, adapterMetricsFile) {
+		if !gitops.IsRuntimeArtifactDiffHeader(line) {
 			return true
 		}
 	}
