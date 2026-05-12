@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     curl \
     tmux \
+    jq \
     && rm -rf /var/lib/apt/lists/*
 
 # Pin Claude Code version for reproducibility
