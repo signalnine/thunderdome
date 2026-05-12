@@ -81,7 +81,8 @@ func RunCodeMetrics(workDir string) (*CodeMetricsResult, error) {
 			return nil
 		}
 		if strings.Contains(rel, "__tests__") || strings.Contains(rel, ".test.") || strings.Contains(rel, ".spec.") {
-			if strings.HasSuffix(info.Name(), ".ts") || strings.HasSuffix(info.Name(), ".js") {
+			ext := strings.ToLower(filepath.Ext(info.Name()))
+			if ext == ".ts" || ext == ".js" || ext == ".tsx" || ext == ".jsx" {
 				result.TestFileCount++
 			}
 		}

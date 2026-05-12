@@ -216,6 +216,29 @@ func TestRunCodeMetricsSkipsPureInlineBlockComment(t *testing.T) {
 	}
 }
 
+// Regression: the inner walk's test counter accepted only .ts/.js, but the
+// source counter accepted .ts/.js/.tsx/.jsx. React/JSX projects with
+// App.test.tsx or Button.test.jsx had those files counted as source but not
+// as tests, costing the agent the HasTests bonus (up to 0.3 of the 1.0
+// code_metrics ceiling) even though tests were written.
+func TestRunCodeMetricsCountsTsxJsxTests(t *testing.T) {
+	work := t.TempDir()
+	writeFile(t, filepath.Join(work, "src", "App.tsx"), "export const App = () => null;\n")
+	writeFile(t, filepath.Join(work, "src", "App.test.tsx"), "test('app', () => {});\n")
+	writeFile(t, filepath.Join(work, "tests", "x.test.jsx"), "test('x', () => {});\n")
+
+	res, err := validation.RunCodeMetrics(work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.TestFileCount != 2 {
+		t.Errorf("TestFileCount = %d, want 2 (App.test.tsx + x.test.jsx)", res.TestFileCount)
+	}
+	if !res.HasTests {
+		t.Errorf("HasTests = false, want true")
+	}
+}
+
 // A single small source file should still get the "no monolithic" bonus
 // plus the single-file organization credit, so scoring 0.0 on an empty
 // workspace must not come at the cost of the small-single-file case.
