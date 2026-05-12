@@ -114,7 +114,41 @@ n=2 said the spread was noise. n=22+ says it isn't.
 
 ---
 
-## Resolved (kept for reference, do not re-investigate)
+## Q8: Does OpenRouter's Pareto Router match task-adaptive routing?
+
+**Status:** New, not run.
+
+**Observation.** OpenRouter shipped `openrouter/pareto-code` (May 2026) — a static price-sorted shortlist routed by `min_coding_score` tier (0-1). At each tier the router picks the cheapest model that meets the threshold, with up to two fallbacks. No per-task classification, no router fee. Confirmed working via OpenRouter's Anthropic-shape endpoint with our existing claude-code-deepseek-v4-pro adapter pattern; a "say ok" probe routed to deepseek-v4-pro at the default tier.
+
+**Open question.** Pareto Router and our conclave-v10-routed-trio occupy the same conceptual space (route to cheaper models when you can) but with opposite mechanisms:
+
+| | Pareto Router (theirs) | Routed-Trio (ours) |
+|---|---|---|
+| Routing decision | Static, per-tier price-sorted | Per-task Haiku classification |
+| Routing cost | $0 router fee | ~$0.005 Haiku call/task |
+| Adapts to task difficulty | No -- same model per tier | Yes -- TRIVIAL/EASY/HARD |
+| Adapts to new models | Yes (curated shortlist evolves) | No (hardcoded) |
+
+If Pareto-at-similar-cost matches Routed-Trio's quality, our per-task routing logic isn't load-bearing -- the win is just "buy cheaper when you can," which a static shortlist handles. If Routed-Trio meaningfully beats Pareto at the same cost tier, task-adaptive routing is the actual lift.
+
+**Proposed experiment.** Build three pareto adapters at different `min_coding_score` levels:
+
+| Adapter | min_score | Expected tier | Cost target | Compare against |
+|---|---|---|---|---|
+| pareto-cheap | 0.70 | DeepSeek-class | ~\$0.10-0.20/trial | DeepSeek standalone (78.2%, \$0.31) |
+| pareto-mid | 0.85 | Sonnet-class | ~\$0.50-0.80/trial | v8-Sonnet (88.1%, \$0.82) |
+| pareto-top | 0.95 | Opus/GPT-5.5 class | ~\$1.00-1.50/trial | v10-routed (89.9%, \$1.20) |
+
+Wrinkle: `min_coding_score` is a plugin param passed via OpenAI's `extra_body`, which Claude Code → OpenRouter Anthropic endpoint doesn't expose. Three implementation paths:
+1. Default tier (no config) -- cheapest first test, see what Pareto picks across our 19 tasks
+2. Thin proxy that injects the `pareto-router` plugin into the request body before forwarding
+3. Switch to OpenRouter's chat-completions endpoint + route through ccr (which can pass extra_body)
+
+Recommend option (1) first as the cheap baseline; if interesting, then (2) for the three-tier comparison.
+
+**Cost.** Option (1): ~$30-50 for one default-tier sweep. Option (2): ~$100-150 across three tiers.
+
+**Tie-breaker if results match:** at the same score-per-dollar, the simpler routing wins (Pareto, no Haiku call, no maintenance). If quality differs by >2pp at the same cost, the more complex routing wins. Reserve a "stretch goal" comparison: pareto-top vs routed-trio after the Q3 classifier fix.
 
 - ✅ ccr is the working path for OpenAI-shape upstreams (Q closed 2026-05-10, see `memory/tool_ccr_neuralwatt.md`)
 - ✅ Discipline complexity must match model capability — heavy structure on under-capable model regresses (Q closed 2026-05-10, see `memory/project_prompt_capability_match_2026-05-10.md`)
