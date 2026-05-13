@@ -69,16 +69,16 @@ Tier: EASY
 Reason: Standard reactive pattern; iterative test-and-fix works.
 
 Task: "Given a corrupted factory state with missing config and partial production logs, rebuild the configuration."
-Tier: EASY
-Reason: Reconstruction is iterative -- propose, check against logs, refine. Mid-tier converges.
-
-Task: "Find the minimum set of button presses that toggles all N lights to ON, given each button toggles a fixed subset."
-Tier: EASY
-Reason: Set cover / XOR over GF(2) is a standard algorithmic pattern; mid-tier can implement and test.
+Tier: HARD
+Reason: Stateful reconstruction with global consistency requirements -- the mid-tier tends to thrash on long-horizon planning; the top tier converges faster and more reliably.
 
 Task: "Implement a scheduler that finds a valid assignment of N tasks to M workers under capacity and dependency constraints."
 Tier: EASY
 Reason: Constraint solving with iterative testing.
+
+Task: "Find the minimum set of button presses that toggles all N lights to a target configuration, where each button toggles a fixed subset of lights."
+Tier: HARD
+Reason: Minimum-set-cover under combinatorial constraints. Requires global reasoning about XOR over GF(2); mid-tier thrashes on the exact-minimum requirement.
 
 Task: "Given observed input/output behavior of a circuit with 200 gates, two wires are swapped somewhere -- identify the specific swap and produce corrected wiring."
 Tier: HARD
