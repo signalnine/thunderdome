@@ -198,6 +198,57 @@ func ParseUsageLogs(logPath string) ([]UsageRecord, int, error) {
 	return records, malformed, nil
 }
 
+// SliceUsageLog reads srcPath as a JSONL usage log and writes lines whose
+// records have start <= timestamp <= end into dstPath. Lines that don't
+// parse are skipped (matches ParseUsageLogs semantics). A record with
+// Timestamp == 0 is treated as undated and written unconditionally so that
+// older proxy versions or test fixtures without timestamps still produce
+// some output. Returns the number of records written. If srcPath does not
+// exist or is empty, dstPath is created as an empty file and (0, nil) is
+// returned. Used by RunTrial to carve a shared gateway log into per-trial
+// slices that enrichCosts can read.
+func SliceUsageLog(srcPath, dstPath string, start, end float64) (int, error) {
+	data, err := os.ReadFile(srcPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, os.WriteFile(dstPath, nil, 0o644)
+		}
+		return 0, fmt.Errorf("reading source usage log: %w", err)
+	}
+
+	lines := splitLines(data)
+	lastUnterminated := len(data) > 0 && data[len(data)-1] != '\n'
+
+	var out []byte
+	var written int
+	for i, line := range lines {
+		if len(line) == 0 {
+			continue
+		}
+		var rec UsageRecord
+		if err := json.Unmarshal(line, &rec); err != nil {
+			if i == len(lines)-1 && lastUnterminated {
+				continue
+			}
+			continue
+		}
+		if rec.Model == "" {
+			continue
+		}
+		if rec.Timestamp != 0 && (rec.Timestamp < start || rec.Timestamp > end) {
+			continue
+		}
+		out = append(out, line...)
+		out = append(out, '\n')
+		written++
+	}
+
+	if err := os.WriteFile(dstPath, out, 0o644); err != nil {
+		return 0, fmt.Errorf("writing trial usage log: %w", err)
+	}
+	return written, nil
+}
+
 func TotalUsage(records []UsageRecord) (inputTokens, outputTokens int) {
 	for _, r := range records {
 		inputTokens += r.InputTokens
@@ -269,6 +320,13 @@ func getPricingTable() *pricing.Table {
 		}
 	}
 	return pricingTable
+}
+
+// FindPricingFile is the exported form of findPricingFile so callers outside
+// this package (cmd/run, cmd/report) can locate pricing.yaml without
+// duplicating the search heuristic.
+func FindPricingFile() (string, error) {
+	return findPricingFile()
 }
 
 func findPricingFile() (string, error) {

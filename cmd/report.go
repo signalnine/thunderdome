@@ -6,11 +6,15 @@ import (
 	"path/filepath"
 
 	"github.com/signalnine/thunderdome/internal/config"
+	"github.com/signalnine/thunderdome/internal/gateway"
 	"github.com/signalnine/thunderdome/internal/report"
 	"github.com/spf13/cobra"
 )
 
-var flagFormat string
+var (
+	flagFormat      string
+	flagPricingPath string
+)
 
 func newReportCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -29,9 +33,14 @@ func newReportCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("resolving run dir: %w", err)
 			}
-			return report.Generate(resolved, flagFormat, os.Stdout)
+			pricingPath := flagPricingPath
+			if pricingPath == "" {
+				pricingPath, _ = gateway.FindPricingFile()
+			}
+			return report.Generate(resolved, flagFormat, os.Stdout, pricingPath)
 		},
 	}
 	cmd.Flags().StringVar(&flagFormat, "format", "table", "output format (table, markdown, json)")
+	cmd.Flags().StringVar(&flagPricingPath, "pricing", "", "path to pricing.yaml (defaults to repo-relative search)")
 	return cmd
 }

@@ -301,6 +301,66 @@ func TestNoContributionReport(t *testing.T) {
 	}
 }
 
+// Regression for agentic-thunderdome-tzu: with the pricing path wired through
+// Generate (cmd/run.go and cmd/report.go now pass it), a per-trial
+// proxy-log.jsonl containing usage records must be used to recompute
+// TotalCostUSD via the pricing.yaml table. Before the fix, enrichCosts read
+// the wrong path (the proxy wrote a shared log under a different name) and
+// the recompute never happened.
+func TestGenerateRecomputesCostFromPerTrialProxyLog(t *testing.T) {
+	base := t.TempDir()
+	runDir := filepath.Join(base, "runs", "test-run")
+	pricingPath := filepath.Join(base, "pricing.yaml")
+	if err := os.WriteFile(pricingPath, []byte("anthropic:\n  claude-opus-4-6: { input: 0.015, output: 0.075, cache_write: 0.01875, cache_read: 0.0015 }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	meta := &result.TrialMeta{
+		Orchestrator:   "proxy-trial",
+		Task:           "task-1",
+		Trial:          1,
+		CompositeScore: 0.9,
+		TotalTokens:    5000,
+		TotalCostUSD:   0, // adapter wrote nothing; pricing-from-proxy must fill it in
+		ExitReason:     "completed",
+	}
+	dir := result.TrialDir(runDir, meta.Orchestrator, meta.Task, meta.Trial)
+	if err := result.WriteTrialMeta(dir, meta); err != nil {
+		t.Fatal(err)
+	}
+
+	// Per-trial proxy log with two real records that pricing.yaml can price.
+	logContent := `{"model":"claude-opus-4-6","provider":"anthropic","input_tokens":1000,"output_tokens":500}
+{"model":"claude-opus-4-6","provider":"anthropic","input_tokens":2000,"output_tokens":1000}
+`
+	if err := os.WriteFile(filepath.Join(dir, "proxy-log.jsonl"), []byte(logContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	if err := report.Generate(runDir, "json", &buf, pricingPath); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	var parsed []struct {
+		Name        string  `json:"name"`
+		MeanCostUSD float64 `json:"mean_cost_usd"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
+		t.Fatalf("unmarshal: %v\noutput: %s", err, buf.String())
+	}
+	if len(parsed) != 1 {
+		t.Fatalf("got %d orchestrators, want 1", len(parsed))
+	}
+	// Expected: (1000*0.015 + 500*0.075 + 2000*0.015 + 1000*0.075) / 1000
+	//         = (15 + 37.5 + 30 + 75) / 1000 = 0.1575
+	want := 0.1575
+	got := parsed[0].MeanCostUSD
+	if got < want-1e-6 || got > want+1e-6 {
+		t.Errorf("MeanCostUSD = %v, want %v (pricing must be applied to per-trial proxy log)", got, want)
+	}
+}
+
 // Regression: enrichCosts unconditionally overwrote m.TotalCostUSD with the
 // proxy-log-derived cost, including when the proxy log was present but
 // contained zero parseable records (a common state when the agent bypassed

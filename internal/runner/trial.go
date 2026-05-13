@@ -208,6 +208,7 @@ func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
 		}
 	}
 
+	trialStart := time.Now()
 	containerResult, err := docker.RunContainer(ctx, &docker.RunOpts{
 		Image:       opts.Orchestrator.Image,
 		Command:     BuildAdapterCommand(),
@@ -224,6 +225,7 @@ func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
 	if err != nil {
 		return nil, fmt.Errorf("running container: %w", err)
 	}
+	trialEnd := time.Now()
 
 	diff, err := gitops.CaptureChanges(workDir)
 	if err != nil {
@@ -233,14 +235,29 @@ func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
 		return nil, fmt.Errorf("writing diff.patch: %w", err)
 	}
 
+	// Slice the shared gateway usage log to a per-trial proxy-log.jsonl using
+	// the wall-clock window we just bracketed. enrichCosts (report.go) reads
+	// this per-trial file; without slicing, sequential or parallel trials
+	// would all see the same shared log and double-count records. The slice
+	// also widens to [start-1s, end+1s] to tolerate small clock skew between
+	// the proxy's time.time() and Go's time.Now().
+	trialProxyLog := filepath.Join(trialDir, "proxy-log.jsonl")
+	startTS := float64(trialStart.Unix()) - 1
+	endTS := float64(trialEnd.Unix()) + 1
+	if opts.GatewayUsageLog != "" {
+		if _, err := gateway.SliceUsageLog(opts.GatewayUsageLog, trialProxyLog, startTS, endTS); err != nil {
+			log.Printf("gateway: slicing usage log for trial %s: %v", trialDir, err)
+		}
+	}
+
 	var totalTokens int
 	var totalCostUSD float64
 	if opts.GatewayUsageLog != "" {
-		records, malformed, err := gateway.ParseUsageLogs(opts.GatewayUsageLog)
+		records, malformed, err := gateway.ParseUsageLogs(trialProxyLog)
 		if err == nil {
 			if malformed > 0 {
 				log.Printf("gateway: %d malformed line(s) in usage log %s -- token totals may understate actual usage",
-					malformed, opts.GatewayUsageLog)
+					malformed, trialProxyLog)
 			}
 			totalTokens = gateway.TotalTokens(records)
 			totalCostUSD = gateway.EstimateCost(records)

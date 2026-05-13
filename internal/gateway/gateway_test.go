@@ -224,6 +224,101 @@ func TestFindProxyScriptResolvesFromBinary(t *testing.T) {
 	}
 }
 
+// Regression for agentic-thunderdome-tzu: a shared gateway log must be
+// sliceable by timestamp into a per-trial proxy-log.jsonl so enrichCosts
+// (which reads <trialDir>/proxy-log.jsonl) sees only records from this
+// trial's wall-clock window, not the entire shared log.
+func TestSliceUsageLogFiltersByTimestamp(t *testing.T) {
+	dir := t.TempDir()
+	srcPath := filepath.Join(dir, "proxy-usage-12345.jsonl")
+	dstPath := filepath.Join(dir, "trial", "proxy-log.jsonl")
+	if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Three trials' worth of records on the same shared gateway log.
+	// Trial 1: ts in [100, 110]. Trial 2 (target): ts in [200, 210].
+	// Trial 3: ts in [300, 310].
+	src := `{"model":"claude-opus-4-6","provider":"anthropic","input_tokens":1,"output_tokens":1,"timestamp":105}
+{"model":"claude-opus-4-6","provider":"anthropic","input_tokens":2,"output_tokens":2,"timestamp":205}
+{"model":"claude-opus-4-6","provider":"anthropic","input_tokens":3,"output_tokens":3,"timestamp":208}
+{"model":"claude-opus-4-6","provider":"anthropic","input_tokens":4,"output_tokens":4,"timestamp":305}
+`
+	if err := os.WriteFile(srcPath, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	written, err := gateway.SliceUsageLog(srcPath, dstPath, 200, 210)
+	if err != nil {
+		t.Fatalf("SliceUsageLog: %v", err)
+	}
+	if written != 2 {
+		t.Errorf("written: got %d, want 2", written)
+	}
+
+	records, malformed, err := gateway.ParseUsageLogs(dstPath)
+	if err != nil {
+		t.Fatalf("ParseUsageLogs: %v", err)
+	}
+	if malformed != 0 {
+		t.Errorf("malformed: got %d, want 0", malformed)
+	}
+	if len(records) != 2 {
+		t.Fatalf("records: got %d, want 2", len(records))
+	}
+	// Records 2 and 3 (timestamps 205, 208) should be present; record 1 (105)
+	// and record 4 (305) must be excluded.
+	for _, r := range records {
+		if r.Timestamp < 200 || r.Timestamp > 210 {
+			t.Errorf("record outside window: ts=%v", r.Timestamp)
+		}
+	}
+}
+
+// SliceUsageLog must create an empty destination when the source log does
+// not exist yet (the proxy may not have written anything for a trial that
+// bypassed it). Callers depend on the destination existing so the
+// downstream proxy-log.jsonl read doesn't trigger an ENOENT path.
+func TestSliceUsageLogMissingSource(t *testing.T) {
+	dir := t.TempDir()
+	dstPath := filepath.Join(dir, "proxy-log.jsonl")
+	written, err := gateway.SliceUsageLog(filepath.Join(dir, "nope.jsonl"), dstPath, 0, 1)
+	if err != nil {
+		t.Fatalf("SliceUsageLog: %v", err)
+	}
+	if written != 0 {
+		t.Errorf("written: got %d, want 0", written)
+	}
+	if _, err := os.Stat(dstPath); err != nil {
+		t.Errorf("expected empty dst file to exist: %v", err)
+	}
+}
+
+// Records lacking a timestamp (Timestamp == 0) are written unconditionally
+// so older proxy versions and test fixtures without timestamps still produce
+// some output. This keeps the existing report.enrichCosts test fixtures
+// (which set no timestamp) working.
+func TestSliceUsageLogPreservesUndatedRecords(t *testing.T) {
+	dir := t.TempDir()
+	srcPath := filepath.Join(dir, "src.jsonl")
+	dstPath := filepath.Join(dir, "dst.jsonl")
+
+	src := `{"model":"claude-opus-4-6","provider":"anthropic","input_tokens":1,"output_tokens":1}
+{"model":"claude-opus-4-6","provider":"anthropic","input_tokens":2,"output_tokens":2,"timestamp":50}
+`
+	if err := os.WriteFile(srcPath, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	written, err := gateway.SliceUsageLog(srcPath, dstPath, 100, 200)
+	if err != nil {
+		t.Fatalf("SliceUsageLog: %v", err)
+	}
+	// Undated record passes; the ts=50 record is outside [100,200] and is dropped.
+	if written != 1 {
+		t.Errorf("written: got %d, want 1 (undated record only)", written)
+	}
+}
+
 // TestTotalTokensIncludesCacheTokens is a regression test for td-6yl.
 // The gateway path must report the same TotalTokens as the adapter-metrics
 // fallback for equivalent usage. Both must include cache creation and read

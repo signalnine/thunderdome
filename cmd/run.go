@@ -185,7 +185,8 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("\n--- Results ---")
-	return report.Generate(runDir, "table", os.Stdout)
+	pricingPath, _ := gateway.FindPricingFile()
+	return report.Generate(runDir, "table", os.Stdout, pricingPath)
 }
 
 func cleanupDocker() {
