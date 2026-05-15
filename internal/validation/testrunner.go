@@ -106,15 +106,16 @@ func parsePassRate(output string) float64 {
 	}
 
 	// Strategy 2: Bare line format like "N passed", "N passed, M failed",
-	// or "N passed, M failed, K skipped". Skipped tests count toward the
-	// denominator to match Strategies 1 (vitest summary) and 3 (JUnit).
+	// or "N passed, M failed, K skipped, J todo". Skipped and todo tests
+	// count toward the denominator to match Strategies 1 (vitest summary)
+	// and 3 (JUnit), both of which include todo in the total.
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		var lead int
 		if n, _ := fmt.Sscanf(line, "%d passed", &lead); n != 1 {
 			continue
 		}
-		var passed, failed, skipped int
+		var passed, failed, skipped, todo int
 		for _, cm := range vitestCountRe.FindAllStringSubmatch(line, -1) {
 			var v int
 			fmt.Sscanf(cm[1], "%d", &v)
@@ -125,9 +126,11 @@ func parsePassRate(output string) float64 {
 				failed = v
 			case "skipped":
 				skipped = v
+			case "todo":
+				todo = v
 			}
 		}
-		total := passed + failed + skipped
+		total := passed + failed + skipped + todo
 		if total > 0 {
 			return float64(passed) / float64(total)
 		}

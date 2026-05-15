@@ -414,3 +414,18 @@ func TestParseLintESLintStylishWarningsOnly(t *testing.T) {
 		t.Errorf("expected score < 1.0 for warning-only output, got %f", result.Score)
 	}
 }
+
+// Regression for uzx: Strategy 2 (bare line parser) must count "todo" in the
+// denominator so it matches Strategy 1 (vitest summary), which includes todo
+// in the (N) total.
+func TestParsePassRateBareLineIncludesTodo(t *testing.T) {
+	bare := validation.ParsePassRateForTest("5 passed, 2 failed, 3 todo")
+	summary := validation.ParsePassRateForTest("Tests  2 failed | 5 passed | 3 todo (10)")
+	if absf(bare-summary) > 0.0001 {
+		t.Errorf("bare-line vs vitest-summary disagree: bare=%f summary=%f (todo should be in denominator)", bare, summary)
+	}
+	want := 0.5 // 5 / (5+2+3)
+	if absf(bare-want) > 0.0001 {
+		t.Errorf("bare-line pass rate = %f, want %f", bare, want)
+	}
+}

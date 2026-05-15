@@ -30,6 +30,19 @@ func Load(path string) (*Table, error) {
 	return &Table{Providers: providers}, nil
 }
 
+// Has reports whether the table has pricing for the given provider/model.
+func (t *Table) Has(provider, model string) bool {
+	if t.Providers == nil {
+		return false
+	}
+	models, ok := t.Providers[provider]
+	if !ok {
+		return false
+	}
+	_, ok = models[model]
+	return ok
+}
+
 // Cost calculates total cost for a request. Prices are per 1K tokens.
 // cacheCreationTokens and cacheReadTokens cover Anthropic-style prompt
 // caching; passing 0 for either is fine for providers without caching.

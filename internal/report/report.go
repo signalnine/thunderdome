@@ -183,8 +183,17 @@ func enrichCosts(runDir string, metas []*result.TrialMeta, pricingPath string) {
 			continue
 		}
 		var totalCost float64
+		var priced bool
 		for _, r := range records {
+			if table.Has(r.Provider, r.Model) {
+				priced = true
+			}
 			totalCost += table.Cost(r.Provider, r.Model, r.InputTokens, r.OutputTokens, r.CacheCreationTokens, r.CacheReadTokens)
+		}
+		// If pricing.yaml had no entry for any of the records' models, leave
+		// the adapter-recorded m.TotalCostUSD intact rather than zeroing it.
+		if !priced {
+			continue
 		}
 		m.TotalCostUSD = totalCost
 	}

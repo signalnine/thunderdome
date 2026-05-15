@@ -414,3 +414,59 @@ func TestGenerateDoesNotZeroAdapterCostOnEmptyProxyLog(t *testing.T) {
 		t.Errorf("MeanCostUSD = %v, want 1.23 (adapter cost should not be zeroed by empty proxy log)", got)
 	}
 }
+
+// Regression for iy8: when the proxy log has records but pricing.yaml has no
+// entry for any of their models, enrichCosts must not overwrite the
+// adapter-recorded TotalCostUSD with 0.
+func TestGenerateDoesNotZeroAdapterCostWhenNoModelsPriced(t *testing.T) {
+	base := t.TempDir()
+	runDir := filepath.Join(base, "runs", "test-run")
+	pricingPath := filepath.Join(base, "pricing.yaml")
+	// Pricing table has entries -- but for a different model than the one in
+	// the proxy log below.
+	if err := os.WriteFile(pricingPath, []byte("anthropic:\n  claude-sonnet-4-5: { input: 0.003, output: 0.015, cache_write: 0.00375, cache_read: 0.0003 }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	meta := &result.TrialMeta{
+		Orchestrator:   "adapter-only",
+		Task:           "task-1",
+		Trial:          1,
+		CompositeScore: 0.9,
+		TotalTokens:    5000,
+		TotalCostUSD:   1.23,
+		ExitReason:     "completed",
+	}
+	dir := result.TrialDir(runDir, meta.Orchestrator, meta.Task, meta.Trial)
+	if err := result.WriteTrialMeta(dir, meta); err != nil {
+		t.Fatalf("WriteTrialMeta: %v", err)
+	}
+	// Proxy log has records, but they all reference a model that isn't in
+	// pricing.yaml (newly-introduced model not yet priced).
+	logPath := filepath.Join(dir, "proxy-log.jsonl")
+	logContent := `{"model":"claude-unpriced-future-1","provider":"anthropic","input_tokens":4200,"output_tokens":1800}
+{"model":"claude-unpriced-future-1","provider":"anthropic","input_tokens":1000,"output_tokens":500}
+`
+	if err := os.WriteFile(logPath, []byte(logContent), 0o644); err != nil {
+		t.Fatalf("write proxy log: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := report.Generate(runDir, "json", &buf, pricingPath); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	var parsed []struct {
+		Name        string  `json:"name"`
+		MeanCostUSD float64 `json:"mean_cost_usd"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
+		t.Fatalf("unmarshal: %v\noutput: %s", err, buf.String())
+	}
+	if len(parsed) != 1 {
+		t.Fatalf("got %d orchestrators, want 1", len(parsed))
+	}
+	if got := parsed[0].MeanCostUSD; got != 1.23 {
+		t.Errorf("MeanCostUSD = %v, want 1.23 (adapter cost should not be zeroed when no records were priced)", got)
+	}
+}
