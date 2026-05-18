@@ -24,8 +24,15 @@ set -e
 # Aider outputs cumulative session cost: "Cost: $0.02 message, $0.02 session."
 # Also outputs tokens: "Tokens: 1.6k sent, 997 received."
 # Take the LAST occurrence (cumulative).
-python3 -c "
+#
+# A quoted heredoc ('PYEOF') prevents bash from touching `$` or `\` inside the
+# Python source — the previous `python3 -c "..."` form ate one backslash from
+# `\\$`, leaving Python with `\$` (an end-of-string anchor) so total_cost_usd
+# was always 0.0. See adapters/aider/test_metrics_parse.sh for a regression.
+python3 - "/workspace/.aider-stdout.log" "/workspace/.thunderdome-metrics.json" <<'PYEOF' 2>&1 || true
 import re, json, sys
+
+log_path, metrics_path = sys.argv[1], sys.argv[2]
 
 last_cost = 0.0
 last_sent = 0
@@ -39,15 +46,15 @@ def parse_tokens(s):
         return int(float(s[:-1]) * 1000000)
     return int(s.replace(',', ''))
 
-with open('/workspace/.aider-stdout.log', 'r', errors='replace') as f:
+with open(log_path, 'r', errors='replace') as f:
     for line in f:
         clean = re.sub(r'\x1b\[[0-9;]*m', '', line)
-        # Match: Cost: \$X.XX message, \$X.XX session.
-        m = re.search(r'Cost:\s*\\$([\\d.]+)\s*message,\s*\\$([\\d.]+)\s*session', clean)
+        # Match: Cost: $X.XX message, $X.XX session.
+        m = re.search(r'Cost:\s*\$([\d.]+)\s*message,\s*\$([\d.]+)\s*session', clean)
         if m:
             last_cost = float(m.group(2))
         # Match: Tokens: 1.6k sent, 997 received.
-        m2 = re.search(r'Tokens:\s*([\d.]+[kKmM]?)\s*sent,\s*([\d.]+[kKmM]?)\s*received', clean)
+        m2 = re.search(r'Tokens:\s*([\d.,]+[kKmM]?)\s*sent,\s*([\d.,]+[kKmM]?)\s*received', clean)
         if m2:
             last_sent = parse_tokens(m2.group(1))
             last_received = parse_tokens(m2.group(2))
@@ -59,9 +66,9 @@ metrics = {
     'cache_creation_tokens': 0,
     'total_cost_usd': round(last_cost, 6),
 }
-with open('/workspace/.thunderdome-metrics.json', 'w') as f:
+with open(metrics_path, 'w') as f:
     json.dump(metrics, f, indent=2)
-print(f'Metrics: in={last_sent} out={last_received} cost=\${last_cost:.4f}', file=sys.stderr)
-" 2>&1 || true
+print(f'Metrics: in={last_sent} out={last_received} cost=${last_cost:.4f}', file=sys.stderr)
+PYEOF
 
 exit $EXIT_CODE
