@@ -60,7 +60,9 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 				os.Setenv(k, v)
 			}
 		}
-		expandOrchEnv(cfg.Orchestrators, secrets)
+		if err := expandOrchEnv(cfg.Orchestrators, secrets); err != nil {
+			return err
+		}
 	}
 
 	orchestrators := filterOrchestrators(cfg.Orchestrators, flagOrchestrator)
@@ -291,17 +293,26 @@ func timeoutForTask(task *config.Task) time.Duration {
 	}
 }
 
-func expandOrchEnv(orchs []config.Orchestrator, secrets map[string]string) {
+func expandOrchEnv(orchs []config.Orchestrator, secrets map[string]string) error {
+	var missing []string
 	for i := range orchs {
 		for k, v := range orchs[i].Env {
 			orchs[i].Env[k] = os.Expand(v, func(key string) string {
 				if val, ok := secrets[key]; ok {
 					return val
 				}
-				return os.Getenv(key)
+				if val, ok := os.LookupEnv(key); ok {
+					return val
+				}
+				missing = append(missing, fmt.Sprintf("${%s} (in %s.env[%s])", key, orchs[i].Name, k))
+				return ""
 			})
 		}
 	}
+	if len(missing) > 0 {
+		return fmt.Errorf("missing secrets: %s", strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 func newExecCmd(args ...string) *exec.Cmd {

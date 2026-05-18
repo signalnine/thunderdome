@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -120,6 +121,19 @@ func TestValidateFilterResults(t *testing.T) {
 				t.Errorf("validateFilterResults() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestExpandOrchEnvErrorsOnMissingSecret(t *testing.T) {
+	orchs := []config.Orchestrator{
+		{Name: "x", Env: map[string]string{"API": "${MISSING_KEY_XYZ}"}},
+	}
+	err := expandOrchEnv(orchs, map[string]string{})
+	if err == nil {
+		t.Fatalf("expected error for missing secret, got nil")
+	}
+	if !strings.Contains(err.Error(), "MISSING_KEY_XYZ") {
+		t.Errorf("error %q does not mention missing key MISSING_KEY_XYZ", err.Error())
 	}
 }
 
