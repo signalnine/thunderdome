@@ -17,6 +17,7 @@ type TrialMeta struct {
 	TotalCostUSD        float64  `json:"total_cost_usd"`
 	Error               string   `json:"error,omitempty"`
 	BudgetExceeded      bool     `json:"budget_exceeded"`
+	Category            string   `json:"category,omitempty"`
 }
 
 type Scores struct {

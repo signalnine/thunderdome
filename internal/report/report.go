@@ -24,6 +24,11 @@ func mdEscape(s string) string {
 	return s
 }
 
+// MinTrialsPerCategory is the qualification threshold per README: an
+// orchestrator must have at least this many non-crash trials in BOTH the
+// standard and hard suites to appear as "qualified" in leaderboards.
+const MinTrialsPerCategory = 8
+
 type OrchestratorSummary struct {
 	Name                 string  `json:"name"`
 	Trials               int     `json:"trials"`
@@ -39,6 +44,7 @@ type OrchestratorSummary struct {
 	MeanAgentTests       float64 `json:"mean_agent_tests,omitempty"`
 	MeanCoverage         float64 `json:"mean_coverage,omitempty"`
 	MeanCodeMetrics      float64 `json:"mean_code_metrics,omitempty"`
+	Qualified            bool    `json:"qualified"`
 }
 
 // Generate reads trial results and produces a summary report.
@@ -99,6 +105,8 @@ func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 		codeMetrics      float64
 		greenCount       int
 		hasGreenfield    bool
+		standardNonCrash int
+		hardNonCrash     int
 	}
 	byOrch := map[string]*accum{}
 
@@ -123,6 +131,13 @@ func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 		} else {
 			a.scoreFiltered += m.CompositeScore
 			a.countFiltered++
+		}
+		if !m.NoAgentContribution {
+			if strings.HasPrefix(m.Category, "greenfield") {
+				a.hardNonCrash++
+			} else {
+				a.standardNonCrash++
+			}
 		}
 		// Track greenfield-specific scores. Use the explicit Greenfield flag
 		// rather than score-presence heuristics so that fully-failed greenfield
@@ -165,6 +180,7 @@ func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 			s.MeanCoverage = a.coverage / n
 			s.MeanCodeMetrics = a.codeMetrics / n
 		}
+		s.Qualified = a.standardNonCrash >= MinTrialsPerCategory && a.hardNonCrash >= MinTrialsPerCategory
 		summaries = append(summaries, s)
 	}
 	sort.Slice(summaries, func(i, j int) bool {
@@ -216,11 +232,15 @@ func enrichCosts(runDir string, metas []*result.TrialMeta, pricingPath string) {
 
 func writeTable(summaries []OrchestratorSummary, w io.Writer) error {
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "ORCHESTRATOR\tTRIALS\tPASS RATE\tPASS RATE (filtered)\tMEAN SCORE\tMEAN TOKENS\tMEAN COST")
+	fmt.Fprintln(tw, "ORCHESTRATOR\tTRIALS\tPASS RATE\tPASS RATE (filtered)\tMEAN SCORE\tMEAN TOKENS\tMEAN COST\tQUALIFIED")
 	fmt.Fprintln(tw, strings.Repeat("-", 80))
 	for _, s := range summaries {
-		fmt.Fprintf(tw, "%s\t%d\t%.0f%%\t%.0f%%\t%.3f\t%.0f\t$%.2f\n",
-			s.Name, s.Trials, s.PassRate*100, s.PassRateFiltered*100, s.MeanScore, s.MeanTokens, s.MeanCostUSD)
+		qualified := "no"
+		if s.Qualified {
+			qualified = "yes"
+		}
+		fmt.Fprintf(tw, "%s\t%d\t%.0f%%\t%.0f%%\t%.3f\t%.0f\t$%.2f\t%s\n",
+			s.Name, s.Trials, s.PassRate*100, s.PassRateFiltered*100, s.MeanScore, s.MeanTokens, s.MeanCostUSD, qualified)
 	}
 	if err := tw.Flush(); err != nil {
 		return err
@@ -281,11 +301,15 @@ func writeTable(summaries []OrchestratorSummary, w io.Writer) error {
 }
 
 func writeMarkdown(summaries []OrchestratorSummary, w io.Writer) error {
-	fmt.Fprintln(w, "| Orchestrator | Trials | Pass Rate | Pass Rate (filtered) | Mean Score | Mean Tokens | Mean Cost |")
-	fmt.Fprintln(w, "|---|---|---|---|---|---|---|")
+	fmt.Fprintln(w, "| Orchestrator | Trials | Pass Rate | Pass Rate (filtered) | Mean Score | Mean Tokens | Mean Cost | Qualified |")
+	fmt.Fprintln(w, "|---|---|---|---|---|---|---|---|")
 	for _, s := range summaries {
-		fmt.Fprintf(w, "| %s | %d | %.0f%% | %.0f%% | %.3f | %.0f | $%.2f |\n",
-			mdEscape(s.Name), s.Trials, s.PassRate*100, s.PassRateFiltered*100, s.MeanScore, s.MeanTokens, s.MeanCostUSD)
+		qualified := "no"
+		if s.Qualified {
+			qualified = "yes"
+		}
+		fmt.Fprintf(w, "| %s | %d | %.0f%% | %.0f%% | %.3f | %.0f | $%.2f | %s |\n",
+			mdEscape(s.Name), s.Trials, s.PassRate*100, s.PassRateFiltered*100, s.MeanScore, s.MeanTokens, s.MeanCostUSD, qualified)
 	}
 
 	hasNoContrib := false

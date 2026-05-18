@@ -320,6 +320,7 @@ func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
 		ExitReason:   exitReason,
 		TotalTokens:  totalTokens,
 		TotalCostUSD: totalCostUSD,
+		Category:     opts.Task.Category,
 	}
 
 	meta.NoAgentContribution = DetectNoAgentContribution(exitReason, durationS, HasWorkspaceChanges(diff))
@@ -488,5 +489,6 @@ func SynthesizeCrashMeta(task *config.Task, orchName string, trialNum int, cause
 		ExitCode:     -1,
 		ExitReason:   "infra_error",
 		Error:        cause.Error(),
+		Category:     task.Category,
 	}
 }
