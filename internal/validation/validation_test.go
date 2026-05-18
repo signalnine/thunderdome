@@ -429,3 +429,19 @@ func TestParsePassRateBareLineIncludesTodo(t *testing.T) {
 		t.Errorf("bare-line pass rate = %f, want %f", bare, want)
 	}
 }
+
+func TestParseVitestSummaryIgnoresPerTestLines(t *testing.T) {
+	output := `
+ ✓ src/foo.test.ts > Tests > does a thing (5)
+ ✓ src/bar.test.ts > greets (1)
+
+ Test Files  2 passed (2)
+      Tests  6 passed (6)
+   Start at  10:00:00
+   Duration  1.23s
+`
+	result := validation.ParseTestResults(output, 0)
+	if absf(result.Score-1.0) > 0.001 {
+		t.Errorf("score: got %f, want 1.0 (parser locked onto per-test line instead of summary)", result.Score)
+	}
+}

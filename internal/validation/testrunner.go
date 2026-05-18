@@ -69,7 +69,7 @@ func ParseTestResults(output string, exitCode int) *TestResult {
 //	"Tests  40 passed (40)"
 //	"Tests  5 failed (5)"
 //	"Tests  3 failed | 21 passed | 42 skipped (66)"
-var vitestSummaryRe = regexp.MustCompile(`Tests\s+([^()]+?)\s*\((\d+)\)`)
+var vitestSummaryRe = regexp.MustCompile(`^\s*Tests\s+([^()]+?)\s*\((\d+)\)\s*$`)
 
 // vitestCountRe pulls "N <status>" pairs out of a status summary line --
 // either the inner text of a vitest summary or a bare line like
