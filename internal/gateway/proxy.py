@@ -9,6 +9,7 @@ verbatim, and appends a usage record to LOG_PATH for each /v1/messages call.
 import argparse
 import gzip
 import json
+import signal
 import sys
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -17,6 +18,23 @@ from urllib.error import HTTPError
 
 UPSTREAM = "https://api.anthropic.com"
 log_path = None
+
+
+def _on_sigterm(signum, frame):
+    # Graceful shutdown handler. The harness sends SIGTERM and waits up to
+    # 5s before escalating to SIGKILL, giving us a window to flush buffered
+    # writes. The usage log is opened/appended/closed within each request
+    # via `with open(log_path, "a")`, so there is no long-lived log fd to
+    # flush here; the `with` block guarantees flush+close on exit. We only
+    # need to flush stdout/stderr (server startup banner, etc.) and exit.
+    try:
+        sys.stdout.flush()
+        sys.stderr.flush()
+    finally:
+        sys.exit(0)
+
+
+signal.signal(signal.SIGTERM, _on_sigterm)
 
 
 class ProxyHandler(BaseHTTPRequestHandler):

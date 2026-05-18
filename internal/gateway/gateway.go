@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/signalnine/thunderdome/internal/pricing"
@@ -76,7 +77,17 @@ func Start(ctx context.Context, opts *StartOpts) (*Gateway, error) {
 	}
 
 	if err := waitForPort(port, 15*time.Second); err != nil {
-		cmd.Process.Kill()
+		// Graceful: SIGTERM first so any partially-started proxy can flush;
+		// fall back to SIGKILL if it doesn't exit promptly.
+		_ = cmd.Process.Signal(syscall.SIGTERM)
+		done := make(chan error, 1)
+		go func() { done <- cmd.Wait() }()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			_ = cmd.Process.Kill()
+			<-done
+		}
 		logFile.Close()
 		return nil, fmt.Errorf("proxy did not start: %w", err)
 	}
@@ -144,9 +155,22 @@ func findProxyScript() (string, error) {
 }
 
 func (g *Gateway) Stop() error {
-	if g.cmd != nil && g.cmd.Process != nil {
-		g.cmd.Process.Kill()
-		g.cmd.Wait()
+	if g.cmd == nil || g.cmd.Process == nil {
+		if g.logFile != nil {
+			g.logFile.Close()
+		}
+		return nil
+	}
+	// Graceful: SIGTERM, wait up to 5s for proxy.py's signal handler to
+	// flush its usage log, then escalate to SIGKILL.
+	_ = g.cmd.Process.Signal(syscall.SIGTERM)
+	done := make(chan error, 1)
+	go func() { done <- g.cmd.Wait() }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		_ = g.cmd.Process.Kill()
+		<-done
 	}
 	if g.logFile != nil {
 		g.logFile.Close()

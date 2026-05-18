@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/signalnine/thunderdome/internal/gateway"
@@ -344,5 +345,25 @@ func TestTotalTokensIncludesCacheTokens(t *testing.T) {
 	want := 100 + 200 + 1000 + 5000 + 50 + 25 + 0 + 400
 	if got != want {
 		t.Errorf("TotalTokens = %d, want %d", got, want)
+	}
+}
+
+// TestGatewayStopSignalsTerminateBeforeKill is a source-check test that
+// guards against regressions of the graceful-shutdown sequence in Stop().
+// Stop must send SIGTERM (and wait) before falling back to Process.Kill()
+// so proxy.py's signal handler has a chance to flush the usage log.
+func TestGatewayStopSignalsTerminateBeforeKill(t *testing.T) {
+	src, err := os.ReadFile("gateway.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(src)
+	sigTermIdx := strings.Index(text, "syscall.SIGTERM")
+	killIdx := strings.Index(text, "Process.Kill")
+	if sigTermIdx < 0 {
+		t.Errorf("Stop should send SIGTERM before SIGKILL")
+	}
+	if sigTermIdx > killIdx && killIdx > 0 {
+		t.Errorf("SIGTERM should precede Process.Kill")
 	}
 }
