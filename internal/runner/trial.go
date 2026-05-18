@@ -385,13 +385,15 @@ func validateGreenfield(ctx context.Context, trialDir, workDir string, meta *res
 
 	// 2. Run coverage on agent's tests BEFORE injecting hidden tests
 	coverageResult, err := validation.RunCoverage(ctx, workDir, task.ValidationImage, task.InstallCmd)
+	var coverageScore float64
 	if err != nil {
 		log.Printf("warning: coverage failed for %s trial %d: %v", meta.Task, meta.Trial, err)
 		meta.ValidationErrors = append(meta.ValidationErrors, fmt.Sprintf("coverage: %v", err))
 	} else {
-		meta.Scores.Coverage = coverageResult.Score
-		meta.Scores.CoverageMeasured = true
+		coverageScore = coverageResult.Score
+		meta.Scores.Coverage = coverageScore
 	}
+	meta.Scores.CoverageMeasured = CoverageMeasured(coverageScore, err, meta.Scores.AgentTests > 0)
 
 	// 3. Code metrics (doesn't depend on test injection order)
 	metricsResult, err := validation.RunCodeMetrics(workDir)
@@ -434,4 +436,18 @@ func validateGreenfield(ctx context.Context, trialDir, workDir string, meta *res
 		return nil, fmt.Errorf("writing updated meta: %w", err)
 	}
 	return meta, nil
+}
+
+// CoverageMeasured decides whether the coverage signal should count in the
+// greenfield composite. When coverage parsing succeeds, it's always measured.
+// When it fails, we only treat it as "not measured" (giving AgentTests a free
+// pass) if the agent wrote no tests — otherwise the coverage failure is real
+// signal and should zero out the multiplier. Without this guard, an agent that
+// wrote zero tests would be rewarded the full AgentTests score because the
+// missing coverage-summary.json caused RunCoverage to error.
+func CoverageMeasured(coverage float64, parseErr error, agentTestsRan bool) bool {
+	if parseErr == nil {
+		return true
+	}
+	return agentTestsRan
 }

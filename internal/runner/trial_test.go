@@ -1,10 +1,35 @@
 package runner_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/signalnine/thunderdome/internal/runner"
 )
+
+// TestCoverageMeasuredFalseRewardsCoverageFailureBug verifies the helper that
+// decides whether the coverage signal should count in the greenfield composite.
+// Previously, validateGreenfield only set CoverageMeasured=true on successful
+// parse — meaning any coverage tool error caused GreenfieldCompositeScore to
+// skip the coverage multiplier and credit AgentTests in full, including for
+// agents that wrote zero tests (where coverage parse "failure" is expected,
+// since no coverage-summary.json is generated).
+func TestCoverageMeasuredFalseRewardsCoverageFailureBug(t *testing.T) {
+	// Case A: coverage tool failed but agent wrote tests → MUST be measured
+	// (so multiplier zeroes out the credit, since coverage really is 0).
+	if !runner.CoverageMeasured(0, errors.New("file not found"), true) {
+		t.Errorf("agent wrote tests + coverage failed: expected measured=true, got false")
+	}
+	// Case B: coverage tool failed AND agent wrote no tests → can be unmeasured
+	// (skip multiplier — coverage failure is expected when no tests exist).
+	if runner.CoverageMeasured(0, errors.New("file not found"), false) {
+		t.Errorf("no tests + coverage failed: expected measured=false, got true")
+	}
+	// Case C: coverage parsed successfully → measured.
+	if !runner.CoverageMeasured(0.85, nil, true) {
+		t.Errorf("coverage parsed: expected measured=true")
+	}
+}
 
 func TestExitReasonFromCode(t *testing.T) {
 	tests := []struct {

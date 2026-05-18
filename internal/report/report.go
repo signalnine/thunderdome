@@ -21,6 +21,7 @@ type OrchestratorSummary struct {
 	Trials               int     `json:"trials"`
 	NoContributionTrials int     `json:"no_contribution_trials,omitempty"`
 	PassRate             float64 `json:"pass_rate"`
+	PassRateFiltered     float64 `json:"pass_rate_filtered"`
 	MeanScore            float64 `json:"mean_score"`
 	MeanScoreFiltered    float64 `json:"mean_score_filtered,omitempty"`
 	MeanTokens           float64 `json:"mean_tokens"`
@@ -77,6 +78,7 @@ func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 	type accum struct {
 		count            int
 		passed           int
+		passedFiltered   int
 		noContribution   int
 		score            float64
 		scoreFiltered    float64
@@ -104,6 +106,9 @@ func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 		a.cost += m.TotalCostUSD
 		if m.ExitReason == "completed" {
 			a.passed++
+			if !m.NoAgentContribution {
+				a.passedFiltered++
+			}
 		}
 		if m.NoAgentContribution {
 			a.noContribution++
@@ -141,6 +146,7 @@ func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 		}
 		if a.countFiltered > 0 {
 			s.MeanScoreFiltered = a.scoreFiltered / float64(a.countFiltered)
+			s.PassRateFiltered = float64(a.passedFiltered) / float64(a.countFiltered)
 		}
 		if a.hasGreenfield && a.greenCount > 0 {
 			s.HasGreenfield = true
@@ -201,11 +207,11 @@ func enrichCosts(runDir string, metas []*result.TrialMeta, pricingPath string) {
 
 func writeTable(summaries []OrchestratorSummary, w io.Writer) error {
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "ORCHESTRATOR\tTRIALS\tPASS RATE\tMEAN SCORE\tMEAN TOKENS\tMEAN COST")
+	fmt.Fprintln(tw, "ORCHESTRATOR\tTRIALS\tPASS RATE\tPASS RATE (filtered)\tMEAN SCORE\tMEAN TOKENS\tMEAN COST")
 	fmt.Fprintln(tw, strings.Repeat("-", 80))
 	for _, s := range summaries {
-		fmt.Fprintf(tw, "%s\t%d\t%.0f%%\t%.3f\t%.0f\t$%.2f\n",
-			s.Name, s.Trials, s.PassRate*100, s.MeanScore, s.MeanTokens, s.MeanCostUSD)
+		fmt.Fprintf(tw, "%s\t%d\t%.0f%%\t%.0f%%\t%.3f\t%.0f\t$%.2f\n",
+			s.Name, s.Trials, s.PassRate*100, s.PassRateFiltered*100, s.MeanScore, s.MeanTokens, s.MeanCostUSD)
 	}
 	if err := tw.Flush(); err != nil {
 		return err
@@ -262,11 +268,11 @@ func writeTable(summaries []OrchestratorSummary, w io.Writer) error {
 }
 
 func writeMarkdown(summaries []OrchestratorSummary, w io.Writer) error {
-	fmt.Fprintln(w, "| Orchestrator | Trials | Pass Rate | Mean Score | Mean Tokens | Mean Cost |")
-	fmt.Fprintln(w, "|---|---|---|---|---|---|")
+	fmt.Fprintln(w, "| Orchestrator | Trials | Pass Rate | Pass Rate (filtered) | Mean Score | Mean Tokens | Mean Cost |")
+	fmt.Fprintln(w, "|---|---|---|---|---|---|---|")
 	for _, s := range summaries {
-		fmt.Fprintf(w, "| %s | %d | %.0f%% | %.3f | %.0f | $%.2f |\n",
-			s.Name, s.Trials, s.PassRate*100, s.MeanScore, s.MeanTokens, s.MeanCostUSD)
+		fmt.Fprintf(w, "| %s | %d | %.0f%% | %.0f%% | %.3f | %.0f | $%.2f |\n",
+			s.Name, s.Trials, s.PassRate*100, s.PassRateFiltered*100, s.MeanScore, s.MeanTokens, s.MeanCostUSD)
 	}
 
 	hasNoContrib := false
