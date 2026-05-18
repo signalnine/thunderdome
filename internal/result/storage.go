@@ -73,7 +73,29 @@ func WriteTrialMeta(trialDir string, meta *TrialMeta) error {
 	if err != nil {
 		return fmt.Errorf("marshaling meta: %w", err)
 	}
-	return os.WriteFile(filepath.Join(trialDir, "meta.json"), data, 0o644)
+	target := filepath.Join(trialDir, "meta.json")
+	tmp, err := os.CreateTemp(trialDir, "meta.json.tmp-*")
+	if err != nil {
+		return fmt.Errorf("creating tmp meta: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		if _, statErr := os.Stat(tmpPath); statErr == nil {
+			os.Remove(tmpPath)
+		}
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return fmt.Errorf("writing tmp meta: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("syncing tmp meta: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("closing tmp meta: %w", err)
+	}
+	return os.Rename(tmpPath, target)
 }
 
 func ReadTrialMeta(path string) (*TrialMeta, error) {

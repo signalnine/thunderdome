@@ -1,8 +1,11 @@
 package result_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/signalnine/thunderdome/internal/result"
@@ -101,6 +104,59 @@ func TestCreateRunDirRejectsLatestRealDirectory(t *testing.T) {
 	_, err := result.CreateRunDir(base)
 	if err == nil {
 		t.Fatal("CreateRunDir succeeded with real-directory latest, want error")
+	}
+}
+
+// Regression guard: WriteTrialMeta must use a tmp+rename pattern so that
+// crashes/SIGKILL mid-write don't leave a zero-length meta.json. We can't
+// inject a crash from a unit test, so we use two proxies: (1) no
+// meta.json.tmp* file leaks after a successful write, and (2) under
+// concurrent writers, the final meta.json still parses.
+func TestWriteTrialMetaIsAtomic(t *testing.T) {
+	dir := t.TempDir()
+	meta := &result.TrialMeta{Orchestrator: "x", Task: "T1", CompositeScore: 0.5}
+	if err := result.WriteTrialMeta(dir, meta); err != nil {
+		t.Fatal(err)
+	}
+	matches, _ := filepath.Glob(filepath.Join(dir, "meta.json.tmp*"))
+	if len(matches) > 0 {
+		t.Errorf("tmp files leaked after atomic write: %v", matches)
+	}
+	got, err := result.ReadTrialMeta(filepath.Join(dir, "meta.json"))
+	if err != nil {
+		t.Fatalf("ReadTrialMeta failed after atomic write: %v", err)
+	}
+	if got.Task != "T1" {
+		t.Errorf("Task = %q, want T1", got.Task)
+	}
+}
+
+func TestWriteTrialMetaConcurrentSafe(t *testing.T) {
+	dir := t.TempDir()
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			meta := &result.TrialMeta{Task: fmt.Sprintf("T%d", n)}
+			if err := result.WriteTrialMeta(dir, meta); err != nil {
+				t.Errorf("concurrent write: %v", err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	// No tmp files should remain.
+	tmps, _ := filepath.Glob(filepath.Join(dir, "meta.json.tmp*"))
+	if len(tmps) != 0 {
+		t.Errorf("leaked tmp files: %v", tmps)
+	}
+	// meta.json must parse to a valid TrialMeta.
+	got, err := result.ReadTrialMeta(filepath.Join(dir, "meta.json"))
+	if err != nil {
+		t.Fatalf("final meta.json unreadable: %v", err)
+	}
+	if !strings.HasPrefix(got.Task, "T") {
+		t.Errorf("Task = %q, expected T-prefixed", got.Task)
 	}
 }
 
