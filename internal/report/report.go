@@ -198,16 +198,16 @@ func enrichCosts(runDir string, metas []*result.TrialMeta, pricingPath string) {
 			continue
 		}
 		var totalCost float64
-		var priced bool
+		allPriced := true
 		for _, r := range records {
-			if table.Has(r.Provider, r.Model) {
-				priced = true
+			if !table.Has(r.Provider, r.Model) {
+				allPriced = false
 			}
 			totalCost += table.Cost(r.Provider, r.Model, r.InputTokens, r.OutputTokens, r.CacheCreationTokens, r.CacheReadTokens)
 		}
-		// If pricing.yaml had no entry for any of the records' models, leave
-		// the adapter-recorded m.TotalCostUSD intact rather than zeroing it.
-		if !priced {
+		// Only overwrite the adapter-recorded total when we successfully priced EVERY
+		// record. Partial overwrite would silently drop the unpriced model's spend.
+		if !allPriced {
 			continue
 		}
 		m.TotalCostUSD = totalCost

@@ -470,3 +470,60 @@ func TestGenerateDoesNotZeroAdapterCostWhenNoModelsPriced(t *testing.T) {
 		t.Errorf("MeanCostUSD = %v, want 1.23 (adapter cost should not be zeroed when no records were priced)", got)
 	}
 }
+
+// Regression: enrichCosts overwrote m.TotalCostUSD with the partial
+// proxy-log-derived total whenever ANY single record had a pricing entry,
+// silently dropping the adapter-reported spend for the unpriced model(s).
+// When even one record's model is missing from pricing.yaml, the partial
+// recompute understates true cost -- so the adapter-recorded total
+// (which covered the whole trial) must be preserved.
+func TestEnrichCostsPreservesAdapterTotalWhenAnyModelUnpriced(t *testing.T) {
+	base := t.TempDir()
+	runDir := filepath.Join(base, "runs", "test-run")
+	pricingPath := filepath.Join(base, "pricing.yaml")
+	// Pricing table prices one model but not the other.
+	if err := os.WriteFile(pricingPath, []byte("anthropic:\n  claude-opus-4-6: { input: 0.015, output: 0.075, cache_write: 0.01875, cache_read: 0.0015 }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	meta := &result.TrialMeta{
+		Orchestrator:   "mixed-models",
+		Task:           "task-1",
+		Trial:          1,
+		CompositeScore: 0.9,
+		TotalTokens:    5000,
+		TotalCostUSD:   0.50, // adapter-reported total covering both models
+		ExitReason:     "completed",
+	}
+	dir := result.TrialDir(runDir, meta.Orchestrator, meta.Task, meta.Trial)
+	if err := result.WriteTrialMeta(dir, meta); err != nil {
+		t.Fatalf("WriteTrialMeta: %v", err)
+	}
+	// Proxy log has one priced record and one unpriced record.
+	logPath := filepath.Join(dir, "proxy-log.jsonl")
+	logContent := `{"model":"claude-opus-4-6","provider":"anthropic","input_tokens":1000,"output_tokens":500}
+{"model":"claude-unpriced-future-1","provider":"anthropic","input_tokens":2000,"output_tokens":1000}
+`
+	if err := os.WriteFile(logPath, []byte(logContent), 0o644); err != nil {
+		t.Fatalf("write proxy log: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := report.Generate(runDir, "json", &buf, pricingPath); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	var parsed []struct {
+		Name        string  `json:"name"`
+		MeanCostUSD float64 `json:"mean_cost_usd"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
+		t.Fatalf("unmarshal: %v\noutput: %s", err, buf.String())
+	}
+	if len(parsed) != 1 {
+		t.Fatalf("got %d orchestrators, want 1", len(parsed))
+	}
+	if got := parsed[0].MeanCostUSD; got < 0.49 {
+		t.Errorf("MeanCostUSD = %v, want >= 0.49 (adapter cost must be preserved when any record is unpriced)", got)
+	}
+}
