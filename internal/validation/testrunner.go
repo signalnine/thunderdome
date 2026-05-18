@@ -173,7 +173,11 @@ func parseJUnitXML(output string) float64 {
 		}
 	}
 	if tests <= 0 {
-		return 0.0
+		// No counts parsed from JUnit XML -- return the "no output" sentinel
+		// so ParseTestResults can fall back to exit-code-based scoring
+		// (exitCode 0 -> 1.0). Distinguishes an empty suite from a 100%-failing
+		// one.
+		return -1
 	}
 	// Skipped tests are not passes -- they count in the denominator (total)
 	// but not the numerator. All three strategies agree on this convention.
