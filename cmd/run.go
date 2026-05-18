@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/signalnine/thunderdome/internal/config"
@@ -77,7 +79,8 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("Run directory: %s\n", runDir)
 
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	if cfg.Proxy.BudgetPerTrialUSD > 0 {
 		fmt.Fprintln(os.Stderr, "WARNING: budget_per_trial_usd is set but gateway budget enforcement is not implemented; ignoring")
@@ -110,7 +113,7 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 			for _, task := range tasks {
 				for trial := 1; trial <= cfg.Trials; trial++ {
 					orch, task, trial := orch, task, trial
-					jobs = append(jobs, func() error {
+					jobs = append(jobs, func(ctx context.Context) error {
 						fmt.Printf("Running %s × %s (trial %d/%d)...\n", orch.Name, task.Category, trial, cfg.Trials)
 						meta, err := runner.RunTrial(ctx, &runner.TrialOpts{
 							Orchestrator:  &orch,
@@ -143,7 +146,7 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 				}
 			}
 		}
-		errs := runner.RunPool(flagParallel, jobs)
+		errs := runner.RunPool(ctx, flagParallel, jobs)
 		for _, err := range errs {
 			fmt.Printf("  ERROR: %v\n", err)
 		}

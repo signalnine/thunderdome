@@ -1,17 +1,19 @@
 package runner
 
 import (
+	"context"
 	"fmt"
 	"runtime/debug"
 	"sync"
 )
 
-type Job func() error
+type Job func(ctx context.Context) error
 
 // RunPool executes jobs with at most maxWorkers concurrently. Returns all errors.
 // A job that panics is recovered and reported as an error so a single bad job
-// cannot tear down the whole batch.
-func RunPool(maxWorkers int, jobs []Job) []error {
+// cannot tear down the whole batch. If ctx is cancelled before a job is
+// dispatched, the remaining jobs are skipped.
+func RunPool(ctx context.Context, maxWorkers int, jobs []Job) []error {
 	if maxWorkers < 1 {
 		maxWorkers = 1
 	}
@@ -25,7 +27,12 @@ func RunPool(maxWorkers int, jobs []Job) []error {
 
 	for _, job := range jobs {
 		wg.Add(1)
-		sem <- struct{}{}
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			wg.Done()
+			continue
+		}
 		go func(j Job) {
 			defer wg.Done()
 			defer func() { <-sem }()
@@ -36,7 +43,7 @@ func RunPool(maxWorkers int, jobs []Job) []error {
 					mu.Unlock()
 				}
 			}()
-			if err := j(); err != nil {
+			if err := j(ctx); err != nil {
 				mu.Lock()
 				errs = append(errs, err)
 				mu.Unlock()

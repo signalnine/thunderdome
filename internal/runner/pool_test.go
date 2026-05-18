@@ -1,6 +1,8 @@
 package runner_test
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -12,12 +14,12 @@ func TestPool(t *testing.T) {
 	var count atomic.Int32
 	jobs := make([]runner.Job, 10)
 	for i := range jobs {
-		jobs[i] = func() error {
+		jobs[i] = func(ctx context.Context) error {
 			count.Add(1)
 			return nil
 		}
 	}
-	errs := runner.RunPool(3, jobs)
+	errs := runner.RunPool(context.Background(), 3, jobs)
 	if len(errs) != 0 {
 		t.Errorf("expected no errors, got %v", errs)
 	}
@@ -28,11 +30,11 @@ func TestPool(t *testing.T) {
 
 func TestPoolWithErrors(t *testing.T) {
 	jobs := []runner.Job{
-		func() error { return nil },
-		func() error { return fmt.Errorf("fail") },
-		func() error { return nil },
+		func(ctx context.Context) error { return nil },
+		func(ctx context.Context) error { return fmt.Errorf("fail") },
+		func(ctx context.Context) error { return nil },
 	}
-	errs := runner.RunPool(2, jobs)
+	errs := runner.RunPool(context.Background(), 2, jobs)
 	if len(errs) != 1 {
 		t.Errorf("expected 1 error, got %d", len(errs))
 	}
@@ -44,16 +46,36 @@ func TestPoolWithErrors(t *testing.T) {
 func TestPoolRecoversPanickingJob(t *testing.T) {
 	var ran atomic.Int32
 	jobs := []runner.Job{
-		func() error { ran.Add(1); return nil },
-		func() error { panic("boom") },
-		func() error { ran.Add(1); return nil },
-		func() error { ran.Add(1); return nil },
+		func(ctx context.Context) error { ran.Add(1); return nil },
+		func(ctx context.Context) error { panic("boom") },
+		func(ctx context.Context) error { ran.Add(1); return nil },
+		func(ctx context.Context) error { ran.Add(1); return nil },
 	}
-	errs := runner.RunPool(2, jobs)
+	errs := runner.RunPool(context.Background(), 2, jobs)
 	if len(errs) != 1 {
 		t.Fatalf("expected 1 error from panic, got %d: %v", len(errs), errs)
 	}
 	if ran.Load() != 3 {
 		t.Errorf("expected 3 non-panic jobs to run, got %d", ran.Load())
+	}
+}
+
+func TestPoolRespectsContextCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{}, 2)
+	job := func(ctx context.Context) error {
+		started <- struct{}{}
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	go func() {
+		<-started
+		cancel()
+	}()
+	errs := runner.RunPool(ctx, 2, []runner.Job{job, job})
+	for _, e := range errs {
+		if e != nil && !errors.Is(e, context.Canceled) {
+			t.Errorf("unexpected error: %v", e)
+		}
 	}
 }
