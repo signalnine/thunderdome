@@ -52,3 +52,20 @@ func TestMeanScoreFilteredEmittedWhenLegitimateZero(t *testing.T) {
 		t.Errorf("JSON output omits mean_score_filtered when value is 0:\n%s", buf.String())
 	}
 }
+
+// TestWriteMarkdownEscapesPipeInName verifies that orchestrator names
+// containing a `|` are escaped so they don't corrupt the markdown table.
+func TestWriteMarkdownEscapesPipeInName(t *testing.T) {
+	summaries := []OrchestratorSummary{{Name: "foo|bar", Trials: 1, PassRate: 1.0}}
+	var buf bytes.Buffer
+	if err := writeMarkdown(summaries, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "| foo|bar |") {
+		t.Errorf("unescaped pipe in markdown row:\n%s", out)
+	}
+	if !strings.Contains(out, `foo\|bar`) {
+		t.Errorf("expected \\| escape; got:\n%s", out)
+	}
+}

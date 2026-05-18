@@ -16,6 +16,14 @@ import (
 	"github.com/signalnine/thunderdome/internal/result"
 )
 
+// mdEscape escapes characters that would break a markdown table cell.
+// Pipes need backslash escaping; newlines must be flattened to spaces.
+func mdEscape(s string) string {
+	s = strings.ReplaceAll(s, "|", `\|`)
+	s = strings.ReplaceAll(s, "\n", " ")
+	return s
+}
+
 type OrchestratorSummary struct {
 	Name                 string  `json:"name"`
 	Trials               int     `json:"trials"`
@@ -277,7 +285,7 @@ func writeMarkdown(summaries []OrchestratorSummary, w io.Writer) error {
 	fmt.Fprintln(w, "|---|---|---|---|---|---|---|")
 	for _, s := range summaries {
 		fmt.Fprintf(w, "| %s | %d | %.0f%% | %.0f%% | %.3f | %.0f | $%.2f |\n",
-			s.Name, s.Trials, s.PassRate*100, s.PassRateFiltered*100, s.MeanScore, s.MeanTokens, s.MeanCostUSD)
+			mdEscape(s.Name), s.Trials, s.PassRate*100, s.PassRateFiltered*100, s.MeanScore, s.MeanTokens, s.MeanCostUSD)
 	}
 
 	hasNoContrib := false
@@ -300,7 +308,7 @@ func writeMarkdown(summaries []OrchestratorSummary, w io.Writer) error {
 					msf = *s.MeanScoreFiltered
 				}
 				fmt.Fprintf(w, "| %s | %d | %d | %.3f |\n",
-					s.Name, s.NoContributionTrials, s.Trials, msf)
+					mdEscape(s.Name), s.NoContributionTrials, s.Trials, msf)
 			}
 		}
 	}
@@ -321,7 +329,7 @@ func writeMarkdown(summaries []OrchestratorSummary, w io.Writer) error {
 		for _, s := range summaries {
 			if s.HasGreenfield {
 				fmt.Fprintf(w, "| %s | %.3f | %.3f | %.3f | %.3f |\n",
-					s.Name, s.MeanHiddenTests, s.MeanAgentTests, s.MeanCoverage, s.MeanCodeMetrics)
+					mdEscape(s.Name), s.MeanHiddenTests, s.MeanAgentTests, s.MeanCoverage, s.MeanCodeMetrics)
 			}
 		}
 	}
