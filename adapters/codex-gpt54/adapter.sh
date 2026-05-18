@@ -13,7 +13,13 @@ export HOME=/tmp
 mkdir -p "$HOME/.codex"
 
 # Codex requires login via --with-api-key (stdin); env var alone is ignored.
-printenv OPENAI_API_KEY | codex login --with-api-key 2>&1 | tail -3
+: "${OPENAI_API_KEY:?OPENAI_API_KEY is required for this adapter}"
+printenv OPENAI_API_KEY | codex login --with-api-key | tail -3
+codex_status=${PIPESTATUS[1]}
+if [[ $codex_status -ne 0 ]]; then
+    echo "codex login failed (exit $codex_status)" >&2
+    exit 2
+fi
 
 TASK_PROMPT=$(cat "$TASK_DESCRIPTION")
 OUTPUT_FILE=/workspace/.thunderdome-output.jsonl
