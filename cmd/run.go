@@ -51,9 +51,13 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 		cfg.Trials = flagTrials
 	}
 
-	// Expand ${VAR} references in orchestrator env from secrets file
+	// Load secrets file into process env first so adapters can pick them up.
+	// Defer ${VAR} expansion until after filtering — otherwise a missing
+	// secret for an orchestrator we aren't even running aborts the whole run.
+	var secrets map[string]string
 	if cfg.Secrets.EnvFile != "" {
-		secrets, err := gateway.ParseEnvFile(cfg.Secrets.EnvFile)
+		var err error
+		secrets, err = gateway.ParseEnvFile(cfg.Secrets.EnvFile)
 		if err != nil {
 			return fmt.Errorf("reading secrets: %w", err)
 		}
@@ -62,15 +66,21 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 				os.Setenv(k, v)
 			}
 		}
-		if err := expandOrchEnv(cfg.Orchestrators, secrets); err != nil {
-			return err
-		}
 	}
 
 	orchestrators := filterOrchestrators(cfg.Orchestrators, flagOrchestrator)
 	tasks := filterTasks(cfg.Tasks, flagTask, flagCategory)
 	if err := validateFilterResults(len(orchestrators), len(tasks), flagOrchestrator, flagTask, flagCategory); err != nil {
 		return err
+	}
+
+	// Expand env references on the filtered set only. Failing here means a
+	// secret referenced by an orchestrator we're actually going to run is
+	// missing — that's a real error worth surfacing up front.
+	if secrets != nil {
+		if err := expandOrchEnv(orchestrators, secrets); err != nil {
+			return err
+		}
 	}
 
 	runDir, err := result.CreateRunDir(cfg.Results.Dir)
