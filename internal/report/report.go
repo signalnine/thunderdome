@@ -23,7 +23,7 @@ type OrchestratorSummary struct {
 	PassRate             float64 `json:"pass_rate"`
 	PassRateFiltered     float64 `json:"pass_rate_filtered"`
 	MeanScore            float64 `json:"mean_score"`
-	MeanScoreFiltered    float64 `json:"mean_score_filtered,omitempty"`
+	MeanScoreFiltered    *float64 `json:"mean_score_filtered"`
 	MeanTokens           float64 `json:"mean_tokens"`
 	MeanCostUSD          float64 `json:"mean_cost_usd"`
 	HasGreenfield        bool    `json:"has_greenfield,omitempty"`
@@ -145,7 +145,8 @@ func aggregate(metas []*result.TrialMeta) []OrchestratorSummary {
 			MeanCostUSD:          a.cost / float64(a.count),
 		}
 		if a.countFiltered > 0 {
-			s.MeanScoreFiltered = a.scoreFiltered / float64(a.countFiltered)
+			v := a.scoreFiltered / float64(a.countFiltered)
+			s.MeanScoreFiltered = &v
 			s.PassRateFiltered = float64(a.passedFiltered) / float64(a.countFiltered)
 		}
 		if a.hasGreenfield && a.greenCount > 0 {
@@ -233,8 +234,12 @@ func writeTable(summaries []OrchestratorSummary, w io.Writer) error {
 		fmt.Fprintln(tw2, strings.Repeat("-", 80))
 		for _, s := range summaries {
 			if s.NoContributionTrials > 0 {
+				var msf float64
+				if s.MeanScoreFiltered != nil {
+					msf = *s.MeanScoreFiltered
+				}
 				fmt.Fprintf(tw2, "%s\t%d\t%d\t%.3f\n",
-					s.Name, s.NoContributionTrials, s.Trials, s.MeanScoreFiltered)
+					s.Name, s.NoContributionTrials, s.Trials, msf)
 			}
 		}
 		if err := tw2.Flush(); err != nil {
@@ -290,8 +295,12 @@ func writeMarkdown(summaries []OrchestratorSummary, w io.Writer) error {
 		fmt.Fprintln(w, "|---|---|---|---|")
 		for _, s := range summaries {
 			if s.NoContributionTrials > 0 {
+				var msf float64
+				if s.MeanScoreFiltered != nil {
+					msf = *s.MeanScoreFiltered
+				}
 				fmt.Fprintf(w, "| %s | %d | %d | %.3f |\n",
-					s.Name, s.NoContributionTrials, s.Trials, s.MeanScoreFiltered)
+					s.Name, s.NoContributionTrials, s.Trials, msf)
 			}
 		}
 	}

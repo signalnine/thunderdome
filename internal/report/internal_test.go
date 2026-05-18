@@ -1,6 +1,8 @@
 package report
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/signalnine/thunderdome/internal/result"
@@ -30,5 +32,23 @@ func TestPassRateFilteredExcludesCrashes(t *testing.T) {
 	got := summaries[0].PassRateFiltered
 	if absf(got-1.0) > 0.001 {
 		t.Errorf("PassRateFiltered = %f, want 1.0 (2 of 2 non-crash trials completed)", got)
+	}
+}
+
+// TestMeanScoreFilteredEmittedWhenLegitimateZero verifies that a legitimate
+// 0.0 filtered mean is emitted in JSON. With `omitempty` on float64, a true 0
+// is indistinguishable from "no filtered trials" — using *float64 (nil when
+// no filtered trials, &0 when zero) lets consumers tell the two apart.
+func TestMeanScoreFilteredEmittedWhenLegitimateZero(t *testing.T) {
+	metas := []*result.TrialMeta{
+		{Orchestrator: "x", ExitReason: "completed", CompositeScore: 0.0, NoAgentContribution: false},
+	}
+	summaries := aggregate(metas)
+	var buf bytes.Buffer
+	if err := writeJSON(summaries, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), `"mean_score_filtered"`) {
+		t.Errorf("JSON output omits mean_score_filtered when value is 0:\n%s", buf.String())
 	}
 }
