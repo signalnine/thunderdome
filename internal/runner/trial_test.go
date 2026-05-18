@@ -44,9 +44,9 @@ func TestExitReasonFromCode(t *testing.T) {
 		{2, false, "gave_up"},
 		{124, true, "timeout"},
 		{42, false, "crashed"},
-		// Docker SDK wait error: code 125 + TimedOut=false should not be
-		// classified as a timeout (regression for agentic-thunderdome-001).
-		{125, false, "crashed"},
+		// Docker SDK wait error: code 125 + TimedOut=false is infra_error
+		// (regression for agentic-thunderdome-001 — not a timeout).
+		{125, false, "infra_error"},
 	}
 	for _, tt := range tests {
 		got := runner.ExitReasonFromCode(tt.code, tt.timedOut)
@@ -222,5 +222,27 @@ func TestRewriteGatewayURLForContainer(t *testing.T) {
 				t.Errorf("RewriteGatewayURLForContainer(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestExitReasonFromCodeDistinguishesOOMCancelInfra(t *testing.T) {
+	cases := []struct {
+		code     int
+		timedOut bool
+		want     string
+	}{
+		{0, false, "completed"},
+		{2, false, "gave_up"},
+		{124, true, "timeout"},
+		{125, false, "infra_error"},
+		{130, false, "cancelled"},
+		{137, false, "oom_killed"},
+		{1, false, "crashed"},
+	}
+	for _, c := range cases {
+		got := runner.ExitReasonFromCode(c.code, c.timedOut)
+		if got != c.want {
+			t.Errorf("ExitReasonFromCode(%d, %v) = %q, want %q", c.code, c.timedOut, got, c.want)
+		}
 	}
 }

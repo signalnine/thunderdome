@@ -43,6 +43,14 @@ func ExitReasonFromCode(code int, timedOut bool) string {
 		return "completed"
 	case 2:
 		return "gave_up"
+	case 124:
+		return "timeout"
+	case 125:
+		return "infra_error"
+	case 130:
+		return "cancelled"
+	case 137:
+		return "oom_killed"
 	default:
 		return "crashed"
 	}
@@ -82,7 +90,11 @@ func DetectNoAgentContribution(exitReason string, durationS int, hasChanges bool
 	if !hasChanges {
 		return true
 	}
-	if exitReason != "completed" && exitReason != "timeout" && durationS < 30 {
+	switch exitReason {
+	case "completed", "timeout", "cancelled", "infra_error":
+		return false
+	}
+	if durationS < 30 {
 		return true
 	}
 	return false
