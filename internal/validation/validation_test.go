@@ -445,3 +445,20 @@ func TestParseVitestSummaryIgnoresPerTestLines(t *testing.T) {
 		t.Errorf("score: got %f, want 1.0 (parser locked onto per-test line instead of summary)", result.Score)
 	}
 }
+
+func TestParseEmptyJUnitSuiteWithExitZero(t *testing.T) {
+	output := `<?xml version="1.0"?><testsuites><testsuite name="x" tests="0" failures="0"></testsuite></testsuites>`
+	result := validation.ParseTestResults(output, 0)
+	if absf(result.Score-1.0) > 0.001 {
+		t.Errorf("score: got %f, want 1.0 (empty suite + exit 0 should pass)", result.Score)
+	}
+}
+
+func TestParseLintResultsDoesNotRewardUnparseableOutput(t *testing.T) {
+	// ESLint JSON output: exit 0, non-empty stdout, no stylish/compact/tsc lines.
+	jsonOut := `[{"filePath":"/x/a.ts","messages":[]}]`
+	res := validation.ParseLintResults(jsonOut, 0, 0)
+	if res.Score >= 1.0 {
+		t.Errorf("Score = %f; expected < 1.0 for unparseable output (would confidently pass real warnings)", res.Score)
+	}
+}

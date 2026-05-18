@@ -82,6 +82,12 @@ func ParseLintResults(output string, exitCode int, baselineIssues int) *LintResu
 	if exitCode != 0 && totalIssues == 0 {
 		return &LintResult{Score: 0, Output: output, ExitCode: exitCode}
 	}
+	// If the linter produced substantive output but our parsers recognized no
+	// diagnostics, the formatter is likely one we don't support (JSON, unix,
+	// custom). Avoid awarding a confident 1.0 — return a conservative 0.5.
+	if exitCode == 0 && totalIssues == 0 && strings.TrimSpace(output) != "" {
+		return &LintResult{Score: 0.5, Output: output, ExitCode: exitCode}
+	}
 	netNew := totalIssues - baselineIssues
 	if netNew < 0 {
 		netNew = 0
