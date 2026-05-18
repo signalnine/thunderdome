@@ -140,6 +140,15 @@ func RunContainer(ctx context.Context, opts *RunOpts) (*RunResult, error) {
 	})
 	// killAndDump is shared cleanup for ctx-cancel / timeout / error paths.
 	killAndDump := func(label string) {
+		// Try graceful stop first so the adapter can flush
+		// .thunderdome-metrics.json and the trailing NDJSON line.
+		// ContainerStopOptions.Timeout is seconds; the SDK escalates to
+		// SIGKILL automatically after expiry, but we follow up with an
+		// explicit ContainerKill below for paranoia.
+		grace := 5
+		if _, stopErr := cli.ContainerStop(context.Background(), containerID, client.ContainerStopOptions{Timeout: &grace}); stopErr != nil {
+			fmt.Fprintf(os.Stderr, "container stop failed for %s (will SIGKILL): %v\n", label, stopErr)
+		}
 		cli.ContainerKill(context.Background(), containerID, client.ContainerKillOptions{Signal: "SIGKILL"})
 		logReader, _ := cli.ContainerLogs(context.Background(), containerID, client.ContainerLogsOptions{ShowStdout: true, ShowStderr: true})
 		if logReader != nil {

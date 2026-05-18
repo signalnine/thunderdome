@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -58,6 +59,26 @@ func TestClassifyWaitError(t *testing.T) {
 			t.Errorf("Canceled should not be classified as timeout")
 		}
 	})
+}
+
+// TestKillAndDumpAttemptsGracefulStopFirst is a source-check regression test.
+// killAndDump must call ContainerStop (graceful, with timeout) before
+// ContainerKill (SIGKILL) so the adapter has a chance to flush
+// .thunderdome-metrics.json and the trailing NDJSON line.
+func TestKillAndDumpAttemptsGracefulStopFirst(t *testing.T) {
+	src, err := os.ReadFile("runner.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(src)
+	stopIdx := strings.Index(text, "ContainerStop")
+	killIdx := strings.Index(text, "ContainerKill")
+	if stopIdx < 0 {
+		t.Errorf("runner.go must call ContainerStop for graceful shutdown")
+	}
+	if stopIdx > killIdx && killIdx > 0 {
+		t.Errorf("ContainerStop should appear before ContainerKill in the kill-and-dump path")
+	}
 }
 
 func TestRunContainer(t *testing.T) {
