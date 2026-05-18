@@ -223,13 +223,25 @@ func RunTrial(ctx context.Context, opts *TrialOpts) (*result.TrialMeta, error) {
 		UserID:      hostUID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("running container: %w", err)
+		err = fmt.Errorf("running container: %w", err)
+		crashMeta := SynthesizeCrashMeta(opts.Task, opts.Orchestrator.Name, opts.TrialNum, err)
+		if writeErr := result.WriteTrialMeta(trialDir, crashMeta); writeErr != nil {
+			log.Printf("warn: failed to write crash meta for %s/%s trial %d: %v",
+				opts.Orchestrator.Name, TaskName(opts.Task), opts.TrialNum, writeErr)
+		}
+		return nil, err
 	}
 	trialEnd := time.Now()
 
 	diff, err := gitops.CaptureChanges(workDir)
 	if err != nil {
-		return nil, fmt.Errorf("capturing changes: %w", err)
+		err = fmt.Errorf("capturing changes: %w", err)
+		crashMeta := SynthesizeCrashMeta(opts.Task, opts.Orchestrator.Name, opts.TrialNum, err)
+		if writeErr := result.WriteTrialMeta(trialDir, crashMeta); writeErr != nil {
+			log.Printf("warn: failed to write crash meta for %s/%s trial %d: %v",
+				opts.Orchestrator.Name, TaskName(opts.Task), opts.TrialNum, writeErr)
+		}
+		return nil, err
 	}
 	if err := os.WriteFile(filepath.Join(trialDir, "diff.patch"), diff, 0o644); err != nil {
 		return nil, fmt.Errorf("writing diff.patch: %w", err)
@@ -450,4 +462,19 @@ func CoverageMeasured(coverage float64, parseErr error, agentTestsRan bool) bool
 		return true
 	}
 	return agentTestsRan
+}
+
+// SynthesizeCrashMeta builds a minimal TrialMeta for early-error paths where
+// the container ran (or failed to run) but ValidateAndScore never got the chance.
+// Without this, RunTrial's `return nil, err` paths leave a trial dir with no
+// meta.json — the reporter then silently drops the trial.
+func SynthesizeCrashMeta(task *config.Task, orchName string, trialNum int, cause error) *result.TrialMeta {
+	return &result.TrialMeta{
+		Orchestrator: orchName,
+		Task:         TaskName(task),
+		Trial:        trialNum,
+		ExitCode:     -1,
+		ExitReason:   "infra_error",
+		Error:        cause.Error(),
+	}
 }

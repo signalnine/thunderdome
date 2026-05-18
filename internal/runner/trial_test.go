@@ -2,8 +2,10 @@ package runner_test
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
+	"github.com/signalnine/thunderdome/internal/config"
 	"github.com/signalnine/thunderdome/internal/runner"
 )
 
@@ -169,6 +171,20 @@ func TestHasWorkspaceChanges(t *testing.T) {
 				t.Errorf("HasWorkspaceChanges(%q) = %v, want %v", tt.diff, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestSynthesizeCrashMeta(t *testing.T) {
+	task := &config.Task{ID: "T1", Repo: "./benchmarks/bench-time-tracker", Category: "features"}
+	got := runner.SynthesizeCrashMeta(task, "my-orch", 1, fmt.Errorf("docker daemon unreachable"))
+	if got.ExitReason == "completed" {
+		t.Errorf("ExitReason = %q, want crash-related", got.ExitReason)
+	}
+	if got.Error == "" {
+		t.Errorf("Error field empty; expected diagnostic message")
+	}
+	if got.Orchestrator != "my-orch" {
+		t.Errorf("Orchestrator = %q, want my-orch", got.Orchestrator)
 	}
 }
 

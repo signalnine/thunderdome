@@ -15,6 +15,7 @@ type TrialMeta struct {
 	CompositeScore      float64  `json:"composite_score"`
 	TotalTokens         int      `json:"total_tokens"`
 	TotalCostUSD        float64  `json:"total_cost_usd"`
+	Error               string   `json:"error,omitempty"`
 	BudgetExceeded      bool     `json:"budget_exceeded"`
 }
 
