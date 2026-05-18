@@ -1,5 +1,8 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+: "${TASK_DIR:?TASK_DIR not set by harness}"
+: "${TASK_DESCRIPTION:?TASK_DESCRIPTION not set by harness}"
 
 # Validate inputs
 [[ -f "$TASK_DESCRIPTION" ]] || { echo "Task file not found: $TASK_DESCRIPTION" >&2; exit 2; }
@@ -7,7 +10,7 @@ set -e
 cd "$TASK_DIR"
 
 # Route API calls through proxy gateway if configured
-if [ -n "$PROXY_URL" ]; then
+if [ -n "${PROXY_URL:-}" ]; then
   export ANTHROPIC_BASE_URL="$PROXY_URL"
 fi
 

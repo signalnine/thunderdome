@@ -1,5 +1,8 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+: "${TASK_DIR:?TASK_DIR not set by harness}"
+: "${TASK_DESCRIPTION:?TASK_DESCRIPTION not set by harness}"
 
 # conclave-v8-no-review-opus: Ablation -- removes Adversarial Self-Review (step 6) from v8-combined. Tests whether the self-review step matters.
 
@@ -14,7 +17,7 @@ if [ -f /tmp/.claude-credentials.json ]; then
   cp /tmp/.claude-credentials.json "$HOME/.claude/.credentials.json"
 fi
 
-if [ -n "$PROXY_URL" ]; then
+if [ -n "${PROXY_URL:-}" ]; then
   export ANTHROPIC_BASE_URL="$PROXY_URL"
 fi
 

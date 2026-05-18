@@ -1,11 +1,14 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+: "${TASK_DIR:?TASK_DIR not set by harness}"
+: "${TASK_DESCRIPTION:?TASK_DESCRIPTION not set by harness}"
 
 [[ -f "$TASK_DESCRIPTION" ]] || { echo "Task file not found: $TASK_DESCRIPTION" >&2; exit 2; }
 
 cd "$TASK_DIR"
 
-if [ -n "$PROXY_URL" ]; then
+if [ -n "${PROXY_URL:-}" ]; then
   export ANTHROPIC_BASE_URL="$PROXY_URL"
 fi
 

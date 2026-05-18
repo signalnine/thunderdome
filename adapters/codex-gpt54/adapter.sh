@@ -1,5 +1,8 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+: "${TASK_DIR:?TASK_DIR not set by harness}"
+: "${TASK_DESCRIPTION:?TASK_DESCRIPTION not set by harness}"
 
 # --- OpenAI Codex CLI + GPT-5.4 ---
 # Codex (https://github.com/openai/codex) is OpenAI's official coding agent.
