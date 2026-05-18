@@ -239,6 +239,27 @@ func TestRunCodeMetricsCountsTsxJsxTests(t *testing.T) {
 	}
 }
 
+// Regression: the first walk over src/ had no .test./.spec. filter, so
+// src/foo.test.ts was counted as both a source file (FileCount) and a
+// test file (TestFileCount). Inline test files belong only to the test
+// walk; they must not inflate FileCount.
+func TestRunCodeMetricsExcludesInlineTestsFromSrcCount(t *testing.T) {
+	work := t.TempDir()
+	writeFile(t, filepath.Join(work, "src", "main.ts"), "export const a = 1;\n")
+	writeFile(t, filepath.Join(work, "src", "foo.test.ts"), "test('a', () => {});\n")
+
+	res, err := validation.RunCodeMetrics(work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.FileCount != 1 {
+		t.Errorf("FileCount = %d, want 1 (inline test file should not count as source)", res.FileCount)
+	}
+	if res.TestFileCount != 1 {
+		t.Errorf("TestFileCount = %d, want 1", res.TestFileCount)
+	}
+}
+
 // A single small source file should still get the "no monolithic" bonus
 // plus the single-file organization credit, so scoring 0.0 on an empty
 // workspace must not come at the cost of the small-single-file case.

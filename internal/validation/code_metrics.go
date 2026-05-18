@@ -42,6 +42,11 @@ func RunCodeMetrics(workDir string) (*CodeMetricsResult, error) {
 		if info.Name() == ".gitkeep" || strings.HasSuffix(info.Name(), ".d.ts") {
 			return nil
 		}
+		// Skip inline test/spec files — they're counted in the test walk below.
+		rel, _ := filepath.Rel(workDir, path)
+		if strings.Contains(rel, "__tests__") || strings.Contains(info.Name(), ".test.") || strings.Contains(info.Name(), ".spec.") {
+			return nil
+		}
 
 		loc := countLOC(path)
 		result.FileCount++
