@@ -24,9 +24,7 @@ type Gateway struct {
 }
 
 type StartOpts struct {
-	SecretsEnvFile string
-	LogDir         string
-	BudgetUSD      float64
+	LogDir string
 }
 
 func FindFreePort() (int, error) {

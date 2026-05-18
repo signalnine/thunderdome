@@ -5,11 +5,22 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/signalnine/thunderdome/internal/gateway"
 )
+
+func TestStartOptsHasNoDeadFields(t *testing.T) {
+	v := reflect.TypeOf(gateway.StartOpts{})
+	for i := 0; i < v.NumField(); i++ {
+		switch v.Field(i).Name {
+		case "BudgetUSD", "SecretsEnvFile":
+			t.Errorf("StartOpts still has dead field %s", v.Field(i).Name)
+		}
+	}
+}
 
 func TestFindFreePort(t *testing.T) {
 	port, err := gateway.FindFreePort()

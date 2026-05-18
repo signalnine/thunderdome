@@ -79,13 +79,15 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
+	if cfg.Proxy.BudgetPerTrialUSD > 0 {
+		fmt.Fprintln(os.Stderr, "WARNING: budget_per_trial_usd is set but gateway budget enforcement is not implemented; ignoring")
+	}
+
 	var gw *gateway.Gateway
 	var gwAddr string
 	if cfg.Proxy.Gateway != "" && cfg.Proxy.Gateway != "none" {
 		gw, err = gateway.Start(ctx, &gateway.StartOpts{
-			SecretsEnvFile: cfg.Secrets.EnvFile,
-			LogDir:         cfg.Proxy.LogDir,
-			BudgetUSD:      cfg.Proxy.BudgetPerTrialUSD,
+			LogDir: cfg.Proxy.LogDir,
 		})
 		if err != nil {
 			fmt.Printf("WARNING: gateway failed to start: %v (proceeding without proxy)\n", err)
