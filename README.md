@@ -122,6 +122,7 @@ Single "genes" tested in isolation on Claude Code — each variant holds everyth
 | Ralph Fresh (Opus) | **87.2%** | 86.6% | 87.8% | 61 | $1.34 | Fresh-context iteration loop |
 | Stacked | **86.8%** | 86.0% | 87.5% | 64 | $1.58 | Metacog + review + worktree |
 | Sonnet Plans+gstack | **86.7%** | 85.1% | 88.3% | 56 | $1.17 | Plans + gstack stacked |
+| v8 No-Review (Opus 4.7) | **86.5%** | 82.5% | **90.4%** | 60 | $2.10 | Remove explicit self-review; first 4.7 config to beat 4.6 baseline on hard suite (see [writeup](docs/experiments/2026-05-22-no-review-opus-47.md)) |
 | Agent Teams | **86.3%** | 87.5% | 85.1% | 73 | $3.29 | Parallel teammate subagents |
 | [gstack](https://github.com/garrytan/gstack) (Opus) | **86.3%** | 85.2% | 87.5% | 57 | $1.32 | "Boil the Lake" CLAUDE.md |
 | Claude Code Branch | **85.8%** | 87.4% | 84.2% | 41 | $1.11 | `git checkout -b main` |
@@ -136,6 +137,7 @@ Single "genes" tested in isolation on Claude Code — each variant holds everyth
 | Claude Code Worktree | **80.0%** | 83.8% | 76.2% | 41 | $1.00 | Git worktree workspace |
 | Debug (Opus) | **77.3%** | 84.6% | 70.0% | 28 | $1.16 | Systematic debugging skill |
 | Claude Code (Opus 4.7, no discipline) | **74.6%** | 70.4% | 78.8% | 19 | $3.34 | Model upgrade alone, bare prompt |
+| Claude Code Token-Efficient (Opus 4.7) | **71.2%** | 73.4% | 68.9% | 20 | $2.18 | [drona23/claude-token-efficient](https://github.com/drona23/claude-token-efficient) benchmark profile (short sentences, no preamble). Std +3pp vs vanilla 4.7 but hard -9.9pp -- brevity cuts cost on 4.7, hurts reasoning |
 
 <details>
 <summary><strong>Metacog Ablations</strong> — 16 system prompt variants, all Opus 4.6 (click to expand)</summary>
@@ -273,6 +275,8 @@ Every discipline gene helps. Self-review, TDD, plan-before-code, verification ga
 Output-compression directives don't substitute for discipline. [Caveman](https://juliusbrussee.github.io/caveman/) (drop articles, fragments OK, terse technical prose) on Opus 4.7 scored 80.6% overall vs 84.0% for vanilla Opus 4.6 -- brevity alone doesn't improve codegen accuracy. Caveman's public claim ("brevity improves accuracy by 26pp") does not replicate on these tasks. Token savings were real (12 turns avg vs 16-19 for discipline orchestrators), but the standard suite dropped -8.1pp.
 
 Model upgrades don't substitute for discipline either. Vanilla Claude Code on Opus 4.7 scored 74.6% overall (70.4% std, 78.8% hard) -- **-9.4pp below vanilla Opus 4.6** (84.0%). Opus 4.7 without scaffolding underperforms 4.6 across the board except hard tasks (+1.2pp) where hidden thinking tokens still pull weight. With v8 methodology Opus 4.7 recovers to 86.3% -- still below v8 + Opus 4.6 (88.7%). Cost is 2.8x higher ($3.34 vs $1.18 vanilla) because 4.7 bills ~50K hidden thinking tokens per task that never surface in `stream-json` usage fields. Net: 4.7 on bare Claude Code is a cost and accuracy regression; use 4.6 unless you're running a discipline-heavy orchestrator that already structures the thinking budget.
+
+4.7's hidden thinking does substitute for *one* discipline gene -- self-review -- but only on hard suite. We tested this directly by stripping the Adversarial Self-Review step from v8 and running on 4.7. **conclave-v8-no-review-opus-47 lands at 86.5% / $2.10 (n=60), with hard-suite 90.4% -- +0.5pp above the v8 + 4.6 hard baseline (89.9%) and only -1.3pp below v10-routed (91.7% hard / $1.20)**. Two hard tasks lift sharply on 4.7 + no-review vs 4.6 + review: T17 circuit-debugger (+6.8pp) and T19 factory-reset (+4.3pp), the two most reasoning-heavy tasks in the suite. Standard suite still regresses -4.8pp vs 4.6, with T8 analytics-dashboard collapsing -21.7pp -- the explicit review pass is doing real work on standard tasks that 4.7's hidden thinking doesn't pick up. Practical rule: **for hard-only sweeps, prefer v8-no-review on 4.7; for mixed standard+hard, v8 on 4.6 remains the right pick.** Token-efficient brevity prompts on 4.7 don't help either: drona23's "benchmark profile" CLAUDE.md lands at 71.2% (std +3pp, hard -9.9pp vs vanilla 4.7) -- brevity trades reasoning for cost. [Full writeup](docs/experiments/2026-05-22-no-review-opus-47.md).
 
 Methodology components stack additively. Gene removal ablations show each step's independent contribution: contract (-1.6pp when removed), self-review (-1.5pp), TDD (-1.0pp), boil-the-lake (-0.9pp). These sum to 5.0pp -- closely matching the 5.2pp gap between bare Sonnet (83.4%) and full v8 (88.6%). No synergy effects: each gene helps regardless of what other genes are present. A two-pass evaluator (separate diagnostic agent) adds nothing over self-review. The lesson: simple introspective loops beat complex multi-pass architectures.
 
