@@ -178,13 +178,19 @@ class ProxyHandler(BaseHTTPRequestHandler):
                                     u = chunk['usage']
                                     input_tokens = u.get('prompt_tokens', 0) or u.get('input_tokens', 0)
                                     output_tokens = u.get('completion_tokens', 0) or u.get('output_tokens', 0)
-                                # Strip `reasoning` from each choice's delta/message.
+                                # Strip `reasoning`/`reasoning_details` from each
+                                # choice's delta/message. OpenRouter reasoning models
+                                # (e.g. Nemotron 3) emit a `reasoning_details` array
+                                # alongside `reasoning`; clients like CRUSH abort with
+                                # "unexpected end of JSON input" on either field.
                                 modified = False
                                 for ch in chunk.get('choices', []) or []:
                                     for k in ('delta', 'message'):
-                                        if k in ch and isinstance(ch[k], dict) and 'reasoning' in ch[k]:
-                                            del ch[k]['reasoning']
-                                            modified = True
+                                        if k in ch and isinstance(ch[k], dict):
+                                            for rk in ('reasoning', 'reasoning_details'):
+                                                if rk in ch[k]:
+                                                    del ch[k][rk]
+                                                    modified = True
                                 if modified:
                                     rewritten = ('data: ' + json.dumps(chunk) + '\n\n').encode('utf-8')
                             except (json.JSONDecodeError, KeyError):
@@ -222,9 +228,11 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 modified = False
                 for ch in data.get('choices', []) or []:
                     for k in ('delta', 'message'):
-                        if k in ch and isinstance(ch[k], dict) and 'reasoning' in ch[k]:
-                            del ch[k]['reasoning']
-                            modified = True
+                        if k in ch and isinstance(ch[k], dict):
+                            for rk in ('reasoning', 'reasoning_details'):
+                                if rk in ch[k]:
+                                    del ch[k][rk]
+                                    modified = True
                 if modified:
                     new_body = json.dumps(data).encode('utf-8')
                     resp_body = gzip.compress(new_body) if gzipped else new_body
