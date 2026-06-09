@@ -13,11 +13,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Bumped 2.1.39 -> 2.1.119 on 2026-04-25 to gain --bare (required by tmux-driven
 # interactive adapters; lets `claude` run without the first-run OAuth wizard).
 # Bumped 2.1.119 -> 2.1.154 on 2026-05-28 for claude-opus-4-8 support.
+# Bumped 2.1.154 -> 2.1.170 on 2026-06-09 for claude-fable-5 support.
 # Newer claude-code ships a native binary that postinstall (install.cjs) must
 # run to materialize. The postinstall hits EACCES under buildkit's default
 # seccomp profile, so install with --ignore-scripts then run the install step
 # manually with bash explicitly.
-RUN npm install -g --ignore-scripts @anthropic-ai/claude-code@2.1.154 && \
+RUN npm install -g --ignore-scripts @anthropic-ai/claude-code@2.1.170 && \
     cd /usr/local/lib/node_modules/@anthropic-ai/claude-code && \
     bash -c "node install.cjs"
 
