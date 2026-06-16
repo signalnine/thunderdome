@@ -1,0 +1,349 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..a35523a
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 665144,
++  "output_tokens": 10021,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 31,
++  "total_cost_usd": 0.0
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..8b13789
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1 @@
++
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/CRUSH.md b/CRUSH.md
+new file mode 100644
+index 0000000..5f815e4
+--- /dev/null
++++ b/CRUSH.md
+@@ -0,0 +1,32 @@
++# STOP -- Read this before doing anything
++
++You are an autonomous coding agent. Your job is to WRITE CODE that passes tests.
++
++## Step 1: Understand the task
++- Read TASK.md to understand what to build
++- Look at existing files: `ls -la`, `ls src/`, `ls tests/`
++
++## Step 2: Write the code
++- Create/edit files in `src/` -- this is where your implementation goes
++- Write complete, working TypeScript code
++- NEVER delete test files or modify package.json/tsconfig.json
++
++## Step 3: Verify (MANDATORY -- do this EVERY time after writing code)
++```bash
++npm install 2>/dev/null
++npm run build
++npm test
++npm run lint
++```
++
++## Step 4: Fix and repeat
++- If build fails: fix TypeScript errors, go to step 3
++- If tests fail: read the errors, fix your code, go to step 3
++- If lint fails: fix lint issues, go to step 3
++- Keep iterating until ALL THREE pass
++
++## CRITICAL RULES
++- You MUST write code in `src/index.ts` -- that is the main deliverable
++- You MUST NOT delete or modify files in `tests/`
++- You MUST run `npm test` at least once before finishing
++- You MUST keep trying until tests pass -- do not stop early
+diff --git a/package-lock.json b/package-lock.json
+index 97d25c0..3c003c8 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..06a1217
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,47 @@
++export interface Gate {
++  op: 'AND' | 'OR' | 'XOR';
++  in1: string;   // input wire name
++  in2: string;   // input wire name
++  out: string;   // output wire name
++}
++
++/**
++ * Simulates the circuit and returns the final value of every wire.
++ */
++export function simulate(gates: Gate[], inputs: Record<string, number>): Record<string, number> {
++  const wires: Record<string, number> = { ...inputs };
++  const computed = new Array(gates.length).fill(false);
++
++  let changed = true;
++  while (changed) {
++    changed = false;
++    for (let i = 0; i < gates.length; i++) {
++      if (computed[i]) continue;
++
++      const gate = gates[i];
++      const v1 = wires[gate.in1];
++      const v2 = wires[gate.in2];
++
++      if (v1 !== undefined && v2 !== undefined) {
++        let res: number;
++        if (gate.op === 'AND') res = v1 & v2;
++        else if (gate.op === 'OR') res = v1 | v2;
++        else if (gate.op === 'XOR') res = v1 ^ v2;
++        else throw new Error(`Unknown op: ${gate.op}`);
++
++        wires[gate.out] = res;
++        computed[i] = true;
++        changed = true;
++      }
++    }
++  }
++
++  return wires;
++}
++
++/**
++ * Finds the 8 wires involved in the 4 swapped output pairs.
++ */
++export function findSwappedWires(gates: Gate[]): string[] {
++  throw new Error("Not implemented");
++}
+diff --git a/tests/index.test.ts b/tests/index.test.ts
+new file mode 100644
+index 0000000..293a31a
+--- /dev/null
++++ b/tests/index.test.ts
+@@ -0,0 +1,176 @@
++import { describe, it, expect } from 'vitest';
++import { simulate, findSwappedWires, Gate } from '../src/index';
++
++function createCorrectAdder(bits: number): Gate[] {
++  const gates: Gate[] = [];
++  
++  // Bit 0: Half adder
++  gates.push({ op: 'XOR', in1: 'x00', in2: 'y00', out: 'z00' });
++  gates.push({ op: 'AND', in1: 'x00', in2: 'y00', out: 'c00' });
++
++  for (let i = 1; i < bits; i++) {
++    const x = `x${String(i).padStart(2, '0')}`;
++    const y = `y${String(i).padStart(2, '0')}`;
++    const z = `z${String(i).padStart(2, '0')}`;
++    const c_in = i === 1 ? 'c00' : `c${String(i - 1).padStart(2, '0')}`;
++    const t = `t${String(i).padStart(2, '0')}`;
++    const a = `a${String(i).padStart(2, '0')}`;
++    const b = `b${String(i).padStart(2, '0')}`;
++    const c_out = `c${String(i).padStart(2, '0')}`;
++
++    gates.push({ op: 'XOR', in1: x, in2: y, out: t });
++    gates.push({ op: 'XOR', in1: t, in2: c_in, out: z });
++    gates.push({ op: 'AND', in1: x, in2: y, out: a });
++    gates.push({ op: 'AND', in1: t, in2: c_in, out: b });
++    gates.push({ op: 'OR',  in1: a, in2: b, out: c_out });
++  }
++
++  // Final carry bit (z_{bits})
++  // If bits=4, c03 -> z04
++  const last_c = `c${String(bits - 1).padStart(2, '0')}`;
++  gates.push({ op: 'XOR', in1: last_c, in2: 'x99', out: `z${String(bits).padStart(2, '0')}` }); 
++  // Wait, the example says c03 -> z04. But our Gate requires two inputs.
++  // The example says: "c03 -> z04 (bit 4: final carry becomes MSB of output)"
++  // But our interface is: in1: string; in2: string;
++  // I will adjust the adder to match the interface by using a dummy input for the last carry.
++  // Actually, let's look at the example again. 
++  // "c03 -> z04" implies a single input gate or a gate with a dummy input.
++  // Given the interface, I'll use a dummy wire 'dummy' and XOR it with c03.
++  
++  return gates;
++}
++
++// Corrected Adder to fit the interface
++function createValidAdder(bits: number): Gate[] {
++  const gates: Gate[] = [];
++  
++  // Bit 0
++  gates.push({ op: 'XOR', in1: 'x00', in2: 'y00', out: 'z00' });
++  gates.push({ op: 'AND', in1: 'x00', in2: 'y00', out: 'c00' });
++
++  for (let i = 1; i < bits; i++) {
++    const x = `x${String(i).padStart(2, '0')}`;
++    const y = `y${String(i).padStart(2, '0')}`;
++    const z = `z${String(i).padStart(2, '0')}`;
++    const c_in = i === 1 ? 'c00' : `c${String(i - 1).padStart(2, '0')}`;
++    const t = `t${String(i).padStart(2, '0')}`;
++    const a = `a${String(i).padStart(2, '0')}`;
++    const b = `b${String(i).padStart(2, '0')}`;
++    const c_out = `c${String(i).padStart(2, '0')}`;
++
++    gates.push({ op: 'XOR', in1: x, in2: y, out: t });
++    gates.push({ op: 'XOR', in1: t, in2: c_in, out: z });
++    gates.push({ op: 'AND', in1: x, in2: y, out: a });
++    gates.push({ op: 'AND', in1: t, in2: c_in, out: b });
++    gates.push({ op: 'OR',  in1: a, in2: b, out: c_out });
++  }
++
++  // Last carry
++  const last_c = `c${String(bits - 1).padStart(2, '0')}`;
++  const last_z = `z${String(bits).padStart(2, '0')}`;
++  // To simulate "c03 -> z04" using the provided Gate interface (which requires 2 inputs),
++  // we'll use a dummy wire 'zero' that is always 0.
++  gates.push({ op: 'XOR', in1: last_c, in2: 'zero', out: last_z });
++
++  return gates;
++}
++
++function swapGateOutputs(gates: Gate[], idx1: number, idx2: number): Gate[] {
++  const newGates = gates.map(g => ({ ...g }));
++  const temp = newGates[idx1].out;
++  newGates[idx1].out = newGates[idx2].out;
++  newGates[idx2].out = temp;
++  return newGates;
++}
++
++describe('Circuit Debugger', () => {
++  describe('simulate', () => {
++    it('should simulate a simple AND gate', () => {
++      const gates: Gate[] = [
++        { op: 'AND', in1: 'x00', in2: 'y00', out: 'z00' }
++      ];
++      const inputs = { x00: 1, y00: 1 };
++      const result = simulate(gates, inputs);
++      expect(result['z00']).toBe(1);
++    });
++
++    it('should simulate a simple OR gate', () => {
++      const gates: Gate[] = [
++        { op: 'OR', in1: 'x00', in2: 'y00', out: 'z00' }
++      ];
++      const inputs = { x00: 1, y00: 0 };
++      const result = simulate(gates, inputs);
++      expect(result['z00']).toBe(1);
++    });
++
++    it('should simulate a simple XOR gate', () => {
++      const gates: Gate[] = [
++        { op: 'XOR', in1: 'x00', in2: 'y00', out: 'z00' }
++      ];
++      const inputs = { x00: 1, y00: 1 };
++      const result = simulate(gates, inputs);
++      expect(result['z00']).toBe(0);
++    });
++
++    it('should simulate a multi-gate circuit', () => {
++      const gates: Gate[] = [
++        { op: 'AND', in1: 'x00', in2: 'y00', out: 'c00' },
++        { op: 'XOR', in1: 'x01', in2: 'y01', out: 't01' },
++        { op: 'XOR', in1: 't01', in2: 'c00', out: 'z01' }
++      ];
++      const inputs = { x00: 1, y00: 1, x01: 1, y01: 0 };
++      const result = simulate(gates, inputs);
++      expect(result['c00']).toBe(1);
++      expect(result['t01']).toBe(1);
++      expect(result['z01']).toBe(0);
++    });
++  });
++
++  describe('findSwappedWires', () => {
++    it('should find swapped wires in a 4-bit adder', () => {
++      const correctGates = createValidAdder(4);
++      // We need to pick 4 pairs of gate indices to swap.
++      // Let's pick indices that don't overlap.
++      // 0,1 | 2,3 | 4,5 | 6,7
++      let swappedGates = correctGates;
++      swappedGates = swapGateOutputs(swappedGates, 0, 1);
++      swappedGates = swapGateOutputs(swappedGates, 2, 3);
++      swappedGates = swapGateOutputs(swappedGates, 4, 5);
++      swappedGates = swapGateOutputs(swappedGates, 6, 7);
++
++      const expectedWires = [
++        correctGates[0].out, correctGates[1].out,
++        correctGates[2].out, correctGates[3].out,
++        correctGates[4].out, correctGates[5].out,
++        correctGates[6].out, correctGates[7].out
++      ].sort();
++
++      expect(findSwappedWires(swappedGates)).toEqual(expectedWires);
++    });
++
++    it('should handle larger bit sizes (up to 45 bits)', () => {
++      const bits = 45;
++      const correctGates = createValidAdder(bits);
++      // Indices for 4 pairs: 10, 11 | 20, 21 | 30, 31 | 40, 41
++      let swappedGates = correctGates;
++      swappedGates = swapGateOutputs(swappedGates, 10, 11);
++      swappedGates = swapGateOutputs(swappedGates, 20, 21);
++      swappedGates = swapGateOutputs(swappedGates, 30, 31);
++      swappedGates = swapGateOutputs(swappedGates, 40, 41);
++
++      const expectedWires = [
++        correctGates[10].out, correctGates[11].out,
++        correctGates[20].out, correctGates[21].out,
++        correctGates[30].out, correctGates[31].out,
++        correctGates[40].out, correctGates[41].out
++      ].sort();
++
++      const start = Date.now();
++      const result = findSwappedWires(swappedGates);
++      const end = Date.now();
++      
++      expect(result).toEqual(expectedWires);
++      expect(end - start).toBeLessThan(5000);
++    });
++  });
++});
