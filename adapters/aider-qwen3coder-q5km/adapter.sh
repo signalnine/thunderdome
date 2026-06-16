@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# --- Aider + Qwen3-Coder 30B Q5_K_M (local llama.cpp on haight:8090) ---
+# --- Aider + Qwen3-Coder 30B Q5_K_M (local llama.cpp on host.docker.internal:8090) ---
 
 [[ -f "$TASK_DESCRIPTION" ]] || { echo "Task file not found: $TASK_DESCRIPTION" >&2; exit 2; }
 
@@ -9,7 +9,7 @@ cd "$TASK_DIR"
 
 # Point aider at local llama.cpp (OpenAI-compatible)
 export OPENAI_API_KEY="not-needed"
-export OPENAI_API_BASE="http://haight:8090/v1"
+export OPENAI_API_BASE="http://host.docker.internal:8090/v1"
 
 # Collect all source files for aider to edit (ts, js, json configs)
 SOURCE_FILES=()

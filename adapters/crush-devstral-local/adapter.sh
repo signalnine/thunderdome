@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# --- CRUSH + Devstral AWQ (local vLLM on haight:8080) ---
+# --- CRUSH + Devstral AWQ (local vLLM on host.docker.internal:8080) ---
 # vLLM with --enable-auto-tool-choice --tool-call-parser mistral
 # provides proper structured tool_calls for Devstral.
 

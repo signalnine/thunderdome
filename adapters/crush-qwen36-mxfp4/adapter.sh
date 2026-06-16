@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# crush-qwen36-mxfp4: CRUSH + Qwen3.6 MXFP4 on haight:8080 (llama.cpp) ---
+# crush-qwen36-mxfp4: CRUSH + Qwen3.6 MXFP4 on host.docker.internal:8080 (llama.cpp) ---
 
 [[ -f "$TASK_DESCRIPTION" ]] || { echo "Task file not found: $TASK_DESCRIPTION" >&2; exit 2; }
 
@@ -17,7 +17,7 @@ PROXY_LOG=/tmp/proxy-usage.jsonl
 python3 /usr/local/bin/openai_proxy.py \
   --port "$PROXY_PORT" \
   --log "$PROXY_LOG" \
-  --upstream "http://haight:8080/v1" \
+  --upstream "http://host.docker.internal:8080/v1" \
   --model-rewrite "glm-5=qwen36-mxfp4" \
   2>/dev/null &
 PROXY_PID=$!

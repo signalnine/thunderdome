@@ -16,7 +16,7 @@ PROXY_LOG=/workspace/.anthropic-proxy.jsonl
 python3 /usr/local/bin/anthropic_proxy.py \
   --port $PROXY_PORT \
   --log "$PROXY_LOG" \
-  --upstream "http://haight:8080" \
+  --upstream "http://host.docker.internal:8080" \
   --model-rewrite "claude=RedHatAI/Qwen3.6-35B-A3B-NVFP4" \
   --api-key "not-needed" &
 PROXY_PID=$!

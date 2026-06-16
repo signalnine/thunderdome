@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# --- Hermes Agent + Qwen 3.5 35B (local llama.cpp on haight:11434) ---
+# --- Hermes Agent + Qwen 3.5 35B (local llama.cpp on host.docker.internal:11434) ---
 
 [[ -f "$TASK_DESCRIPTION" ]] || { echo "Task file not found: $TASK_DESCRIPTION" >&2; exit 2; }
 

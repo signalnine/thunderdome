@@ -16,7 +16,7 @@ PROXY_LOG=/workspace/.anthropic-proxy.jsonl
 python3 /usr/local/bin/anth2openai_proxy.py \
   --port $PROXY_PORT \
   --log "$PROXY_LOG" \
-  --upstream "http://haight:8080/v1" \
+  --upstream "http://host.docker.internal:8080/v1" \
   --model "sakamakismile/Qwen3.6-27B-NVFP4" \
   --api-key "none" &
 PROXY_PID=$!

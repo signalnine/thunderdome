@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# crush-nemotron-nano-local: CRUSH agent with Nemotron-3-Nano-30B on local llama.cpp (haight:8090)
+# crush-nemotron-nano-local: CRUSH agent with Nemotron-3-Nano-30B on local llama.cpp (host.docker.internal:8090)
 
 [[ -f "$TASK_DESCRIPTION" ]] || { echo "Task file not found: $TASK_DESCRIPTION" >&2; exit 2; }
 
@@ -14,13 +14,13 @@ PROXY_PORT=$(python3 -c "import socket; s=socket.socket(); s.bind(('',0)); print
 PROXY_LOG=/tmp/proxy-usage.jsonl
 
 # Start the OpenAI-compatible proxy for metrics capture
-# Upstream is the local llama.cpp server on haight:8090
+# Upstream is the local llama.cpp server on host.docker.internal:8090
 # Use model-rewrite so crush sees "glm-5" (passes its internal validation)
 # and the proxy rewrites to the actual llama.cpp model ID
 python3 /usr/local/bin/openai_proxy.py \
   --port "$PROXY_PORT" \
   --log "$PROXY_LOG" \
-  --upstream "http://haight:8090/v1" \
+  --upstream "http://host.docker.internal:8090/v1" \
   --model-rewrite "glm-5=sha256-a70437c41b3b0b768c48737e15f8160c90f13dc963f5226aabb3a160f708d1ce" \
   2>/dev/null &
 PROXY_PID=$!

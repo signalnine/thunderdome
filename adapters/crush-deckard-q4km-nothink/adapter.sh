@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# --- CRUSH + Qwen 3.5 40B Deckard Q4_K_M LOW THINKING (local llama.cpp on haight:8090) ---
+# --- CRUSH + Qwen 3.5 40B Deckard Q4_K_M LOW THINKING (local llama.cpp on host.docker.internal:8090) ---
 
 [[ -f "$TASK_DESCRIPTION" ]] || { echo "Task file not found: $TASK_DESCRIPTION" >&2; exit 2; }
 
@@ -13,12 +13,12 @@ export HOME=/tmp
 PROXY_PORT=$(python3 -c "import socket; s=socket.socket(); s.bind(('',0)); print(s.getsockname()[1]); s.close()")
 PROXY_LOG=/tmp/proxy-usage.jsonl
 
-# Start the OpenAI-compatible proxy — upstream is local llama.cpp on haight:8090
+# Start the OpenAI-compatible proxy — upstream is local llama.cpp on host.docker.internal:8090
 # --reasoning-effort low limits thinking tokens for faster inference while preserving some reasoning
 python3 /usr/local/bin/openai_proxy.py \
   --port "$PROXY_PORT" \
   --log "$PROXY_LOG" \
-  --upstream "http://haight:8090/v1" \
+  --upstream "http://host.docker.internal:8090/v1" \
   --model-rewrite "glm-5=qwen35-40b-deckard-Q4_K_M.gguf" \
   --reasoning-effort low \
   2>/dev/null &

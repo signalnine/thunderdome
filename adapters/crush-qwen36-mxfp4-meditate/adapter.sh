@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# crush-qwen36-mxfp4-meditate: CRUSH + Qwen3.6 MXFP4 (local llama.cpp on haight:8080)
+# crush-qwen36-mxfp4-meditate: CRUSH + Qwen3.6 MXFP4 (local llama.cpp on host.docker.internal:8080)
 # with meditation/zen discipline prompt. Tests whether the zen framing
 # that gave +2.8pp on Qwen3-Coder 30B also helps the stronger Qwen3.6 model.
 
@@ -19,7 +19,7 @@ PROXY_LOG=/tmp/proxy-usage.jsonl
 python3 /usr/local/bin/openai_proxy.py \
   --port "$PROXY_PORT" \
   --log "$PROXY_LOG" \
-  --upstream "http://haight:8080/v1" \
+  --upstream "http://host.docker.internal:8080/v1" \
   --model-rewrite "glm-5=qwen36-mxfp4" \
   2>/dev/null &
 PROXY_PID=$!

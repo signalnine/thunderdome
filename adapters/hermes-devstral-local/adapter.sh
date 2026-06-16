@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# --- Hermes Agent + Devstral (local ollama on haight:11434) ---
+# --- Hermes Agent + Devstral (local ollama on host.docker.internal:11434) ---
 # Hermes parses tool calls from model text output, bypassing ollama's
 # broken OpenAI tool_calls shim for Mistral models.
 

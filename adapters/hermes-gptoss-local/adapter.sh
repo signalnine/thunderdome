@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# --- Hermes Agent + gpt-oss 120B (local llama.cpp on haight:11434) ---
+# --- Hermes Agent + gpt-oss 120B (local llama.cpp on host.docker.internal:11434) ---
 
 [[ -f "$TASK_DESCRIPTION" ]] || { echo "Task file not found: $TASK_DESCRIPTION" >&2; exit 2; }
 

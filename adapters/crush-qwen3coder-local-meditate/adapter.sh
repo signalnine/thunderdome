@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# crush-qwen3coder-local-meditate: CRUSH + Qwen 3 Coder (local llama.cpp on haight:8090)
+# crush-qwen3coder-local-meditate: CRUSH + Qwen 3 Coder (local llama.cpp on host.docker.internal:8090)
 # with meditation/zen discipline prompt adapted from metacog-zen experiment.
 # Tests whether meditation framing transfers to non-Claude models.
 
@@ -19,7 +19,7 @@ PROXY_LOG=/tmp/proxy-usage.jsonl
 python3 /usr/local/bin/openai_proxy.py \
   --port "$PROXY_PORT" \
   --log "$PROXY_LOG" \
-  --upstream "http://haight:8080/v1" \
+  --upstream "http://host.docker.internal:8080/v1" \
   --model-rewrite "glm-5=Qwen3-Coder-30B-A3B-Instruct-Q4_K_S.gguf" \
   2>/dev/null &
 PROXY_PID=$!

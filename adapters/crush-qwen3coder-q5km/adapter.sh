@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# --- CRUSH + Qwen3-Coder 30B Q5_K_M (local llama.cpp on haight:8090, 320k ctx) ---
+# --- CRUSH + Qwen3-Coder 30B Q5_K_M (local llama.cpp on host.docker.internal:8090, 320k ctx) ---
 
 [[ -f "$TASK_DESCRIPTION" ]] || { echo "Task file not found: $TASK_DESCRIPTION" >&2; exit 2; }
 
@@ -13,11 +13,11 @@ export HOME=/tmp
 PROXY_PORT=$(python3 -c "import socket; s=socket.socket(); s.bind(('',0)); print(s.getsockname()[1]); s.close()")
 PROXY_LOG=/tmp/proxy-usage.jsonl
 
-# Start the OpenAI-compatible proxy — upstream is local llama.cpp on haight:8090
+# Start the OpenAI-compatible proxy — upstream is local llama.cpp on host.docker.internal:8090
 python3 /usr/local/bin/openai_proxy.py \
   --port "$PROXY_PORT" \
   --log "$PROXY_LOG" \
-  --upstream "http://haight:8090/v1" \
+  --upstream "http://host.docker.internal:8090/v1" \
   --model-rewrite "glm-5=Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf" \
   2>/dev/null &
 PROXY_PID=$!
