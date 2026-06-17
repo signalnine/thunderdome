@@ -52,9 +52,20 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 if max_tokens_clamp and "max_tokens" in data:
                     if data["max_tokens"] > max_tokens_clamp:
                         data["max_tokens"] = max_tokens_clamp
-                # Disable or limit thinking if configured
+                # Disable or limit thinking if configured. Different vLLM
+                # reasoning setups read the toggle from different places:
+                # top-level `enable_thinking` (some Qwen builds) vs nested
+                # `chat_template_kwargs.enable_thinking` (GLM-5.2 on Neuralwatt
+                # -- top-level is silently ignored there). Inject both so a
+                # single --no-think reliably suppresses the `reasoning` deltas
+                # that otherwise flood CRUSH's stream with empty deltas.
                 if no_think and is_chat:
                     data["enable_thinking"] = False
+                    ctk = data.get("chat_template_kwargs")
+                    if not isinstance(ctk, dict):
+                        ctk = {}
+                    ctk["enable_thinking"] = False
+                    data["chat_template_kwargs"] = ctk
                 if reasoning_effort_override and is_chat:
                     data["reasoning_effort"] = reasoning_effort_override
                 # Exclude reasoning chunks (OpenRouter-specific). Thinking
@@ -158,11 +169,34 @@ class ProxyHandler(BaseHTTPRequestHandler):
             input_tokens = 0
             output_tokens = 0
             resp_model = "unknown"
+            last_forwarded_blank = False
 
             try:
                 for raw_line in resp:
                     line = raw_line.decode('utf-8', errors='ignore').strip()
                     rewritten = raw_line
+
+                    # Drop non-standard SSE comment lines AND collapse the blank
+                    # lines they leave behind. Neuralwatt now interleaves
+                    # `: energy {...}` / `: cost {...}` telemetry comment lines,
+                    # each followed by its own blank line, before `data: [DONE]`.
+                    # Comments are valid SSE that compliant clients ignore, but
+                    # dropping a comment leaves consecutive blank lines, and
+                    # CRUSH's reader dispatches an SSE event on every blank --
+                    # an empty event becomes json.Unmarshal("") -> "unexpected
+                    # end of JSON input", aborting the whole stream. So: skip
+                    # comment lines, and never forward two blank lines in a row
+                    # (a single blank still terminates the preceding event).
+                    if line.startswith(':'):
+                        continue
+                    if line == '':
+                        if last_forwarded_blank:
+                            continue
+                        last_forwarded_blank = True
+                        self.wfile.write(rewritten)
+                        self.wfile.flush()
+                        continue
+                    last_forwarded_blank = False
 
                     # Some vLLM servers (e.g. Neuralwatt Qwen3.6) emit chain-of-thought
                     # in a nonstandard `reasoning` delta field. Strip it -- clients like
@@ -192,7 +226,16 @@ class ProxyHandler(BaseHTTPRequestHandler):
                                                     del ch[k][rk]
                                                     modified = True
                                 if modified:
-                                    rewritten = ('data: ' + json.dumps(chunk) + '\n\n').encode('utf-8')
+                                    # Preserve original SSE framing: the upstream
+                                    # data line is `\n`-terminated and the
+                                    # event-separating blank line arrives as its
+                                    # own iteration. Re-emit a single `\n` here --
+                                    # appending `\n\n` injected a spurious empty
+                                    # event after every stripped chunk, which
+                                    # strict clients (CRUSH on GLM-5.2) decode as
+                                    # `json.Unmarshal("")` -> "unexpected end of
+                                    # JSON input" and abort the whole stream.
+                                    rewritten = ('data: ' + json.dumps(chunk) + '\n').encode('utf-8')
                             except (json.JSONDecodeError, KeyError):
                                 pass
 
