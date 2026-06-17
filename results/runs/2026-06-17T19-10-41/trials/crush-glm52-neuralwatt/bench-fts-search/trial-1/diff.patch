@@ -1,0 +1,333 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..144fd38
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 447400,
++  "output_tokens": 4041,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.4942009100000001
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..3102c36
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,42 @@
++I'll start by exploring the codebase to understand the existing structure.Now let me look at the test files, errors, server, and seed:Now I understand the structure. Let me look at the test for improvement points:
++
++**Key observations:**
++1. Test #19 sends special chars including `&`, `'`, `<script>`, `+`, `/` — FTS5 needs safe query handling
++2. Test #10 uses `q=the&page=1` — "the" alone may be treated as a stopword in FTS5 by default... wait, FTS5 doesn't have stopwords by default unless configured. I need to make sure `the` returns results.
++3. Test #16-18 use unique terms ("zylophone", "elephants", "xylographics", "quizzaciously") — these will work fine
++4. Test #10 expects `perPage: 20`
++5. Test #4 expects `rank` values ascending 
++
++**Key challenge with special chars:** FTS5 MATCH query will error on characters like `<`, `&`, `+`, `/`. I need to run tests to see how to handle them — likely by extracting tokens and using them as prefixes, or falling back to LIKE search on error.
++
++Let me plan the implementation:Let me first run the existing tests to establish a baseline:Good — the 15 CRUD tests pass, all 20 search tests fail (endpoints don't exist yet). Now let me implement.
++
++**Key considerations for special chars (Test #19):**
++- `hello%20world` → `hello world` → two FTS5 tokens — OK with MATCH
++- `test%26test` → `test&test` → needs `&` handling, will break MATCH
++- `it%27s` → `it's` → apostrophe
++- `%3Cscript%3E` → `<script>` → angle brackets
++- `foo%2Bbar` → `foo+bar` → plus
++- `a%2Fb` → `a/b` → slash
++
++For these, the safe approach is: try FTS5 MATCH first; on syntax error, fall back to LIKE-based search (or escape and use prefix matching on extracted tokens). Let me implement with a fallback strategy where we extract word tokens and use prefix queries, falling back to LIKE if needed.
++
++**For "the" (Test #10/11):** FTS5 doesn't strip stopwords by default, so "the" should return matches. Let me verify the FTS5 behavior by building the feature.
++
++Let me start with db.ts:Note: I need to register the search/suggest routes BEFORE the `/notes/:id` route, otherwise `/notes/search` will be captured by `:id`. Let me write the search routes:Now let's run the search tests:All 35 tests pass on the first run. Let me also run the linter and typecheck to verify code quality:Lint, typecheck, and all 35 tests pass.All 35 tests pass. Implementation complete.
++
++## Summary
++
++**`src/db.ts`** — Added FTS5 virtual table `notes_fts` (contentless, external content from `notes`) plus AFTER INSERT/UPDATE/DELETE triggers to keep the index synchronized.
++
++**`src/routes.ts`** — Added two endpoints registered before `/notes/:id` so `search` isn't trapped as an id:
++
++- `GET /notes/search?q=<query>&page=N` — Builds an FTS5 MATCH query (preserving quoted phrases, converting bare words to prefix `word*` queries), runs `bm25()` + `snippet()` with `<mark>` tags, paginates at 20/page, and returns `{ results, total, page, perPage }`. Falls back to a LIKE scan if FTS5 rejects the query or no usable tokens remain — this is what makes Test #19's `<script>`, `+`, `&` queries return 200 instead of 500.
++- `GET /notes/search/suggest?q=<prefix>` — LIKE-based prefix match against title and body, returns up to 5 distinct `{ id, title }` results.
++
++Both endpoints return 400 on missing/empty `q`.
++
++**Key design notes:**
++- `bm25()` returns negative values (more negative = more relevant), so `ORDER BY rank` naturally yields ascending relevance — matching Test #4's ascending-order assertion.
++- `snippet(notes_fts, 1, ...)` targets column index 1 (body) for highlight context.
++- Triggers handle FTS sync on all CRUD mutations (Tests #16–18), and the seed INSERT also back-fills the index for any pre-existing rows when attaching to a populated DB.
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index a3ad476..a7ecd82 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1131,7 +1131,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1247,7 +1246,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1540,7 +1538,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2301,7 +2298,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -4604,7 +4600,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/db.ts b/src/db.ts
+index 810e0fd..6e68111 100644
+--- a/src/db.ts
++++ b/src/db.ts
+@@ -18,6 +18,41 @@ export function createDatabase(path?: string): Database.Database {
+     )
+   `);
+ 
++  // Create FTS5 virtual table for full-text search across titles and bodies.
++  // contentless='1' keeps the FTS index lean since we JOIN back to `notes`
++  // for source columns, avoiding double storage and keeping snippets sourced
++  // from the canonical table.
++  db.exec(`
++    CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
++      title,
++      body,
++      content='notes',
++      content_rowid='id'
++    )
++  `);
++
++  // Seed the FTS index for any pre-existing rows (e.g. when attaching to a
++  // populated database). Cheap when the notes table is empty.
++  db.exec(`
++    INSERT INTO notes_fts (rowid, title, body)
++    SELECT id, title, body FROM notes
++    WHERE NOT EXISTS (SELECT 1 FROM notes_fts WHERE notes_fts.rowid = notes.id)
++  `);
++
++  // Keep FTS index synchronized with the notes table via triggers.
++  db.exec(`
++    CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
++      INSERT INTO notes_fts (rowid, title, body) VALUES (new.id, new.title, new.body);
++    END;
++    CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
++      INSERT INTO notes_fts (notes_fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body);
++    END;
++    CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
++      INSERT INTO notes_fts (notes_fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body);
++      INSERT INTO notes_fts (rowid, title, body) VALUES (new.id, new.title, new.body);
++    END;
++  `);
++
+   return db;
+ }
+ 
+diff --git a/src/routes.ts b/src/routes.ts
+index 013b2dc..74f38a6 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -1,11 +1,172 @@
+ import { Router, Request, Response, NextFunction } from 'express';
+ import Database from 'better-sqlite3';
+-import { Note, NoteInput } from './models.js';
++import { Note, NoteInput, SearchResult, SuggestResult } from './models.js';
+ import { NotFoundError, ValidationError } from './errors.js';
+ 
++const PER_PAGE = 20;
++
++/**
++ * Build a safe FTS5 MATCH expression from a raw user query.
++ *
++ * FTS5 syntax reserves several characters (`"`, `*`, `(`, `)`, `-`, `+`, `AND`,
++ * `OR`, `NOT`, etc.). Untrusted input can either throw a syntax error or match
++ * unexpected documents. This helper extracts the user's intent:
++ *   - Quoted phrases (`"chocolate chip"`) are preserved as FTS5 phrase queries.
++ *   - Bare words are converted to prefix queries (`word*`) so partial matches
++ *     (e.g. "learn" matching "learning") work for autocomplete-style lookups.
++ *   - Strips any leftover control characters.
++ *
++ * Returns null when no usable tokens remain (caller should 400).
++ */
++function buildFtsQuery(raw: string): string | null {
++  const trimmed = raw.trim();
++  if (!trimmed) return null;
++
++  const tokens: string[] = [];
++  // Match either a quoted phrase or a contiguous run of word characters.
++  const parts = trimmed.match(/"[^"]+"|\S+/g) ?? [];
++  for (const part of parts) {
++    if (part.startsWith('"') && part.endsWith('"') && part.length >= 2) {
++      const phrase = part.slice(1, -1).trim();
++      if (phrase) tokens.push(`"${phrase}"`);
++      continue;
++    }
++    // Strip characters that are unsafe in FTS5 query syntax outside of
++    // quoted phrases. Keep alphanumerics, underscores, and hyphens so
++    // identifiers and hyphenated terms still match.
++    const cleaned = part.replace(/[^\p{L}\p{N}_-]/gu, '');
++    if (cleaned) tokens.push(`${cleaned}*`);
++  }
++  return tokens.length > 0 ? tokens.join(' ') : null;
++}
++
++/**
++ * Run a full-text search against `notes_fts`, falling back to a LIKE-based
++ * scan when the constructed MATCH query is invalid (e.g. user supplied only
++ * punctuation). The fallback guarantees the endpoint never 500s on weird
++ * input while still returning relevant rows when possible.
++ */
++function runSearch(db: Database.Database, ftsQuery: string): { rows: SearchResult[]; total: number } {
++  const matchStmt = db.prepare(`
++    SELECT
++      n.id AS id,
++      n.title AS title,
++      snippet(notes_fts, 1, '<mark>', '</mark>', '…', 32) AS snippet,
++      bm25(notes_fts) AS rank
++    FROM notes_fts
++    JOIN notes n ON n.id = notes_fts.rowid
++    WHERE notes_fts MATCH ?
++    ORDER BY rank
++  `);
++
++  const rows = matchStmt.all(ftsQuery) as SearchResult[];
++  return { rows, total: rows.length };
++}
++
++function runLikeFallback(db: Database.Database, rawQuery: string): { rows: SearchResult[]; total: number } {
++  // Strip surrounding quotes if the user wrapped the whole query in them so
++  // LIKE matches the inner text rather than the literal quote characters.
++  const cleaned = rawQuery.trim().replace(/^"|"$/g, '');
++  const like = `%${cleaned}%`;
++  const stmt = db.prepare(`
++    SELECT id, title, body FROM notes
++    WHERE title LIKE ? OR body LIKE ?
++    ORDER BY id
++  `);
++  const matches = stmt.all(like, like) as { id: number; title: string; body: string }[];
++
++  const rows: SearchResult[] = matches.map((m) => ({
++    id: m.id,
++    title: m.title,
++    snippet: buildLikeSnippet(m.body, cleaned),
++    rank: 0,
++  }));
++  return { rows, total: rows.length };
++}
++
++function buildLikeSnippet(body: string, term: string): string {
++  if (!term) return body.slice(0, 64);
++  const idx = body.toLowerCase().indexOf(term.toLowerCase());
++  if (idx === -1) return body.slice(0, 64);
++  const start = Math.max(0, idx - 16);
++  const end = Math.min(body.length, idx + term.length + 48);
++  const prefix = start > 0 ? '…' : '';
++  const suffix = end < body.length ? '…' : '';
++  const before = body.slice(start, idx);
++  const match = body.slice(idx, idx + term.length);
++  const after = body.slice(idx + term.length, end);
++  return `${prefix}${before}<mark>${match}</mark>${after}${suffix}`;
++}
++
+ export function createRoutes(db: Database.Database): Router {
+   const router = Router();
+ 
++  // GET /notes/search - Full-text search across note titles and bodies.
++  // Must be declared before `/notes/:id` so "search" isn't captured as an id.
++  router.get('/notes/search', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const q = req.query.q as string | undefined;
++      if (!q || q.trim() === '') {
++        throw new ValidationError('Query parameter q is required');
++      }
++
++      const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
++      const offset = (page - 1) * PER_PAGE;
++
++      const ftsQuery = buildFtsQuery(q);
++      let rows: SearchResult[];
++      let total: number;
++      if (ftsQuery) {
++        try {
++          ({ rows, total } = runSearch(db, ftsQuery));
++        } catch {
++          // MATCH syntax rejected by FTS5 (e.g. query resolves to a reserved
++          // token). Fall back to a LIKE scan so the endpoint stays robust.
++          ({ rows, total } = runLikeFallback(db, q));
++        }
++      } else {
++        ({ rows, total } = runLikeFallback(db, q));
++      }
++
++      const paged = rows.slice(offset, offset + PER_PAGE);
++      res.json({
++        results: paged,
++        total,
++        page,
++        perPage: PER_PAGE,
++      });
++    } catch (err) {
++      next(err);
++    }
++  });
++
++  // GET /notes/search/suggest - Autocomplete up to 5 matching note titles.
++  router.get('/notes/search/suggest', (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const q = req.query.q as string | undefined;
++      if (!q || q.trim() === '') {
++        throw new ValidationError('Query parameter q is required');
++      }
++
++      const prefix = q.trim().toLowerCase();
++      // Match prefix against either title or body; return the matching note's
++      // title. DISTINCT collapses notes matched on both fields. Use LIKE for
++      // prefix semantics — the FTS index is tuned for ranking, not prefix
++      // completion across separately indexed columns.
++      const suggestStmt = db.prepare(`
++        SELECT DISTINCT id, title
++        FROM notes
++        WHERE LOWER(title) LIKE ? OR LOWER(body) LIKE ?
++        ORDER BY id
++        LIMIT 5
++      `);
++      const results = suggestStmt.all(`${prefix}%`, `${prefix}%`) as SuggestResult[];
++      res.json({ results });
++    } catch (err) {
++      next(err);
++    }
++  });
++
+   // GET /notes - List all notes (with optional tag filter)
+   router.get('/notes', (req: Request, res: Response, next: NextFunction) => {
+     try {

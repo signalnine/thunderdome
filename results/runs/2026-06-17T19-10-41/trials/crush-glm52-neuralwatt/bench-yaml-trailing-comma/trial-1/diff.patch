@@ -1,0 +1,146 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..d644ee2
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 518588,
++  "output_tokens": 2850,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.5719003
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..e4690d0
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,12 @@
++I'll start by exploring the codebase structure and understanding how stringify options work.Now I understand the structure. Let me look at the existing tests to understand patterns and check how the docs describe flow collections.Let me see the ToString options doc section and look at existing flow tests:Now I have a clear picture. Let me look at the exact multiline output part of `stringifyFlowCollection` once more and check how `falseStr` and `trueStr` sit alphabetically (where `trailingComma` should go—after `simpleKeys`/`singleQuote` area). Let me check ordering conventions.Now I have all the info I need. The `trailingComma` option belongs alphabetically after `singleQuote` and before `trueStr`. Let me make the edits.Now the core logic in `stringifyFlowCollection`. The current multi-line branch:
++
++```
++if (reqNewline) {
++  let str = start
++  for (const line of lines)
++    str += line ? `\n${indentStep}${indent}${line}` : '\n'
++  return `${str}\n${indent}${end}`
++}
++```
++
++The last `line` already ends with `,` (added at line 132 for all items except the last). For trailing comma, the last item needs a `,` too, *only* when multiline.Wait, I had a bug — I used `str[line.length - 1]` but should check `line[line.length - 1]`. Also, the last item may not have a comma yet (line 132 skips adding comma for the last item). Let me re-examine and fix properly.The last item doesn't have a comma (line 132 only adds for `i < items.length - 1`). So for the last line, after a comment might have been appended (line 133), the actual last entry string doesn't end with `,`. I need to simply append `,` to the last line when trailingComma is enabled and multiline. But the comment on line 133 appends after the comma check, so I should append `,` at the *very end* unconditionally (as a true trailing comma). Let me fix:Now update the docs and add tests.Now let me add tests next to the `flow collection padding` describe block:Let me clean up that odd `.replace(/^/, '')` line:Need to run the project's test command properly. Let me use `npm test`:Node modules aren't installed. Let me install them:
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/docs/03_options.md b/docs/03_options.md
+index 9fdb943..e97f3b9 100644
+--- a/docs/03_options.md
++++ b/docs/03_options.md
+@@ -166,4 +166,5 @@ Used by: `stringify()` and `doc.toString()`
+ | nullStr                        | `string`                                                                                  | `'null'`  | String representation for `null` values.                                                                                                                                                                                      |
+ | simpleKeys                     | `boolean`                                                                                 | `false`   | Require keys to be scalars and always use implicit rather than explicit notation.                                                                                                                                             |
+ | singleQuote                    | `boolean ⎮ null`                                                                          | `null`    | Use 'single quote' rather than "double quote" where applicable. Set to `false` to disable single quotes completely.                                                                                                           |
++| trailingComma                  | `boolean`                                                                                 | `false`   | When true, add a trailing comma to the last entry of a flow collection that is rendered across multiple lines. Single-line flow collections are unaffected.                                                                   |
+ | trueStr                        | `string`                                                                                  | `'true'`  | String representation for `true` values.                                                                                                                                                                                      |
+diff --git a/src/options.ts b/src/options.ts
+index 1d20f55..bee2d26 100644
+--- a/src/options.ts
++++ b/src/options.ts
+@@ -371,6 +371,14 @@ export type ToStringOptions = {
+    */
+   singleQuote?: boolean | null
+ 
++  /**
++   * When true, add a trailing comma to the last entry of a flow collection
++   * that is rendered across multiple lines.
++   *
++   * Default: `false`
++   */
++  trailingComma?: boolean
++
+   /**
+    * String representation for `true`.
+    * With the core schema, use `'true'`, `'True'`, or `'TRUE'`.
+diff --git a/src/stringify/stringify.ts b/src/stringify/stringify.ts
+index 6983ae1..bedae69 100644
+--- a/src/stringify/stringify.ts
++++ b/src/stringify/stringify.ts
+@@ -50,6 +50,7 @@ export function createStringifyContext(
+       nullStr: 'null',
+       simpleKeys: false,
+       singleQuote: null,
++      trailingComma: false,
+       trueStr: 'true',
+       verifyAliasOrder: true
+     },
+diff --git a/src/stringify/stringifyCollection.ts b/src/stringify/stringifyCollection.ts
+index 133d557..66b00f8 100644
+--- a/src/stringify/stringifyCollection.ts
++++ b/src/stringify/stringifyCollection.ts
+@@ -147,8 +147,12 @@ function stringifyFlowCollection(
+     }
+     if (reqNewline) {
+       let str = start
+-      for (const line of lines)
++      const last = lines.length - 1
++      for (let i = 0; i <= last; ++i) {
++        let line = lines[i]
++        if (i === last && ctx.options.trailingComma) line += ','
+         str += line ? `\n${indentStep}${indent}${line}` : '\n'
++      }
+       return `${str}\n${indent}${end}`
+     } else {
+       return `${start}${fcPadding}${lines.join(' ')}${fcPadding}${end}`
+diff --git a/tests/doc/stringify.ts b/tests/doc/stringify.ts
+index 1c79144..0ce7865 100644
+--- a/tests/doc/stringify.ts
++++ b/tests/doc/stringify.ts
+@@ -1439,3 +1439,47 @@ describe('flow collection padding', () => {
+     expect(doc.toString({ flowCollectionPadding: false })).toBe('[1, 2]\n')
+   })
+ })
++
++describe('trailing comma in flow collections', () => {
++  const seq = new YAML.YAMLSeq()
++  seq.items = [new Scalar(1), new Scalar(2)]
++  const seqDoc = new YAML.Document()
++  seqDoc.value = seq
++
++  test('flow seq single line: no trailing comma', () => {
++    seq.flow = true
++    expect(seqDoc.toString({ trailingComma: true })).toBe('[ 1, 2 ]\n')
++  })
++
++  test('flow seq multiline: trailing comma when enabled', () => {
++    seq.flow = true
++    const out = seqDoc.toString({ trailingComma: true, lineWidth: 0 })
++    expect(out).toBe('[\n  1,\n  2,\n]\n')
++  })
++
++  test('flow seq multiline: no trailing comma by default', () => {
++    seq.flow = true
++    const out = seqDoc.toString({ lineWidth: 0 })
++    expect(out).toBe('[\n  1,\n  2\n]\n')
++  })
++
++  test('flow map multiline: trailing comma when enabled', () => {
++    const map = new YAML.YAMLMap()
++    map.items = [
++      new Pair(new Scalar('a'), new Scalar(1)),
++      new Pair(new Scalar('b'), new Scalar(2))
++    ]
++    map.flow = true
++    const doc = new YAML.Document()
++    doc.value = map
++    const out = doc.toString({ trailingComma: true, lineWidth: 0 })
++    expect(out).toBe('{\n  a: 1,\n  b: 2,\n}\n')
++  })
++
++  test('single-line flow not modified by lineWidth wrapping', () => {
++    seq.flow = true
++    expect(seqDoc.toString({ trailingComma: true, lineWidth: 80 })).toBe(
++      '[ 1, 2 ]\n'
++    )
++  })
++})

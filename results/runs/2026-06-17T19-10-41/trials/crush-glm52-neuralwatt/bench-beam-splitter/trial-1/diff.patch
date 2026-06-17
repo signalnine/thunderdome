@@ -1,0 +1,356 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..2c79617
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 174843,
++  "output_tokens": 3044,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.19387974
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..1e996d9
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,13 @@
++I'll start by exploring the project structure to understand what's already there.Now I understand the project. Let me analyze the beam movement and path counting carefully before implementing.
++
++Key observations:
++- Beam moves down (D), down-left (L), down-right (R). All advance `row+1` each step.
++- A path exits when it steps outside grid bounds.
++- `countBeamCells`: BFS/DFS simulating all beams, tracking visited cells. Avoid infinite loops by memoizing (row,col,dir) states already processed.
++- `countBeamPaths`: Need to count distinct paths. Since each splitter along a path doubles paths, and splitters always split, the total paths = product over each path of splits encountered. But beams can merge and re-split. The naive recursion: `paths(cell, dir) =` if next is out of bounds → 1; if next is splitter → `paths(next, L) + paths(next, R)`; else → `paths(next, dir)`. Memoize by (cell, dir). This elegantly handles merging.
++
++Let me check for any potential cycles. Since every move goes to `row+1`, beams only go downward → **no cycles possible**. This makes memoization clean.Now let me create tests and verify the implementation against the examples:Need to install deps first.Build passes. Now let me write a test file to verify the examples and edge cases:Wait, my "10 splitters stacked in a single column" test is wrong - if splitters are all in column 1, the left beam goes to col 0 and right to col 2, missing the splitter below. Let me fix that test to use a wider grid with splitters truly stacked. Actually splitters can't be "stacked" vertically because a splitter sends beams diagonally. Let me reconsider - a single splitter down the middle needs the next splitter offset. Let me just remove that flawed test and verify the others first.Let me verify my zigzag logic. Stage i: splitter at col c on row (2i+1). Its two children (down-left, down-right) land at (2i+2, c-1) and (2i+2, c+1) — both splitters. Each of those splits: the left splitter (c-1) sends to (2i+3, c-2) [exits chain, but grid continues] and (2i+3, c) [shared]. The right splitter (c+1) sends to (2i+3, c) [shared] and (2i+3, c+2). 
++
++Wait, (2i+3, c) is the shared convergence — but in my loop I set activeCol to stay at `c` and the next stage's splitter is at row `2(i+1)+1 = 2i+3` at col `c`. Yes! So both inner children converge on the next stage splitter at col c. The outer children (c-2 and c+2) are... `.`, they just pass through and exit harmlessly. 
++
++But wait — those outer beams continue and might hit other splitters below! Let me check. The outer beam at col c-2 going down-row... no, it went down-left to (2i+3, c-2) as a 'left' direction beam, continues down-left. Hmm, this could collide with future stages. Let me just run it and see — if it fails I'll reason more.
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/package-lock.json b/package-lock.json
+index 02b0dae..222cd7d 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..d1c1364
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,113 @@
++export type Direction = 'down' | 'left' | 'right';
++
++interface Beam {
++  row: number;
++  col: number;
++  dir: Direction;
++}
++
++const DELTAS: Record<Direction, [number, number]> = {
++  down: [1, 0],
++  left: [1, -1],
++  right: [1, 1],
++};
++
++function findSource(grid: string[][]): { row: number; col: number } | null {
++  for (let col = 0; col < grid[0].length; col++) {
++    if (grid[0][col] === 'S') {
++      return { row: 0, col };
++    }
++  }
++  return null;
++}
++
++export function countBeamCells(grid: string[][]): number {
++  if (grid.length === 0 || grid[0].length === 0) {
++    return 0;
++  }
++
++  const source = findSource(grid);
++  if (!source) {
++    return 0;
++  }
++
++  const rows = grid.length;
++  const cols = grid[0].length;
++  const visited = new Set<number>();
++  const seen = new Set<number>();
++  const queue: Beam[] = [{ ...source, dir: 'down' as Direction }];
++
++  const cellKey = (r: number, c: number): number => r * cols + c;
++  const stateKey = (r: number, c: number, d: Direction): number =>
++    (r * cols + c) * 3 + (d === 'down' ? 0 : d === 'left' ? 1 : 2);
++
++  visited.add(cellKey(source.row, source.col));
++
++  while (queue.length > 0) {
++    const { row, col, dir } = queue.pop() as Beam;
++    const sKey = stateKey(row, col, dir);
++    if (seen.has(sKey)) continue;
++    seen.add(sKey);
++
++    const isSplitter = grid[row][col] === '^';
++    const nextDirs: Direction[] = isSplitter ? ['left', 'right'] : [dir];
++
++    for (const nextDir of nextDirs) {
++      const [dr, dc] = DELTAS[nextDir];
++      const nr = row + dr;
++      const nc = col + dc;
++      if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) {
++        continue;
++      }
++      visited.add(cellKey(nr, nc));
++      queue.push({ row: nr, col: nc, dir: nextDir });
++    }
++  }
++
++  return visited.size;
++}
++
++export function countBeamPaths(grid: string[][]): bigint {
++  if (grid.length === 0 || grid[0].length === 0) {
++    return 0n;
++  }
++
++  const source = findSource(grid);
++  if (!source) {
++    return 0n;
++  }
++
++  const rows = grid.length;
++  const cols = grid[0].length;
++  const memo = new Map<number, bigint>();
++  const UNSET = -1n;
++
++  const stateKey = (r: number, c: number, d: Direction): number =>
++    (r * cols + c) * 3 + (d === 'down' ? 0 : d === 'left' ? 1 : 2);
++
++  const count = (row: number, col: number, dir: Direction): bigint => {
++    if (row < 0 || row >= rows || col < 0 || col >= cols) {
++      return 1n;
++    }
++
++    const key = stateKey(row, col, dir);
++    const cached = memo.get(key);
++    if (cached !== undefined) {
++      return cached;
++    }
++    memo.set(key, UNSET);
++
++    let result: bigint;
++    if (grid[row][col] === '^') {
++      result = count(row + 1, col - 1, 'left') + count(row + 1, col + 1, 'right');
++    } else {
++      const [dr, dc] = DELTAS[dir];
++      result = count(row + dr, col + dc, dir);
++    }
++
++    memo.set(key, result);
++    return result;
++  };
++
++  return count(source.row, source.col, 'down');
++}
+diff --git a/tests/beam.test.ts b/tests/beam.test.ts
+new file mode 100644
+index 0000000..86e3c73
+--- /dev/null
++++ b/tests/beam.test.ts
+@@ -0,0 +1,143 @@
++import { describe, it, expect } from 'vitest';
++import { countBeamCells, countBeamPaths } from '../src/index.js';
++
++function g(...rows: string[]): string[][] {
++  return rows.map((r) => Array.from(r).filter((c) => c !== ' '));
++}
++
++describe('countBeamCells', () => {
++  it('example 1: single splitter', () => {
++    const grid = g(
++      '.S...',
++      '.....',
++      '.^...',
++      '.....',
++    );
++    expect(countBeamCells(grid)).toBe(5);
++  });
++
++  it('example 2: two splitters', () => {
++    const grid = g(
++      '.S...',
++      '.^...',
++      '^.^..',
++      '.....',
++    );
++    expect(countBeamCells(grid)).toBe(6);
++  });
++
++  it('no source', () => {
++    expect(countBeamCells(g('.....', '.....'))).toBe(0);
++  });
++
++  it('source only, no splitters', () => {
++    const grid = g('.S.', '...', '...');
++    expect(countBeamCells(grid)).toBe(3);
++  });
++
++  it('empty grid', () => {
++    expect(countBeamCells([])).toBe(0);
++  });
++
++  it('beam exits via bottom (no splitter)', () => {
++    const grid = g('.S.', '...');
++    expect(countBeamCells(grid)).toBe(2);
++  });
++
++  it('splitter at bottom row sends both out', () => {
++    const grid = g('.S.', '.^.');
++    expect(countBeamCells(grid)).toBe(3);
++  });
++});
++
++describe('countBeamPaths', () => {
++  it('example 1: 2 paths', () => {
++    const grid = g(
++      '.S...',
++      '.....',
++      '.^...',
++      '.....',
++    );
++    expect(countBeamPaths(grid)).toBe(2n);
++  });
++
++  it('example 2: 4 paths', () => {
++    const grid = g(
++      '.S...',
++      '.^...',
++      '^.^..',
++      '.....',
++    );
++    expect(countBeamPaths(grid)).toBe(4n);
++  });
++
++  it('no source -> 0', () => {
++    expect(countBeamPaths(g('.....', '.....'))).toBe(0n);
++  });
++
++  it('no splitter, single path', () => {
++    const grid = g('.S.', '...', '...');
++    expect(countBeamPaths(grid)).toBe(1n);
++  });
++
++  it('three splitters in chain -> 2^3 = 8 paths', () => {
++    const grid = g(
++      '.S.........',
++      '.^.........',
++      '...^.......',
++      '.....^.....',
++    );
++    expect(countBeamPaths(grid)).toBe(8n);
++  });
++
++  it('merging beams do not double count shared downstream paths incorrectly', () => {
++    // Two splitters converge back to same column then re-split
++    const grid = g(
++      '.S.....',
++      '.^.....',
++      '^.^....',
++      '...^...',
++      '.....^.',
++      '.......',
++    );
++    // Manual: top split -> 2. Each hits splitter at row2 (cols 0 and 2).
++    // Row2 col0 splitter: left out (1 path), right to (3,1)
++    // Row2 col2 splitter: left to (3,1), right to (3,3)
++    // So 2 paths reach (3,1), 1 reaches (3,3). (3,1) is splitter.
++    // (3,1) splitter: 2 paths * 2 = 4 paths out of (3,1). Plus (3,3) splitter -> 2 paths.
++    // Total = 4 + 2 = 6.
++    expect(countBeamPaths(grid)).toBe(6n);
++  });
++
++  it('large path count via bigint: zigzag splitters', () => {
++    // Place splitters in a zigzag so beams recombine into a single splitter chain.
++    // Pattern: S at col, splitters alternate to keep a chain going.
++    // Simpler: a single splitter with both branches recombining requires special geometry;
++    // instead build a 'V' chain: each splitter's two children both hit the same next splitter.
++    // Wide grid, splitters arranged so down-left+down-right of splitter at (r,c) both land on (r+1,c-1) and (r+1,c+1),
++    // which won't both be the same cell. So instead test pure doubling via independent chains is hard.
++    // Use the figure-8: splitter at col c with children landing on two splitters at row+1 (cols c-1, c+1),
++    // whose outer children exit and inner children both land on a shared splitter at (row+2, c).
++    // Chain of length L -> 2^L leaves.
++    const L = 5;
++    const width = 2 * L + 3;
++    const rows: string[][] = [];
++    const top: string[] = Array(width).fill('.');
++    top[2] = 'S';
++    rows.push([...top]);
++    let activeCol = 2;
++    for (let i = 0; i < L; i++) {
++      const r1 = Array(width).fill('.');
++      r1[activeCol] = '^';
++      rows.push(r1);
++      // Next row: two splitters at activeCol-1 and activeCol+1
++      const r2 = Array(width).fill('.');
++      r2[activeCol - 1] = '^';
++      r2[activeCol + 1] = '^';
++      rows.push(r2);
++      // activeCol stays the same (both inner children converge at activeCol)
++    }
++    // After L iterations we have L "V" stages -> each stage doubles paths: 2^L leaves out the bottom.
++    expect(countBeamPaths(rows)).toBe(2n ** BigInt(L));
++  });
++});
