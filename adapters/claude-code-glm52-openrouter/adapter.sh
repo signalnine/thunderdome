@@ -21,6 +21,7 @@ python3 /usr/local/bin/anth2openai_proxy.py \
   --log "$PROXY_LOG" \
   --upstream "https://openrouter.ai/api/v1" \
   --model "z-ai/glm-5.2" \
+  --provider '{"order":["Z.AI","Novita","AtlasCloud","Io Net"],"allow_fallbacks":false}' \
   --api-key "$OPENROUTER_API_KEY" &
 PROXY_PID=$!
 

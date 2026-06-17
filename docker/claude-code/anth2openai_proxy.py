@@ -56,6 +56,7 @@ def _decode_tool_id(anth_id):
 UPSTREAM = None
 API_KEY = None
 DEFAULT_MODEL = None
+PROVIDER_PREF = None  # OpenRouter provider routing preference (dict) injected into each request
 MIN_MAX_TOKENS = 0  # floor on max_tokens (thinking models need a minimum budget)
 LOG_PATH = None
 TRACE_PATH = None
@@ -193,6 +194,14 @@ def translate_request(body):
         bt = body["thinking"].get("budget_tokens") if isinstance(body["thinking"], dict) else None
         if bt:
             out["reasoning"]["max_tokens"] = bt
+
+    # OpenRouter provider routing preferences (e.g. {"sort":"throughput"} or a
+    # pinned {"order":[...]}). Default OpenRouter routing for z-ai/glm-5.2
+    # intermittently lands on a provider that takes ~5 min to prefill a 24K-token
+    # agentic turn, which times out the task; the fast providers serve the same
+    # request in 5-18s. Passing a preference keeps turns inside the time limit.
+    if PROVIDER_PREF is not None:
+        out["provider"] = PROVIDER_PREF
 
     out["stream"] = False  # always buffer upstream
     return out
@@ -488,7 +497,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global UPSTREAM, API_KEY, DEFAULT_MODEL, MIN_MAX_TOKENS, LOG_PATH, TRACE_PATH
+    global UPSTREAM, API_KEY, DEFAULT_MODEL, PROVIDER_PREF, MIN_MAX_TOKENS, LOG_PATH, TRACE_PATH
     p = argparse.ArgumentParser()
     p.add_argument("--port", type=int, default=18900)
     p.add_argument("--host", default="127.0.0.1")
@@ -503,6 +512,10 @@ def main():
                    help="Append one jsonl line per request with usage counters (for thunderdome metrics).")
     p.add_argument("--trace", default=None,
                    help="Append full request+response trace dumps (debugging).")
+    p.add_argument("--provider", default=None,
+                   help='OpenRouter provider routing JSON injected into each request, '
+                        'e.g. \'{"sort":"throughput"}\' or \'{"order":["Z.AI","Novita"]}\'. '
+                        'Avoids slow providers that time out large agentic turns.')
     args = p.parse_args()
 
     UPSTREAM = args.upstream
@@ -511,11 +524,15 @@ def main():
     MIN_MAX_TOKENS = args.min_max_tokens
     LOG_PATH = args.log
     TRACE_PATH = args.trace
+    if args.provider:
+        PROVIDER_PREF = json.loads(args.provider)
 
     print(f"anth2openai-proxy listening on http://{args.host}:{args.port}", flush=True)
     print(f"  upstream: {UPSTREAM}", flush=True)
     if DEFAULT_MODEL:
         print(f"  forcing model: {DEFAULT_MODEL}", flush=True)
+    if PROVIDER_PREF:
+        print(f"  provider routing: {PROVIDER_PREF}", flush=True)
 
     ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
 
