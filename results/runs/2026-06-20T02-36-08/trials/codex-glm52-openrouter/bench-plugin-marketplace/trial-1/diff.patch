@@ -1,0 +1,811 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..8b44b5c
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,9 @@
++{
++  "input_tokens": 537103,
++  "output_tokens": 15438,
++  "cache_read_tokens": 496256,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "duration_ms": 453000,
++  "total_cost_usd": 0.819871
++}
+\ No newline at end of file
+diff --git a/.thunderdome-output.jsonl b/.thunderdome-output.jsonl
+new file mode 100644
+index 0000000..03ae410
+--- /dev/null
++++ b/.thunderdome-output.jsonl
+@@ -0,0 +1,76 @@
++{"type":"thread.started","thread_id":"019ee2e7-1512-7a20-afba-6cbdc5fd01e4"}
++{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Model metadata for `z-ai/glm-5.2` not found. Defaulting to fallback metadata; this can degrade performance and cause issues."}}
++{"type":"turn.started"}
++{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"I'll start by exploring the provided files to understand the structure and types."}}
++{"type":"item.started","item":{"id":"item_2","type":"command_execution","command":"/bin/bash -lc \"find /workspace -type f -not -path '*/node_modules/*' -not -path '*/.git/*' | head -100\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_2","type":"command_execution","command":"/bin/bash -lc \"find /workspace -type f -not -path '*/node_modules/*' -not -path '*/.git/*' | head -100\"","aggregated_output":"/workspace/src/reviews/.gitkeep\n/workspace/src/types.ts\n/workspace/src/registry/.gitkeep\n/workspace/src/runner/.gitkeep\n/workspace/src/deps/.gitkeep\n/workspace/src/resolver/.gitkeep\n/workspace/vitest.config.ts\n/workspace/.thunderdome-output.jsonl\n/workspace/.eslintrc.cjs\n/workspace/.thunderdome-stderr.log\n/workspace/.thunderdome/rubric.yaml\n/workspace/package.json\n/workspace/TASK.md\n/workspace/package-lock.json\n/workspace/tsconfig.json\n/workspace/tests/deps.test.ts\n/workspace/tests/runner.test.ts\n/workspace/tests/integration.test.ts\n/workspace/tests/registry.test.ts\n/workspace/tests/resolver.test.ts\n/workspace/tests/reviews.test.ts\n/workspace/.gitignore\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_3","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/TASK.md'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_3","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/TASK.md'","aggregated_output":"# T7: Plugin Marketplace\n\n**Category:** greenfield/complex\n**Timeout:** 30 minutes\n**Tests:** 55 total (40 unit + 15 integration)\n\n## Objective\n\nBuild a plugin marketplace with 5 independent modules. Each module has its own directory, its own tests, and zero cross-module imports. A shared read-only `src/types.ts` defines all inter-module contracts. A thin integration layer `src/index.ts` composes the modules.\n\n## Modules\n\n1. **Plugin Registry** (`src/registry/index.ts`) — CRUD for plugin metadata with SQLite (better-sqlite3). Stores plugin manifests with name+version as composite key. Search by name/description substring.\n\n2. **Version Resolver** (`src/resolver/index.ts`) — Semver constraint resolution using the `semver` npm package. Resolves a set of version constraints against available versions. Pure logic, no database.\n\n3. **Sandboxed Runner** (`src/runner/index.ts`) — Execute plugin code in isolated contexts using Node.js `vm` module. Supports timeout enforcement and memory tracking. Returns structured SandboxResult.\n\n4. **Review System** (`src/reviews/index.ts`) — Ratings, comments, and moderation flags with SQLite. Computes average ratings (excluding flagged reviews). Supports querying by user, plugin, and flagged status.\n\n5. **Dependency Graph** (`src/deps/index.ts`) — Topological sort, cycle detection using DFS, dependency tree building, and flattening. Pure logic that queries the registry.\n\n## Integration Layer\n\n`src/index.ts` exports a `createMarketplace()` function that composes all 5 modules and provides an `installPlugin()` workflow:\n- Validate manifest (name, version, entryPoint required)\n- Register the plugin\n- Resolve dependency versions from registry\n- Check for circular dependencies\n- Execute entry point in sandbox\n- Return resolved versions and sandbox result\n\n## Constraints\n\n- **DO NOT modify `src/types.ts`** — its SHA-256 checksum is validated in integration tests\n- Each module must implement its corresponding service interface from `types.ts`\n- Modules import types from `../types.js` (ESM with .js extension)\n- Use `better-sqlite3` for database modules (registry, reviews)\n- Use `semver` package for version resolution\n- Use Node.js `vm` module (NOT vm2) for sandboxing\n- Zero cross-module imports (modules only depend on types)\n\n## Provided Files\n\n- `src/types.ts` — Read-only shared type definitions (~90 lines)\n- `package.json` — Dependencies already configured\n- `tsconfig.json`, `.eslintrc.cjs`, `vitest.config.ts` — Build/test config\n- All test files in `tests/`\n\n## Validation\n\n```bash\nnpm run build   # TypeScript compilation must succeed\nnpm run lint    # ESLint must pass\nnpm test        # All 55 tests must pass\n```\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_4","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/src/types.ts'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_4","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/src/types.ts'","aggregated_output":"// Plugin marketplace shared types - DO NOT MODIFY\nexport interface PluginManifest {\n  name: string;\n  version: string;\n  description: string;\n  author: string;\n  dependencies: Record<string, string>; // name -> semver range\n  entryPoint: string;\n  permissions: string[];\n}\n\nexport interface VersionConstraint {\n  name: string;\n  range: string; // semver range like \"^1.0.0\"\n}\n\nexport interface ResolvedVersion {\n  name: string;\n  version: string;\n  satisfies: string; // the range it satisfies\n}\n\nexport interface Review {\n  id: number;\n  pluginName: string;\n  pluginVersion: string;\n  userId: string;\n  rating: number; // 1-5\n  comment: string;\n  flagged: boolean;\n  createdAt: string;\n}\n\nexport interface DependencyNode {\n  name: string;\n  version: string;\n  dependencies: DependencyNode[];\n}\n\nexport interface SandboxResult {\n  success: boolean;\n  output: unknown;\n  duration: number;\n  memoryUsed: number;\n  error?: string;\n}\n\n// Service interfaces\nexport interface RegistryService {\n  register(manifest: PluginManifest): void;\n  get(name: string): PluginManifest | null;\n  getVersion(name: string, version: string): PluginManifest | null;\n  list(): PluginManifest[];\n  search(query: string): PluginManifest[];\n  remove(name: string, version: string): boolean;\n  listVersions(name: string): string[];\n  update(name: string, version: string, updates: Partial<PluginManifest>): void;\n}\n\nexport interface ResolverService {\n  resolve(constraints: VersionConstraint[], available: Record<string, string[]>): ResolvedVersion[];\n  satisfies(version: string, range: string): boolean;\n  maxSatisfying(versions: string[], range: string): string | null;\n  validRange(range: string): boolean;\n}\n\nexport interface RunnerService {\n  execute(code: string, context?: Record<string, unknown>): Promise<SandboxResult>;\n  executeWithTimeout(code: string, timeoutMs: number, context?: Record<string, unknown>): Promise<SandboxResult>;\n}\n\nexport interface ReviewService {\n  addReview(review: Omit<Review, 'id' | 'createdAt' | 'flagged'>): Review;\n  getReviews(pluginName: string): Review[];\n  getAverageRating(pluginName: string): number;\n  flagReview(reviewId: number): void;\n  getFlaggedReviews(): Review[];\n  removeReview(reviewId: number): boolean;\n  getReviewsByUser(userId: string): Review[];\n  getReviewCount(pluginName: string): number;\n}\n\nexport interface DepsService {\n  buildTree(name: string, registry: RegistryService): DependencyNode;\n  detectCycles(name: string, registry: RegistryService): string[][] | null;\n  topologicalSort(name: string, registry: RegistryService): string[];\n  flattenDependencies(name: string, registry: RegistryService): string[];\n  hasCircularDependency(name: string, registry: RegistryService): boolean;\n}\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_5","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/package.json /workspace/tsconfig.json /workspace/.eslintrc.cjs /workspace/vitest.config.ts'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_5","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/package.json /workspace/tsconfig.json /workspace/.eslintrc.cjs /workspace/vitest.config.ts'","aggregated_output":"{\n  \"name\": \"bench-plugin-marketplace\",\n  \"version\": \"1.0.0\",\n  \"description\": \"Plugin marketplace benchmark\",\n  \"type\": \"module\",\n  \"scripts\": {\n    \"build\": \"tsc\",\n    \"lint\": \"eslint src/ tests/\",\n    \"test\": \"vitest run\"\n  },\n  \"dependencies\": {\n    \"better-sqlite3\": \"^11.0.0\",\n    \"semver\": \"^7.6.0\"\n  },\n  \"devDependencies\": {\n    \"typescript\": \"^5.4.0\",\n    \"vitest\": \"^2.0.0\",\n    \"eslint\": \"^8.56.0\",\n    \"@typescript-eslint/parser\": \"^7.0.0\",\n    \"@typescript-eslint/eslint-plugin\": \"^7.0.0\",\n    \"@types/better-sqlite3\": \"^7.6.0\",\n    \"@types/semver\": \"^7.5.0\"\n  }\n}\n{\n  \"compilerOptions\": {\n    \"target\": \"ES2022\",\n    \"module\": \"Node16\",\n    \"moduleResolution\": \"Node16\",\n    \"outDir\": \"./dist\",\n    \"rootDir\": \"./src\",\n    \"strict\": true,\n    \"esModuleInterop\": true,\n    \"skipLibCheck\": true,\n    \"forceConsistentCasingInFileNames\": true,\n    \"resolveJsonModule\": true,\n    \"declaration\": true,\n    \"declarationMap\": true,\n    \"sourceMap\": true\n  },\n  \"include\": [\"src/**/*\"],\n  \"exclude\": [\"node_modules\", \"dist\", \"tests\"]\n}\nmodule.exports = {\n  parser: '@typescript-eslint/parser',\n  plugins: ['@typescript-eslint'],\n  extends: ['eslint:recommended', 'plugin:@typescript-eslint/recommended'],\n  parserOptions: {\n    ecmaVersion: 2022,\n    sourceType: 'module',\n  },\n  rules: {\n    '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],\n  },\n  env: {\n    node: true,\n    es2022: true,\n  },\n};\nimport { defineConfig } from 'vitest/config';\n\nexport default defineConfig({\n  test: {\n    globals: true,\n    testTimeout: 10000,\n  },\n});\n","exit_code":0,"status":"completed"}}
++{"type":"item.completed","item":{"id":"item_6","type":"agent_message","text":"Now let me read all the test files to understand exact expectations."}}
++{"type":"item.started","item":{"id":"item_7","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/tests/resolver.test.ts'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_7","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/tests/resolver.test.ts'","aggregated_output":"import { describe, it, expect } from 'vitest';\nimport { createResolver } from '../src/resolver/index.js';\n\ndescribe('Version Resolver', () => {\n  const resolver = createResolver();\n\n  it('satisfies returns true for matching version', () => {\n    expect(resolver.satisfies('1.2.3', '^1.0.0')).toBe(true);\n  });\n\n  it('satisfies returns false for non-matching', () => {\n    expect(resolver.satisfies('2.0.0', '^1.0.0')).toBe(false);\n  });\n\n  it('resolve finds versions satisfying all constraints', () => {\n    const constraints = [\n      { name: 'foo', range: '^1.0.0' },\n      { name: 'bar', range: '~2.1.0' },\n    ];\n    const available = {\n      foo: ['1.0.0', '1.2.3', '2.0.0'],\n      bar: ['2.0.0', '2.1.0', '2.1.5', '2.2.0'],\n    };\n    const result = resolver.resolve(constraints, available);\n    expect(result).toHaveLength(2);\n    expect(result[0].name).toBe('foo');\n    expect(result[0].version).toBe('1.2.3');\n    expect(result[1].name).toBe('bar');\n    expect(result[1].version).toBe('2.1.5');\n  });\n\n  it('resolve throws for unsatisfiable constraints', () => {\n    const constraints = [{ name: 'foo', range: '^3.0.0' }];\n    const available = { foo: ['1.0.0', '2.0.0'] };\n    expect(() => resolver.resolve(constraints, available)).toThrow();\n  });\n\n  it('maxSatisfying returns highest matching version', () => {\n    const versions = ['1.0.0', '1.1.0', '1.2.0', '2.0.0'];\n    expect(resolver.maxSatisfying(versions, '^1.0.0')).toBe('1.2.0');\n  });\n\n  it('validRange returns true for valid ranges', () => {\n    expect(resolver.validRange('^1.0.0')).toBe(true);\n    expect(resolver.validRange('~2.3.0')).toBe(true);\n    expect(resolver.validRange('>=1.0.0 <2.0.0')).toBe(true);\n  });\n\n  it('validRange returns false for invalid ranges', () => {\n    expect(resolver.validRange('not-a-range')).toBe(false);\n    expect(resolver.validRange('abc.def.ghi')).toBe(false);\n  });\n\n  it('resolve handles multiple plugins with dependencies', () => {\n    const constraints = [\n      { name: 'core', range: '^1.0.0' },\n      { name: 'utils', range: '^2.0.0' },\n      { name: 'logger', range: '>=1.5.0' },\n    ];\n    const available = {\n      core: ['1.0.0', '1.3.0', '2.0.0'],\n      utils: ['2.0.0', '2.1.0', '3.0.0'],\n      logger: ['1.0.0', '1.5.0', '1.9.0', '2.0.0'],\n    };\n    const result = resolver.resolve(constraints, available);\n    expect(result).toHaveLength(3);\n    expect(result.find(r => r.name === 'core')!.version).toBe('1.3.0');\n    expect(result.find(r => r.name === 'utils')!.version).toBe('2.1.0');\n    expect(result.find(r => r.name === 'logger')!.version).toBe('2.0.0');\n  });\n});\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_8","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/tests/registry.test.ts'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_8","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/tests/registry.test.ts'","aggregated_output":"import { describe, it, expect, beforeEach } from 'vitest';\nimport { createRegistry } from '../src/registry/index.js';\nimport type { PluginManifest, RegistryService } from '../src/types.js';\n\nfunction makeManifest(overrides: Partial<PluginManifest> = {}): PluginManifest {\n  return {\n    name: 'test-plugin',\n    version: '1.0.0',\n    description: 'A test plugin',\n    author: 'tester',\n    dependencies: {},\n    entryPoint: 'return 42;',\n    permissions: ['read'],\n    ...overrides,\n  };\n}\n\ndescribe('Plugin Registry', () => {\n  let registry: RegistryService;\n\n  beforeEach(() => {\n    registry = createRegistry();\n  });\n\n  it('register stores plugin manifest', () => {\n    const manifest = makeManifest();\n    registry.register(manifest);\n    const stored = registry.get('test-plugin');\n    expect(stored).not.toBeNull();\n    expect(stored!.name).toBe('test-plugin');\n    expect(stored!.version).toBe('1.0.0');\n  });\n\n  it('get retrieves registered plugin', () => {\n    const manifest = makeManifest({ description: 'special plugin' });\n    registry.register(manifest);\n    const result = registry.get('test-plugin');\n    expect(result).not.toBeNull();\n    expect(result!.description).toBe('special plugin');\n  });\n\n  it('get returns null for unregistered', () => {\n    const result = registry.get('nonexistent');\n    expect(result).toBeNull();\n  });\n\n  it('list returns all plugins', () => {\n    registry.register(makeManifest({ name: 'plugin-a', version: '1.0.0' }));\n    registry.register(makeManifest({ name: 'plugin-b', version: '2.0.0' }));\n    const all = registry.list();\n    expect(all).toHaveLength(2);\n    const names = all.map(p => p.name);\n    expect(names).toContain('plugin-a');\n    expect(names).toContain('plugin-b');\n  });\n\n  it('search finds by name substring', () => {\n    registry.register(makeManifest({ name: 'awesome-logger' }));\n    registry.register(makeManifest({ name: 'basic-util' }));\n    const results = registry.search('logger');\n    expect(results).toHaveLength(1);\n    expect(results[0].name).toBe('awesome-logger');\n  });\n\n  it('search finds by description', () => {\n    registry.register(makeManifest({ name: 'foo', description: 'A fantastic logging utility' }));\n    registry.register(makeManifest({ name: 'bar', description: 'Math helpers' }));\n    const results = registry.search('logging');\n    expect(results).toHaveLength(1);\n    expect(results[0].name).toBe('foo');\n  });\n\n  it('remove deletes plugin version', () => {\n    registry.register(makeManifest({ name: 'removable', version: '1.0.0' }));\n    expect(registry.get('removable')).not.toBeNull();\n    const removed = registry.remove('removable', '1.0.0');\n    expect(removed).toBe(true);\n    expect(registry.get('removable')).toBeNull();\n  });\n\n  it('listVersions returns all versions for a plugin', () => {\n    registry.register(makeManifest({ name: 'multi', version: '1.0.0' }));\n    registry.register(makeManifest({ name: 'multi', version: '1.1.0' }));\n    registry.register(makeManifest({ name: 'multi', version: '2.0.0' }));\n    const versions = registry.listVersions('multi');\n    expect(versions).toHaveLength(3);\n    expect(versions).toContain('1.0.0');\n    expect(versions).toContain('1.1.0');\n    expect(versions).toContain('2.0.0');\n  });\n});\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_9","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/tests/runner.test.ts'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_9","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/tests/runner.test.ts'","aggregated_output":"import { describe, it, expect } from 'vitest';\nimport { createRunner } from '../src/runner/index.js';\n\ndescribe('Sandboxed Runner', () => {\n  const runner = createRunner();\n\n  it('execute runs simple code and returns result', async () => {\n    const result = await runner.execute('return 2 + 3;');\n    expect(result.success).toBe(true);\n    expect(result.output).toBe(5);\n  });\n\n  it('execute provides context variables', async () => {\n    const result = await runner.execute('return x * y;', { x: 6, y: 7 });\n    expect(result.success).toBe(true);\n    expect(result.output).toBe(42);\n  });\n\n  it('executeWithTimeout kills long-running code', async () => {\n    const result = await runner.executeWithTimeout('while(true) {}', 100);\n    expect(result.success).toBe(false);\n    expect(result.error).toBeDefined();\n  });\n\n  it('execute captures output in result', async () => {\n    const result = await runner.execute('return { message: \"hello\" };');\n    expect(result.success).toBe(true);\n    expect(result.output).toEqual({ message: 'hello' });\n  });\n\n  it('execute reports duration', async () => {\n    const result = await runner.execute('return 1;');\n    expect(result.duration).toBeGreaterThanOrEqual(0);\n    expect(typeof result.duration).toBe('number');\n  });\n\n  it('execute catches runtime errors', async () => {\n    const result = await runner.execute('throw new Error(\"boom\");');\n    expect(result.success).toBe(false);\n    expect(result.error).toContain('boom');\n  });\n\n  it('execute isolates between runs (no shared state)', async () => {\n    await runner.execute('var leaked = 42;');\n    const result = await runner.execute('return typeof leaked;');\n    expect(result.success).toBe(true);\n    expect(result.output).toBe('undefined');\n  });\n\n  it('executeWithTimeout returns error on timeout', async () => {\n    const result = await runner.executeWithTimeout(\n      'var i = 0; while(true) { i++; }',\n      50\n    );\n    expect(result.success).toBe(false);\n    expect(result.error).toBeDefined();\n    expect(result.duration).toBeGreaterThan(0);\n  });\n});\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_10","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/tests/reviews.test.ts'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_10","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/tests/reviews.test.ts'","aggregated_output":"import { describe, it, expect, beforeEach } from 'vitest';\nimport { createReviewSystem } from '../src/reviews/index.js';\nimport type { ReviewService } from '../src/types.js';\n\ndescribe('Review System', () => {\n  let reviews: ReviewService;\n\n  beforeEach(() => {\n    reviews = createReviewSystem();\n  });\n\n  it('addReview creates review with auto-generated id', () => {\n    const review = reviews.addReview({\n      pluginName: 'test-plugin',\n      pluginVersion: '1.0.0',\n      userId: 'user1',\n      rating: 5,\n      comment: 'Great plugin!',\n    });\n    expect(review.id).toBeDefined();\n    expect(review.id).toBeGreaterThan(0);\n    expect(review.flagged).toBe(false);\n    expect(review.createdAt).toBeDefined();\n  });\n\n  it('getReviews returns reviews for plugin', () => {\n    reviews.addReview({\n      pluginName: 'plugin-a',\n      pluginVersion: '1.0.0',\n      userId: 'user1',\n      rating: 4,\n      comment: 'Good',\n    });\n    reviews.addReview({\n      pluginName: 'plugin-b',\n      pluginVersion: '1.0.0',\n      userId: 'user2',\n      rating: 3,\n      comment: 'Okay',\n    });\n    const result = reviews.getReviews('plugin-a');\n    expect(result).toHaveLength(1);\n    expect(result[0].pluginName).toBe('plugin-a');\n  });\n\n  it('getAverageRating computes correct average', () => {\n    reviews.addReview({ pluginName: 'p', pluginVersion: '1.0.0', userId: 'u1', rating: 4, comment: 'a' });\n    reviews.addReview({ pluginName: 'p', pluginVersion: '1.0.0', userId: 'u2', rating: 2, comment: 'b' });\n    expect(reviews.getAverageRating('p')).toBe(3);\n  });\n\n  it('flagReview sets flagged to true', () => {\n    const review = reviews.addReview({\n      pluginName: 'p',\n      pluginVersion: '1.0.0',\n      userId: 'u1',\n      rating: 1,\n      comment: 'spam',\n    });\n    reviews.flagReview(review.id);\n    const flagged = reviews.getFlaggedReviews();\n    expect(flagged).toHaveLength(1);\n    expect(flagged[0].flagged).toBe(true);\n  });\n\n  it('getFlaggedReviews returns only flagged', () => {\n    const r1 = reviews.addReview({ pluginName: 'p', pluginVersion: '1.0.0', userId: 'u1', rating: 1, comment: 'bad' });\n    reviews.addReview({ pluginName: 'p', pluginVersion: '1.0.0', userId: 'u2', rating: 5, comment: 'good' });\n    reviews.flagReview(r1.id);\n    const flagged = reviews.getFlaggedReviews();\n    expect(flagged).toHaveLength(1);\n    expect(flagged[0].id).toBe(r1.id);\n  });\n\n  it('removeReview deletes review', () => {\n    const review = reviews.addReview({\n      pluginName: 'p',\n      pluginVersion: '1.0.0',\n      userId: 'u1',\n      rating: 3,\n      comment: 'meh',\n    });\n    expect(reviews.removeReview(review.id)).toBe(true);\n    expect(reviews.getReviews('p')).toHaveLength(0);\n  });\n\n  it('getReviewsByUser returns user reviews', () => {\n    reviews.addReview({ pluginName: 'p1', pluginVersion: '1.0.0', userId: 'alice', rating: 5, comment: 'love it' });\n    reviews.addReview({ pluginName: 'p2', pluginVersion: '1.0.0', userId: 'alice', rating: 4, comment: 'nice' });\n    reviews.addReview({ pluginName: 'p1', pluginVersion: '1.0.0', userId: 'bob', rating: 3, comment: 'ok' });\n    const aliceReviews = reviews.getReviewsByUser('alice');\n    expect(aliceReviews).toHaveLength(2);\n    aliceReviews.forEach(r => expect(r.userId).toBe('alice'));\n  });\n\n  it('getReviewCount returns correct count', () => {\n    reviews.addReview({ pluginName: 'counter', pluginVersion: '1.0.0', userId: 'u1', rating: 5, comment: 'a' });\n    reviews.addReview({ pluginName: 'counter', pluginVersion: '1.0.0', userId: 'u2', rating: 4, comment: 'b' });\n    reviews.addReview({ pluginName: 'counter', pluginVersion: '1.1.0', userId: 'u3', rating: 3, comment: 'c' });\n    expect(reviews.getReviewCount('counter')).toBe(3);\n  });\n});\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_11","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/tests/deps.test.ts'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_11","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/tests/deps.test.ts'","aggregated_output":"import { describe, it, expect } from 'vitest';\nimport { createDepsService } from '../src/deps/index.js';\nimport { createRegistry } from '../src/registry/index.js';\nimport type { PluginManifest } from '../src/types.js';\n\nfunction makeManifest(name: string, deps: Record<string, string> = {}): PluginManifest {\n  return {\n    name,\n    version: '1.0.0',\n    description: `Plugin ${name}`,\n    author: 'tester',\n    dependencies: deps,\n    entryPoint: 'return true;',\n    permissions: [],\n  };\n}\n\ndescribe('Dependency Graph', () => {\n  const depsService = createDepsService();\n\n  it('buildTree creates correct dependency tree', () => {\n    const registry = createRegistry();\n    registry.register(makeManifest('A', { B: '^1.0.0' }));\n    registry.register(makeManifest('B', { C: '^1.0.0' }));\n    registry.register(makeManifest('C'));\n\n    const tree = depsService.buildTree('A', registry);\n    expect(tree.name).toBe('A');\n    expect(tree.dependencies).toHaveLength(1);\n    expect(tree.dependencies[0].name).toBe('B');\n    expect(tree.dependencies[0].dependencies).toHaveLength(1);\n    expect(tree.dependencies[0].dependencies[0].name).toBe('C');\n  });\n\n  it('detectCycles finds circular dependencies', () => {\n    const registry = createRegistry();\n    registry.register(makeManifest('X', { Y: '^1.0.0' }));\n    registry.register(makeManifest('Y', { X: '^1.0.0' }));\n\n    const cycles = depsService.detectCycles('X', registry);\n    expect(cycles).not.toBeNull();\n    expect(cycles!.length).toBeGreaterThan(0);\n    // The cycle should contain both X and Y\n    const flatCycle = cycles!.flat();\n    expect(flatCycle).toContain('X');\n    expect(flatCycle).toContain('Y');\n  });\n\n  it('detectCycles returns null for no cycles', () => {\n    const registry = createRegistry();\n    registry.register(makeManifest('A', { B: '^1.0.0' }));\n    registry.register(makeManifest('B'));\n\n    const cycles = depsService.detectCycles('A', registry);\n    expect(cycles).toBeNull();\n  });\n\n  it('topologicalSort returns correct order', () => {\n    const registry = createRegistry();\n    registry.register(makeManifest('A', { B: '^1.0.0', C: '^1.0.0' }));\n    registry.register(makeManifest('B', { C: '^1.0.0' }));\n    registry.register(makeManifest('C'));\n\n    const sorted = depsService.topologicalSort('A', registry);\n    expect(sorted.indexOf('C')).toBeLessThan(sorted.indexOf('B'));\n    expect(sorted.indexOf('B')).toBeLessThan(sorted.indexOf('A'));\n  });\n\n  it('flattenDependencies returns all transitive deps', () => {\n    const registry = createRegistry();\n    registry.register(makeManifest('root', { mid: '^1.0.0' }));\n    registry.register(makeManifest('mid', { leaf: '^1.0.0' }));\n    registry.register(makeManifest('leaf'));\n\n    const deps = depsService.flattenDependencies('root', registry);\n    expect(deps).toContain('mid');\n    expect(deps).toContain('leaf');\n    expect(deps).not.toContain('root');\n  });\n\n  it('hasCircularDependency returns true for cycles', () => {\n    const registry = createRegistry();\n    registry.register(makeManifest('A', { B: '^1.0.0' }));\n    registry.register(makeManifest('B', { A: '^1.0.0' }));\n\n    expect(depsService.hasCircularDependency('A', registry)).toBe(true);\n  });\n\n  it('hasCircularDependency returns false for acyclic', () => {\n    const registry = createRegistry();\n    registry.register(makeManifest('A', { B: '^1.0.0' }));\n    registry.register(makeManifest('B'));\n\n    expect(depsService.hasCircularDependency('A', registry)).toBe(false);\n  });\n\n  it('topologicalSort handles diamond dependencies', () => {\n    const registry = createRegistry();\n    // A -> B, A -> C, B -> D, C -> D (diamond)\n    registry.register(makeManifest('A', { B: '^1.0.0', C: '^1.0.0' }));\n    registry.register(makeManifest('B', { D: '^1.0.0' }));\n    registry.register(makeManifest('C', { D: '^1.0.0' }));\n    registry.register(makeManifest('D'));\n\n    const sorted = depsService.topologicalSort('A', registry);\n    expect(sorted).toHaveLength(4);\n    // D must come before B and C, and A must be last\n    expect(sorted.indexOf('D')).toBeLessThan(sorted.indexOf('B'));\n    expect(sorted.indexOf('D')).toBeLessThan(sorted.indexOf('C'));\n    expect(sorted.indexOf('A')).toBe(sorted.length - 1);\n  });\n});\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_12","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/tests/integration.test.ts'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_12","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/tests/integration.test.ts'","aggregated_output":"import { describe, it, expect, beforeAll, beforeEach } from 'vitest';\nimport { createHash } from 'crypto';\nimport { readFileSync } from 'fs';\nimport { createMarketplace } from '../src/index.js';\nimport type { Marketplace } from '../src/index.js';\nimport type { PluginManifest } from '../src/types.js';\n\nconst EXPECTED_HASH = 'a689d3f8ff186f56d180f66bb33b394e118b0721e7b8685b307b03991bbf9751';\n\nfunction makeManifest(overrides: Partial<PluginManifest> = {}): PluginManifest {\n  return {\n    name: 'test-plugin',\n    version: '1.0.0',\n    description: 'A test plugin',\n    author: 'tester',\n    dependencies: {},\n    entryPoint: 'return 42;',\n    permissions: ['read'],\n    ...overrides,\n  };\n}\n\nbeforeAll(() => {\n  const content = readFileSync(new URL('../src/types.ts', import.meta.url), 'utf-8');\n  const hash = createHash('sha256').update(content).digest('hex');\n  expect(hash).toBe(EXPECTED_HASH);\n});\n\ndescribe('Integration Tests', () => {\n  let marketplace: Marketplace;\n\n  beforeEach(() => {\n    marketplace = createMarketplace();\n  });\n\n  it('full install workflow: register -> resolve -> check deps -> run -> review', async () => {\n    // Register a dependency first\n    marketplace.registry.register(makeManifest({ name: 'dep-lib', version: '1.0.0' }));\n    marketplace.registry.register(makeManifest({ name: 'dep-lib', version: '1.2.0' }));\n\n    const plugin = makeManifest({\n      name: 'my-plugin',\n      version: '1.0.0',\n      dependencies: { 'dep-lib': '^1.0.0' },\n      entryPoint: 'return \"installed\";',\n    });\n\n    const result = await marketplace.installPlugin(plugin);\n    expect(result.resolved).toHaveLength(1);\n    expect(result.resolved[0].name).toBe('dep-lib');\n    expect(result.resolved[0].version).toBe('1.2.0');\n    expect(result.sandboxResult.success).toBe(true);\n    expect(result.sandboxResult.output).toBe('installed');\n\n    // Add a review\n    const review = marketplace.reviews.addReview({\n      pluginName: 'my-plugin',\n      pluginVersion: '1.0.0',\n      userId: 'user1',\n      rating: 5,\n      comment: 'Works perfectly!',\n    });\n    expect(review.id).toBeGreaterThan(0);\n  });\n\n  it('version conflict detection across plugins', () => {\n    const resolver = marketplace.resolver;\n    const constraints = [\n      { name: 'shared-lib', range: '^1.0.0' },\n      { name: 'shared-lib', range: '^2.0.0' },\n    ];\n    const available = { 'shared-lib': ['1.0.0', '1.5.0', '2.0.0', '2.1.0'] };\n\n    // Both constraints can be resolved independently; first one gets ^1, second gets ^2\n    // but the resolver resolves each constraint independently\n    const result = resolver.resolve(constraints, available);\n    expect(result).toHaveLength(2);\n    expect(result[0].version).toBe('1.5.0');\n    expect(result[1].version).toBe('2.1.0');\n  });\n\n  it('dependency chain resolution (A depends on B depends on C)', async () => {\n    marketplace.registry.register(makeManifest({ name: 'C', version: '1.0.0' }));\n    marketplace.registry.register(makeManifest({ name: 'B', version: '1.0.0', dependencies: { C: '^1.0.0' } }));\n    marketplace.registry.register(makeManifest({ name: 'A', version: '1.0.0', dependencies: { B: '^1.0.0' } }));\n\n    const sorted = marketplace.deps.topologicalSort('A', marketplace.registry);\n    expect(sorted).toEqual(['C', 'B', 'A']);\n  });\n\n  it('sandbox execution of plugin entry point', async () => {\n    const result = await marketplace.runner.execute('return { status: \"ok\", value: 100 };');\n    expect(result.success).toBe(true);\n    expect(result.output).toEqual({ status: 'ok', value: 100 });\n  });\n\n  it('review aggregation across versions', () => {\n    marketplace.reviews.addReview({ pluginName: 'plugin-x', pluginVersion: '1.0.0', userId: 'u1', rating: 5, comment: 'v1 great' });\n    marketplace.reviews.addReview({ pluginName: 'plugin-x', pluginVersion: '2.0.0', userId: 'u2', rating: 3, comment: 'v2 ok' });\n    // getReviews returns all reviews for the plugin name (all versions)\n    const allReviews = marketplace.reviews.getReviews('plugin-x');\n    expect(allReviews).toHaveLength(2);\n    expect(marketplace.reviews.getAverageRating('plugin-x')).toBe(4);\n  });\n\n  it('plugin removal cascades correctly', () => {\n    marketplace.registry.register(makeManifest({ name: 'to-remove', version: '1.0.0' }));\n    marketplace.registry.register(makeManifest({ name: 'to-remove', version: '2.0.0' }));\n    expect(marketplace.registry.listVersions('to-remove')).toHaveLength(2);\n\n    marketplace.registry.remove('to-remove', '1.0.0');\n    expect(marketplace.registry.listVersions('to-remove')).toHaveLength(1);\n    expect(marketplace.registry.getVersion('to-remove', '1.0.0')).toBeNull();\n    expect(marketplace.registry.getVersion('to-remove', '2.0.0')).not.toBeNull();\n  });\n\n  it('search returns relevant results ranked', () => {\n    marketplace.registry.register(makeManifest({ name: 'image-processor', description: 'Process images' }));\n    marketplace.registry.register(makeManifest({ name: 'data-analyzer', description: 'Analyze data' }));\n    marketplace.registry.register(makeManifest({ name: 'image-viewer', description: 'View images' }));\n\n    const results = marketplace.registry.search('image');\n    expect(results.length).toBeGreaterThanOrEqual(2);\n    const names = results.map(r => r.name);\n    expect(names).toContain('image-processor');\n    expect(names).toContain('image-viewer');\n  });\n\n  it('multiple version registration and resolution', () => {\n    marketplace.registry.register(makeManifest({ name: 'lib', version: '1.0.0' }));\n    marketplace.registry.register(makeManifest({ name: 'lib', version: '1.1.0' }));\n    marketplace.registry.register(makeManifest({ name: 'lib', version: '2.0.0' }));\n\n    const versions = marketplace.registry.listVersions('lib');\n    expect(versions).toHaveLength(3);\n\n    const resolved = marketplace.resolver.maxSatisfying(versions, '^1.0.0');\n    expect(resolved).toBe('1.1.0');\n  });\n\n  it('circular dependency detected in install workflow', async () => {\n    // Register A -> B -> A (cycle)\n    marketplace.registry.register(makeManifest({ name: 'cycle-b', version: '1.0.0', dependencies: { 'cycle-a': '^1.0.0' } }));\n\n    const cyclicPlugin = makeManifest({\n      name: 'cycle-a',\n      version: '1.0.0',\n      dependencies: { 'cycle-b': '^1.0.0' },\n      entryPoint: 'return true;',\n    });\n\n    await expect(marketplace.installPlugin(cyclicPlugin)).rejects.toThrow(/[Cc]ircular/);\n  });\n\n  it('plugin with no dependencies installs cleanly', async () => {\n    const plugin = makeManifest({\n      name: 'standalone',\n      version: '1.0.0',\n      entryPoint: 'return \"standalone\";',\n    });\n\n    const result = await marketplace.installPlugin(plugin);\n    expect(result.resolved).toHaveLength(0);\n    expect(result.sandboxResult.success).toBe(true);\n    expect(result.sandboxResult.output).toBe('standalone');\n  });\n\n  it('rating average updates after new review', () => {\n    marketplace.reviews.addReview({ pluginName: 'rated', pluginVersion: '1.0.0', userId: 'u1', rating: 4, comment: 'good' });\n    expect(marketplace.reviews.getAverageRating('rated')).toBe(4);\n\n    marketplace.reviews.addReview({ pluginName: 'rated', pluginVersion: '1.0.0', userId: 'u2', rating: 2, comment: 'meh' });\n    expect(marketplace.reviews.getAverageRating('rated')).toBe(3);\n  });\n\n  it('flagged review excluded from rating', () => {\n    marketplace.reviews.addReview({ pluginName: 'flagtest', pluginVersion: '1.0.0', userId: 'u1', rating: 5, comment: 'great' });\n    const badReview = marketplace.reviews.addReview({ pluginName: 'flagtest', pluginVersion: '1.0.0', userId: 'spam', rating: 1, comment: 'spam' });\n\n    expect(marketplace.reviews.getAverageRating('flagtest')).toBe(3);\n    marketplace.reviews.flagReview(badReview.id);\n    expect(marketplace.reviews.getAverageRating('flagtest')).toBe(5);\n  });\n\n  it('timeout enforcement in sandbox', async () => {\n    const result = await marketplace.runner.executeWithTimeout('while(true) {}', 100);\n    expect(result.success).toBe(false);\n    expect(result.error).toBeDefined();\n  });\n\n  it('install workflow rejects invalid manifest', async () => {\n    const invalid = makeManifest({ name: '', version: '1.0.0' });\n    await expect(marketplace.installPlugin(invalid)).rejects.toThrow(/[Ii]nvalid/);\n  });\n\n  it('dependency tree depth limit', () => {\n    // Build a very deep chain that shouldn't exceed the limit\n    const registry = marketplace.registry;\n    registry.register(makeManifest({ name: 'deep-5', version: '1.0.0' }));\n    registry.register(makeManifest({ name: 'deep-4', version: '1.0.0', dependencies: { 'deep-5': '^1.0.0' } }));\n    registry.register(makeManifest({ name: 'deep-3', version: '1.0.0', dependencies: { 'deep-4': '^1.0.0' } }));\n    registry.register(makeManifest({ name: 'deep-2', version: '1.0.0', dependencies: { 'deep-3': '^1.0.0' } }));\n    registry.register(makeManifest({ name: 'deep-1', version: '1.0.0', dependencies: { 'deep-2': '^1.0.0' } }));\n\n    const tree = marketplace.deps.buildTree('deep-1', marketplace.registry);\n    expect(tree.name).toBe('deep-1');\n    expect(tree.dependencies[0].name).toBe('deep-2');\n\n    // Flatten should return all 4 deps\n    const flat = marketplace.deps.flattenDependencies('deep-1', marketplace.registry);\n    expect(flat).toHaveLength(4);\n  });\n});\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_13","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/.thunderdome/rubric.yaml'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_13","type":"command_execution","command":"/bin/bash -lc 'cat /workspace/.thunderdome/rubric.yaml'","aggregated_output":"task: T7-plugin-marketplace\ncategory: greenfield/complex\ntimeout_minutes: 30\ntotal_tests: 55\n\nscoring:\n  unit_tests:\n    weight: 60\n    breakdown:\n      registry: 8\n      resolver: 8\n      runner: 8\n      reviews: 8\n      deps: 8\n  integration_tests:\n    weight: 30\n    count: 15\n  build_lint:\n    weight: 10\n    checks:\n      - tsc_compiles\n      - eslint_passes\n\nmodules:\n  - name: registry\n    path: src/registry/index.ts\n    interface: RegistryService\n    tests: tests/registry.test.ts\n    test_count: 8\n    dependencies: [better-sqlite3]\n\n  - name: resolver\n    path: src/resolver/index.ts\n    interface: ResolverService\n    tests: tests/resolver.test.ts\n    test_count: 8\n    dependencies: [semver]\n\n  - name: runner\n    path: src/runner/index.ts\n    interface: RunnerService\n    tests: tests/runner.test.ts\n    test_count: 8\n    dependencies: [vm]\n\n  - name: reviews\n    path: src/reviews/index.ts\n    interface: ReviewService\n    tests: tests/reviews.test.ts\n    test_count: 8\n    dependencies: [better-sqlite3]\n\n  - name: deps\n    path: src/deps/index.ts\n    interface: DepsService\n    tests: tests/deps.test.ts\n    test_count: 8\n    dependencies: []\n\nintegration:\n  path: src/index.ts\n  tests: tests/integration.test.ts\n  test_count: 15\n  exports: [createMarketplace]\n\ninvariants:\n  - src/types.ts must not be modified (SHA-256 checksum validated)\n  - zero cross-module imports (modules only import from ../types.js)\n  - ESM with .js extensions in imports\n","exit_code":0,"status":"completed"}}
++{"type":"item.completed","item":{"id":"item_14","type":"agent_message","text":"I have all the test expectations. Let me check the rubric for any additional detail and confirm the Marketplace interface needs."}}
++{"type":"item.started","item":{"id":"item_15","type":"command_execution","command":"/bin/bash -lc 'ls /workspace/node_modules/.bin/ 2>/dev/null | head; cat /workspace/.thunderdome-output.jsonl 2>/dev/null | head; node --version'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_15","type":"command_execution","command":"/bin/bash -lc 'ls /workspace/node_modules/.bin/ 2>/dev/null | head; cat /workspace/.thunderdome-output.jsonl 2>/dev/null | head; node --version'","aggregated_output":"{\"type\":\"thread.started\",\"thread_id\":\"019ee2e7-1512-7a20-afba-6cbdc5fd01e4\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"Model metadata for `z-ai/glm-5.2` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"agent_message\",\"text\":\"I'll start by exploring the provided files to understand the structure and types.\"}}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc \\\"find /workspace -type f -not -path '*/node_modules/*' -not -path '*/.git/*' | head -100\\\"\",\"aggregated_output\":\"\",\"exit_code\":null,\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc \\\"find /workspace -type f -not -path '*/node_modules/*' -not -path '*/.git/*' | head -100\\\"\",\"aggregated_output\":\"/workspace/src/reviews/.gitkeep\\n/workspace/src/types.ts\\n/workspace/src/registry/.gitkeep\\n/workspace/src/runner/.gitkeep\\n/workspace/src/deps/.gitkeep\\n/workspace/src/resolver/.gitkeep\\n/workspace/vitest.config.ts\\n/workspace/.thunderdome-output.jsonl\\n/workspace/.eslintrc.cjs\\n/workspace/.thunderdome-stderr.log\\n/workspace/.thunderdome/rubric.yaml\\n/workspace/package.json\\n/workspace/TASK.md\\n/workspace/package-lock.json\\n/workspace/tsconfig.json\\n/workspace/tests/deps.test.ts\\n/workspace/tests/runner.test.ts\\n/workspace/tests/integration.test.ts\\n/workspace/tests/registry.test.ts\\n/workspace/tests/resolver.test.ts\\n/workspace/tests/reviews.test.ts\\n/workspace/.gitignore\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_3\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat /workspace/TASK.md'\",\"aggregated_output\":\"\",\"exit_code\":null,\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_3\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat /workspace/TASK.md'\",\"aggregated_output\":\"# T7: Plugin Marketplace\\n\\n**Category:** greenfield/complex\\n**Timeout:** 30 minutes\\n**Tests:** 55 total (40 unit + 15 integration)\\n\\n## Objective\\n\\nBuild a plugin marketplace with 5 independent modules. Each module has its own directory, its own tests, and zero cross-module imports. A shared read-only `src/types.ts` defines all inter-module contracts. A thin integration layer `src/index.ts` composes the modules.\\n\\n## Modules\\n\\n1. **Plugin Registry** (`src/registry/index.ts`) — CRUD for plugin metadata with SQLite (better-sqlite3). Stores plugin manifests with name+version as composite key. Search by name/description substring.\\n\\n2. **Version Resolver** (`src/resolver/index.ts`) — Semver constraint resolution using the `semver` npm package. Resolves a set of version constraints against available versions. Pure logic, no database.\\n\\n3. **Sandboxed Runner** (`src/runner/index.ts`) — Execute plugin code in isolated contexts using Node.js `vm` module. Supports timeout enforcement and memory tracking. Returns structured SandboxResult.\\n\\n4. **Review System** (`src/reviews/index.ts`) — Ratings, comments, and moderation flags with SQLite. Computes average ratings (excluding flagged reviews). Supports querying by user, plugin, and flagged status.\\n\\n5. **Dependency Graph** (`src/deps/index.ts`) — Topological sort, cycle detection using DFS, dependency tree building, and flattening. Pure logic that queries the registry.\\n\\n## Integration Layer\\n\\n`src/index.ts` exports a `createMarketplace()` function that composes all 5 modules and provides an `installPlugin()` workflow:\\n- Validate manifest (name, version, entryPoint required)\\n- Register the plugin\\n- Resolve dependency versions from registry\\n- Check for circular dependencies\\n- Execute entry point in sandbox\\n- Return resolved versions and sandbox result\\n\\n## Constraints\\n\\n- **DO NOT modify `src/types.ts`** — its SHA-256 checksum is validated in integration tests\\n- Each module must implement its corresponding service interface from `types.ts`\\n- Modules import types from `../types.js` (ESM with .js extension)\\n- Use `better-sqlite3` for database modules (registry, reviews)\\n- Use `semver` package for version resolution\\n- Use Node.js `vm` module (NOT vm2) for sandboxing\\n- Zero cross-module imports (modules only depend on types)\\n\\n## Provided Files\\n\\n- `src/types.ts` — Read-only shared type definitions (~90 lines)\\n- `package.json` — Dependencies already configured\\n- `tsconfig.json`, `.eslintrc.cjs`, `vitest.config.ts` — Build/test config\\n- All test files in `tests/`\\n\\n## Validation\\n\\n```bash\\nnpm run build   # TypeScript compilation must succeed\\nnpm run lint    # ESLint must pass\\nnpm test        # All 55 tests must pass\\n```\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_4\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat /workspace/src/types.ts'\",\"aggregated_output\":\"\",\"exit_code\":null,\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_4\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat /workspace/src/types.ts'\",\"aggregated_output\":\"// Plugin marketplace shared types - DO NOT MODIFY\\nexport interface PluginManifest {\\n  name: string;\\n  version: string;\\n  description: string;\\n  author: string;\\n  dependencies: Record<string, string>; // name -> semver range\\n  entryPoint: string;\\n  permissions: string[];\\n}\\n\\nexport interface VersionConstraint {\\n  name: string;\\n  range: string; // semver range like \\\"^1.0.0\\\"\\n}\\n\\nexport interface ResolvedVersion {\\n  name: string;\\n  version: string;\\n  satisfies: string; // the range it satisfies\\n}\\n\\nexport interface Review {\\n  id: number;\\n  pluginName: string;\\n  pluginVersion: string;\\n  userId: string;\\n  rating: number; // 1-5\\n  comment: string;\\n  flagged: boolean;\\n  createdAt: string;\\n}\\n\\nexport interface DependencyNode {\\n  name: string;\\n  version: string;\\n  dependencies: DependencyNode[];\\n}\\n\\nexport interface SandboxResult {\\n  success: boolean;\\n  output: unknown;\\n  duration: number;\\n  memoryUsed: number;\\n  error?: string;\\n}\\n\\n// Service interfaces\\nexport interface RegistryService {\\n  register(manifest: PluginManifest): void;\\n  get(name: string): PluginManifest | null;\\n  getVersion(name: string, version: string): PluginManifest | null;\\n  list(): PluginManifest[];\\n  search(query: string): PluginManifest[];\\n  remove(name: string, version: string): boolean;\\n  listVersions(name: string): string[];\\n  update(name: string, version: string, updates: Partial<PluginManifest>): void;\\n}\\n\\nexport interface ResolverService {\\n  resolve(constraints: VersionConstraint[], available: Record<string, string[]>): ResolvedVersion[];\\n  satisfies(version: string, range: string): boolean;\\n  maxSatisfying(versions: string[], range: string): string | null;\\n  validRange(range: string): boolean;\\n}\\n\\nexport interface RunnerService {\\n  execute(code: string, context?: Record<string, unknown>): Promise<SandboxResult>;\\n  executeWithTimeout(code: string, timeoutMs: number, context?: Record<string, unknown>): Promise<SandboxResult>;\\n}\\n\\nexport interface ReviewService {\\n  addReview(review: Omit<Review, 'id' | 'createdAt' | 'flagged'>): Review;\\n  getReviews(pluginName: string): Review[];\\n  getAverageRating(pluginName: string): number;\\n  flagReview(reviewId: number): void;\\n  getFlaggedReviews(): Review[];\\n  removeReview(reviewId: number): boolean;\\n  getReviewsByUser(userId: string): Review[];\\n  getReviewCount(pluginName: string): number;\\n}\\n\\nexport interface DepsService {\\n  buildTree(name: string, registry: RegistryService): DependencyNode;\\n  detectCycles(name: string, registry: RegistryService): string[][] | null;\\n  topologicalSort(name: string, registry: RegistryService): string[];\\n  flattenDependencies(name: string, registry: RegistryService): string[];\\n  hasCircularDependency(name: string, registry: RegistryService): boolean;\\n}\\n\",\"exit_code\":0,\"status\":\"completed\"}}\nv20.20.1\n","exit_code":0,"status":"completed"}}
++{"type":"item.completed","item":{"id":"item_16","type":"agent_message","text":"Dependencies appear installed. Let me verify node_modules exists and confirm the test count understanding."}}
++{"type":"item.started","item":{"id":"item_17","type":"command_execution","command":"/bin/bash -lc 'ls /workspace/node_modules/better-sqlite3 /workspace/node_modules/semver >/dev/null 2>&1 && echo \"deps present\"; cat /workspace/.gitignore'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_17","type":"command_execution","command":"/bin/bash -lc 'ls /workspace/node_modules/better-sqlite3 /workspace/node_modules/semver >/dev/null 2>&1 && echo \"deps present\"; cat /workspace/.gitignore'","aggregated_output":"node_modules/\ndist/\n*.js.map\n*.d.ts.map\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_18","type":"todo_list","items":[{"text":"Implement registry module (SQLite CRUD)","completed":false},{"text":"Implement resolver module (semver)","completed":false},{"text":"Implement runner module (vm sandbox)","completed":false},{"text":"Implement reviews module (SQLite)","completed":false},{"text":"Implement deps module (DFS graph)","completed":false},{"text":"Implement index.ts marketplace layer","completed":false},{"text":"Run build, lint, and all 55 tests","completed":false}]}}
++{"type":"item.completed","item":{"id":"item_19","type":"agent_message","text":"All requirements are clear. Let me set up a plan and implement all modules."}}
++{"type":"item.completed","item":{"id":"item_20","type":"agent_message","text":"Now implementing all modules. Starting with the registry:"}}
++{"type":"item.started","item":{"id":"item_21","type":"command_execution","command":"/bin/bash -lc \"cat > /workspace/src/registry/index.ts << 'EOF'\nimport Database from 'better-sqlite3';\nimport type { Database as DatabaseType } from 'better-sqlite3';\nimport type { PluginManifest, RegistryService } from '../types.js';\nimport { compare } from 'semver';\n\nconst CREATE_SQL = \"'`\n  CREATE TABLE IF NOT EXISTS plugins (\n    name TEXT NOT NULL,\n    version TEXT NOT NULL,\n    description TEXT NOT NULL,\n    author TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    entry_point TEXT NOT NULL,\n    permissions TEXT NOT NULL,\n    PRIMARY KEY (name, version)\n  )\n`;\n\nfunction rowToManifest(row: Record<string, string>): PluginManifest {\n  return {\n    name: row.name,\n    version: row.version,\n    description: row.description,\n    author: row.author,\n    dependencies: JSON.parse(row.dependencies) as Record<string, string>,\n    entryPoint: row.entry_point,\n    permissions: JSON.parse(row.permissions) as string[],\n  };\n}\n\nexport function createRegistry(db?: DatabaseType): RegistryService {\n  const database = db ?? new Database('\"':memory:');\n  database.exec(CREATE_SQL);\n\n  const registerStmt = database.prepare(\n    \"'`INSERT OR REPLACE INTO plugins (name, version, description, author, dependencies, entry_point, permissions)\n     VALUES (@name, @version, @description, @author, @dependencies, @entry_point, @permissions)`\n  );\n  const getVersionStmt = database.prepare(\n    '\"'SELECT * FROM plugins WHERE name = ? AND version = ?'\n  );\n  const listByNameStmt = database.prepare('SELECT * FROM plugins WHERE name = ?');\n  const listAllStmt = database.prepare('SELECT * FROM plugins');\n  const searchStmt = database.prepare(\n    'SELECT * FROM plugins WHERE name LIKE ? OR description LIKE ?'\n  );\n  const removeStmt = database.prepare(\n    'DELETE FROM plugins WHERE name = ? AND version = ?'\n  );\n  const updateStmt = database.prepare(\n    \"'`UPDATE plugins SET\n       description = COALESCE(@description, description),\n       author = COALESCE(@author, author),\n       dependencies = COALESCE(@dependencies, dependencies),\n       entry_point = COALESCE(@entry_point, entry_point),\n       permissions = COALESCE(@permissions, permissions)\n     WHERE name = @name AND version = @version`\n  );\n\n  return {\n    register(manifest: PluginManifest): void {\n      registerStmt.run({\n        name: manifest.name,\n        version: manifest.version,\n        description: manifest.description,\n        author: manifest.author,\n        dependencies: JSON.stringify(manifest.dependencies),\n        entry_point: manifest.entryPoint,\n        permissions: JSON.stringify(manifest.permissions),\n      });\n    },\n\n    get(name: string): PluginManifest | null {\n      const rows = listByNameStmt.all(name) as Record<string, string>[];\n      if (rows.length === 0) return null;\n      rows.sort((a, b) => compare(b.version, a.version));\n      return rowToManifest(rows[0]);\n    },\n\n    getVersion(name: string, version: string): PluginManifest | null {\n      const row = getVersionStmt.get(name, version) as Record<string, string> | undefined;\n      return row ? rowToManifest(row) : null;\n    },\n\n    list(): PluginManifest[] {\n      const rows = listAllStmt.all() as Record<string, string>[];\n      return rows.map(rowToManifest);\n    },\n\n    search(query: string): PluginManifest[] {\n      const pattern = `%${query}%`;\n      const rows = searchStmt.all(pattern, pattern) as Record<string, string>[];\n      return rows.map(rowToManifest);\n    },\n\n    remove(name: string, version: string): boolean {\n      const info = removeStmt.run(name, version);\n      return info.changes > 0;\n    },\n\n    listVersions(name: string): string[] {\n      const rows = listByNameStmt.all(name) as Record<string, string>[];\n      return rows.map(r => r.version).sort((a, b) => compare(a, b));\n    },\n\n    update(name: string, version: string, updates: Partial<PluginManifest>): void {\n      updateStmt.run({\n        name,\n        version,\n        description: updates.description ?? null,\n        author: updates.author ?? null,\n        dependencies: updates.dependencies ? JSON.stringify(updates.dependencies) : null,\n        entry_point: updates.entryPoint ?? null,\n        permissions: updates.permissions ? JSON.stringify(updates.permissions) : null,\n      });\n    },\n  };\n}\nEOF\necho \"registry written\"'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_21","type":"command_execution","command":"/bin/bash -lc \"cat > /workspace/src/registry/index.ts << 'EOF'\nimport Database from 'better-sqlite3';\nimport type { Database as DatabaseType } from 'better-sqlite3';\nimport type { PluginManifest, RegistryService } from '../types.js';\nimport { compare } from 'semver';\n\nconst CREATE_SQL = \"'`\n  CREATE TABLE IF NOT EXISTS plugins (\n    name TEXT NOT NULL,\n    version TEXT NOT NULL,\n    description TEXT NOT NULL,\n    author TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    entry_point TEXT NOT NULL,\n    permissions TEXT NOT NULL,\n    PRIMARY KEY (name, version)\n  )\n`;\n\nfunction rowToManifest(row: Record<string, string>): PluginManifest {\n  return {\n    name: row.name,\n    version: row.version,\n    description: row.description,\n    author: row.author,\n    dependencies: JSON.parse(row.dependencies) as Record<string, string>,\n    entryPoint: row.entry_point,\n    permissions: JSON.parse(row.permissions) as string[],\n  };\n}\n\nexport function createRegistry(db?: DatabaseType): RegistryService {\n  const database = db ?? new Database('\"':memory:');\n  database.exec(CREATE_SQL);\n\n  const registerStmt = database.prepare(\n    \"'`INSERT OR REPLACE INTO plugins (name, version, description, author, dependencies, entry_point, permissions)\n     VALUES (@name, @version, @description, @author, @dependencies, @entry_point, @permissions)`\n  );\n  const getVersionStmt = database.prepare(\n    '\"'SELECT * FROM plugins WHERE name = ? AND version = ?'\n  );\n  const listByNameStmt = database.prepare('SELECT * FROM plugins WHERE name = ?');\n  const listAllStmt = database.prepare('SELECT * FROM plugins');\n  const searchStmt = database.prepare(\n    'SELECT * FROM plugins WHERE name LIKE ? OR description LIKE ?'\n  );\n  const removeStmt = database.prepare(\n    'DELETE FROM plugins WHERE name = ? AND version = ?'\n  );\n  const updateStmt = database.prepare(\n    \"'`UPDATE plugins SET\n       description = COALESCE(@description, description),\n       author = COALESCE(@author, author),\n       dependencies = COALESCE(@dependencies, dependencies),\n       entry_point = COALESCE(@entry_point, entry_point),\n       permissions = COALESCE(@permissions, permissions)\n     WHERE name = @name AND version = @version`\n  );\n\n  return {\n    register(manifest: PluginManifest): void {\n      registerStmt.run({\n        name: manifest.name,\n        version: manifest.version,\n        description: manifest.description,\n        author: manifest.author,\n        dependencies: JSON.stringify(manifest.dependencies),\n        entry_point: manifest.entryPoint,\n        permissions: JSON.stringify(manifest.permissions),\n      });\n    },\n\n    get(name: string): PluginManifest | null {\n      const rows = listByNameStmt.all(name) as Record<string, string>[];\n      if (rows.length === 0) return null;\n      rows.sort((a, b) => compare(b.version, a.version));\n      return rowToManifest(rows[0]);\n    },\n\n    getVersion(name: string, version: string): PluginManifest | null {\n      const row = getVersionStmt.get(name, version) as Record<string, string> | undefined;\n      return row ? rowToManifest(row) : null;\n    },\n\n    list(): PluginManifest[] {\n      const rows = listAllStmt.all() as Record<string, string>[];\n      return rows.map(rowToManifest);\n    },\n\n    search(query: string): PluginManifest[] {\n      const pattern = `%${query}%`;\n      const rows = searchStmt.all(pattern, pattern) as Record<string, string>[];\n      return rows.map(rowToManifest);\n    },\n\n    remove(name: string, version: string): boolean {\n      const info = removeStmt.run(name, version);\n      return info.changes > 0;\n    },\n\n    listVersions(name: string): string[] {\n      const rows = listByNameStmt.all(name) as Record<string, string>[];\n      return rows.map(r => r.version).sort((a, b) => compare(a, b));\n    },\n\n    update(name: string, version: string, updates: Partial<PluginManifest>): void {\n      updateStmt.run({\n        name,\n        version,\n        description: updates.description ?? null,\n        author: updates.author ?? null,\n        dependencies: updates.dependencies ? JSON.stringify(updates.dependencies) : null,\n        entry_point: updates.entryPoint ?? null,\n        permissions: updates.permissions ? JSON.stringify(updates.permissions) : null,\n      });\n    },\n  };\n}\nEOF\necho \"registry written\"'","aggregated_output":"registry written\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_22","type":"command_execution","command":"/bin/bash -lc \"cat > /workspace/src/resolver/index.ts << 'EOF'\nimport { satisfies, maxSatisfying, validRange } from 'semver';\nimport type {\n  ResolverService,\n  VersionConstraint,\n  ResolvedVersion,\n} from '../types.js';\n\nexport function createResolver(): ResolverService {\n  return {\n    resolve(\n      constraints: VersionConstraint[],\n      available: Record<string, string[]>\n    ): ResolvedVersion[] {\n      return constraints.map(constraint => {\n        const versions = available[constraint.name];\n        if (\"'!versions || versions.length === 0) {\n          throw new Error(\n            `No available versions for \"${constraint.name}\"`\n          );\n        }\n        const best = maxSatisfying(versions, constraint.range);\n        if (best === null) {\n          throw new Error(\n            `No version of \"${constraint.name}\" satisfies range \"${constraint.range}\"`\n          );\n        }\n        return {\n          name: constraint.name,\n          version: best,\n          satisfies: constraint.range,\n        } satisfies ResolvedVersion;\n      });\n    },\n\n    satisfies(version: string, range: string): boolean {\n      return satisfies(version, range);\n    },\n\n    maxSatisfying(versions: string[], range: string): string | null {\n      return maxSatisfying(versions, range);\n    },\n\n    validRange(range: string): boolean {\n      return validRange(range) !== null;\n    },\n  };\n}\nEOF\necho \"resolver written\"'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_22","type":"command_execution","command":"/bin/bash -lc \"cat > /workspace/src/resolver/index.ts << 'EOF'\nimport { satisfies, maxSatisfying, validRange } from 'semver';\nimport type {\n  ResolverService,\n  VersionConstraint,\n  ResolvedVersion,\n} from '../types.js';\n\nexport function createResolver(): ResolverService {\n  return {\n    resolve(\n      constraints: VersionConstraint[],\n      available: Record<string, string[]>\n    ): ResolvedVersion[] {\n      return constraints.map(constraint => {\n        const versions = available[constraint.name];\n        if (\"'!versions || versions.length === 0) {\n          throw new Error(\n            `No available versions for \"${constraint.name}\"`\n          );\n        }\n        const best = maxSatisfying(versions, constraint.range);\n        if (best === null) {\n          throw new Error(\n            `No version of \"${constraint.name}\" satisfies range \"${constraint.range}\"`\n          );\n        }\n        return {\n          name: constraint.name,\n          version: best,\n          satisfies: constraint.range,\n        } satisfies ResolvedVersion;\n      });\n    },\n\n    satisfies(version: string, range: string): boolean {\n      return satisfies(version, range);\n    },\n\n    maxSatisfying(versions: string[], range: string): string | null {\n      return maxSatisfying(versions, range);\n    },\n\n    validRange(range: string): boolean {\n      return validRange(range) !== null;\n    },\n  };\n}\nEOF\necho \"resolver written\"'","aggregated_output":"resolver written\n","exit_code":0,"status":"completed"}}
++{"type":"item.completed","item":{"id":"item_23","type":"agent_message","text":"Now the runner module. The key challenge: handling `while(true){}` timeout with the `vm` module. Since `vm` runs synchronously, I'll run it in a worker/child context. Actually, the cleanest approach for timeout on synchronous infinite loop is to run the vm code in a separate Node worker thread that can be terminated."}}
++{"type":"item.started","item":{"id":"item_24","type":"command_execution","command":"/bin/bash -lc \"cat > /workspace/src/runner/index.ts << 'EOF'\nimport { createContext, Script, Context } from 'vm';\nimport type { RunnerService, SandboxResult } from '../types.js';\n\nfunction measureMemory(): number {\n  return process.memoryUsage().heapUsed;\n}\n\nfunction runInSandbox(\n  code: string,\n  context: Record<string, unknown> = {}\n): { output: unknown; error?: string } {\n  const sandbox: Context = createContext({\n    ...context,\n    module: { exports: {} as Record<string, unknown> },\n    exports: {} as Record<string, unknown>,\n    console: {\n      log: (...args: unknown[]) => {\n        // swallow logs to keep sandbox isolated\n        void args;\n      },\n    },\n  });\n\n  const script = new Script(code);\n\n  let output: unknown = undefined;\n  try {\n    output = script.runInContext(sandbox, {\n      timeout: 0,\n      breakOnSigint: true,\n    });\n  } catch (err) {\n    return { output: undefined, error: err instanceof Error ? err.message : String(err) };\n  }\n\n  // If explicit return value is undefined, fall back to module.exports\n  if (output === undefined) {\n    const modExports = (sandbox as Record<string, unknown>)['module'] as\n      | { exports?: unknown }\n      | undefined;\n    if (modExports && modExports.exports && Object.keys(modExports.exports as object).length > 0) {\n      output = modExports.exports;\n    }\n  }\n\n  return { output };\n}\n\nexport function createRunner(): RunnerService {\n  async function executeInternal(\n    code: string,\n    timeoutMs: number | undefined,\n    context?: Record<string, unknown>\n  ): Promise<SandboxResult> {\n    const startMemory = measureMemory();\n    const startTime = process.hrtime.bigint();\n\n    let result: { output: unknown; error?: string };\n    let timedOut = false;\n\n    if (timeoutMs \"'!== undefined) {\n      // Synchronous vm can'\"'t be interrupted cleanly for infinite loops without a\n      // separate thread. We run the code in a worker thread so we can terminate it\n      // on timeout.\n      const { Worker } = await import('worker_threads');\n      const workerCode = \"'`\n        const { createContext, Script } = require('\"'vm');\n        const { parentPort } = require('worker_threads');\n        const userCode = \"'${JSON.stringify(code)};\n        const ctx = ${JSON.stringify(context ?? {})};\n        try {\n          const sandbox = createContext({ ...ctx });\n          const script = new Script(userCode);\n          const output = script.runInContext(sandbox, { timeout: 0 });\n          parentPort.postMessage({ output });\n        } catch (err) {\n          parentPort.postMessage({ error: err instanceof Error ? err.message : String(err) });\n        }\n      `;\n      const worker = new Worker(workerCode, { eval: true });\n      result = await new Promise<{ output: unknown; error?: string }>(resolve => {\n        let settled = false;\n        const timer = setTimeout(() => {\n          if (settled) return;\n          settled = true;\n          timedOut = true;\n          worker.terminate();\n          resolve({ output: undefined, error: `Execution timed out after ${timeoutMs}ms` });\n        }, timeoutMs);\n\n        worker.on('\"'message', (msg: { output?: unknown; error?: string }) => {\n          if (settled) return;\n          settled = true;\n          clearTimeout(timer);\n          worker.terminate();\n          resolve({ output: msg.output, error: msg.error });\n        });\n\n        worker.on('error', (err: Error) => {\n          if (settled) return;\n          settled = true;\n          clearTimeout(timer);\n          worker.terminate();\n          resolve({ output: undefined, error: err.message });\n        });\n      });\n    } else {\n      result = runInSandbox(code, context);\n    }\n\n    const endTime = process.hrtime.bigint();\n    const duration = Number(endTime - startTime) / 1e6;\n\n    return {\n      success: \"'!result.error && !timedOut,\n      output: timedOut ? undefined : result.output,\n      duration,\n      memoryUsed: measureMemory() - startMemory,\n      error: result.error,\n    };\n  }\n\n  return {\n    execute(code: string, context?: Record<string, unknown>): Promise<SandboxResult> {\n      return executeInternal(code, undefined, context);\n    },\n    executeWithTimeout(\n      code: string,\n      timeoutMs: number,\n      context?: Record<string, unknown>\n    ): Promise<SandboxResult> {\n      return executeInternal(code, timeoutMs, context);\n    },\n  };\n}\nEOF\necho \"runner written\"'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_24","type":"command_execution","command":"/bin/bash -lc \"cat > /workspace/src/runner/index.ts << 'EOF'\nimport { createContext, Script, Context } from 'vm';\nimport type { RunnerService, SandboxResult } from '../types.js';\n\nfunction measureMemory(): number {\n  return process.memoryUsage().heapUsed;\n}\n\nfunction runInSandbox(\n  code: string,\n  context: Record<string, unknown> = {}\n): { output: unknown; error?: string } {\n  const sandbox: Context = createContext({\n    ...context,\n    module: { exports: {} as Record<string, unknown> },\n    exports: {} as Record<string, unknown>,\n    console: {\n      log: (...args: unknown[]) => {\n        // swallow logs to keep sandbox isolated\n        void args;\n      },\n    },\n  });\n\n  const script = new Script(code);\n\n  let output: unknown = undefined;\n  try {\n    output = script.runInContext(sandbox, {\n      timeout: 0,\n      breakOnSigint: true,\n    });\n  } catch (err) {\n    return { output: undefined, error: err instanceof Error ? err.message : String(err) };\n  }\n\n  // If explicit return value is undefined, fall back to module.exports\n  if (output === undefined) {\n    const modExports = (sandbox as Record<string, unknown>)['module'] as\n      | { exports?: unknown }\n      | undefined;\n    if (modExports && modExports.exports && Object.keys(modExports.exports as object).length > 0) {\n      output = modExports.exports;\n    }\n  }\n\n  return { output };\n}\n\nexport function createRunner(): RunnerService {\n  async function executeInternal(\n    code: string,\n    timeoutMs: number | undefined,\n    context?: Record<string, unknown>\n  ): Promise<SandboxResult> {\n    const startMemory = measureMemory();\n    const startTime = process.hrtime.bigint();\n\n    let result: { output: unknown; error?: string };\n    let timedOut = false;\n\n    if (timeoutMs \"'!== undefined) {\n      // Synchronous vm can'\"'t be interrupted cleanly for infinite loops without a\n      // separate thread. We run the code in a worker thread so we can terminate it\n      // on timeout.\n      const { Worker } = await import('worker_threads');\n      const workerCode = \"'`\n        const { createContext, Script } = require('\"'vm');\n        const { parentPort } = require('worker_threads');\n        const userCode = \"'${JSON.stringify(code)};\n        const ctx = ${JSON.stringify(context ?? {})};\n        try {\n          const sandbox = createContext({ ...ctx });\n          const script = new Script(userCode);\n          const output = script.runInContext(sandbox, { timeout: 0 });\n          parentPort.postMessage({ output });\n        } catch (err) {\n          parentPort.postMessage({ error: err instanceof Error ? err.message : String(err) });\n        }\n      `;\n      const worker = new Worker(workerCode, { eval: true });\n      result = await new Promise<{ output: unknown; error?: string }>(resolve => {\n        let settled = false;\n        const timer = setTimeout(() => {\n          if (settled) return;\n          settled = true;\n          timedOut = true;\n          worker.terminate();\n          resolve({ output: undefined, error: `Execution timed out after ${timeoutMs}ms` });\n        }, timeoutMs);\n\n        worker.on('\"'message', (msg: { output?: unknown; error?: string }) => {\n          if (settled) return;\n          settled = true;\n          clearTimeout(timer);\n          worker.terminate();\n          resolve({ output: msg.output, error: msg.error });\n        });\n\n        worker.on('error', (err: Error) => {\n          if (settled) return;\n          settled = true;\n          clearTimeout(timer);\n          worker.terminate();\n          resolve({ output: undefined, error: err.message });\n        });\n      });\n    } else {\n      result = runInSandbox(code, context);\n    }\n\n    const endTime = process.hrtime.bigint();\n    const duration = Number(endTime - startTime) / 1e6;\n\n    return {\n      success: \"'!result.error && !timedOut,\n      output: timedOut ? undefined : result.output,\n      duration,\n      memoryUsed: measureMemory() - startMemory,\n      error: result.error,\n    };\n  }\n\n  return {\n    execute(code: string, context?: Record<string, unknown>): Promise<SandboxResult> {\n      return executeInternal(code, undefined, context);\n    },\n    executeWithTimeout(\n      code: string,\n      timeoutMs: number,\n      context?: Record<string, unknown>\n    ): Promise<SandboxResult> {\n      return executeInternal(code, timeoutMs, context);\n    },\n  };\n}\nEOF\necho \"runner written\"'","aggregated_output":"runner written\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_25","type":"command_execution","command":"/bin/bash -lc \"cat > /workspace/src/reviews/index.ts << 'EOF'\nimport Database from 'better-sqlite3';\nimport type { Database as DatabaseType } from 'better-sqlite3';\nimport type { Review, ReviewService } from '../types.js';\n\nconst CREATE_SQL = \"'`\n  CREATE TABLE IF NOT EXISTS reviews (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    plugin_name TEXT NOT NULL,\n    plugin_version TEXT NOT NULL,\n    user_id TEXT NOT NULL,\n    rating INTEGER NOT NULL,\n    comment TEXT NOT NULL,\n    flagged INTEGER NOT NULL DEFAULT 0,\n    created_at TEXT NOT NULL\n  )\n`;\n\ninterface ReviewRow {\n  id: number;\n  plugin_name: string;\n  plugin_version: string;\n  user_id: string;\n  rating: number;\n  comment: string;\n  flagged: number;\n  created_at: string;\n}\n\nfunction rowToReview(row: ReviewRow): Review {\n  return {\n    id: row.id,\n    pluginName: row.plugin_name,\n    pluginVersion: row.plugin_version,\n    userId: row.user_id,\n    rating: row.rating,\n    comment: row.comment,\n    flagged: row.flagged === 1,\n    createdAt: row.created_at,\n  };\n}\n\nexport function createReviewSystem(db?: DatabaseType): ReviewService {\n  const database = db ?? new Database('\"':memory:');\n  database.exec(CREATE_SQL);\n\n  const insertStmt = database.prepare(\n    \"'`INSERT INTO reviews (plugin_name, plugin_version, user_id, rating, comment, flagged, created_at)\n     VALUES (@plugin_name, @plugin_version, @user_id, @rating, @comment, 0, @created_at)`\n  );\n  const getByIdStmt = database.prepare('\"'SELECT * FROM reviews WHERE id = ?');\n  const getByPluginStmt = database.prepare(\n    'SELECT * FROM reviews WHERE plugin_name = ? ORDER BY id ASC'\n  );\n  const getByUserStmt = database.prepare(\n    'SELECT * FROM reviews WHERE user_id = ? ORDER BY id ASC'\n  );\n  const getFlaggedStmt = database.prepare(\n    'SELECT * FROM reviews WHERE flagged = 1 ORDER BY id ASC'\n  );\n  const flagStmt = database.prepare('UPDATE reviews SET flagged = 1 WHERE id = ?');\n  const deleteStmt = database.prepare('DELETE FROM reviews WHERE id = ?');\n  const countStmt = database.prepare(\n    'SELECT COUNT(*) as count FROM reviews WHERE plugin_name = ?'\n  );\n\n  return {\n    addReview(review: Omit<Review, 'id' | 'createdAt' | 'flagged'>): Review {\n      const createdAt = new Date().toISOString();\n      const info = insertStmt.run({\n        plugin_name: review.pluginName,\n        plugin_version: review.pluginVersion,\n        user_id: review.userId,\n        rating: review.rating,\n        comment: review.comment,\n        created_at: createdAt,\n      });\n      const row = getByIdStmt.get(info.lastInsertRowid) as ReviewRow;\n      return rowToReview(row);\n    },\n\n    getReviews(pluginName: string): Review[] {\n      const rows = getByPluginStmt.all(pluginName) as ReviewRow[];\n      return rows.map(rowToReview);\n    },\n\n    getAverageRating(pluginName: string): number {\n      const rows = getByPluginStmt.all(pluginName) as ReviewRow[];\n      const active = rows.filter(r => r.flagged === 0);\n      if (active.length === 0) return 0;\n      const total = active.reduce((sum, r) => sum + r.rating, 0);\n      return total / active.length;\n    },\n\n    flagReview(reviewId: number): void {\n      flagStmt.run(reviewId);\n    },\n\n    getFlaggedReviews(): Review[] {\n      const rows = getFlaggedStmt.all() as ReviewRow[];\n      return rows.map(rowToReview);\n    },\n\n    removeReview(reviewId: number): boolean {\n      const info = deleteStmt.run(reviewId);\n      return info.changes > 0;\n    },\n\n    getReviewsByUser(userId: string): Review[] {\n      const rows = getByUserStmt.all(userId) as ReviewRow[];\n      return rows.map(rowToReview);\n    },\n\n    getReviewCount(pluginName: string): number {\n      const row = countStmt.get(pluginName) as { count: number };\n      return row.count;\n    },\n  };\n}\nEOF\necho \\\"reviews written\\\"\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_25","type":"command_execution","command":"/bin/bash -lc \"cat > /workspace/src/reviews/index.ts << 'EOF'\nimport Database from 'better-sqlite3';\nimport type { Database as DatabaseType } from 'better-sqlite3';\nimport type { Review, ReviewService } from '../types.js';\n\nconst CREATE_SQL = \"'`\n  CREATE TABLE IF NOT EXISTS reviews (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    plugin_name TEXT NOT NULL,\n    plugin_version TEXT NOT NULL,\n    user_id TEXT NOT NULL,\n    rating INTEGER NOT NULL,\n    comment TEXT NOT NULL,\n    flagged INTEGER NOT NULL DEFAULT 0,\n    created_at TEXT NOT NULL\n  )\n`;\n\ninterface ReviewRow {\n  id: number;\n  plugin_name: string;\n  plugin_version: string;\n  user_id: string;\n  rating: number;\n  comment: string;\n  flagged: number;\n  created_at: string;\n}\n\nfunction rowToReview(row: ReviewRow): Review {\n  return {\n    id: row.id,\n    pluginName: row.plugin_name,\n    pluginVersion: row.plugin_version,\n    userId: row.user_id,\n    rating: row.rating,\n    comment: row.comment,\n    flagged: row.flagged === 1,\n    createdAt: row.created_at,\n  };\n}\n\nexport function createReviewSystem(db?: DatabaseType): ReviewService {\n  const database = db ?? new Database('\"':memory:');\n  database.exec(CREATE_SQL);\n\n  const insertStmt = database.prepare(\n    \"'`INSERT INTO reviews (plugin_name, plugin_version, user_id, rating, comment, flagged, created_at)\n     VALUES (@plugin_name, @plugin_version, @user_id, @rating, @comment, 0, @created_at)`\n  );\n  const getByIdStmt = database.prepare('\"'SELECT * FROM reviews WHERE id = ?');\n  const getByPluginStmt = database.prepare(\n    'SELECT * FROM reviews WHERE plugin_name = ? ORDER BY id ASC'\n  );\n  const getByUserStmt = database.prepare(\n    'SELECT * FROM reviews WHERE user_id = ? ORDER BY id ASC'\n  );\n  const getFlaggedStmt = database.prepare(\n    'SELECT * FROM reviews WHERE flagged = 1 ORDER BY id ASC'\n  );\n  const flagStmt = database.prepare('UPDATE reviews SET flagged = 1 WHERE id = ?');\n  const deleteStmt = database.prepare('DELETE FROM reviews WHERE id = ?');\n  const countStmt = database.prepare(\n    'SELECT COUNT(*) as count FROM reviews WHERE plugin_name = ?'\n  );\n\n  return {\n    addReview(review: Omit<Review, 'id' | 'createdAt' | 'flagged'>): Review {\n      const createdAt = new Date().toISOString();\n      const info = insertStmt.run({\n        plugin_name: review.pluginName,\n        plugin_version: review.pluginVersion,\n        user_id: review.userId,\n        rating: review.rating,\n        comment: review.comment,\n        created_at: createdAt,\n      });\n      const row = getByIdStmt.get(info.lastInsertRowid) as ReviewRow;\n      return rowToReview(row);\n    },\n\n    getReviews(pluginName: string): Review[] {\n      const rows = getByPluginStmt.all(pluginName) as ReviewRow[];\n      return rows.map(rowToReview);\n    },\n\n    getAverageRating(pluginName: string): number {\n      const rows = getByPluginStmt.all(pluginName) as ReviewRow[];\n      const active = rows.filter(r => r.flagged === 0);\n      if (active.length === 0) return 0;\n      const total = active.reduce((sum, r) => sum + r.rating, 0);\n      return total / active.length;\n    },\n\n    flagReview(reviewId: number): void {\n      flagStmt.run(reviewId);\n    },\n\n    getFlaggedReviews(): Review[] {\n      const rows = getFlaggedStmt.all() as ReviewRow[];\n      return rows.map(rowToReview);\n    },\n\n    removeReview(reviewId: number): boolean {\n      const info = deleteStmt.run(reviewId);\n      return info.changes > 0;\n    },\n\n    getReviewsByUser(userId: string): Review[] {\n      const rows = getByUserStmt.all(userId) as ReviewRow[];\n      return rows.map(rowToReview);\n    },\n\n    getReviewCount(pluginName: string): number {\n      const row = countStmt.get(pluginName) as { count: number };\n      return row.count;\n    },\n  };\n}\nEOF\necho \\\"reviews written\\\"\"","aggregated_output":"reviews written\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_26","type":"command_execution","command":"/bin/bash -lc \"cat > /workspace/src/deps/index.ts << 'EOF'\nimport type {\n  DepsService,\n  RegistryService,\n  DependencyNode,\n} from '../types.js';\n\nfunction getManifest(name: string, registry: RegistryService) {\n  const manifest = registry.get(name);\n  if (\"'!manifest) {\n    throw new Error(`Plugin \"${name}\" not found in registry`);\n  }\n  return manifest;\n}\n\nexport function createDepsService(): DepsService {\n  return {\n    buildTree(name: string, registry: RegistryService): DependencyNode {\n      const visited = new Set<string>();\n      const build = (pluginName: string): DependencyNode => {\n        const manifest = getManifest(pluginName, registry);\n        const node: DependencyNode = {\n          name: manifest.name,\n          version: manifest.version,\n          dependencies: [],\n        };\n        if (visited.has(pluginName)) {\n          return node;\n        }\n        visited.add(pluginName);\n        for (const depName of Object.keys(manifest.dependencies)) {\n          node.dependencies.push(build(depName));\n        }\n        return node;\n      };\n      return build(name);\n    },\n\n    detectCycles(name: string, registry: RegistryService): string[][] | null {\n      const cycles: string[][] = [];\n      const visited = new Set<string>();\n      const stack: string[] = [];\n      const onStack = new Set<string>();\n\n      const dfs = (pluginName: string): void => {\n        if (onStack.has(pluginName)) {\n          const cycleStart = stack.indexOf(pluginName);\n          const cycle = stack.slice(cycleStart).concat(pluginName);\n          cycles.push(cycle);\n          return;\n        }\n        if (visited.has(pluginName)) return;\n        visited.add(pluginName);\n        onStack.add(pluginName);\n        stack.push(pluginName);\n\n        const manifest = registry.get(pluginName);\n        if (manifest) {\n          for (const depName of Object.keys(manifest.dependencies)) {\n            dfs(depName);\n          }\n        }\n\n        stack.pop();\n        onStack.delete(pluginName);\n      };\n\n      dfs(name);\n      return cycles.length > 0 ? cycles : null;\n    },\n\n    topologicalSort(name: string, registry: RegistryService): string[] {\n      const result: string[] = [];\n      const visited = new Set<string>();\n      const visiting = new Set<string>();\n\n      const visit = (pluginName: string): void => {\n        if (visited.has(pluginName)) return;\n        if (visiting.has(pluginName)) return; // cycle: stop to avoid infinite loop\n        visiting.add(pluginName);\n        const manifest = registry.get(pluginName);\n        if (manifest) {\n          for (const depName of Object.keys(manifest.dependencies)) {\n            visit(depName);\n          }\n        }\n        visiting.delete(pluginName);\n        if (!visited.has(pluginName)) {\n          visited.add(pluginName);\n          result.push(pluginName);\n        }\n      };\n\n      visit(name);\n      return result;\n    },\n\n    flattenDependencies(name: string, registry: RegistryService): string[] {\n      const result: string[] = [];\n      const visited = new Set<string>();\n      const visiting = new Set<string>();\n\n      const visit = (pluginName: string, isRoot: boolean): void => {\n        if (visited.has(pluginName) || visiting.has(pluginName)) return;\n        visiting.add(pluginName);\n        const manifest = registry.get(pluginName);\n        if (manifest) {\n          for (const depName of Object.keys(manifest.dependencies)) {\n            visit(depName, false);\n          }\n        }\n        visiting.delete(pluginName);\n        visited.add(pluginName);\n        if (!isRoot) {\n          result.push(pluginName);\n        }\n      };\n\n      visit(name, true);\n      return result;\n    },\n\n    hasCircularDependency(name: string, registry: RegistryService): boolean {\n      const cycles = this.detectCycles(name, registry);\n      return cycles !== null;\n    },\n  };\n}\nEOF\necho \"deps written\"'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_26","type":"command_execution","command":"/bin/bash -lc \"cat > /workspace/src/deps/index.ts << 'EOF'\nimport type {\n  DepsService,\n  RegistryService,\n  DependencyNode,\n} from '../types.js';\n\nfunction getManifest(name: string, registry: RegistryService) {\n  const manifest = registry.get(name);\n  if (\"'!manifest) {\n    throw new Error(`Plugin \"${name}\" not found in registry`);\n  }\n  return manifest;\n}\n\nexport function createDepsService(): DepsService {\n  return {\n    buildTree(name: string, registry: RegistryService): DependencyNode {\n      const visited = new Set<string>();\n      const build = (pluginName: string): DependencyNode => {\n        const manifest = getManifest(pluginName, registry);\n        const node: DependencyNode = {\n          name: manifest.name,\n          version: manifest.version,\n          dependencies: [],\n        };\n        if (visited.has(pluginName)) {\n          return node;\n        }\n        visited.add(pluginName);\n        for (const depName of Object.keys(manifest.dependencies)) {\n          node.dependencies.push(build(depName));\n        }\n        return node;\n      };\n      return build(name);\n    },\n\n    detectCycles(name: string, registry: RegistryService): string[][] | null {\n      const cycles: string[][] = [];\n      const visited = new Set<string>();\n      const stack: string[] = [];\n      const onStack = new Set<string>();\n\n      const dfs = (pluginName: string): void => {\n        if (onStack.has(pluginName)) {\n          const cycleStart = stack.indexOf(pluginName);\n          const cycle = stack.slice(cycleStart).concat(pluginName);\n          cycles.push(cycle);\n          return;\n        }\n        if (visited.has(pluginName)) return;\n        visited.add(pluginName);\n        onStack.add(pluginName);\n        stack.push(pluginName);\n\n        const manifest = registry.get(pluginName);\n        if (manifest) {\n          for (const depName of Object.keys(manifest.dependencies)) {\n            dfs(depName);\n          }\n        }\n\n        stack.pop();\n        onStack.delete(pluginName);\n      };\n\n      dfs(name);\n      return cycles.length > 0 ? cycles : null;\n    },\n\n    topologicalSort(name: string, registry: RegistryService): string[] {\n      const result: string[] = [];\n      const visited = new Set<string>();\n      const visiting = new Set<string>();\n\n      const visit = (pluginName: string): void => {\n        if (visited.has(pluginName)) return;\n        if (visiting.has(pluginName)) return; // cycle: stop to avoid infinite loop\n        visiting.add(pluginName);\n        const manifest = registry.get(pluginName);\n        if (manifest) {\n          for (const depName of Object.keys(manifest.dependencies)) {\n            visit(depName);\n          }\n        }\n        visiting.delete(pluginName);\n        if (!visited.has(pluginName)) {\n          visited.add(pluginName);\n          result.push(pluginName);\n        }\n      };\n\n      visit(name);\n      return result;\n    },\n\n    flattenDependencies(name: string, registry: RegistryService): string[] {\n      const result: string[] = [];\n      const visited = new Set<string>();\n      const visiting = new Set<string>();\n\n      const visit = (pluginName: string, isRoot: boolean): void => {\n        if (visited.has(pluginName) || visiting.has(pluginName)) return;\n        visiting.add(pluginName);\n        const manifest = registry.get(pluginName);\n        if (manifest) {\n          for (const depName of Object.keys(manifest.dependencies)) {\n            visit(depName, false);\n          }\n        }\n        visiting.delete(pluginName);\n        visited.add(pluginName);\n        if (!isRoot) {\n          result.push(pluginName);\n        }\n      };\n\n      visit(name, true);\n      return result;\n    },\n\n    hasCircularDependency(name: string, registry: RegistryService): boolean {\n      const cycles = this.detectCycles(name, registry);\n      return cycles !== null;\n    },\n  };\n}\nEOF\necho \"deps written\"'","aggregated_output":"deps written\n","exit_code":0,"status":"completed"}}
++{"type":"item.completed","item":{"id":"item_27","type":"agent_message","text":"Now the integration layer. The integration test imports `Marketplace` type and `createMarketplace` from `src/index.ts`."}}
++{"type":"item.started","item":{"id":"item_28","type":"command_execution","command":"/bin/bash -lc \"cat > /workspace/src/index.ts << 'EOF'\nimport { createRegistry } from './registry/index.js';\nimport { createResolver } from './resolver/index.js';\nimport { createRunner } from './runner/index.js';\nimport { createReviewSystem } from './reviews/index.js';\nimport { createDepsService } from './deps/index.js';\nimport type {\n  RegistryService,\n  ResolverService,\n  RunnerService,\n  ReviewService,\n  DepsService,\n  PluginManifest,\n  ResolvedVersion,\n  SandboxResult,\n} from './types.js';\n\nexport interface Marketplace {\n  registry: RegistryService;\n  resolver: ResolverService;\n  runner: RunnerService;\n  reviews: ReviewService;\n  deps: DepsService;\n  installPlugin(manifest: PluginManifest): Promise<{\n    resolved: ResolvedVersion[];\n    sandboxResult: SandboxResult;\n  }>;\n}\n\nexport interface InstallResult {\n  resolved: ResolvedVersion[];\n  sandboxResult: SandboxResult;\n}\n\nfunction validateManifest(manifest: PluginManifest): void {\n  if (\n    \"'!manifest.name ||\n    typeof manifest.name !== '\"'string' ||\n    manifest.name.trim() === '' ||\n    \"'!manifest.version ||\n    typeof manifest.version !== '\"'string' ||\n    manifest.version.trim() === '' ||\n    \"'!manifest.entryPoint ||\n    typeof manifest.entryPoint !== '\"'string' ||\n    manifest.entryPoint.trim() === ''\n  ) {\n    throw new Error('Invalid manifest: name, version, and entryPoint are required');\n  }\n}\n\nexport function createMarketplace(): Marketplace {\n  const registry = createRegistry();\n  const resolver = createResolver();\n  const runner = createRunner();\n  const reviews = createReviewSystem();\n  const deps = createDepsService();\n\n  return {\n    registry,\n    resolver,\n    runner,\n    reviews,\n    deps,\n\n    async installPlugin(manifest: PluginManifest): Promise<InstallResult> {\n      validateManifest(manifest);\n\n      registry.register(manifest);\n\n      if (deps.hasCircularDependency(manifest.name, registry)) {\n        throw new Error(\n          \"'`Circular dependency detected for plugin \"${manifest.name}\"`\n        );\n      }\n\n      const constraints = Object.entries(manifest.dependencies).map(\n        ([name, range]) => ({ name, range })\n      );\n\n      const available: Record<string, string[]> = {};\n      for (const constraint of constraints) {\n        available[constraint.name] = registry.listVersions(constraint.name);\n      }\n\n      const resolved = resolver.resolve(constraints, available);\n\n      const sandboxResult = await runner.execute(manifest.entryPoint);\n\n      return { resolved, sandboxResult };\n    },\n  };\n}\nEOF\necho \"index written\"'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_28","type":"command_execution","command":"/bin/bash -lc \"cat > /workspace/src/index.ts << 'EOF'\nimport { createRegistry } from './registry/index.js';\nimport { createResolver } from './resolver/index.js';\nimport { createRunner } from './runner/index.js';\nimport { createReviewSystem } from './reviews/index.js';\nimport { createDepsService } from './deps/index.js';\nimport type {\n  RegistryService,\n  ResolverService,\n  RunnerService,\n  ReviewService,\n  DepsService,\n  PluginManifest,\n  ResolvedVersion,\n  SandboxResult,\n} from './types.js';\n\nexport interface Marketplace {\n  registry: RegistryService;\n  resolver: ResolverService;\n  runner: RunnerService;\n  reviews: ReviewService;\n  deps: DepsService;\n  installPlugin(manifest: PluginManifest): Promise<{\n    resolved: ResolvedVersion[];\n    sandboxResult: SandboxResult;\n  }>;\n}\n\nexport interface InstallResult {\n  resolved: ResolvedVersion[];\n  sandboxResult: SandboxResult;\n}\n\nfunction validateManifest(manifest: PluginManifest): void {\n  if (\n    \"'!manifest.name ||\n    typeof manifest.name !== '\"'string' ||\n    manifest.name.trim() === '' ||\n    \"'!manifest.version ||\n    typeof manifest.version !== '\"'string' ||\n    manifest.version.trim() === '' ||\n    \"'!manifest.entryPoint ||\n    typeof manifest.entryPoint !== '\"'string' ||\n    manifest.entryPoint.trim() === ''\n  ) {\n    throw new Error('Invalid manifest: name, version, and entryPoint are required');\n  }\n}\n\nexport function createMarketplace(): Marketplace {\n  const registry = createRegistry();\n  const resolver = createResolver();\n  const runner = createRunner();\n  const reviews = createReviewSystem();\n  const deps = createDepsService();\n\n  return {\n    registry,\n    resolver,\n    runner,\n    reviews,\n    deps,\n\n    async installPlugin(manifest: PluginManifest): Promise<InstallResult> {\n      validateManifest(manifest);\n\n      registry.register(manifest);\n\n      if (deps.hasCircularDependency(manifest.name, registry)) {\n        throw new Error(\n          \"'`Circular dependency detected for plugin \"${manifest.name}\"`\n        );\n      }\n\n      const constraints = Object.entries(manifest.dependencies).map(\n        ([name, range]) => ({ name, range })\n      );\n\n      const available: Record<string, string[]> = {};\n      for (const constraint of constraints) {\n        available[constraint.name] = registry.listVersions(constraint.name);\n      }\n\n      const resolved = resolver.resolve(constraints, available);\n\n      const sandboxResult = await runner.execute(manifest.entryPoint);\n\n      return { resolved, sandboxResult };\n    },\n  };\n}\nEOF\necho \"index written\"'","aggregated_output":"index written\n","exit_code":0,"status":"completed"}}
++{"type":"item.updated","item":{"id":"item_18","type":"todo_list","items":[{"text":"Implement registry module (SQLite CRUD)","completed":true},{"text":"Implement resolver module (semver)","completed":true},{"text":"Implement runner module (vm sandbox)","completed":true},{"text":"Implement reviews module (SQLite)","completed":true},{"text":"Implement deps module (DFS graph)","completed":true},{"text":"Implement index.ts marketplace layer","completed":true},{"text":"Run build, lint, and all 55 tests","completed":false}]}}
++{"type":"item.started","item":{"id":"item_29","type":"command_execution","command":"/bin/bash -lc 'cd /workspace && npm run build 2>&1 | tail -40'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_29","type":"command_execution","command":"/bin/bash -lc 'cd /workspace && npm run build 2>&1 | tail -40'","aggregated_output":"\n> bench-plugin-marketplace@1.0.0 build\n> tsc\n\nsh: 1: tsc: not found\n","exit_code":0,"status":"completed"}}
++{"type":"item.completed","item":{"id":"item_30","type":"agent_message","text":"Need to install dependencies first."}}
++{"type":"item.started","item":{"id":"item_31","type":"command_execution","command":"/bin/bash -lc 'cd /workspace && npm install 2>&1 | tail -15'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_31","type":"command_execution","command":"/bin/bash -lc 'cd /workspace && npm install 2>&1 | tail -15'","aggregated_output":"\nadded 212 packages, and audited 213 packages in 2s\n\n56 packages are looking for funding\n  run `npm fund` for details\n\n13 vulnerabilities (7 moderate, 5 high, 1 critical)\n\nTo address issues that do not require attention, run:\n  npm audit fix\n\nTo address all issues (including breaking changes), run:\n  npm audit fix --force\n\nRun `npm audit` for details.\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_32","type":"command_execution","command":"/bin/bash -lc 'cd /workspace && npm run build 2>&1 | tail -40'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_32","type":"command_execution","command":"/bin/bash -lc 'cd /workspace && npm run build 2>&1 | tail -40'","aggregated_output":"\n> bench-plugin-marketplace@1.0.0 build\n> tsc\n\n","exit_code":0,"status":"completed"}}
++{"type":"item.completed","item":{"id":"item_33","type":"agent_message","text":"Build passes. Now lint and tests:"}}
++{"type":"item.started","item":{"id":"item_34","type":"command_execution","command":"/bin/bash -lc 'cd /workspace && npm run lint 2>&1 | tail -40'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_34","type":"command_execution","command":"/bin/bash -lc 'cd /workspace && npm run lint 2>&1 | tail -40'","aggregated_output":"\n> bench-plugin-marketplace@1.0.0 lint\n> eslint src/ tests/\n\n","exit_code":0,"status":"completed"}}
++{"type":"item.completed","item":{"id":"item_35","type":"agent_message","text":"Lint passes. Now run the tests:"}}
++{"type":"item.started","item":{"id":"item_36","type":"command_execution","command":"/bin/bash -lc 'cd /workspace && npm test 2>&1 | tail -60'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_36","type":"command_execution","command":"/bin/bash -lc 'cd /workspace && npm test 2>&1 | tail -60'","aggregated_output":"       |                  ^\n     25| \n     26|   let output: unknown = undefined;\n ❯ executeInternal src/runner/index.ts:108:16\n ❯ Object.execute src/runner/index.ts:125:14\n ❯ tests/runner.test.ts:26:33\n\n⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯\n\n FAIL  tests/runner.test.ts > Sandboxed Runner > execute reports duration\nSyntaxError: Illegal return statement\n ❯ runInSandbox src/runner/index.ts:24:18\n     22|   });\n     23| \n     24|   const script = new Script(code);\n       |                  ^\n     25| \n     26|   let output: unknown = undefined;\n ❯ executeInternal src/runner/index.ts:108:16\n ❯ Object.execute src/runner/index.ts:125:14\n ❯ tests/runner.test.ts:32:33\n\n⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯\n\n FAIL  tests/runner.test.ts > Sandboxed Runner > execute catches runtime errors\nAssertionError: expected 'The value of \"options.timeout\" is out…' to contain 'boom'\n\nExpected: \"boom\"\nReceived: \"The value of \"options.timeout\" is out of range. It must be >= 1 && <= 4294967295. Received 0\"\n\n ❯ tests/runner.test.ts:40:26\n     38|     const result = await runner.execute('throw new Error(\"boom\");');\n     39|     expect(result.success).toBe(false);\n     40|     expect(result.error).toContain('boom');\n       |                          ^\n     41|   });\n     42| \n\n⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/9]⎯\n\n FAIL  tests/runner.test.ts > Sandboxed Runner > execute isolates between runs (no shared state)\nSyntaxError: Illegal return statement\n ❯ runInSandbox src/runner/index.ts:24:18\n     22|   });\n     23| \n     24|   const script = new Script(code);\n       |                  ^\n     25| \n     26|   let output: unknown = undefined;\n ❯ executeInternal src/runner/index.ts:108:16\n ❯ Object.execute src/runner/index.ts:125:14\n ❯ tests/runner.test.ts:45:33\n\n⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/9]⎯\n\n Test Files  2 failed | 4 passed (6)\n      Tests  9 failed | 46 passed (55)\n   Start at  02:47:10\n   Duration  464ms (transform 292ms, setup 0ms, collect 444ms, tests 150ms, environment 1ms, prepare 726ms)\n\n","exit_code":0,"status":"completed"}}
++{"type":"item.completed","item":{"id":"item_37","type":"agent_message","text":"Two issues: bare `return` statements need wrapping in a function, and `timeout: 0` is invalid. Let me fix the runner."}}
++{"type":"item.started","item":{"id":"item_38","type":"command_execution","command":"/bin/bash -lc \"cat > /workspace/src/runner/index.ts << 'EOF'\nimport { createContext, Script, Context } from 'vm';\nimport type { RunnerService, SandboxResult } from '../types.js';\n\nfunction measureMemory(): number {\n  return process.memoryUsage().heapUsed;\n}\n\nfunction wrapCode(code: string): string {\n  return \"'`(function() {'\"\\\\n\"'${code}'\"\\\\n})()\"'`;\n}\n\nfunction runInSandbox(\n  code: string,\n  context: Record<string, unknown> = {}\n): { output: unknown; error?: string } {\n  const sandbox: Context = createContext({\n    ...context,\n    console: {\n      log: (..._args: unknown[]) => {\n        // swallow logs to keep sandbox isolated\n      },\n    },\n  });\n\n  const script = new Script(wrapCode(code));\n\n  let output: unknown = undefined;\n  try {\n    output = script.runInContext(sandbox, { breakOnSigint: true });\n  } catch (err) {\n    return { output: undefined, error: err instanceof Error ? err.message : String(err) };\n  }\n\n  return { output };\n}\n\nexport function createRunner(): RunnerService {\n  async function executeInternal(\n    code: string,\n    timeoutMs: number | undefined,\n    context?: Record<string, unknown>\n  ): Promise<SandboxResult> {\n    const startMemory = measureMemory();\n    const startTime = process.hrtime.bigint();\n\n    let result: { output: unknown; error?: string };\n    let timedOut = false;\n\n    if (timeoutMs !== undefined) {\n      // Synchronous vm can'\"'t be interrupted cleanly for infinite loops without a\n      // separate thread. Run the code in a worker thread so we can terminate it\n      // on timeout.\n      const { Worker } = await import('worker_threads');\n      const workerCode = \"'`\n        const { createContext, Script } = require('\"'vm');\n        const { parentPort } = require('worker_threads');\n        const userCode = \"'${JSON.stringify(wrapCode(code))};\n        const ctx = ${JSON.stringify(context ?? {})};\n        try {\n          const sandbox = createContext({ ...ctx });\n          const script = new Script(userCode);\n          const output = script.runInContext(sandbox);\n          parentPort.postMessage({ output });\n        } catch (err) {\n          parentPort.postMessage({ error: err instanceof Error ? err.message : String(err) });\n        }\n      `;\n      const worker = new Worker(workerCode, { eval: true });\n      result = await new Promise<{ output: unknown; error?: string }>(resolve => {\n        let settled = false;\n        const timer = setTimeout(() => {\n          if (settled) return;\n          settled = true;\n          timedOut = true;\n          worker.terminate();\n          resolve({ output: undefined, error: `Execution timed out after ${timeoutMs}ms` });\n        }, timeoutMs);\n\n        worker.on('\"'message', (msg: { output?: unknown; error?: string }) => {\n          if (settled) return;\n          settled = true;\n          clearTimeout(timer);\n          worker.terminate();\n          resolve({ output: msg.output, error: msg.error });\n        });\n\n        worker.on('error', (err: Error) => {\n          if (settled) return;\n          settled = true;\n          clearTimeout(timer);\n          worker.terminate();\n          resolve({ output: undefined, error: err.message });\n        });\n      });\n    } else {\n      result = runInSandbox(code, context);\n    }\n\n    const endTime = process.hrtime.bigint();\n    const duration = Number(endTime - startTime) / 1e6;\n\n    return {\n      success: \"'!result.error && !timedOut,\n      output: timedOut ? undefined : result.output,\n      duration,\n      memoryUsed: measureMemory() - startMemory,\n      error: result.error,\n    };\n  }\n\n  return {\n    execute(code: string, context?: Record<string, unknown>): Promise<SandboxResult> {\n      return executeInternal(code, undefined, context);\n    },\n    executeWithTimeout(\n      code: string,\n      timeoutMs: number,\n      context?: Record<string, unknown>\n    ): Promise<SandboxResult> {\n      return executeInternal(code, timeoutMs, context);\n    },\n  };\n}\nEOF\ncd /workspace && npm run build 2>&1 | tail -20'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_38","type":"command_execution","command":"/bin/bash -lc \"cat > /workspace/src/runner/index.ts << 'EOF'\nimport { createContext, Script, Context } from 'vm';\nimport type { RunnerService, SandboxResult } from '../types.js';\n\nfunction measureMemory(): number {\n  return process.memoryUsage().heapUsed;\n}\n\nfunction wrapCode(code: string): string {\n  return \"'`(function() {'\"\\\\n\"'${code}'\"\\\\n})()\"'`;\n}\n\nfunction runInSandbox(\n  code: string,\n  context: Record<string, unknown> = {}\n): { output: unknown; error?: string } {\n  const sandbox: Context = createContext({\n    ...context,\n    console: {\n      log: (..._args: unknown[]) => {\n        // swallow logs to keep sandbox isolated\n      },\n    },\n  });\n\n  const script = new Script(wrapCode(code));\n\n  let output: unknown = undefined;\n  try {\n    output = script.runInContext(sandbox, { breakOnSigint: true });\n  } catch (err) {\n    return { output: undefined, error: err instanceof Error ? err.message : String(err) };\n  }\n\n  return { output };\n}\n\nexport function createRunner(): RunnerService {\n  async function executeInternal(\n    code: string,\n    timeoutMs: number | undefined,\n    context?: Record<string, unknown>\n  ): Promise<SandboxResult> {\n    const startMemory = measureMemory();\n    const startTime = process.hrtime.bigint();\n\n    let result: { output: unknown; error?: string };\n    let timedOut = false;\n\n    if (timeoutMs !== undefined) {\n      // Synchronous vm can'\"'t be interrupted cleanly for infinite loops without a\n      // separate thread. Run the code in a worker thread so we can terminate it\n      // on timeout.\n      const { Worker } = await import('worker_threads');\n      const workerCode = \"'`\n        const { createContext, Script } = require('\"'vm');\n        const { parentPort } = require('worker_threads');\n        const userCode = \"'${JSON.stringify(wrapCode(code))};\n        const ctx = ${JSON.stringify(context ?? {})};\n        try {\n          const sandbox = createContext({ ...ctx });\n          const script = new Script(userCode);\n          const output = script.runInContext(sandbox);\n          parentPort.postMessage({ output });\n        } catch (err) {\n          parentPort.postMessage({ error: err instanceof Error ? err.message : String(err) });\n        }\n      `;\n      const worker = new Worker(workerCode, { eval: true });\n      result = await new Promise<{ output: unknown; error?: string }>(resolve => {\n        let settled = false;\n        const timer = setTimeout(() => {\n          if (settled) return;\n          settled = true;\n          timedOut = true;\n          worker.terminate();\n          resolve({ output: undefined, error: `Execution timed out after ${timeoutMs}ms` });\n        }, timeoutMs);\n\n        worker.on('\"'message', (msg: { output?: unknown; error?: string }) => {\n          if (settled) return;\n          settled = true;\n          clearTimeout(timer);\n          worker.terminate();\n          resolve({ output: msg.output, error: msg.error });\n        });\n\n        worker.on('error', (err: Error) => {\n          if (settled) return;\n          settled = true;\n          clearTimeout(timer);\n          worker.terminate();\n          resolve({ output: undefined, error: err.message });\n        });\n      });\n    } else {\n      result = runInSandbox(code, context);\n    }\n\n    const endTime = process.hrtime.bigint();\n    const duration = Number(endTime - startTime) / 1e6;\n\n    return {\n      success: \"'!result.error && !timedOut,\n      output: timedOut ? undefined : result.output,\n      duration,\n      memoryUsed: measureMemory() - startMemory,\n      error: result.error,\n    };\n  }\n\n  return {\n    execute(code: string, context?: Record<string, unknown>): Promise<SandboxResult> {\n      return executeInternal(code, undefined, context);\n    },\n    executeWithTimeout(\n      code: string,\n      timeoutMs: number,\n      context?: Record<string, unknown>\n    ): Promise<SandboxResult> {\n      return executeInternal(code, timeoutMs, context);\n    },\n  };\n}\nEOF\ncd /workspace && npm run build 2>&1 | tail -20'","aggregated_output":"\n> bench-plugin-marketplace@1.0.0 build\n> tsc\n\n","exit_code":0,"status":"completed"}}
++{"type":"item.started","item":{"id":"item_39","type":"command_execution","command":"/bin/bash -lc 'cd /workspace && npm test 2>&1 | tail -40'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_39","type":"command_execution","command":"/bin/bash -lc 'cd /workspace && npm test 2>&1 | tail -40'","aggregated_output":"\n> bench-plugin-marketplace@1.0.0 test\n> vitest run\n\n\n RUN  v2.1.9 /workspace\n\n ✓ tests/reviews.test.ts (8 tests) 9ms\n ✓ tests/resolver.test.ts (8 tests) 6ms\n ✓ tests/registry.test.ts (8 tests) 12ms\n ✓ tests/deps.test.ts (8 tests) 12ms\n ✓ tests/integration.test.ts (15 tests) 126ms\n ✓ tests/runner.test.ts (8 tests) 164ms\n\n Test Files  6 passed (6)\n      Tests  55 passed (55)\n   Start at  02:47:52\n   Duration  522ms (transform 194ms, setup 0ms, collect 400ms, tests 329ms, environment 1ms, prepare 421ms)\n\n","exit_code":0,"status":"completed"}}
++{"type":"item.completed","item":{"id":"item_40","type":"agent_message","text":"All 55 tests pass. Let me verify lint still passes too:"}}
++{"type":"item.started","item":{"id":"item_41","type":"command_execution","command":"/bin/bash -lc 'cd /workspace && npm run lint 2>&1 | tail -10'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
++{"type":"item.completed","item":{"id":"item_41","type":"command_execution","command":"/bin/bash -lc 'cd /workspace && npm run lint 2>&1 | tail -10'","aggregated_output":"\n> bench-plugin-marketplace@1.0.0 lint\n> eslint src/ tests/\n\n","exit_code":0,"status":"completed"}}
++{"type":"item.updated","item":{"id":"item_18","type":"todo_list","items":[{"text":"Implement registry module (SQLite CRUD)","completed":true},{"text":"Implement resolver module (semver)","completed":true},{"text":"Implement runner module (vm sandbox)","completed":true},{"text":"Implement reviews module (SQLite)","completed":true},{"text":"Implement deps module (DFS graph)","completed":true},{"text":"Implement index.ts marketplace layer","completed":true},{"text":"Run build, lint, and all 55 tests","completed":true}]}}
++{"type":"item.completed","item":{"id":"item_42","type":"agent_message","text":"All done. Build, lint, and all 55 tests pass.\n\n**Implementation Summary**\n\n- **Registry** (`src/registry/index.ts`): SQLite-backed CRUD with name+version composite key. `get` returns highest version, `search` matches name/description substrings, `listVersions` sorted ascending via `semver.compare`.\n- **Resolver** (`src/resolver/index.ts`): Pure semver logic wrapping `satisfies`, `maxSatisfying`, `validRange`. `resolve` maps each constraint to its max-satisfying version, throwing on unsatisfiable.\n- **Runner** (`src/runner/index.ts`): Code wrapped in `(function(){...})()` so bare `return` works, executed in a fresh `vm` context per call (full isolation). `executeWithTimeout` runs in a `worker_threads` Worker that gets `terminate()`d on timeout — this is the reliable way to kill a synchronous `while(true){}` since `vm` itself can't interrupt CPU-bound infinite loops.\n- **Reviews** (`src/reviews/index.ts`): SQLite-backed reviews with auto-increment IDs and ISO timestamps. `getAverageRating` excludes flagged reviews (returns 0 when none active).\n- **Deps** (`src/deps/index.ts`): Pure DFS over `RegistryService`. `detectCycles` tracks on-stack nodes to capture cycle paths; `topologicalSort`/`flattenDependencies` use visiting/visited guards to stay cycle-safe. `flattenDependencies` excludes the root.\n- **Integration** (`src/index.ts`): `createMarketplace()` composes all 5 modules. `installPlugin` validates manifest → registers → checks circular deps (throws `/[Cc]ircular/`) → resolves dependency versions from registry → runs entry point in sandbox → returns `{ resolved, sandboxResult }`.\n\nAll modules import only from `../types.js` — zero cross-module imports. `src/types.ts` is untouched."}}
++{"type":"item.completed","item":{"id":"item_18","type":"todo_list","items":[{"text":"Implement registry module (SQLite CRUD)","completed":true},{"text":"Implement resolver module (semver)","completed":true},{"text":"Implement runner module (vm sandbox)","completed":true},{"text":"Implement reviews module (SQLite)","completed":true},{"text":"Implement deps module (DFS graph)","completed":true},{"text":"Implement index.ts marketplace layer","completed":true},{"text":"Run build, lint, and all 55 tests","completed":true}]}}
++{"type":"turn.completed","usage":{"input_tokens":537103,"cached_input_tokens":496256,"output_tokens":15438,"reasoning_output_tokens":8180}}
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..c01bed2
+--- /dev/null
++++ b/.thunderdome-stderr.log
+@@ -0,0 +1,3 @@
++WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/.codex"))
++Reading additional input from stdin...
++2026-06-20T02:41:47.451826Z ERROR codex_core::util: ReasoningRawContentDelta without active item
+diff --git a/package-lock.json b/package-lock.json
+index fb449ee..be7a842 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -979,7 +979,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1031,7 +1030,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1311,7 +1309,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1785,7 +1782,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3347,7 +3343,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/deps/index.ts b/src/deps/index.ts
+new file mode 100644
+index 0000000..7b5048f
+--- /dev/null
++++ b/src/deps/index.ts
+@@ -0,0 +1,127 @@
++import type {
++  DepsService,
++  RegistryService,
++  DependencyNode,
++} from '../types.js';
++
++function getManifest(name: string, registry: RegistryService) {
++  const manifest = registry.get(name);
++  if (!manifest) {
++    throw new Error(`Plugin "${name}" not found in registry`);
++  }
++  return manifest;
++}
++
++export function createDepsService(): DepsService {
++  return {
++    buildTree(name: string, registry: RegistryService): DependencyNode {
++      const visited = new Set<string>();
++      const build = (pluginName: string): DependencyNode => {
++        const manifest = getManifest(pluginName, registry);
++        const node: DependencyNode = {
++          name: manifest.name,
++          version: manifest.version,
++          dependencies: [],
++        };
++        if (visited.has(pluginName)) {
++          return node;
++        }
++        visited.add(pluginName);
++        for (const depName of Object.keys(manifest.dependencies)) {
++          node.dependencies.push(build(depName));
++        }
++        return node;
++      };
++      return build(name);
++    },
++
++    detectCycles(name: string, registry: RegistryService): string[][] | null {
++      const cycles: string[][] = [];
++      const visited = new Set<string>();
++      const stack: string[] = [];
++      const onStack = new Set<string>();
++
++      const dfs = (pluginName: string): void => {
++        if (onStack.has(pluginName)) {
++          const cycleStart = stack.indexOf(pluginName);
++          const cycle = stack.slice(cycleStart).concat(pluginName);
++          cycles.push(cycle);
++          return;
++        }
++        if (visited.has(pluginName)) return;
++        visited.add(pluginName);
++        onStack.add(pluginName);
++        stack.push(pluginName);
++
++        const manifest = registry.get(pluginName);
++        if (manifest) {
++          for (const depName of Object.keys(manifest.dependencies)) {
++            dfs(depName);
++          }
++        }
++
++        stack.pop();
++        onStack.delete(pluginName);
++      };
++
++      dfs(name);
++      return cycles.length > 0 ? cycles : null;
++    },
++
++    topologicalSort(name: string, registry: RegistryService): string[] {
++      const result: string[] = [];
++      const visited = new Set<string>();
++      const visiting = new Set<string>();
++
++      const visit = (pluginName: string): void => {
++        if (visited.has(pluginName)) return;
++        if (visiting.has(pluginName)) return; // cycle: stop to avoid infinite loop
++        visiting.add(pluginName);
++        const manifest = registry.get(pluginName);
++        if (manifest) {
++          for (const depName of Object.keys(manifest.dependencies)) {
++            visit(depName);
++          }
++        }
++        visiting.delete(pluginName);
++        if (!visited.has(pluginName)) {
++          visited.add(pluginName);
++          result.push(pluginName);
++        }
++      };
++
++      visit(name);
++      return result;
++    },
++
++    flattenDependencies(name: string, registry: RegistryService): string[] {
++      const result: string[] = [];
++      const visited = new Set<string>();
++      const visiting = new Set<string>();
++
++      const visit = (pluginName: string, isRoot: boolean): void => {
++        if (visited.has(pluginName) || visiting.has(pluginName)) return;
++        visiting.add(pluginName);
++        const manifest = registry.get(pluginName);
++        if (manifest) {
++          for (const depName of Object.keys(manifest.dependencies)) {
++            visit(depName, false);
++          }
++        }
++        visiting.delete(pluginName);
++        visited.add(pluginName);
++        if (!isRoot) {
++          result.push(pluginName);
++        }
++      };
++
++      visit(name, true);
++      return result;
++    },
++
++    hasCircularDependency(name: string, registry: RegistryService): boolean {
++      const cycles = this.detectCycles(name, registry);
++      return cycles !== null;
++    },
++  };
++}
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..6ba3bcc
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,91 @@
++import { createRegistry } from './registry/index.js';
++import { createResolver } from './resolver/index.js';
++import { createRunner } from './runner/index.js';
++import { createReviewSystem } from './reviews/index.js';
++import { createDepsService } from './deps/index.js';
++import type {
++  RegistryService,
++  ResolverService,
++  RunnerService,
++  ReviewService,
++  DepsService,
++  PluginManifest,
++  ResolvedVersion,
++  SandboxResult,
++} from './types.js';
++
++export interface Marketplace {
++  registry: RegistryService;
++  resolver: ResolverService;
++  runner: RunnerService;
++  reviews: ReviewService;
++  deps: DepsService;
++  installPlugin(manifest: PluginManifest): Promise<{
++    resolved: ResolvedVersion[];
++    sandboxResult: SandboxResult;
++  }>;
++}
++
++export interface InstallResult {
++  resolved: ResolvedVersion[];
++  sandboxResult: SandboxResult;
++}
++
++function validateManifest(manifest: PluginManifest): void {
++  if (
++    !manifest.name ||
++    typeof manifest.name !== 'string' ||
++    manifest.name.trim() === '' ||
++    !manifest.version ||
++    typeof manifest.version !== 'string' ||
++    manifest.version.trim() === '' ||
++    !manifest.entryPoint ||
++    typeof manifest.entryPoint !== 'string' ||
++    manifest.entryPoint.trim() === ''
++  ) {
++    throw new Error('Invalid manifest: name, version, and entryPoint are required');
++  }
++}
++
++export function createMarketplace(): Marketplace {
++  const registry = createRegistry();
++  const resolver = createResolver();
++  const runner = createRunner();
++  const reviews = createReviewSystem();
++  const deps = createDepsService();
++
++  return {
++    registry,
++    resolver,
++    runner,
++    reviews,
++    deps,
++
++    async installPlugin(manifest: PluginManifest): Promise<InstallResult> {
++      validateManifest(manifest);
++
++      registry.register(manifest);
++
++      if (deps.hasCircularDependency(manifest.name, registry)) {
++        throw new Error(
++          `Circular dependency detected for plugin "${manifest.name}"`
++        );
++      }
++
++      const constraints = Object.entries(manifest.dependencies).map(
++        ([name, range]) => ({ name, range })
++      );
++
++      const available: Record<string, string[]> = {};
++      for (const constraint of constraints) {
++        available[constraint.name] = registry.listVersions(constraint.name);
++      }
++
++      const resolved = resolver.resolve(constraints, available);
++
++      const sandboxResult = await runner.execute(manifest.entryPoint);
++
++      return { resolved, sandboxResult };
++    },
++  };
++}
+diff --git a/src/registry/index.ts b/src/registry/index.ts
+new file mode 100644
+index 0000000..81a3446
+--- /dev/null
++++ b/src/registry/index.ts
+@@ -0,0 +1,118 @@
++import Database from 'better-sqlite3';
++import type { Database as DatabaseType } from 'better-sqlite3';
++import type { PluginManifest, RegistryService } from '../types.js';
++import { compare } from 'semver';
++
++const CREATE_SQL = `
++  CREATE TABLE IF NOT EXISTS plugins (
++    name TEXT NOT NULL,
++    version TEXT NOT NULL,
++    description TEXT NOT NULL,
++    author TEXT NOT NULL,
++    dependencies TEXT NOT NULL,
++    entry_point TEXT NOT NULL,
++    permissions TEXT NOT NULL,
++    PRIMARY KEY (name, version)
++  )
++`;
++
++function rowToManifest(row: Record<string, string>): PluginManifest {
++  return {
++    name: row.name,
++    version: row.version,
++    description: row.description,
++    author: row.author,
++    dependencies: JSON.parse(row.dependencies) as Record<string, string>,
++    entryPoint: row.entry_point,
++    permissions: JSON.parse(row.permissions) as string[],
++  };
++}
++
++export function createRegistry(db?: DatabaseType): RegistryService {
++  const database = db ?? new Database(':memory:');
++  database.exec(CREATE_SQL);
++
++  const registerStmt = database.prepare(
++    `INSERT OR REPLACE INTO plugins (name, version, description, author, dependencies, entry_point, permissions)
++     VALUES (@name, @version, @description, @author, @dependencies, @entry_point, @permissions)`
++  );
++  const getVersionStmt = database.prepare(
++    'SELECT * FROM plugins WHERE name = ? AND version = ?'
++  );
++  const listByNameStmt = database.prepare('SELECT * FROM plugins WHERE name = ?');
++  const listAllStmt = database.prepare('SELECT * FROM plugins');
++  const searchStmt = database.prepare(
++    'SELECT * FROM plugins WHERE name LIKE ? OR description LIKE ?'
++  );
++  const removeStmt = database.prepare(
++    'DELETE FROM plugins WHERE name = ? AND version = ?'
++  );
++  const updateStmt = database.prepare(
++    `UPDATE plugins SET
++       description = COALESCE(@description, description),
++       author = COALESCE(@author, author),
++       dependencies = COALESCE(@dependencies, dependencies),
++       entry_point = COALESCE(@entry_point, entry_point),
++       permissions = COALESCE(@permissions, permissions)
++     WHERE name = @name AND version = @version`
++  );
++
++  return {
++    register(manifest: PluginManifest): void {
++      registerStmt.run({
++        name: manifest.name,
++        version: manifest.version,
++        description: manifest.description,
++        author: manifest.author,
++        dependencies: JSON.stringify(manifest.dependencies),
++        entry_point: manifest.entryPoint,
++        permissions: JSON.stringify(manifest.permissions),
++      });
++    },
++
++    get(name: string): PluginManifest | null {
++      const rows = listByNameStmt.all(name) as Record<string, string>[];
++      if (rows.length === 0) return null;
++      rows.sort((a, b) => compare(b.version, a.version));
++      return rowToManifest(rows[0]);
++    },
++
++    getVersion(name: string, version: string): PluginManifest | null {
++      const row = getVersionStmt.get(name, version) as Record<string, string> | undefined;
++      return row ? rowToManifest(row) : null;
++    },
++
++    list(): PluginManifest[] {
++      const rows = listAllStmt.all() as Record<string, string>[];
++      return rows.map(rowToManifest);
++    },
++
++    search(query: string): PluginManifest[] {
++      const pattern = `%${query}%`;
++      const rows = searchStmt.all(pattern, pattern) as Record<string, string>[];
++      return rows.map(rowToManifest);
++    },
++
++    remove(name: string, version: string): boolean {
++      const info = removeStmt.run(name, version);
++      return info.changes > 0;
++    },
++
++    listVersions(name: string): string[] {
++      const rows = listByNameStmt.all(name) as Record<string, string>[];
++      return rows.map(r => r.version).sort((a, b) => compare(a, b));
++    },
++
++    update(name: string, version: string, updates: Partial<PluginManifest>): void {
++      updateStmt.run({
++        name,
++        version,
++        description: updates.description ?? null,
++        author: updates.author ?? null,
++        dependencies: updates.dependencies ? JSON.stringify(updates.dependencies) : null,
++        entry_point: updates.entryPoint ?? null,
++        permissions: updates.permissions ? JSON.stringify(updates.permissions) : null,
++      });
++    },
++  };
++}
+diff --git a/src/resolver/index.ts b/src/resolver/index.ts
+new file mode 100644
+index 0000000..552f97d
+--- /dev/null
++++ b/src/resolver/index.ts
+@@ -0,0 +1,47 @@
++import { satisfies, maxSatisfying, validRange } from 'semver';
++import type {
++  ResolverService,
++  VersionConstraint,
++  ResolvedVersion,
++} from '../types.js';
++
++export function createResolver(): ResolverService {
++  return {
++    resolve(
++      constraints: VersionConstraint[],
++      available: Record<string, string[]>
++    ): ResolvedVersion[] {
++      return constraints.map(constraint => {
++        const versions = available[constraint.name];
++        if (!versions || versions.length === 0) {
++          throw new Error(
++            `No available versions for "${constraint.name}"`
++          );
++        }
++        const best = maxSatisfying(versions, constraint.range);
++        if (best === null) {
++          throw new Error(
++            `No version of "${constraint.name}" satisfies range "${constraint.range}"`
++          );
++        }
++        return {
++          name: constraint.name,
++          version: best,
++          satisfies: constraint.range,
++        } satisfies ResolvedVersion;
++      });
++    },
++
++    satisfies(version: string, range: string): boolean {
++      return satisfies(version, range);
++    },
++
++    maxSatisfying(versions: string[], range: string): string | null {
++      return maxSatisfying(versions, range);
++    },
++
++    validRange(range: string): boolean {
++      return validRange(range) !== null;
++    },
++  };
++}
+diff --git a/src/reviews/index.ts b/src/reviews/index.ts
+new file mode 100644
+index 0000000..f07ac73
+--- /dev/null
++++ b/src/reviews/index.ts
+@@ -0,0 +1,118 @@
++import Database from 'better-sqlite3';
++import type { Database as DatabaseType } from 'better-sqlite3';
++import type { Review, ReviewService } from '../types.js';
++
++const CREATE_SQL = `
++  CREATE TABLE IF NOT EXISTS reviews (
++    id INTEGER PRIMARY KEY AUTOINCREMENT,
++    plugin_name TEXT NOT NULL,
++    plugin_version TEXT NOT NULL,
++    user_id TEXT NOT NULL,
++    rating INTEGER NOT NULL,
++    comment TEXT NOT NULL,
++    flagged INTEGER NOT NULL DEFAULT 0,
++    created_at TEXT NOT NULL
++  )
++`;
++
++interface ReviewRow {
++  id: number;
++  plugin_name: string;
++  plugin_version: string;
++  user_id: string;
++  rating: number;
++  comment: string;
++  flagged: number;
++  created_at: string;
++}
++
++function rowToReview(row: ReviewRow): Review {
++  return {
++    id: row.id,
++    pluginName: row.plugin_name,
++    pluginVersion: row.plugin_version,
++    userId: row.user_id,
++    rating: row.rating,
++    comment: row.comment,
++    flagged: row.flagged === 1,
++    createdAt: row.created_at,
++  };
++}
++
++export function createReviewSystem(db?: DatabaseType): ReviewService {
++  const database = db ?? new Database(':memory:');
++  database.exec(CREATE_SQL);
++
++  const insertStmt = database.prepare(
++    `INSERT INTO reviews (plugin_name, plugin_version, user_id, rating, comment, flagged, created_at)
++     VALUES (@plugin_name, @plugin_version, @user_id, @rating, @comment, 0, @created_at)`
++  );
++  const getByIdStmt = database.prepare('SELECT * FROM reviews WHERE id = ?');
++  const getByPluginStmt = database.prepare(
++    'SELECT * FROM reviews WHERE plugin_name = ? ORDER BY id ASC'
++  );
++  const getByUserStmt = database.prepare(
++    'SELECT * FROM reviews WHERE user_id = ? ORDER BY id ASC'
++  );
++  const getFlaggedStmt = database.prepare(
++    'SELECT * FROM reviews WHERE flagged = 1 ORDER BY id ASC'
++  );
++  const flagStmt = database.prepare('UPDATE reviews SET flagged = 1 WHERE id = ?');
++  const deleteStmt = database.prepare('DELETE FROM reviews WHERE id = ?');
++  const countStmt = database.prepare(
++    'SELECT COUNT(*) as count FROM reviews WHERE plugin_name = ?'
++  );
++
++  return {
++    addReview(review: Omit<Review, 'id' | 'createdAt' | 'flagged'>): Review {
++      const createdAt = new Date().toISOString();
++      const info = insertStmt.run({
++        plugin_name: review.pluginName,
++        plugin_version: review.pluginVersion,
++        user_id: review.userId,
++        rating: review.rating,
++        comment: review.comment,
++        created_at: createdAt,
++      });
++      const row = getByIdStmt.get(info.lastInsertRowid) as ReviewRow;
++      return rowToReview(row);
++    },
++
++    getReviews(pluginName: string): Review[] {
++      const rows = getByPluginStmt.all(pluginName) as ReviewRow[];
++      return rows.map(rowToReview);
++    },
++
++    getAverageRating(pluginName: string): number {
++      const rows = getByPluginStmt.all(pluginName) as ReviewRow[];
++      const active = rows.filter(r => r.flagged === 0);
++      if (active.length === 0) return 0;
++      const total = active.reduce((sum, r) => sum + r.rating, 0);
++      return total / active.length;
++    },
++
++    flagReview(reviewId: number): void {
++      flagStmt.run(reviewId);
++    },
++
++    getFlaggedReviews(): Review[] {
++      const rows = getFlaggedStmt.all() as ReviewRow[];
++      return rows.map(rowToReview);
++    },
++
++    removeReview(reviewId: number): boolean {
++      const info = deleteStmt.run(reviewId);
++      return info.changes > 0;
++    },
++
++    getReviewsByUser(userId: string): Review[] {
++      const rows = getByUserStmt.all(userId) as ReviewRow[];
++      return rows.map(rowToReview);
++    },
++
++    getReviewCount(pluginName: string): number {
++      const row = countStmt.get(pluginName) as { count: number };
++      return row.count;
++    },
++  };
++}
+diff --git a/src/runner/index.ts b/src/runner/index.ts
+new file mode 100644
+index 0000000..f178e47
+--- /dev/null
++++ b/src/runner/index.ts
+@@ -0,0 +1,123 @@
++import { createContext, Script, Context } from 'vm';
++import type { RunnerService, SandboxResult } from '../types.js';
++
++function measureMemory(): number {
++  return process.memoryUsage().heapUsed;
++}
++
++function wrapCode(code: string): string {
++  return `(function() {\n${code}\n})()`;
++}
++
++function runInSandbox(
++  code: string,
++  context: Record<string, unknown> = {}
++): { output: unknown; error?: string } {
++  const sandbox: Context = createContext({
++    ...context,
++    console: {
++      log: (..._args: unknown[]) => {
++        // swallow logs to keep sandbox isolated
++      },
++    },
++  });
++
++  const script = new Script(wrapCode(code));
++
++  let output: unknown = undefined;
++  try {
++    output = script.runInContext(sandbox, { breakOnSigint: true });
++  } catch (err) {
++    return { output: undefined, error: err instanceof Error ? err.message : String(err) };
++  }
++
++  return { output };
++}
++
++export function createRunner(): RunnerService {
++  async function executeInternal(
++    code: string,
++    timeoutMs: number | undefined,
++    context?: Record<string, unknown>
++  ): Promise<SandboxResult> {
++    const startMemory = measureMemory();
++    const startTime = process.hrtime.bigint();
++
++    let result: { output: unknown; error?: string };
++    let timedOut = false;
++
++    if (timeoutMs !== undefined) {
++      // Synchronous vm can't be interrupted cleanly for infinite loops without a
++      // separate thread. Run the code in a worker thread so we can terminate it
++      // on timeout.
++      const { Worker } = await import('worker_threads');
++      const workerCode = `
++        const { createContext, Script } = require('vm');
++        const { parentPort } = require('worker_threads');
++        const userCode = ${JSON.stringify(wrapCode(code))};
++        const ctx = ${JSON.stringify(context ?? {})};
++        try {
++          const sandbox = createContext({ ...ctx });
++          const script = new Script(userCode);
++          const output = script.runInContext(sandbox);
++          parentPort.postMessage({ output });
++        } catch (err) {
++          parentPort.postMessage({ error: err instanceof Error ? err.message : String(err) });
++        }
++      `;
++      const worker = new Worker(workerCode, { eval: true });
++      result = await new Promise<{ output: unknown; error?: string }>(resolve => {
++        let settled = false;
++        const timer = setTimeout(() => {
++          if (settled) return;
++          settled = true;
++          timedOut = true;
++          worker.terminate();
++          resolve({ output: undefined, error: `Execution timed out after ${timeoutMs}ms` });
++        }, timeoutMs);
++
++        worker.on('message', (msg: { output?: unknown; error?: string }) => {
++          if (settled) return;
++          settled = true;
++          clearTimeout(timer);
++          worker.terminate();
++          resolve({ output: msg.output, error: msg.error });
++        });
++
++        worker.on('error', (err: Error) => {
++          if (settled) return;
++          settled = true;
++          clearTimeout(timer);
++          worker.terminate();
++          resolve({ output: undefined, error: err.message });
++        });
++      });
++    } else {
++      result = runInSandbox(code, context);
++    }
++
++    const endTime = process.hrtime.bigint();
++    const duration = Number(endTime - startTime) / 1e6;
++
++    return {
++      success: !result.error && !timedOut,
++      output: timedOut ? undefined : result.output,
++      duration,
++      memoryUsed: measureMemory() - startMemory,
++      error: result.error,
++    };
++  }
++
++  return {
++    execute(code: string, context?: Record<string, unknown>): Promise<SandboxResult> {
++      return executeInternal(code, undefined, context);
++    },
++    executeWithTimeout(
++      code: string,
++      timeoutMs: number,
++      context?: Record<string, unknown>
++    ): Promise<SandboxResult> {
++      return executeInternal(code, timeoutMs, context);
++    },
++  };
++}
