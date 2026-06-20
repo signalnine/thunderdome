@@ -56,11 +56,16 @@ set -e
 WALL_CLOCK_END=$(date +%s)
 WALL_CLOCK_DURATION=$(( (WALL_CLOCK_END - WALL_CLOCK_START) * 1000 ))
 
-# Parse JSONL output for token usage (same shapes as the GPT-5.4 adapter).
+# Parse JSONL output for token usage. Codex 0.141 (Responses-API/--json) emits
+# top-level events; the cumulative token usage lands in 'turn.completed' with a
+# usage block {input_tokens, cached_input_tokens, output_tokens,
+# reasoning_output_tokens}. usage is cumulative per turn, so take the LAST
+# turn.completed rather than summing (avoids double-counting). reasoning tokens
+# are already inside output_tokens and bill at the output rate.
 python3 -c "
 import json, os, sys
 
-input_tokens = output_tokens = 0
+input_tokens = output_tokens = cached = 0
 turns = 0
 try:
     with open('$OUTPUT_FILE') as f:
@@ -69,26 +74,28 @@ try:
             if not line: continue
             try:
                 ev = json.loads(line)
-                msg = ev.get('msg', {})
-                mtype = msg.get('type', '')
-                if 'usage' in msg:
-                    u = msg['usage']
-                    input_tokens += u.get('input_tokens', 0) or u.get('prompt_tokens', 0) or 0
-                    output_tokens += u.get('output_tokens', 0) or u.get('completion_tokens', 0) or 0
-                if mtype in ('agent_message', 'task_complete'):
-                    turns += 1
             except json.JSONDecodeError:
-                pass
+                continue
+            etype = ev.get('type', ev.get('msg', {}).get('type', ''))
+            if etype == 'turn.completed':
+                turns += 1
+                u = ev.get('usage', {}) or {}
+                # cumulative -> overwrite with latest
+                input_tokens = u.get('input_tokens', input_tokens) or input_tokens
+                output_tokens = u.get('output_tokens', output_tokens) or output_tokens
+                cached = u.get('cached_input_tokens', cached) or cached
 except FileNotFoundError:
     pass
 
-# GLM-5.2 via OpenRouter pricing: \$1.40/M input, \$4.40/M output.
+# GLM-5.2 via OpenRouter pricing: \$1.40/M input, \$4.40/M output. cached_input
+# is the prompt-cache-hit slice of input_tokens (OpenRouter discounts it, but we
+# bill at full input rate here to stay conservative).
 cost = input_tokens * 1.40 / 1e6 + output_tokens * 4.40 / 1e6
 
 metrics = {
     'input_tokens': input_tokens,
     'output_tokens': output_tokens,
-    'cache_read_tokens': 0,
+    'cache_read_tokens': cached,
     'cache_creation_tokens': 0,
     'turns': turns,
     'duration_ms': $WALL_CLOCK_DURATION,
