@@ -48,6 +48,13 @@ cat > "$HOME/.claude.json" <<'JSON'
 JSON
 
 MODEL="${TMUX_CLAUDE_MODEL:-claude-opus-4-6}"
+# Optional session effort level. `ultracode` (Opus 4.8 only: xhigh + automatic
+# dynamic-workflow orchestration) is NOT a valid --effort CLI value -- it is a
+# session SETTING set only via the `/effort ultracode` slash command. So we send
+# `/effort <level>` into the live TUI after it's ready (works for ultracode and
+# the model levels high/xhigh/max alike). This is the whole reason the
+# interactive driver is required for ultracode -- headless -p can't set it.
+EFFORT="${TMUX_CLAUDE_EFFORT:-}"
 TASK_PROMPT=$(cat "$TASK_DESCRIPTION")
 SESSION="td-$$"
 PANE_LOG=/workspace/.thunderdome-pane.log
@@ -90,6 +97,15 @@ for _ in $(seq 1 18); do
   fi
 done
 [ "$READY" = "1" ] || { echo "ERROR: claude TUI never reached ready state" >&2; tmux capture-pane -t "$SESSION" -p >&2 || true; exit 5; }
+
+# Set session effort (e.g. /effort ultracode) before the task, if requested.
+# Send as a discrete slash command and give it a beat to register.
+if [ -n "$EFFORT" ]; then
+  echo "=== setting session effort: /effort $EFFORT ===" >&2
+  tmux send-keys -t "$SESSION" "/effort $EFFORT" Enter
+  sleep 3
+  tmux capture-pane -t "$SESSION" -p 2>/dev/null | grep -iE "effort|ultracode" | tail -2 >&2 || true
+fi
 
 # Send the task prompt as a single paste so embedded newlines don't fire
 # premature Enters; then submit.
