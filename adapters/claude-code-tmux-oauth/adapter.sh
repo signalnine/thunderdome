@@ -118,7 +118,12 @@ tmux send-keys -t "$SESSION" Enter
 LAST_HASH=""
 IDLE_TICKS=0
 ELAPSED=0
-MAX_WAIT=$((45 * 60))
+# Internal wait ceiling (min). Default 45; raise for ultracode, whose
+# dynamic workflows can run far longer than 45 min on hard tasks (the
+# harness per-task time_limit still binds first). 90s-idle detection stops
+# it early once actually done, so a higher ceiling only extends genuinely
+# long-running tasks.
+MAX_WAIT=$(( ${TMUX_MAX_WAIT_MIN:-45} * 60 ))
 IDLE_THRESHOLD=9
 while [ $ELAPSED -lt $MAX_WAIT ]; do
   CURRENT=$(tmux capture-pane -t "$SESSION" -p 2>/dev/null | md5sum | cut -d' ' -f1)
