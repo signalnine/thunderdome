@@ -1,0 +1,1138 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..7ac3e4d
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 1801116,
++  "output_tokens": 17465,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.0
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..ffe25ac
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,48 @@
++I'll start by reading the task description, schema, tests, and project configuration to understand what needs to be built.
++
++Now let me read all the test files to understand exactly what's expected:
++Now I have a thorough understanding of all tests. Let me create all the source files. I'll set up the project structure and write all the code.
++Now let me create all the source files. I'll write them all at once:
++Now let me create all the module files. I'll do them in parallel:
++Now let me install dependencies and run the tests:
++I need to move `AppError` from auth to errors and fix the type issues. Let me also export `AuthenticatedRequest` from the right place.
++Now fix the type issues - better-sqlite3 returns `unknown` for `.get()`. I need to type the results properly:
++Build passes. Now run the tests:
++The issue is that `__dirname` in the compiled output resolves to `dist/` instead of `src/`. The path `../../schema.sql` from `dist/db.js` goes to `/schema.sql`. I need to use `fileURLToPath` with `import.meta.url` or hardcode the project root path.
++
++The issue is that the tsconfig has `"module": "Node16"` which means `__dirname` doesn't exist in ESM. Let me check if vitest is running the source directly (via ts) or the compiled output:
++
++Vitest runs the TypeScript files directly. The problem is that `__dirname` in Node16 module mode doesn't work. Let me check what `__dirname` resolves to in the test context. The issue is that in the compiled `dist/` output, `__dirname` would be `dist/`, but vitest runs `src/` directly. Let me check if `__dirname` works in vitest with Node16 modules:
++
++The `import.meta.url` doesn't work with Node16 module resolution (it outputs CommonJS). Let me use `process.cwd()` instead since the tests run from the project root:
++49/50 passing. The issue is in the integration test - `GET /users/me` returns 401. The problem is in `createApp()`: I'm mounting the users router twice - once as a public route and once inside the auth stack. The public route intercepts first and the `/users` mount without auth middleware doesn't require auth for any routes. But the integration test uses the full app with auth.
++
++Let me look at the app structure. The issue is that `POST /users` and `POST /users/login` need to be public, but `GET /users/me` needs auth. The current setup mounts the whole users router twice - first without auth, then with auth. The first mount catches `/users/me` before auth middleware runs.
++
++I need to split the users routes: public ones (register, login) and authenticated ones (me, role change).
++The problem is that the public users router catches all requests before the auth stack. I need to only expose public routes (register and login) without auth, and put authenticated routes (me, role) behind auth.
++
++That approach is fragile - relying on `stack` indices. A cleaner approach: split the users router into two separate routers.
++Now update the app.ts to use both routers properly:
++49/50. The login test in unit tests fails. The unit test uses `createPublicApp()` which mounts the full `usersRouter` (not the public one). The login handler in `router.ts` uses `require('../auth')` which might cause issues. Let me check - the unit test mounts `usersRouter` directly. The login endpoint uses `require()` for `generateToken` which could fail. Let me fix by using proper imports:
++Also fix the public router the same way:
++All 50 tests pass. Now let me run lint:
++Let me fix all lint issues:
++Now fix the query router lint issues:
++Now remove the unused `SessionStep` type:
++All 50 tests pass, build compiles clean, and lint is clean.
++
++All done. 50/50 tests pass, build compiles clean, lint is clean.
++
++**Files created:**
++
++- `src/db.ts` — Database connection management (in-memory SQLite with schema loading)
++- `src/auth.ts` — JWT token generation and authentication middleware
++- `src/errors.ts` — `AppError` class and Express error handler
++- `src/app.ts` — Express app with public/auth route splitting
++- `src/users/public.ts` — Public user routes (register, login)
++- `src/users/router.ts` — Full user routes (register, login, profile, role change)
++- `src/ingest/router.ts` — Event ingestion (single + batch)
++- `src/query/router.ts` — Query engine (count, timeseries, breakdown, funnel)
++- `src/dashboards/router.ts` — Dashboard CRUD + widget management
++- `src/export/router.ts` — Event export (JSON/CSV) and dashboard export
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/CRUSH.md b/CRUSH.md
+new file mode 100644
+index 0000000..34ac16d
+--- /dev/null
++++ b/CRUSH.md
+@@ -0,0 +1,32 @@
++# STOP — Read this before doing anything
++
++You are an autonomous coding agent. Your job is to WRITE CODE that passes tests.
++
++## Step 1: Understand the task
++- Read TASK.md to understand what to build
++- Look at existing files: `ls -la`, `ls src/`, `ls tests/`
++
++## Step 2: Write the code
++- Create/edit files in `src/` — this is where your implementation goes
++- Write complete, working TypeScript code
++- NEVER delete test files or modify package.json/tsconfig.json
++
++## Step 3: Verify (MANDATORY — do this EVERY time after writing code)
++```bash
++npm install 2>/dev/null
++npm run build
++npm test
++npm run lint
++```
++
++## Step 4: Fix and repeat
++- If build fails: fix TypeScript errors, go to step 3
++- If tests fail: read the errors, fix your code, go to step 3
++- If lint fails: fix lint issues, go to step 3
++- Keep iterating until ALL THREE pass
++
++## CRITICAL RULES
++- You MUST write code in `src/index.ts` — that is the main deliverable
++- You MUST NOT delete or modify files in `tests/`
++- You MUST run `npm test` at least once before finishing
++- You MUST keep trying until tests pass — do not stop early
+diff --git a/package-lock.json b/package-lock.json
+index 16cc798..4380b89 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1102,7 +1102,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1225,7 +1224,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1518,7 +1516,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2291,7 +2288,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -4636,7 +4632,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/app.ts b/src/app.ts
+new file mode 100644
+index 0000000..dacac4b
+--- /dev/null
++++ b/src/app.ts
+@@ -0,0 +1,31 @@
++import express from 'express';
++import { authenticateToken } from './auth';
++import { errorHandler } from './errors';
++import usersPublicRouter from './users/public';
++import usersRouter from './users/router';
++import ingestRouter from './ingest/router';
++import queryRouter from './query/router';
++import dashboardsRouter from './dashboards/router';
++import exportRouter from './export/router';
++
++export function createApp(): express.Express {
++  const app = express();
++  app.use(express.json());
++
++  // Public routes (register, login)
++  app.use('/users', usersPublicRouter);
++
++  // Authenticated routes
++  const authStack = express.Router();
++  authStack.use(authenticateToken);
++  authStack.use('/users', usersRouter);
++  authStack.use('/events', ingestRouter);
++  authStack.use('/query', queryRouter);
++  authStack.use('/dashboards', dashboardsRouter);
++  authStack.use('/export', exportRouter);
++  app.use(authStack);
++
++  app.use(errorHandler);
++
++  return app;
++}
+diff --git a/src/auth.ts b/src/auth.ts
+new file mode 100644
+index 0000000..bc3a31c
+--- /dev/null
++++ b/src/auth.ts
+@@ -0,0 +1,49 @@
++import jwt from 'jsonwebtoken';
++import { Request, Response, NextFunction } from 'express';
++
++const JWT_SECRET = process.env.JWT_SECRET || 'analytics-dashboard-secret-key-2024';
++
++export interface AuthPayload {
++  sub: string; // user id
++  tid: string; // tenant id
++  iat: number;
++  exp: number;
++}
++
++export interface AuthenticatedRequest extends Request {
++  user?: {
++    id: string;
++    tenantId: string;
++  };
++}
++
++export function generateToken(userId: string, tenantId: string): string {
++  return jwt.sign(
++    { sub: userId, tid: tenantId },
++    JWT_SECRET,
++    { expiresIn: '24h' }
++  );
++}
++
++export function authenticateToken(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
++  const authHeader = req.headers.authorization;
++  if (!authHeader) {
++    res.status(401).json({ error: 'Missing authentication token', code: 'AUTH_ERROR' });
++    return;
++  }
++
++  const parts = authHeader.split(' ');
++  if (parts.length !== 2 || parts[0] !== 'Bearer') {
++    res.status(401).json({ error: 'Invalid authorization format', code: 'AUTH_ERROR' });
++    return;
++  }
++
++  const token = parts[1];
++  try {
++    const decoded = jwt.verify(token, JWT_SECRET) as AuthPayload;
++    req.user = { id: decoded.sub, tenantId: decoded.tid };
++    next();
++  } catch {
++    res.status(401).json({ error: 'Invalid or expired token', code: 'AUTH_ERROR' });
++  }
++}
+diff --git a/src/dashboards/router.ts b/src/dashboards/router.ts
+new file mode 100644
+index 0000000..8d619ba
+--- /dev/null
++++ b/src/dashboards/router.ts
+@@ -0,0 +1,192 @@
++import { Router, Response } from 'express';
++import { v4 as uuidv4 } from 'uuid';
++import { getDb } from '../db';
++import { AppError } from '../errors';
++import { AuthenticatedRequest } from '../auth';
++
++const router = Router();
++
++// POST /dashboards - Create a dashboard
++router.post('/', (req: AuthenticatedRequest, res: Response) => {
++  if (!req.user) {
++    throw new AppError(401, 'AUTH_ERROR', 'Not authenticated');
++  }
++
++  const { name, config } = req.body;
++
++  if (!name) {
++    throw new AppError(400, 'BAD_REQUEST', 'Dashboard name is required');
++  }
++
++  const db = getDb();
++  const id = uuidv4();
++
++  db.prepare(
++    `INSERT INTO dashboards (id, tenant_id, name, owner_id, config) VALUES (?, ?, ?, ?, ?)`
++  ).run(id, req.user.tenantId, name, req.user.id, JSON.stringify(config || {}));
++
++  res.status(201).json({
++    id,
++    tenant_id: req.user.tenantId,
++    name,
++    owner_id: req.user.id,
++    config: config || {},
++  });
++});
++
++// GET /dashboards - List dashboards for tenant
++router.get('/', (req: AuthenticatedRequest, res: Response) => {
++  if (!req.user) {
++    throw new AppError(401, 'AUTH_ERROR', 'Not authenticated');
++  }
++
++  const db = getDb();
++  const dashboards = db.prepare(
++    'SELECT * FROM dashboards WHERE tenant_id = ? ORDER BY created_at DESC'
++  ).all(req.user.tenantId);
++
++  res.json(dashboards);
++});
++
++// GET /dashboards/:id - Get dashboard by id with widgets
++router.get('/:id', (req: AuthenticatedRequest, res: Response) => {
++  if (!req.user) {
++    throw new AppError(401, 'AUTH_ERROR', 'Not authenticated');
++  }
++
++  const db = getDb();
++  const dashboard = db.prepare(
++    'SELECT * FROM dashboards WHERE id = ? AND tenant_id = ?'
++  ).get(req.params.id, req.user.tenantId);
++
++  if (!dashboard) {
++    throw new AppError(404, 'NOT_FOUND', 'Dashboard not found');
++  }
++
++  const widgets = db.prepare(
++    'SELECT * FROM widgets WHERE dashboard_id = ? ORDER BY position_y, position_x'
++  ).all(req.params.id);
++
++  res.json({ ...dashboard, widgets });
++});
++
++// PATCH /dashboards/:id - Update dashboard
++router.patch('/:id', (req: AuthenticatedRequest, res: Response) => {
++  if (!req.user) {
++    throw new AppError(401, 'AUTH_ERROR', 'Not authenticated');
++  }
++
++  const { name, config } = req.body;
++
++  const db = getDb();
++  const existing = db.prepare(
++    'SELECT * FROM dashboards WHERE id = ? AND tenant_id = ?'
++  ).get(req.params.id, req.user.tenantId) as Record<string, unknown> | undefined;
++
++  if (!existing) {
++    throw new AppError(404, 'NOT_FOUND', 'Dashboard not found');
++  }
++
++  const newName = name || existing.name;
++  const newConfig = config !== undefined ? JSON.stringify(config) : existing.config;
++
++  db.prepare(
++    `UPDATE dashboards SET name = ?, config = ?, updated_at = datetime('now') WHERE id = ?`
++  ).run(newName, newConfig, req.params.id);
++
++  const updated = db.prepare(
++    'SELECT * FROM dashboards WHERE id = ?'
++  ).get(req.params.id);
++
++  res.json(updated);
++});
++
++// DELETE /dashboards/:id - Delete dashboard
++router.delete('/:id', (req: AuthenticatedRequest, res: Response) => {
++  if (!req.user) {
++    throw new AppError(401, 'AUTH_ERROR', 'Not authenticated');
++  }
++
++  const db = getDb();
++  const result = db.prepare(
++    'DELETE FROM dashboards WHERE id = ? AND tenant_id = ?'
++  ).run(req.params.id, req.user.tenantId);
++
++  if (result.changes === 0) {
++    throw new AppError(404, 'NOT_FOUND', 'Dashboard not found');
++  }
++
++  res.status(204).send();
++});
++
++// POST /dashboards/:dashboardId/widgets - Add widget
++router.post('/:dashboardId/widgets', (req: AuthenticatedRequest, res: Response) => {
++  if (!req.user) {
++    throw new AppError(401, 'AUTH_ERROR', 'Not authenticated');
++  }
++
++  const { type, config, position_x = 0, position_y = 0, width = 1, height = 1 } = req.body;
++
++  if (!type) {
++    throw new AppError(400, 'BAD_REQUEST', 'Widget type is required');
++  }
++
++  const validTypes = ['counter', 'timeseries', 'breakdown', 'funnel'];
++  if (!validTypes.includes(type)) {
++    throw new AppError(400, 'BAD_REQUEST', `Invalid widget type. Must be one of: ${validTypes.join(', ')}`);
++  }
++
++  const db = getDb();
++  const dashboard = db.prepare(
++    'SELECT * FROM dashboards WHERE id = ? AND tenant_id = ?'
++  ).get(req.params.dashboardId, req.user.tenantId);
++
++  if (!dashboard) {
++    throw new AppError(404, 'NOT_FOUND', 'Dashboard not found');
++  }
++
++  const id = uuidv4();
++
++  db.prepare(
++    `INSERT INTO widgets (id, dashboard_id, type, config, position_x, position_y, width, height) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
++  ).run(id, req.params.dashboardId, type, JSON.stringify(config || {}), position_x, position_y, width, height);
++
++  res.status(201).json({
++    id,
++    dashboard_id: req.params.dashboardId,
++    type,
++    config: config || {},
++    position_x,
++    position_y,
++    width,
++    height,
++  });
++});
++
++// DELETE /dashboards/:dashboardId/widgets/:widgetId - Delete widget
++router.delete('/:dashboardId/widgets/:widgetId', (req: AuthenticatedRequest, res: Response) => {
++  if (!req.user) {
++    throw new AppError(401, 'AUTH_ERROR', 'Not authenticated');
++  }
++
++  const db = getDb();
++  const dashboard = db.prepare(
++    'SELECT * FROM dashboards WHERE id = ? AND tenant_id = ?'
++  ).get(req.params.dashboardId, req.user.tenantId);
++
++  if (!dashboard) {
++    throw new AppError(404, 'NOT_FOUND', 'Dashboard not found');
++  }
++
++  const result = db.prepare(
++    'DELETE FROM widgets WHERE id = ? AND dashboard_id = ?'
++  ).run(req.params.widgetId, req.params.dashboardId);
++
++  if (result.changes === 0) {
++    throw new AppError(404, 'NOT_FOUND', 'Widget not found');
++  }
++
++  res.status(204).send();
++});
++
++export default router;
+diff --git a/src/db.ts b/src/db.ts
+new file mode 100644
+index 0000000..ab36cf0
+--- /dev/null
++++ b/src/db.ts
+@@ -0,0 +1,35 @@
++import Database from 'better-sqlite3';
++import { readFileSync } from 'fs';
++import { join } from 'path';
++
++let db: Database.Database | null = null;
++
++export function setDb(database: Database.Database): void {
++  db = database;
++}
++
++export function getDb(): Database.Database {
++  if (!db) {
++    throw new Error('Database not initialized');
++  }
++  return db;
++}
++
++export function createTestDb(): Database.Database {
++  const database = new Database(':memory:');
++  database.pragma('journal_mode = WAL');
++  database.pragma('foreign_keys = ON');
++  const schema = readFileSync(join(process.cwd(), 'schema.sql'), 'utf-8');
++  database.exec(schema);
++  return database;
++}
++
++export function closeDb(): void {
++  if (db) {
++    db.close();
++    db = null;
++  }
++}
++
++// Export a default for convenience
++export default { setDb, getDb, createTestDb, closeDb };
+diff --git a/src/errors.ts b/src/errors.ts
+new file mode 100644
+index 0000000..77a4024
+--- /dev/null
++++ b/src/errors.ts
+@@ -0,0 +1,35 @@
++import { Request, Response, NextFunction } from 'express';
++
++export class AppError extends Error {
++  constructor(
++    public statusCode: number,
++    public code: string,
++    message: string
++  ) {
++    super(message);
++    this.name = 'AppError';
++  }
++}
++
++export function errorHandler(err: Error, _req: Request, res: Response, _next: NextFunction): void {
++  if (err instanceof AppError) {
++    res.status(err.statusCode).json({ error: err.message, code: err.code });
++    return;
++  }
++
++  // better-sqlite3 ConstraintError for unique constraint violations
++  // better-sqlite3 ConstraintError for unique constraint violations
++  if ((err as unknown as { code: string }).code === 'SQLITE_CONSTRAINT_UNIQUE') {
++    res.status(409).json({ error: 'Resource already exists', code: 'CONFLICT' });
++    return;
++  }
++
++  // Generic error
++  // Generic error
++  if ((err as unknown as { code: string }).code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
++    res.status(400).json({ error: 'Foreign key constraint failed', code: 'BAD_REQUEST' });
++    return;
++  }
++
++  res.status(500).json({ error: 'Internal server error', code: 'INTERNAL_ERROR' });
++}
+diff --git a/src/export/router.ts b/src/export/router.ts
+new file mode 100644
+index 0000000..ba0583d
+--- /dev/null
++++ b/src/export/router.ts
+@@ -0,0 +1,75 @@
++import { Router, Response } from 'express';
++import { getDb } from '../db';
++import { AppError } from '../errors';
++import { AuthenticatedRequest } from '../auth';
++
++const router = Router();
++
++// GET /export/events?format=csv|json - Export events
++router.get('/events', (req: AuthenticatedRequest, res: Response) => {
++  if (!req.user) {
++    throw new AppError(401, 'AUTH_ERROR', 'Not authenticated');
++  }
++
++  const format = (req.query.format as string) || 'json';
++
++  if (format !== 'json' && format !== 'csv') {
++    throw new AppError(400, 'BAD_REQUEST', 'Invalid format. Must be json or csv');
++  }
++
++  const db = getDb();
++  const events = db.prepare(
++    'SELECT * FROM events WHERE tenant_id = ? ORDER BY timestamp'
++  ).all(req.user.tenantId) as Array<Record<string, unknown>>;
++
++  if (format === 'csv') {
++    const headers = ['id', 'tenant_id', 'name', 'properties', 'timestamp', 'user_id', 'session_id'];
++    const csvLines = [headers.join(',')];
++
++    for (const event of events) {
++      const row = headers.map(h => {
++        const val = event[h as keyof typeof event];
++        if (val === null || val === undefined) return '';
++        const str = String(val);
++        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
++          return `"${str.replace(/"/g, '""')}"`;
++        }
++        return str;
++      });
++      csvLines.push(row.join(','));
++    }
++
++    res.setHeader('Content-Type', 'text/csv');
++    res.status(200).send(csvLines.join('\n'));
++    return;
++  }
++
++  res.json(events);
++});
++
++// GET /export/dashboard/:id - Export dashboard data
++router.get('/dashboard/:id', (req: AuthenticatedRequest, res: Response) => {
++  if (!req.user) {
++    throw new AppError(401, 'AUTH_ERROR', 'Not authenticated');
++  }
++
++  const db = getDb();
++  const dashboard = db.prepare(
++    'SELECT * FROM dashboards WHERE id = ? AND tenant_id = ?'
++  ).get(req.params.id, req.user.tenantId);
++
++  if (!dashboard) {
++    throw new AppError(404, 'NOT_FOUND', 'Dashboard not found');
++  }
++
++  const widgets = db.prepare(
++    'SELECT * FROM widgets WHERE dashboard_id = ? ORDER BY position_y, position_x'
++  ).all(req.params.id);
++
++  res.json({
++    dashboard,
++    widgets,
++  });
++});
++
++export default router;
+diff --git a/src/ingest/router.ts b/src/ingest/router.ts
+new file mode 100644
+index 0000000..4db9ded
+--- /dev/null
++++ b/src/ingest/router.ts
+@@ -0,0 +1,114 @@
++import { Router, Response } from 'express';
++import { v4 as uuidv4 } from 'uuid';
++import { getDb } from '../db';
++import { AppError } from '../errors';
++import { AuthenticatedRequest } from '../auth';
++
++const router = Router();
++
++// POST /events - Ingest a single event
++router.post('/', (req: AuthenticatedRequest, res: Response) => {
++  if (!req.user) {
++    throw new AppError(401, 'AUTH_ERROR', 'Not authenticated');
++  }
++
++  const { name, properties = {}, timestamp, user_id, session_id } = req.body;
++
++  if (!name) {
++    throw new AppError(400, 'BAD_REQUEST', 'Event name is required');
++  }
++
++  const db = getDb();
++  const id = uuidv4();
++  const eventTimestamp = timestamp || new Date().toISOString();
++
++  db.prepare(
++    `INSERT INTO events (id, tenant_id, name, properties, timestamp, user_id, session_id) VALUES (?, ?, ?, ?, ?, ?, ?)`
++  ).run(
++    id,
++    req.user.tenantId,
++    name,
++    JSON.stringify(properties),
++    eventTimestamp,
++    user_id || null,
++    session_id || null
++  );
++
++  res.status(201).json({
++    id,
++    tenant_id: req.user.tenantId,
++    name,
++    properties,
++    timestamp: eventTimestamp,
++    user_id,
++    session_id,
++  });
++});
++
++// POST /events/batch - Ingest multiple events
++router.post('/batch', (req: AuthenticatedRequest, res: Response) => {
++  if (!req.user) {
++    throw new AppError(401, 'AUTH_ERROR', 'Not authenticated');
++  }
++
++  const { events } = req.body;
++
++  if (!events || !Array.isArray(events) || events.length === 0) {
++    throw new AppError(400, 'BAD_REQUEST', 'Events array is required and must not be empty');
++  }
++
++  const db = getDb();
++  const insert = db.prepare(
++    `INSERT INTO events (id, tenant_id, name, properties, timestamp, user_id, session_id) VALUES (?, ?, ?, ?, ?, ?, ?)`
++  );
++
++  const inserted: Record<string, unknown>[] = [];
++
++interface BatchEvent {
++  name?: string;
++  properties?: Record<string, unknown>;
++  timestamp?: string;
++  user_id?: string | null;
++  session_id?: string | null;
++}
++
++const insertMany = db.transaction((eventsArr: BatchEvent[]) => {
++    for (const event of eventsArr) {
++      if (!event.name) {
++        throw new AppError(400, 'BAD_REQUEST', 'Each event must have a name');
++      }
++
++      const id = uuidv4();
++      const eventTimestamp = event.timestamp || new Date().toISOString();
++
++      insert.run(
++        id,
++        req.user!.tenantId,
++        event.name,
++        JSON.stringify(event.properties || {}),
++        eventTimestamp,
++        event.user_id || null,
++        event.session_id || null
++      );
++
++      inserted.push({
++        id,
++        tenant_id: req.user!.tenantId,
++        name: event.name,
++        properties: event.properties || {},
++        timestamp: eventTimestamp,
++        user_id: event.user_id || null,
++        session_id: event.session_id || null,
++      });
++    }
++  });
++
++  insertMany(events);
++
++  res.status(201).json({
++    inserted: inserted.length,
++    events: inserted,
++  });
++});
++
++export default router;
+diff --git a/src/query/router.ts b/src/query/router.ts
+new file mode 100644
+index 0000000..2984ac1
+--- /dev/null
++++ b/src/query/router.ts
+@@ -0,0 +1,215 @@
++import { Router, Response } from 'express';
++import { getDb } from '../db';
++import { AppError } from '../errors';
++import { AuthenticatedRequest } from '../auth';
++
++const router = Router();
++
++// POST /query/count - Count events matching filter
++router.post('/count', (req: AuthenticatedRequest, res: Response) => {
++  if (!req.user) {
++    throw new AppError(401, 'AUTH_ERROR', 'Not authenticated');
++  }
++
++  const { event_name, start, end, property_key, property_value } = req.body;
++
++  if (!event_name) {
++    throw new AppError(400, 'BAD_REQUEST', 'event_name is required');
++  }
++
++  const db = getDb();
++  let query = 'SELECT COUNT(*) as count FROM events WHERE tenant_id = ? AND name = ?';
++  const params: (string | number)[] = [req.user.tenantId, event_name];
++
++  if (start) {
++    query += ' AND timestamp >= ?';
++    params.push(start);
++  }
++  if (end) {
++    query += ' AND timestamp <= ?';
++    params.push(end);
++  }
++  if (property_key) {
++    query += ` AND json_extract(properties, '$."' || ? || '"') = ?`;
++    params.push(property_key, property_value || '');
++  }
++
++  const result = db.prepare(query).get(...params) as Record<string, unknown>;
++  res.json({ count: Number(result.count) });
++});
++
++// POST /query/timeseries - Time-bucketed event counts
++router.post('/timeseries', (req: AuthenticatedRequest, res: Response) => {
++  if (!req.user) {
++    throw new AppError(401, 'AUTH_ERROR', 'Not authenticated');
++  }
++
++  const { event_name, bucket = 'day', start, end } = req.body;
++
++  if (!event_name) {
++    throw new AppError(400, 'BAD_REQUEST', 'event_name is required');
++  }
++
++  const db = getDb();
++
++  // Determine strftime format based on bucket
++  let strftimeFormat: string;
++  switch (bucket) {
++    case 'hour':
++      strftimeFormat = '%Y-%m-%dT%H:00:00Z';
++      break;
++    case 'day':
++      strftimeFormat = '%Y-%m-%d';
++      break;
++    case 'week':
++      strftimeFormat = 'strftime("%Y-W%W", timestamp)';
++      break;
++    case 'month':
++      strftimeFormat = '%Y-%m';
++      break;
++    default:
++      strftimeFormat = '%Y-%m-%d';
++  }
++
++  let bucketExpr: string;
++  if (bucket === 'week') {
++    bucketExpr = strftimeFormat;
++  } else {
++    bucketExpr = `strftime('${strftimeFormat}', timestamp)`;
++  }
++
++  let query = `SELECT ${bucketExpr} as bucket, COUNT(*) as count FROM events WHERE tenant_id = ? AND name = ?`;
++  const params: (string | number)[] = [req.user.tenantId, event_name];
++
++  if (start) {
++    query += ' AND timestamp >= ?';
++    params.push(start);
++  }
++  if (end) {
++    query += ' AND timestamp <= ?';
++    params.push(end);
++  }
++
++  query += ` GROUP BY ${bucketExpr} ORDER BY bucket`;
++
++  const results = db.prepare(query).all(...params);
++
++  res.json({ data: results });
++});
++
++// POST /query/breakdown - Event counts grouped by property
++router.post('/breakdown', (req: AuthenticatedRequest, res: Response) => {
++  if (!req.user) {
++    throw new AppError(401, 'AUTH_ERROR', 'Not authenticated');
++  }
++
++  const { event_name, property_key } = req.body;
++
++  if (!event_name || !property_key) {
++    throw new AppError(400, 'BAD_REQUEST', 'event_name and property_key are required');
++  }
++
++  const db = getDb();
++
++  const query = `
++    SELECT json_extract(properties, '$."' || ? || '"') as property_value, COUNT(*) as count
++    FROM events
++    WHERE tenant_id = ? AND name = ?
++    GROUP BY property_value
++    ORDER BY count DESC
++  `;
++
++  const results = db.prepare(query).all(property_key, req.user.tenantId, event_name);
++
++  res.json({ data: results });
++});
++
++// POST /query/funnel - Multi-step funnel analysis
++router.post('/funnel', (req: AuthenticatedRequest, res: Response) => {
++  if (!req.user) {
++    throw new AppError(401, 'AUTH_ERROR', 'Not authenticated');
++  }
++
++  const { steps } = req.body;
++
++  if (!steps || !Array.isArray(steps) || steps.length === 0) {
++    throw new AppError(400, 'BAD_REQUEST', 'steps array is required');
++  }
++
++  const db = getDb();
++  const tenantId = req.user.tenantId;
++
++  // Funnel: find unique sessions that completed each step in order
++  // A session completes a step if it has an event matching that step name
++  // Each subsequent step must happen after the previous one in the same session
++
++  const funnelSteps: { step: string; count: number }[] = [];
++
++  // Get all distinct sessions with timestamps for each step
++  const sessionData: Record<string, Map<number, string>> = {}; // session_id -> {step_index -> timestamp}
++
++  // Get all events for the relevant steps
++  const placeholders = steps.map(() => '?').join(',');
++
++  const events = db.prepare(
++    `SELECT session_id, name, timestamp FROM events
++     WHERE tenant_id = ? AND name IN (${placeholders}) AND session_id IS NOT NULL
++     ORDER BY session_id, timestamp`
++  ).all(tenantId, ...steps) as Array<{ session_id: string; name: string; timestamp: string }>;
++
++  // Process events per session
++  for (const event of events) {
++    const sid = event.session_id;
++    if (!sid) continue;
++
++    if (!sessionData[sid]) {
++      sessionData[sid] = new Map();
++    }
++
++    const stepIndex = steps.indexOf(event.name);
++    if (stepIndex === -1) continue;
++
++    // Only keep the first occurrence of each step per session
++    if (!sessionData[sid].has(stepIndex)) {
++      sessionData[sid].set(stepIndex, event.timestamp);
++    }
++  }
++
++  // Calculate funnel: for each step, count sessions that have completed it AND all prior steps in order
++  for (let i = 0; i < steps.length; i++) {
++    let count = 0;
++
++    for (const [, stepMap] of Object.entries(sessionData)) {
++      let valid = true;
++
++      for (let j = 0; j <= i; j++) {
++        if (!stepMap.has(j)) {
++          valid = false;
++          break;
++        }
++      }
++
++      // Check ordering: each step's timestamp must be >= previous step's timestamp
++      if (valid) {
++        for (let j = 1; j <= i; j++) {
++          const prev = stepMap.get(j - 1);
++          const curr = stepMap.get(j);
++          if (curr && prev && curr < prev) {
++            valid = false;
++            break;
++          }
++        }
++      }
++
++      if (valid) {
++        count++;
++      }
++    }
++
++    funnelSteps.push({ step: steps[i], count });
++  }
++
++  res.json({ steps: funnelSteps });
++});
++
++export default router;
+diff --git a/src/users/public.ts b/src/users/public.ts
+new file mode 100644
+index 0000000..f0539ce
+--- /dev/null
++++ b/src/users/public.ts
+@@ -0,0 +1,66 @@
++import { Router, Request, Response } from 'express';
++import { v4 as uuidv4 } from 'uuid';
++import { getDb } from '../db';
++import { AppError } from '../errors';
++import { generateToken } from '../auth';
++
++const router = Router();
++
++// POST /users - Register new user (public)
++router.post('/', (req: Request, res: Response) => {
++  const { email, password, tenant_id } = req.body;
++
++  if (!email || !password || !tenant_id) {
++    throw new AppError(400, 'BAD_REQUEST', 'Email, password, and tenant_id are required');
++  }
++
++  const db = getDb();
++  const id = uuidv4();
++
++  const passwordHash = `hash:${password}`;
++
++  const result = db.prepare(
++    `INSERT INTO users (id, email, password_hash, tenant_id, role) VALUES (?, ?, ?, ?, 'viewer')`
++  ).run(id, email, passwordHash, tenant_id);
++
++  if (!result || result.changes === 0) {
++    throw new AppError(500, 'INTERNAL_ERROR', 'Failed to create user');
++  }
++
++  res.status(201).json({
++    id,
++    email,
++    tenant_id,
++    role: 'viewer',
++  });
++});
++
++// POST /users/login - Login (public)
++router.post('/login', (req: Request, res: Response) => {
++  const { email, password } = req.body;
++
++  if (!email || !password) {
++    throw new AppError(400, 'BAD_REQUEST', 'Email and password are required');
++  }
++
++  const db = getDb();
++  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as Record<string, unknown> | undefined;
++
++  if (!user || user.password_hash !== `hash:${password}`) {
++    throw new AppError(401, 'AUTH_ERROR', 'Invalid credentials');
++  }
++
++  const token = generateToken(String(user.id), String(user.tenant_id));
++
++  res.json({
++    token,
++    user: {
++      id: user.id,
++      email: user.email,
++      tenant_id: user.tenant_id,
++      role: user.role,
++    },
++  });
++});
++
++export default router;
+diff --git a/src/users/router.ts b/src/users/router.ts
+new file mode 100644
+index 0000000..7fbe959
+--- /dev/null
++++ b/src/users/router.ts
+@@ -0,0 +1,113 @@
++import { Router, Request, Response } from 'express';
++import { v4 as uuidv4 } from 'uuid';
++import { getDb } from '../db';
++import { AppError } from '../errors';
++import { AuthenticatedRequest, generateToken } from '../auth';
++
++const router = Router();
++
++// POST /users - Register new user
++router.post('/', (_req: Request, res: Response) => {
++  const { email, password, tenant_id } = _req.body;
++
++  if (!email || !password || !tenant_id) {
++    throw new AppError(400, 'BAD_REQUEST', 'Email, password, and tenant_id are required');
++  }
++
++  const db = getDb();
++  const id = uuidv4();
++
++  // Simple password hash (in production use bcrypt)
++  const passwordHash = `hash:${password}`;
++
++  const result = db.prepare(
++    `INSERT INTO users (id, email, password_hash, tenant_id, role) VALUES (?, ?, ?, ?, 'viewer')`
++  ).run(id, email, passwordHash, tenant_id);
++
++  if (!result || result.changes === 0) {
++    throw new AppError(500, 'INTERNAL_ERROR', 'Failed to create user');
++  }
++
++  res.status(201).json({
++    id,
++    email,
++    tenant_id,
++    role: 'viewer',
++  });
++});
++
++// POST /users/login - Login
++router.post('/login', (_req: Request, res: Response) => {
++  const { email, password } = _req.body;
++
++  if (!email || !password) {
++    throw new AppError(400, 'BAD_REQUEST', 'Email and password are required');
++  }
++
++  const db = getDb();
++  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as Record<string, unknown> | undefined;
++
++  if (!user || user.password_hash !== `hash:${password}`) {
++    throw new AppError(401, 'AUTH_ERROR', 'Invalid credentials');
++  }
++
++  const token = generateToken(String(user.id), String(user.tenant_id));
++
++  res.json({
++    token,
++    user: {
++      id: user.id,
++      email: user.email,
++      tenant_id: user.tenant_id,
++      role: user.role,
++    },
++  });
++});
++
++// GET /users/me - Get current user profile (requires auth)
++router.get('/me', (req: AuthenticatedRequest, res: Response) => {
++  if (!req.user) {
++    throw new AppError(401, 'AUTH_ERROR', 'Not authenticated');
++  }
++
++  const db = getDb();
++  const user = db.prepare('SELECT id, email, tenant_id, role FROM users WHERE id = ?').get(req.user.id);
++
++  if (!user) {
++    throw new AppError(404, 'NOT_FOUND', 'User not found');
++  }
++
++  res.json(user);
++});
++
++// PATCH /users/:id/role - Change user role (admin only)
++router.patch('/:id/role', (req: AuthenticatedRequest, res: Response) => {
++  const { role } = req.body;
++  const targetId = req.params.id;
++
++  if (!req.user) {
++    throw new AppError(401, 'AUTH_ERROR', 'Not authenticated');
++  }
++
++  const validRoles = ['admin', 'viewer', 'editor'];
++  if (!role || !validRoles.includes(role)) {
++    throw new AppError(400, 'BAD_REQUEST', 'Invalid role');
++  }
++
++  const db = getDb();
++
++  // Check if current user is admin
++  const currentUser = db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.id) as Record<string, unknown> | undefined;
++  if (!currentUser || String(currentUser.role) !== 'admin') {
++    throw new AppError(403, 'FORBIDDEN', 'Only admins can change roles');
++  }
++
++  const result = db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, targetId);
++  if (result.changes === 0) {
++    throw new AppError(404, 'NOT_FOUND', 'User not found');
++  }
++
++  res.json({ id: targetId, role });
++});
++
++export default router;
