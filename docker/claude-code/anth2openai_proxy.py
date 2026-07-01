@@ -57,6 +57,7 @@ UPSTREAM = None
 API_KEY = None
 DEFAULT_MODEL = None
 PROVIDER_PREF = None  # OpenRouter provider routing preference (dict) injected into each request
+NO_THINK = False  # if set, inject enable_thinking=false (disable hybrid-model reasoning)
 MIN_MAX_TOKENS = 0  # floor on max_tokens (thinking models need a minimum budget)
 LOG_PATH = None
 TRACE_PATH = None
@@ -202,6 +203,19 @@ def translate_request(body):
     # request in 5-18s. Passing a preference keeps turns inside the time limit.
     if PROVIDER_PREF is not None:
         out["provider"] = PROVIDER_PREF
+
+    # Force-disable thinking for hybrid reasoning models (Qwen3.x/Qwopus on
+    # local llama.cpp). Inject both the top-level and nested
+    # chat_template_kwargs toggles -- llama.cpp honors the nested form. Without
+    # this the model reasons for minutes per turn (non-streamed) and times out
+    # short-time-limit tasks before writing code.
+    if NO_THINK:
+        out["enable_thinking"] = False
+        ctk = out.get("chat_template_kwargs")
+        if not isinstance(ctk, dict):
+            ctk = {}
+        ctk["enable_thinking"] = False
+        out["chat_template_kwargs"] = ctk
 
     out["stream"] = False  # always buffer upstream
     return out
@@ -497,7 +511,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global UPSTREAM, API_KEY, DEFAULT_MODEL, PROVIDER_PREF, MIN_MAX_TOKENS, LOG_PATH, TRACE_PATH
+    global UPSTREAM, API_KEY, DEFAULT_MODEL, PROVIDER_PREF, NO_THINK, MIN_MAX_TOKENS, LOG_PATH, TRACE_PATH
     p = argparse.ArgumentParser()
     p.add_argument("--port", type=int, default=18900)
     p.add_argument("--host", default="127.0.0.1")
@@ -512,6 +526,8 @@ def main():
                    help="Append one jsonl line per request with usage counters (for thunderdome metrics).")
     p.add_argument("--trace", default=None,
                    help="Append full request+response trace dumps (debugging).")
+    p.add_argument("--no-think", action="store_true", default=False,
+                   help="Inject enable_thinking=false (disable hybrid reasoning models' thinking).")
     p.add_argument("--provider", default=None,
                    help='OpenRouter provider routing JSON injected into each request, '
                         'e.g. \'{"sort":"throughput"}\' or \'{"order":["Z.AI","Novita"]}\'. '
@@ -524,6 +540,7 @@ def main():
     MIN_MAX_TOKENS = args.min_max_tokens
     LOG_PATH = args.log
     TRACE_PATH = args.trace
+    NO_THINK = args.no_think
     if args.provider:
         PROVIDER_PREF = json.loads(args.provider)
 
