@@ -1,0 +1,132 @@
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..424002a
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,126 @@
++export interface Gate {
++  op: 'AND' | 'OR' | 'XOR';
++  in1: string;
++  in2: string;
++  out: string;
++}
++
++function applyOp(op: Gate['op'], a: number, b: number): number {
++  switch (op) {
++    case 'AND':
++      return a & b;
++    case 'OR':
++      return a | b;
++    case 'XOR':
++      return a ^ b;
++  }
++}
++
++export function simulate(gates: Gate[], inputs: Record<string, number>): Record<string, number> {
++  const values: Record<string, number> = { ...inputs };
++  const gateByOutput = new Map<string, Gate>();
++  for (const gate of gates) {
++    gateByOutput.set(gate.out, gate);
++  }
++
++  function resolve(wire: string): number {
++    if (wire in values) {
++      return values[wire];
++    }
++    const gate = gateByOutput.get(wire);
++    if (!gate) {
++      throw new Error(`No value or gate found for wire "${wire}"`);
++    }
++    const value = applyOp(gate.op, resolve(gate.in1), resolve(gate.in2));
++    values[wire] = value;
++    return value;
++  }
++
++  for (const gate of gates) {
++    resolve(gate.out);
++  }
++
++  return values;
++}
++
++const isInputWire = (wire: string): boolean => wire[0] === 'x' || wire[0] === 'y';
++const isOutputWire = (wire: string): boolean => wire[0] === 'z';
++const bitIndex = (wire: string): string => wire.slice(1);
++
++// A correctly-formed ripple-carry adder built from XOR/AND/OR gates has a
++// distinctive local shape at every gate. `findSwappedWires` checks each gate
++// against that shape rather than brute-forcing swap combinations: any gate
++// that doesn't match the expected pattern for its position must be one half
++// of a swap.
++export function findSwappedWires(gates: Gate[]): string[] {
++  let highestOutputBit = 0;
++  for (const gate of gates) {
++    if (isOutputWire(gate.out)) {
++      highestOutputBit = Math.max(highestOutputBit, parseInt(bitIndex(gate.out), 10));
++    }
++  }
++  const finalCarryOut = 'z' + String(highestOutputBit).padStart(2, '0');
++
++  const gateByOutput = new Map<string, Gate>();
++  const orOutputConsumers = new Set<string>();
++  for (const gate of gates) {
++    gateByOutput.set(gate.out, gate);
++    if (gate.op === 'OR') {
++      orOutputConsumers.add(gate.in1);
++      orOutputConsumers.add(gate.in2);
++    }
++  }
++
++  const suspect = new Set<string>();
++
++  for (const { op, in1, in2, out } of gates) {
++    if (op === 'XOR') {
++      if (isOutputWire(out)) {
++        const bothXY = isInputWire(in1) && isInputWire(in2);
++        // z00 is the one z output produced directly from x/y (half adder);
++        // every other z bit is the XOR of two intermediate wires.
++        if (out === 'z00' ? !bothXY : bothXY) {
++          suspect.add(out);
++        }
++      } else {
++        // A non-output XOR must be a partial-sum gate: x_i XOR y_i.
++        if (!(isInputWire(in1) && isInputWire(in2))) {
++          suspect.add(out);
++        }
++        // Bit 0 has no partial-sum wire distinct from z00 (it's a half
++        // adder) - x00 XOR y00 must always produce z00, never anything else.
++        if (isInputWire(in1) && isInputWire(in2) && bitIndex(in1) === '00' && bitIndex(in2) === '00') {
++          suspect.add(out);
++        }
++      }
++    } else if (op === 'AND') {
++      // AND never feeds a z wire directly.
++      if (isOutputWire(out)) {
++        suspect.add(out);
++      } else {
++        const isBitZeroCarry =
++          isInputWire(in1) && isInputWire(in2) && bitIndex(in1) === '00' && bitIndex(in2) === '00';
++        // Every AND gate's output feeds an OR gate (as generate or propagate
++        // carry) except the very first bit's carry, which is consumed
++        // directly by the next bit's XOR/AND gates.
++        if (!isBitZeroCarry && !orOutputConsumers.has(out)) {
++          suspect.add(out);
++        }
++      }
++    } else if (op === 'OR') {
++      // OR only feeds a z wire for the final carry-out bit.
++      if (isOutputWire(out) && out !== finalCarryOut) {
++        suspect.add(out);
++      }
++      // OR always combines two AND results (generate and propagate carry).
++      for (const input of [in1, in2]) {
++        const producer = gateByOutput.get(input);
++        if (producer && producer.op !== 'AND') {
++          suspect.add(input);
++        }
++      }
++    }
++  }
++
++  return Array.from(suspect).sort();
++}

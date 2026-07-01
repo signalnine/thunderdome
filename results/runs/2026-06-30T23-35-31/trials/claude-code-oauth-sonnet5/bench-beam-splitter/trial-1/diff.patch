@@ -1,0 +1,139 @@
+diff --git a/package-lock.json b/package-lock.json
+index 02b0dae..222cd7d 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..b94222e
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,81 @@
++type DirCounts = [bigint, bigint, bigint];
++
++const DIR_COL_OFFSET: readonly number[] = [0, -1, 1];
++
++function findSourceCol(grid: string[][]): number {
++  const topRow = grid[0];
++  for (let c = 0; c < topRow.length; c++) {
++    if (topRow[c] === 'S') return c;
++  }
++  throw new Error('No source (S) found in top row of grid');
++}
++
++interface SimulationResult {
++  visitedCount: number;
++  totalPaths: bigint;
++}
++
++function simulate(grid: string[][]): SimulationResult {
++  const rows = grid.length;
++  const cols = grid[0].length;
++  const srcCol = findSourceCol(grid);
++
++  const visited = new Set<number>();
++  visited.add(srcCol);
++
++  let totalPaths = 0n;
++  let current = new Map<number, DirCounts>();
++  current.set(srcCol, [1n, 0n, 0n]);
++
++  const addBeam = (
++    target: Map<number, DirCounts>,
++    row: number,
++    col: number,
++    dir: number,
++    count: bigint,
++  ): void => {
++    if (count === 0n) return;
++    if (row >= rows || col < 0 || col >= cols) {
++      totalPaths += count;
++      return;
++    }
++    visited.add(row * cols + col);
++    const existing = target.get(col);
++    if (existing) {
++      existing[dir] += count;
++    } else {
++      const fresh: DirCounts = [0n, 0n, 0n];
++      fresh[dir] = count;
++      target.set(col, fresh);
++    }
++  };
++
++  for (let r = 0; r < rows && current.size > 0; r++) {
++    const next = new Map<number, DirCounts>();
++    for (const [c, counts] of current) {
++      const cell = grid[r][c];
++      if (cell === '^') {
++        const total = counts[0] + counts[1] + counts[2];
++        addBeam(next, r + 1, c - 1, 1, total);
++        addBeam(next, r + 1, c + 1, 2, total);
++      } else {
++        for (let d = 0; d < 3; d++) {
++          if (counts[d] > 0n) {
++            addBeam(next, r + 1, c + DIR_COL_OFFSET[d], d, counts[d]);
++          }
++        }
++      }
++    }
++    current = next;
++  }
++
++  return { visitedCount: visited.size, totalPaths };
++}
++
++export function countBeamCells(grid: string[][]): number {
++  return simulate(grid).visitedCount;
++}
++
++export function countBeamPaths(grid: string[][]): bigint {
++  return simulate(grid).totalPaths;
++}
