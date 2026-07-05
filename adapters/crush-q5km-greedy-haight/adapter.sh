@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 
-# --- CRUSH + gpt-oss 120B (local llama.cpp on host.docker.internal:11434) ---
+# crush-q5km-greedy-haight: CRUSH + Qwopus3.6 Q5_K_M (no-think, FORCED GREEDY) on host.docker.internal:8080 (llama.cpp).
+# Quant A/B baseline leg vs crush-q27-greedy-haight -- identical harness/transport, temp=0 both.
 
 [[ -f "$TASK_DESCRIPTION" ]] || { echo "Task file not found: $TASK_DESCRIPTION" >&2; exit 2; }
 
@@ -17,8 +18,10 @@ PROXY_LOG=/tmp/proxy-usage.jsonl
 python3 /usr/local/bin/openai_proxy.py \
   --port "$PROXY_PORT" \
   --log "$PROXY_LOG" \
-  --upstream "http://100.107.24.62:11434/v1" \
-  --model-rewrite "glm-5=gpt-oss:120b" \
+  --upstream "http://host.docker.internal:8080/v1" \
+  --model-rewrite "glm-5=Qwopus3.6-27B-v2-MTP-Q5_K_M.gguf" \
+  --no-think \
+  --force-greedy \
   2>/dev/null &
 PROXY_PID=$!
 
@@ -30,11 +33,45 @@ for i in {1..10}; do
   sleep 0.5
 done
 
-# Use glm-5 as model ID (crush validates against its internal registry)
-# The proxy rewrites to gpt-oss:120b for the upstream
 cat > /tmp/.local/share/crush/crush.json << EOF
 {"providers":{"zai":{"api_key":"not-needed","base_url":"http://localhost:$PROXY_PORT"}},"models":{"large":{"model":"glm-5","provider":"zai","max_tokens":32768},"small":{"model":"glm-5","provider":"zai","max_tokens":32768}}}
 EOF
+
+# Write project instructions that CRUSH reads automatically
+cat > "$TASK_DIR/CRUSH.md" << 'CRUSHMD'
+# STOP — Read this before doing anything
+
+You are an autonomous coding agent. Your job is to WRITE CODE that passes tests.
+
+## Step 1: Understand the task
+- Read TASK.md to understand what to build
+- Look at existing files: `ls -la`, `ls src/`, `ls tests/`
+
+## Step 2: Write the code
+- Create/edit files in `src/` — this is where your implementation goes
+- Write complete, working TypeScript code
+- NEVER delete test files or modify package.json/tsconfig.json
+
+## Step 3: Verify (MANDATORY — do this EVERY time after writing code)
+```bash
+npm install 2>/dev/null
+npm run build
+npm test
+npm run lint
+```
+
+## Step 4: Fix and repeat
+- If build fails: fix TypeScript errors, go to step 3
+- If tests fail: read the errors, fix your code, go to step 3
+- If lint fails: fix lint issues, go to step 3
+- Keep iterating until ALL THREE pass
+
+## CRITICAL RULES
+- You MUST write code in `src/index.ts` — that is the main deliverable
+- You MUST NOT delete or modify files in `tests/`
+- You MUST run `npm test` at least once before finishing
+- You MUST keep trying until tests pass — do not stop early
+CRUSHMD
 
 TASK_PROMPT=$(cat "$TASK_DESCRIPTION")
 OUTPUT_FILE=/workspace/.thunderdome-output.txt

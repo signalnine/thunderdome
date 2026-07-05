@@ -24,6 +24,7 @@ auth_override = None  # if set, replace Authorization header with this key
 no_think = False  # if set, inject enable_thinking=false into chat requests
 reasoning_effort_override = None  # if set, inject reasoning_effort into chat requests
 exclude_reasoning = False  # if set, inject reasoning.exclude=true (OpenRouter)
+force_greedy = False  # if set, force temperature=0 (greedy) on chat requests
 
 
 class ProxyHandler(BaseHTTPRequestHandler):
@@ -66,6 +67,10 @@ class ProxyHandler(BaseHTTPRequestHandler):
                         ctk = {}
                     ctk["enable_thinking"] = False
                     data["chat_template_kwargs"] = ctk
+                if force_greedy and is_chat:
+                    data["temperature"] = 0
+                    data.pop("top_p", None)
+                    data.pop("top_k", None)
                 if reasoning_effort_override and is_chat:
                     data["reasoning_effort"] = reasoning_effort_override
                 # Exclude reasoning chunks (OpenRouter-specific). Thinking
@@ -334,7 +339,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
 
 def main():
-    global upstream_url, log_path, model_rewrites, max_tokens_clamp, auth_override, no_think, reasoning_effort_override, exclude_reasoning
+    global upstream_url, log_path, model_rewrites, max_tokens_clamp, auth_override, no_think, reasoning_effort_override, exclude_reasoning, force_greedy
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--log", required=True)
@@ -351,6 +356,8 @@ def main():
                         help="Inject reasoning_effort into chat requests")
     parser.add_argument("--exclude-reasoning", action="store_true", default=False,
                         help="Inject reasoning.exclude=true (OpenRouter) so thinking-model chunks don't reach the client")
+    parser.add_argument("--force-greedy", action="store_true", default=False,
+                        help="force temperature=0 (greedy) on chat requests")
     args = parser.parse_args()
     upstream_url = args.upstream.rstrip("/")
     log_path = args.log
@@ -359,6 +366,7 @@ def main():
     no_think = args.no_think
     reasoning_effort_override = args.reasoning_effort
     exclude_reasoning = args.exclude_reasoning
+    force_greedy = args.force_greedy
     if no_think:
         print("  Thinking disabled (enable_thinking=false)", flush=True)
     if reasoning_effort_override:
