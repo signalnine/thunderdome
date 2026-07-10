@@ -174,34 +174,34 @@ class ProxyHandler(BaseHTTPRequestHandler):
             input_tokens = 0
             output_tokens = 0
             resp_model = "unknown"
-            last_forwarded_blank = False
+            pending_data = False  # a data: line was forwarded but not yet terminated by a blank
 
             try:
                 for raw_line in resp:
                     line = raw_line.decode('utf-8', errors='ignore').strip()
                     rewritten = raw_line
 
-                    # Drop non-standard SSE comment lines AND collapse the blank
-                    # lines they leave behind. Neuralwatt now interleaves
-                    # `: energy {...}` / `: cost {...}` telemetry comment lines,
-                    # each followed by its own blank line, before `data: [DONE]`.
-                    # Comments are valid SSE that compliant clients ignore, but
-                    # dropping a comment leaves consecutive blank lines, and
-                    # CRUSH's reader dispatches an SSE event on every blank --
-                    # an empty event becomes json.Unmarshal("") -> "unexpected
-                    # end of JSON input", aborting the whole stream. So: skip
-                    # comment lines, and never forward two blank lines in a row
-                    # (a single blank still terminates the preceding event).
+                    # Drop non-standard SSE comment lines AND the blank lines they
+                    # leave behind. Two sources emit comments: Neuralwatt telemetry
+                    # (`: energy {...}` / `: cost {...}`) and OpenRouter keepalives
+                    # (`: OPENROUTER PROCESSING`, streamed while a reasoning model
+                    # like Laguna-XS-2.1 thinks -- BEFORE any data line). Comments
+                    # are valid SSE that compliant clients ignore, but each is
+                    # followed by its own blank line; CRUSH's reader dispatches an
+                    # SSE event on every blank, and an empty event becomes
+                    # json.Unmarshal("") -> "unexpected end of JSON input", aborting
+                    # the whole stream. A blank is only meaningful when it TERMINATES
+                    # a data event we forwarded -- so drop the comment, and only
+                    # forward a blank when there is a pending data line to close.
                     if line.startswith(':'):
                         continue
                     if line == '':
-                        if last_forwarded_blank:
+                        if not pending_data:
                             continue
-                        last_forwarded_blank = True
+                        pending_data = False
                         self.wfile.write(rewritten)
                         self.wfile.flush()
                         continue
-                    last_forwarded_blank = False
 
                     # Some vLLM servers (e.g. Neuralwatt Qwen3.6) emit chain-of-thought
                     # in a nonstandard `reasoning` delta field. Strip it -- clients like
@@ -244,9 +244,11 @@ class ProxyHandler(BaseHTTPRequestHandler):
                             except (json.JSONDecodeError, KeyError):
                                 pass
 
-                    # Forward (possibly rewritten) line
+                    # Forward (possibly rewritten) data line; a blank must follow
+                    # to terminate the event before the client will dispatch it.
                     self.wfile.write(rewritten)
                     self.wfile.flush()
+                    pending_data = True
             except (BrokenPipeError, ConnectionResetError) as e:
                 print(f"STREAM CLOSED: {e}", file=sys.stderr, flush=True)
 
