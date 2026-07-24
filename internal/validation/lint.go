@@ -22,6 +22,39 @@ var eslintCompactRe = regexp.MustCompile(`^\S.*:\d+:\d+:\s+(error|warning)\b`)
 // 'tsc --noEmit' is bundled into the lint command.
 var tscRe = regexp.MustCompile(`^\S.*\(\d+,\d+\):\s+(error|warning)\b`)
 
+// toolingChatterRe matches package-manager output that is not a lint
+// diagnostic: npm's update notice, npm warnings, and the
+// "> pkg@1.0.0 lint" / "> eslint src/" banner npm prints before running a
+// script (plus the yarn/pnpm equivalents).
+//
+// This matters because npm 12.0.1's release made node:20's bundled npm
+// 10.8.2 print "npm notice New major version of npm available!" on EVERY
+// script run. A perfectly clean `npm run lint` therefore produced non-empty
+// output with zero parseable diagnostics, which tripped the
+// unrecognized-formatter fallback below and silently downgraded every clean
+// lint from 1.0 to 0.5 -- capping standard-task composites at 0.85 from
+// 2026-06 onward. Note `npm ERR!` is deliberately NOT stripped: that signals
+// a genuine failure and should keep the linter honest.
+var toolingChatterRe = regexp.MustCompile(`^\s*(npm (notice|warn|WARN)\b|>\s|\$\s|yarn run v|\$ eslint)`)
+
+// stripToolingChatter drops package-manager noise so that "the linter printed
+// something we don't recognize" reflects the LINTER's output, not its
+// launcher's. Blank lines go too, so trailing newlines can't look like output.
+func stripToolingChatter(output string) string {
+	var kept []string
+	for _, raw := range strings.Split(output, "\n") {
+		line := strings.TrimRight(raw, "\r")
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if toolingChatterRe.MatchString(line) {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.Join(kept, "\n")
+}
+
 type LintResult struct {
 	Score        float64
 	Output       string
@@ -38,6 +71,7 @@ func RunLint(ctx context.Context, workDir, validationImage, lintCmd string, base
 	cmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--init",
 		"--security-opt=seccomp=unconfined",
 		"--security-opt=apparmor=unconfined",
+		"-e", "npm_config_update_notifier=false",
 		"-v", workDir+":/workspace", "-w", "/workspace",
 		validationImage, "sh", "-c", lintCmd)
 
@@ -58,11 +92,15 @@ func RunLint(ctx context.Context, workDir, validationImage, lintCmd string, base
 
 // ParseLintResults counts issues and computes a score.
 func ParseLintResults(output string, exitCode int, baselineIssues int) *LintResult {
-	if exitCode == 0 && output == "" {
+	// Judge emptiness and count diagnostics against the linter's own output,
+	// with package-manager chatter removed -- see toolingChatterRe.
+	meaningful := stripToolingChatter(output)
+
+	if exitCode == 0 && meaningful == "" {
 		return &LintResult{Score: 1.0, Output: output, ExitCode: exitCode}
 	}
 	totalIssues := 0
-	for _, raw := range strings.Split(output, "\n") {
+	for _, raw := range strings.Split(meaningful, "\n") {
 		line := strings.TrimRight(raw, "\r")
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
@@ -85,7 +123,7 @@ func ParseLintResults(output string, exitCode int, baselineIssues int) *LintResu
 	// If the linter produced substantive output but our parsers recognized no
 	// diagnostics, the formatter is likely one we don't support (JSON, unix,
 	// custom). Avoid awarding a confident 1.0 — return a conservative 0.5.
-	if exitCode == 0 && totalIssues == 0 && strings.TrimSpace(output) != "" {
+	if exitCode == 0 && totalIssues == 0 && meaningful != "" {
 		return &LintResult{Score: 0.5, Output: output, ExitCode: exitCode}
 	}
 	netNew := totalIssues - baselineIssues

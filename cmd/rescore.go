@@ -17,7 +17,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var flagRescoreFull bool
+var (
+	flagRescoreFull     bool
+	flagRescoreLintOnly bool
+)
 
 func newRescoreCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -28,10 +31,14 @@ re-runs test validation, and updates meta.json scores.
 
 By default, only re-runs tests (agent tests + hidden tests) and recomputes
 composite scores, keeping existing lint/coverage/code_metrics scores.
-Use --full to re-run the entire validation pipeline.`,
+Use --full to re-run the entire validation pipeline.
+Use --lint-only to re-run just the lint command and recompute the composite,
+keeping every other score -- for repairing a scorer-side lint bug without
+letting reconstruction noise drift the other components.`,
 		RunE: runRescore,
 	}
 	cmd.Flags().BoolVar(&flagRescoreFull, "full", false, "re-run full validation pipeline (slower)")
+	cmd.Flags().BoolVar(&flagRescoreLintOnly, "lint-only", false, "re-run only lint; keep all other scores")
 	return cmd
 }
 
@@ -111,9 +118,12 @@ func runRescore(cmd *cobra.Command, args []string) error {
 					}
 
 					var err error
-					if flagRescoreFull {
+					switch {
+					case flagRescoreLintOnly:
+						err = rescoreLintOnly(ctx, trialDir, task)
+					case flagRescoreFull:
 						err = rescoreFull(ctx, trialDir, task)
-					} else {
+					default:
 						err = rescoreTestsOnly(ctx, trialDir, task)
 					}
 					if err != nil {
@@ -344,6 +354,62 @@ func rescoreFull(ctx context.Context, trialDir string, task *config.Task) error 
 	// changes, which matches the spirit of "we can't tell, assume worst".
 	diffData, _ := os.ReadFile(filepath.Join(trialDir, "diff.patch"))
 	meta.NoAgentContribution = runner.DetectNoAgentContribution(meta.ExitReason, meta.DurationS, runner.HasWorkspaceChanges(diffData))
+
+	return result.WriteTrialMeta(trialDir, meta)
+}
+
+// rescoreLintOnly re-runs ONLY the lint command and recomputes the composite
+// from the refreshed static_analysis plus the trial's existing scores.
+//
+// Used to repair a scorer-side lint bug without re-running tests/coverage:
+// --full would recompute every component against a reconstructed workspace,
+// and an imperfect reconstruction then silently drifts scores that were never
+// wrong (see the hidden-test corruption that had to be reverted in fafe5e1c).
+// A lint failure is returned as an error rather than warned-and-ignored, so a
+// broken run can never write a confident wrong score.
+func rescoreLintOnly(ctx context.Context, trialDir string, task *config.Task) error {
+	meta, err := result.ReadTrialMeta(filepath.Join(trialDir, "meta.json"))
+	if err != nil {
+		return fmt.Errorf("reading meta: %w", err)
+	}
+	applyTaskMetaUpdates(meta, task)
+
+	// Prefer the trial's own preserved workspace when it survived AND is
+	// already installed: it is exactly the tree the original lint scored, so
+	// re-linting it is more faithful than rebuilding from v1 + diff.patch, it
+	// needs no install, and it sidesteps diffs that captured node_modules and
+	// no longer apply. Requiring node_modules keeps this read-only -- we never
+	// mutate stored results. Otherwise reconstruct into a temp dir.
+	wsDir := filepath.Join(trialDir, "workspace")
+	if fi, err := os.Stat(filepath.Join(wsDir, "node_modules")); err != nil || !fi.IsDir() {
+		var cleanup func()
+		wsDir, cleanup, err = reconstructToTempDir(trialDir, task)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+
+		// Lint needs node_modules: reconstructToTempDir only clones v1 and
+		// applies the diff, and a bare `npm run lint` with no eslint installed
+		// exits nonzero, which the parser correctly reads as a crashed linter
+		// and scores 0. (rescoreFull only gets away without this because
+		// RunTests/RunCoverage install into the same workspace first.)
+		if err := validation.RunInstall(ctx, wsDir, task.ValidationImage, task.InstallCmd); err != nil {
+			return fmt.Errorf("install before lint: %w", err)
+		}
+	}
+
+	lintResult, err := validation.RunLint(ctx, wsDir, task.ValidationImage, task.LintCmd, 0)
+	if err != nil {
+		return fmt.Errorf("lint: %w", err)
+	}
+	meta.Scores.StaticAnalysis = lintResult.Score
+
+	if task.Greenfield {
+		meta.CompositeScore = validation.GreenfieldCompositeScore(meta.Scores, task.GreenWeights)
+	} else {
+		meta.CompositeScore = validation.CompositeScore(meta.Scores, task.Weights)
+	}
 
 	return result.WriteTrialMeta(trialDir, meta)
 }

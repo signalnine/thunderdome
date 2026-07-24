@@ -351,6 +351,64 @@ func TestParseLintIgnoresNpmWarning(t *testing.T) {
 	}
 }
 
+// A clean lint run must score 1.0 even though npm prints its script banner
+// and an update notice around the (silent) linter. npm 12.0.1's release made
+// node:20's bundled npm 10.8.2 emit this on every script run, which tripped
+// the unrecognized-formatter fallback and silently downgraded EVERY clean lint
+// from 1.0 to 0.5 -- capping standard-task composites at 0.85 from 2026-06 on.
+func TestParseLintCleanDespiteNpmUpdateNotice(t *testing.T) {
+	output := "\n> bench-fts-search@1.0.0 lint\n> eslint src/ tests/\n\n" +
+		"npm notice\n" +
+		"npm notice New major version of npm available! 10.8.2 -> 12.0.1\n" +
+		"npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.1\n" +
+		"npm notice To update run: npm install -g npm@12.0.1\n" +
+		"npm notice\n"
+	result := validation.ParseLintResults(output, 0, 0)
+	if result.Score != 1.0 {
+		t.Errorf("clean lint wrapped in npm chatter must score 1.0, got %f", result.Score)
+	}
+	if result.NetNewIssues != 0 {
+		t.Errorf("npm chatter must not count as issues, got NetNewIssues=%d", result.NetNewIssues)
+	}
+}
+
+// Stripping npm chatter must not blind us to real diagnostics printed
+// alongside it.
+func TestParseLintCountsDiagnosticsAmongNpmChatter(t *testing.T) {
+	output := "\n> pkg@1.0.0 lint\n> eslint src/\n\n" +
+		"/workspace/src/a.ts\n" +
+		"  3:5  error  'x' is assigned but never used  no-unused-vars\n" +
+		"\nnpm notice New major version of npm available! 10.8.2 -> 12.0.1\n"
+	result := validation.ParseLintResults(output, 1, 0)
+	if result.NetNewIssues != 1 {
+		t.Errorf("real diagnostic among npm chatter must count, got NetNewIssues=%d", result.NetNewIssues)
+	}
+	if result.Score >= 1.0 {
+		t.Errorf("a lint error must not score 1.0, got %f", result.Score)
+	}
+}
+
+// `npm ERR!` signals a genuine failure and must NOT be treated as ignorable
+// chatter: a linter that died still fails.
+func TestParseLintNpmErrNotStrippedAsChatter(t *testing.T) {
+	output := "npm ERR! code ELIFECYCLE\nnpm ERR! errno 1\n"
+	result := validation.ParseLintResults(output, 1, 0)
+	if result.Score != 0 {
+		t.Errorf("crashed lint (npm ERR!, nonzero exit) must score 0, got %f", result.Score)
+	}
+}
+
+// An unsupported formatter still yields the conservative 0.5 -- the chatter
+// filter must not turn genuinely unrecognized output into a perfect score.
+func TestParseLintUnrecognizedFormatterStillConservative(t *testing.T) {
+	output := "npm notice New major version of npm available! 10.8.2 -> 12.0.1\n" +
+		`{"filePath":"/workspace/src/a.ts","messages":[{"ruleId":"no-unused-vars"}]}` + "\n"
+	result := validation.ParseLintResults(output, 0, 0)
+	if result.Score != 0.5 {
+		t.Errorf("unrecognized (JSON) formatter should stay conservative 0.5, got %f", result.Score)
+	}
+}
+
 func TestParseLintIgnoresNodeStackTrace(t *testing.T) {
 	output := "Error: Cannot find module 'eslint-plugin-foo'\n" +
 		"    at Function.Module._resolveFilename (node:internal/modules/cjs/loader:1075:15)\n"

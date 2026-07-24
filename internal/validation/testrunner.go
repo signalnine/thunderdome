@@ -14,20 +14,37 @@ type TestResult struct {
 	ExitCode int
 }
 
+// RunInstall executes the dependency-install command in a validation
+// container. Exported so a caller that needs a populated workspace WITHOUT
+// running tests can prepare one -- notably a lint-only rescore, since RunLint
+// assumes node_modules already exists and a bare `npm run lint` against an
+// uninstalled workspace exits nonzero and scores 0.
+func RunInstall(ctx context.Context, workDir, validationImage, installCmd string) error {
+	if installCmd == "" {
+		return nil
+	}
+	cmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--init",
+		"--security-opt=seccomp=unconfined",
+		"--security-opt=apparmor=unconfined",
+		"-e", "npm_config_update_notifier=false",
+		"-v", workDir+":/workspace", "-w", "/workspace",
+		validationImage, "sh", "-c", installCmd)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("running install command: %s: %w", string(out), err)
+	}
+	return nil
+}
+
 // RunTests executes the test command in a validation container and returns results.
 func RunTests(ctx context.Context, workDir, validationImage, installCmd, testCmd string) (*TestResult, error) {
 	seccomp := "--security-opt=seccomp=unconfined"
 	apparmor := "--security-opt=apparmor=unconfined"
-	if installCmd != "" {
-		cmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--init", seccomp, apparmor,
-			"-v", workDir+":/workspace", "-w", "/workspace",
-			validationImage, "sh", "-c", installCmd)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return nil, fmt.Errorf("running install command: %s: %w", string(out), err)
-		}
+	if err := RunInstall(ctx, workDir, validationImage, installCmd); err != nil {
+		return nil, err
 	}
 
 	cmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--init", seccomp, apparmor,
+		"-e", "npm_config_update_notifier=false",
 		"-v", workDir+":/workspace", "-w", "/workspace",
 		validationImage, "sh", "-c", testCmd)
 
