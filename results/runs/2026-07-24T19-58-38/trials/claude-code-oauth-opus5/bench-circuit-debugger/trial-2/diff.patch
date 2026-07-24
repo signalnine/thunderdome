@@ -1,0 +1,1706 @@
+diff --git a/package-lock.json b/package-lock.json
+index 97d25c0..3c003c8 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/circuit.ts b/src/circuit.ts
+new file mode 100644
+index 0000000..32f93dc
+--- /dev/null
++++ b/src/circuit.ts
+@@ -0,0 +1,136 @@
++import type { Gate } from './types.js';
++
++export const AND = 0;
++export const OR = 1;
++export const XOR = 2;
++
++/**
++ * A circuit flattened into typed arrays, addressed by integer wire ids.
++ *
++ * Only `out` ever changes while searching for swaps: a swap permutes which
++ * gate drives which wire, so the wire set, the input edges and therefore each
++ * gate's in-degree all stay fixed. That lets us reuse `consumers`/`indeg`
++ * across every candidate swap instead of rebuilding the graph each time.
++ */
++export interface Circuit {
++  names: string[];
++  index: Map<string, number>;
++  numWires: number;
++  numGates: number;
++  op: Uint8Array;
++  ina: Int32Array;
++  inb: Int32Array;
++  out: Int32Array;
++  /** gates reading each wire */
++  consumers: number[][];
++  /** number of a gate's inputs that are driven by another gate */
++  indeg: Uint8Array;
++}
++
++export function compile(gates: Gate[]): Circuit {
++  const index = new Map<string, number>();
++  const names: string[] = [];
++  const idOf = (name: string): number => {
++    let id = index.get(name);
++    if (id === undefined) {
++      id = names.length;
++      names.push(name);
++      index.set(name, id);
++    }
++    return id;
++  };
++
++  const numGates = gates.length;
++  const op = new Uint8Array(numGates);
++  const ina = new Int32Array(numGates);
++  const inb = new Int32Array(numGates);
++  const out = new Int32Array(numGates);
++
++  for (let i = 0; i < numGates; i++) {
++    const gate = gates[i];
++    op[i] = gate.op === 'AND' ? AND : gate.op === 'OR' ? OR : XOR;
++    ina[i] = idOf(gate.in1);
++    inb[i] = idOf(gate.in2);
++    out[i] = idOf(gate.out);
++  }
++
++  const numWires = names.length;
++  const driven = new Uint8Array(numWires);
++  for (let i = 0; i < numGates; i++) driven[out[i]] = 1;
++
++  const consumers: number[][] = [];
++  for (let w = 0; w < numWires; w++) consumers.push([]);
++  const indeg = new Uint8Array(numGates);
++
++  for (let i = 0; i < numGates; i++) {
++    consumers[ina[i]].push(i);
++    indeg[i] = driven[ina[i]];
++    if (inb[i] !== ina[i]) {
++      consumers[inb[i]].push(i);
++      indeg[i] += driven[inb[i]];
++    }
++  }
++
++  return { names, index, numWires, numGates, op, ina, inb, out, consumers, indeg };
++}
++
++/**
++ * Kahn topological sort. Writes the gate order into `order` (which doubles as
++ * the worklist) and returns false if the circuit contains a cycle — a swap can
++ * easily introduce one.
++ */
++export function topoOrder(c: Circuit, rem: Uint8Array, order: Int32Array): boolean {
++  rem.set(c.indeg);
++  let tail = 0;
++  for (let i = 0; i < c.numGates; i++) {
++    if (rem[i] === 0) order[tail++] = i;
++  }
++  for (let head = 0; head < tail; head++) {
++    const consumers = c.consumers[c.out[order[head]]];
++    for (let k = 0; k < consumers.length; k++) {
++      const j = consumers[k];
++      if (--rem[j] === 0) order[tail++] = j;
++    }
++  }
++  return tail === c.numGates;
++}
++
++/**
++ * Evaluates the circuit on `words` test vectors at once: `vals` holds one
++ * `stride`-word bit-slice per wire, where bit t of the slice is that wire's
++ * value under test vector t. Every gate writes its whole output slice, so the
++ * array needs no clearing between runs — only the primary inputs are fixed.
++ */
++export function evaluate(
++  c: Circuit,
++  order: Int32Array,
++  vals: Uint32Array,
++  words: number,
++  stride: number,
++): void {
++  const { op, ina, inb, out, numGates } = c;
++  for (let k = 0; k < numGates; k++) {
++    const g = order[k];
++    const a = ina[g] * stride;
++    const b = inb[g] * stride;
++    const o = out[g] * stride;
++    switch (op[g]) {
++      case AND:
++        for (let w = 0; w < words; w++) vals[o + w] = vals[a + w] & vals[b + w];
++        break;
++      case OR:
++        for (let w = 0; w < words; w++) vals[o + w] = vals[a + w] | vals[b + w];
++        break;
++      default:
++        for (let w = 0; w < words; w++) vals[o + w] = vals[a + w] ^ vals[b + w];
++        break;
++    }
++  }
++}
++
++/** Gate driving each wire, or -1 for a primary input. */
++export function producers(c: Circuit): Int32Array {
++  const producer = new Int32Array(c.numWires).fill(-1);
++  for (let i = 0; i < c.numGates; i++) producer[c.out[i]] = i;
++  return producer;
++}
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..44d3f8c
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,3 @@
++export type { Gate } from './types.js';
++export { simulate } from './simulate.js';
++export { findSwappedWires } from './swaps.js';
+diff --git a/src/reconstruct.ts b/src/reconstruct.ts
+new file mode 100644
+index 0000000..cb693d3
+--- /dev/null
++++ b/src/reconstruct.ts
+@@ -0,0 +1,241 @@
++import { AND, OR, XOR, type Circuit } from './circuit.js';
++import { bitOf, wireName } from './shape.js';
++
++/** Cap on branches explored, so a wildly non-adder input still returns. */
++const WALK_BUDGET = 500_000;
++
++interface Head {
++  half: number;
++  carry: number;
++  sum: number;
++}
++
++interface Tail {
++  gen: number;
++  prop: number;
++  merge: number;
++}
++
++/**
++ * Walks the adder stage by stage, repairing the wiring wherever it stops
++ * looking like an adder, and hands each complete repair to `accept`.
++ *
++ * This works because a swap only ever relabels gate *outputs*. Every gate's
++ * input wire names are exactly as the generator left them, so the circuit read
++ * from the input side is intact: the XOR and AND of `xNN`/`yNN` are always
++ * findable, and the two gates sharing a stage's (half-sum, carry-in) pair
++ * still share it. Walking that skeleton from bit 0 upwards, the carry chain
++ * says what each gate ought to emit, and a gate emitting anything else is one
++ * half of a swap — its partner being whichever gate holds the name it should
++ * have had.
++ *
++ * Where the walk can't tell which of two wires was renamed it tries both, so
++ * `accept` decides: it returns true for a repair it is happy with and the walk
++ * stops there. Returns false if no reading of the circuit satisfied it.
++ *
++ * `thorough` widens every stage to "any stage or OR gate nobody has claimed
++ * yet", which is needed when both of a stage's carry terms were renamed and so
++ * neither one can point at the other. It multiplies the branching, so it is
++ * worth a second pass rather than a first.
++ */
++export function reconstruct(
++  c: Circuit,
++  bits: number,
++  accept: () => boolean,
++  carryHolds: (stage: number, wire: number, driver: Int32Array) => boolean,
++  thorough = false,
++  deadline = Infinity,
++): boolean {
++  const byInputs = new Map<string, number>();
++  for (let g = 0; g < c.numGates; g++) {
++    const lo = Math.min(c.ina[g], c.inb[g]);
++    const hi = Math.max(c.ina[g], c.inb[g]);
++    byInputs.set(`${c.op[g]}:${lo}:${hi}`, g);
++  }
++  const gateFor = (op: number, a: number, b: number): number =>
++    byInputs.get(`${op}:${Math.min(a, b)}:${Math.max(a, b)}`) ?? -1;
++
++  /** the gate of that kind reading this wire, if there is exactly one */
++  const readerWithOp = (wire: number, op: number): number => {
++    let found = -1;
++    for (const g of c.consumers[wire]) {
++      if (c.op[g] !== op) continue;
++      if (found >= 0) return -1;
++      found = g;
++    }
++    return found;
++  };
++  const otherInput = (g: number, wire: number): number => (c.ina[g] === wire ? c.inb[g] : c.ina[g]);
++  const zWire = (bit: number): number => c.index.get(wireName(bit, 'z')) ?? -1;
++
++  const isPrimary = (w: number): boolean =>
++    bitOf(c.names[w], 'x') >= 0 || bitOf(c.names[w], 'y') >= 0;
++
++  const xorXY: number[] = [];
++  const andXY: number[] = [];
++  for (let i = 0; i < bits; i++) {
++    const x = c.index.get(wireName(i, 'x'));
++    const y = c.index.get(wireName(i, 'y'));
++    if (x === undefined || y === undefined) return false;
++    xorXY.push(gateFor(XOR, x, y));
++    andXY.push(gateFor(AND, x, y));
++    if (xorXY[i] < 0 || andXY[i] < 0) return false;
++  }
++
++  // The XOR/AND couples that read the same two internal wires: one per stage,
++  // and, like everything on the input side, immune to the swaps.
++  const stagePairs: number[] = [];
++  const partnerAnd = new Int32Array(c.numGates).fill(-1);
++  const merges: number[] = [];
++  for (let g = 0; g < c.numGates; g++) {
++    if (c.op[g] === OR) merges.push(g);
++    if (c.op[g] !== XOR || isPrimary(c.ina[g]) || isPrimary(c.inb[g])) continue;
++    const and = gateFor(AND, c.ina[g], c.inb[g]);
++    if (and < 0) continue;
++    stagePairs.push(g);
++    partnerAnd[g] = and;
++  }
++
++  const driver = new Int32Array(c.numWires).fill(-1);
++  for (let g = 0; g < c.numGates; g++) driver[c.out[g]] = g;
++
++  const undo: Array<[number, number]> = [];
++  /** makes `gate` emit `wire`, trading with whichever gate emits it today */
++  const reassign = (gate: number, wire: number): boolean => {
++    if (gate < 0 || wire < 0) return false;
++    const holder = driver[wire];
++    if (holder < 0) return false;
++    if (holder === gate) return true;
++    const had = c.out[gate];
++    c.out[gate] = wire;
++    c.out[holder] = had;
++    driver[wire] = gate;
++    driver[had] = holder;
++    undo.push([gate, holder]);
++    return true;
++  };
++  const rewind = (mark: number): void => {
++    while (undo.length > mark) {
++      const [gate, holder] = undo.pop() as [number, number];
++      const a = c.out[gate];
++      const b = c.out[holder];
++      c.out[gate] = b;
++      c.out[holder] = a;
++      driver[b] = gate;
++      driver[a] = holder;
++    }
++  };
++
++  const claimedPair = new Uint8Array(c.numGates);
++  const claimedMerge = new Uint8Array(c.numGates);
++  let budget = WALK_BUDGET;
++
++  const walk = (i: number, carryGate: number, carry: number): boolean => {
++    if (budget <= 0) return false;
++    // A finished walk costs far more than a step of one, since `accept` has to
++    // simulate; charge for it so the clock below is actually consulted.
++    budget -= i === bits ? 64 : 1;
++    if ((budget & 255) < 64 && Date.now() > deadline) return false;
++    if (i === bits) return accept();
++    const start = undo.length;
++
++    // Which gates form this stage's sum and propagate terms? Normally the pair
++    // reading (half-sum, carry-in) is right there. If not, one of those two
++    // names is stale, and whichever is still read by a XOR names the other.
++    const halfNow = c.out[xorXY[i]];
++    const heads: Head[] = [];
++    const seenHead = new Set<number>();
++    const addHead = (head: Head): void => {
++      const key = head.sum * c.numWires + head.half;
++      if (seenHead.has(key)) return;
++      seenHead.add(key);
++      heads.push(head);
++    };
++    const direct = gateFor(XOR, halfNow, carry);
++    if (direct >= 0) addHead({ half: halfNow, carry, sum: direct });
++    const viaHalf = readerWithOp(halfNow, XOR);
++    if (viaHalf >= 0) addHead({ half: halfNow, carry: otherInput(viaHalf, halfNow), sum: viaHalf });
++    const viaCarry = readerWithOp(carry, XOR);
++    if (viaCarry >= 0) addHead({ half: otherInput(viaCarry, carry), carry, sum: viaCarry });
++    if (thorough || heads.length === 0) {
++      for (const pair of stagePairs) {
++        if (claimedPair[pair]) continue;
++        addHead({ half: c.ina[pair], carry: c.inb[pair], sum: pair });
++        addHead({ half: c.inb[pair], carry: c.ina[pair], sum: pair });
++      }
++    }
++
++    for (const head of heads) {
++      rewind(start);
++      if (claimedPair[head.sum] || partnerAnd[head.sum] < 0) continue;
++      if (head.half !== halfNow && !reassign(xorXY[i], head.half)) continue;
++      if (head.carry !== carry && !reassign(carryGate, head.carry)) continue;
++      if (!reassign(head.sum, zWire(i))) continue;
++      const prop = partnerAnd[head.sum];
++
++      // Same question one level down for the OR that forms the carry out.
++      const afterHead = undo.length;
++      const genNow = c.out[andXY[i]];
++      const propNow = c.out[prop];
++      const tails: Tail[] = [];
++      const seenTail = new Set<number>();
++      const addTail = (tail: Tail): void => {
++        const key = tail.merge * c.numWires + tail.gen;
++        if (seenTail.has(key)) return;
++        seenTail.add(key);
++        tails.push(tail);
++      };
++      const merged = gateFor(OR, genNow, propNow);
++      if (merged >= 0) addTail({ gen: genNow, prop: propNow, merge: merged });
++      const viaProp = readerWithOp(propNow, OR);
++      if (viaProp >= 0) addTail({ gen: otherInput(viaProp, propNow), prop: propNow, merge: viaProp });
++      const viaGen = readerWithOp(genNow, OR);
++      if (viaGen >= 0) addTail({ gen: genNow, prop: otherInput(viaGen, genNow), merge: viaGen });
++      if (thorough || tails.length === 0) {
++        for (const merge of merges) {
++          if (claimedMerge[merge]) continue;
++          addTail({ gen: c.ina[merge], prop: c.inb[merge], merge });
++          addTail({ gen: c.inb[merge], prop: c.ina[merge], merge });
++        }
++      }
++
++      claimedPair[head.sum] = 1;
++      for (const tail of tails) {
++        rewind(afterHead);
++        if (claimedMerge[tail.merge]) continue;
++        if (tail.gen !== genNow && !reassign(andXY[i], tail.gen)) continue;
++        if (tail.prop !== propNow && !reassign(prop, tail.prop)) continue;
++
++        const last = i === bits - 1;
++        if (last && !reassign(tail.merge, zWire(bits))) continue;
++        // The carry this stage hands upwards is checkable against the real
++        // thing, which rules out a wrong reading here and now.
++        if (!carryHolds(i, c.out[tail.merge], driver)) continue;
++
++        claimedMerge[tail.merge] = 1;
++        const ok = last ? walk(i + 1, tail.merge, -1) : walk(i + 1, tail.merge, c.out[tail.merge]);
++        claimedMerge[tail.merge] = 0;
++        if (ok) {
++          claimedPair[head.sum] = 0;
++          return true;
++        }
++      }
++      claimedPair[head.sum] = 0;
++    }
++
++    rewind(start);
++    return false;
++  };
++
++  const start = undo.length;
++  // Bit 0 is a half adder: the XOR is the output bit, the AND is the carry.
++  if (reassign(xorXY[0], zWire(0))) {
++    if (bits === 1) {
++      if (reassign(andXY[0], zWire(1)) && accept()) return true;
++    } else if (walk(1, andXY[0], c.out[andXY[0]])) {
++      return true;
++    }
++  }
++  rewind(start);
++  return false;
++}
+diff --git a/src/shape.ts b/src/shape.ts
+new file mode 100644
+index 0000000..9d8b4c5
+--- /dev/null
++++ b/src/shape.ts
+@@ -0,0 +1,99 @@
++import { AND, XOR, type Circuit } from './circuit.js';
++
++export function bitOf(name: string, prefix: string): number {
++  if (name.length < 2 || name[0] !== prefix) return -1;
++  const rest = name.slice(1);
++  if (!/^\d+$/.test(rest)) return -1;
++  return Number(rest);
++}
++
++export function wireName(bit: number, prefix: string): string {
++  return prefix + String(bit).padStart(2, '0');
++}
++
++/**
++ * For every (gate, wire) pair, whether driving that wire from that gate would
++ * break the shape of a ripple-carry adder. Indexed as `gate * numWires + wire`.
++ *
++ * Each stage of the adder looks like
++ *
++ *     half = x ^ y      gen  = x & y
++ *     z    = half ^ cin prop = half & cin
++ *     cout = gen | prop
++ *
++ * which pins down, for every gate, what kind of wire it may drive: whether the
++ * wire is an output bit, and which mix of gates is allowed to read it. Swapping
++ * two outputs almost always violates one of those rules, so counting
++ * violations gives a cheap measure of how adder-shaped the circuit currently
++ * is — and because a gate's readers are fixed by wire name and never move, the
++ * whole table can be computed once up front and the count updated in constant
++ * time per swap.
++ *
++ * The rules are conservative: a correct adder scores zero, so a violation is
++ * always real. They are not complete — a swap between two structurally
++ * interchangeable wires is invisible here — which is why this only ever guides
++ * a search that verifies its answers by simulation.
++ */
++export function buildViolationTable(c: Circuit, bits: number): Uint8Array {
++  const { numGates, numWires } = c;
++  const topZ = wireName(bits, 'z');
++
++  // Per-wire facts, all independent of which gate currently drives the wire.
++  const isZ = new Uint8Array(numWires);
++  const isTopZ = new Uint8Array(numWires);
++  const readsXor = new Int32Array(numWires);
++  const readsAnd = new Int32Array(numWires);
++  const readsOr = new Int32Array(numWires);
++  for (let w = 0; w < numWires; w++) {
++    const name = c.names[w];
++    isZ[w] = bitOf(name, 'z') >= 0 ? 1 : 0;
++    isTopZ[w] = name === topZ ? 1 : 0;
++    for (const g of c.consumers[w]) {
++      if (c.op[g] === XOR) readsXor[w]++;
++      else if (c.op[g] === AND) readsAnd[w]++;
++      else readsOr[w]++;
++    }
++  }
++
++  // Per-gate facts: which stage's x/y inputs it reads, if any.
++  const stage = new Int32Array(numGates);
++  for (let g = 0; g < numGates; g++) {
++    const a = c.names[c.ina[g]];
++    const b = c.names[c.inb[g]];
++    const bit = (n: string): number => {
++      const x = bitOf(n, 'x');
++      return x >= 0 ? x : bitOf(n, 'y');
++    };
++    stage[g] = Math.max(bit(a), bit(b));
++  }
++
++  const table = new Uint8Array(numGates * numWires);
++  for (let g = 0; g < numGates; g++) {
++    for (let w = 0; w < numWires; w++) {
++      // A carry feeds the next stage's XOR and AND and nothing else; a
++      // generate or propagate term is only ever merged by an OR.
++      const feedsStage = readsXor[w] === 1 && readsAnd[w] === 1 && readsOr[w] === 0;
++      const feedsMerge = readsOr[w] > 0 && readsXor[w] === 0 && readsAnd[w] === 0;
++      let bad = false;
++
++      if (isZ[w] && !isTopZ[w] && c.op[g] !== XOR) {
++        bad = true; // every sum bit but the top one is its stage's final XOR
++      } else if (c.op[g] === XOR) {
++        if (stage[g] < 0) bad = !isZ[w] || isTopZ[w] === 1; // sum bit
++        else if (stage[g] === 0) bad = c.names[w] !== wireName(0, 'z'); // x00 ^ y00
++        else bad = isZ[w] === 1 || !feedsStage; // half sum
++      } else if (c.op[g] === AND) {
++        // x00 & y00 is the first carry; every other AND is a carry term.
++        if (stage[g] === 0) bad = isZ[w] === 1 || !feedsStage;
++        else bad = isZ[w] === 1 || !feedsMerge;
++      } else {
++        // OR: a carry, or the top output bit, which nothing reads.
++        if (isZ[w]) bad = isTopZ[w] === 0;
++        else bad = !feedsStage;
++      }
++
++      table[g * numWires + w] = bad ? 1 : 0;
++    }
++  }
++  return table;
++}
+diff --git a/src/simulate.ts b/src/simulate.ts
+new file mode 100644
+index 0000000..a1d035c
+--- /dev/null
++++ b/src/simulate.ts
+@@ -0,0 +1,63 @@
++import type { Gate } from './types.js';
++
++function apply(op: Gate['op'], a: number, b: number): number {
++  switch (op) {
++    case 'AND':
++      return a & b;
++    case 'OR':
++      return a | b;
++    case 'XOR':
++      return a ^ b;
++  }
++}
++
++/**
++ * Evaluates a combinational circuit.
++ *
++ * Gates fire as soon as both of their inputs are known, so the caller does not
++ * have to supply them in dependency order. Returns every wire that ended up
++ * with a value: the supplied inputs plus every gate output that could be
++ * reached from them.
++ */
++export function simulate(gates: Gate[], inputs: Record<string, number>): Record<string, number> {
++  const values = new Map<string, number>();
++  for (const [wire, value] of Object.entries(inputs)) {
++    values.set(wire, value ? 1 : 0);
++  }
++
++  // Gates waiting on a wire, so we can wake them when that wire resolves.
++  const waiting = new Map<string, number[]>();
++  const pending = new Int32Array(gates.length);
++  const ready: number[] = [];
++
++  for (let i = 0; i < gates.length; i++) {
++    const gate = gates[i];
++    let missing = 0;
++    for (const wire of gate.in1 === gate.in2 ? [gate.in1] : [gate.in1, gate.in2]) {
++      if (values.has(wire)) continue;
++      missing++;
++      const list = waiting.get(wire);
++      if (list) list.push(i);
++      else waiting.set(wire, [i]);
++    }
++    pending[i] = missing;
++    if (missing === 0) ready.push(i);
++  }
++
++  while (ready.length > 0) {
++    const gate = gates[ready.pop() as number];
++    const a = values.get(gate.in1) as number;
++    const b = values.get(gate.in2) as number;
++    const known = values.has(gate.out);
++    values.set(gate.out, apply(gate.op, a, b));
++    if (known) continue; // wire was pre-seeded; nothing is waiting on it
++
++    const woken = waiting.get(gate.out);
++    if (!woken) continue;
++    for (const j of woken) {
++      if (--pending[j] === 0) ready.push(j);
++    }
++  }
++
++  return Object.fromEntries(values);
++}
+diff --git a/src/swaps.ts b/src/swaps.ts
+new file mode 100644
+index 0000000..07d6c5a
+--- /dev/null
++++ b/src/swaps.ts
+@@ -0,0 +1,502 @@
++import type { Gate } from './types.js';
++import { AND, OR, compile, evaluate, producers, topoOrder, type Circuit } from './circuit.js';
++import { reconstruct } from './reconstruct.js';
++import { bitOf, buildViolationTable, wireName } from './shape.js';
++import { buildTestVectors, expectedSums } from './testvectors.js';
++
++/** Number of 32-bit words per wire, i.e. 512 test vectors evaluated at once. */
++const STRIDE = 16;
++/** Words used by the inner-loop check; the leading 128 vectors. */
++const FAST_WORDS = 4;
++const NUM_SWAPS = 4;
++/** Cap on circuit evaluations, so a pathological input still returns. */
++const EVAL_BUDGET = 400_000;
++/** Wall-clock allowance, well inside the five seconds we are asked for. */
++const TIME_LIMIT_MS = 2_500;
++/** Moves explored per level that don't repair another output bit. */
++const SIDEWAYS_KEEP = 8;
++
++interface Move {
++  g1: number;
++  g2: number;
++  /** lowest output bit still wrong after the swap */
++  bad: number;
++  /** output bits correct after the swap */
++  correct: number;
++  /** adder shape rules broken after the swap */
++  violations: number;
++}
++
++interface Context {
++  circuit: Circuit;
++  /** width of the X/Y inputs; Z is one bit wider */
++  bits: number;
++  numZ: number;
++  zIndex: Int32Array;
++  vals: Uint32Array;
++  expected: Uint32Array;
++  order: Int32Array;
++  rem: Uint8Array;
++  /** `gate * numWires + wire`: does that gate driving that wire break a rule */
++  violates: Uint8Array;
++  /** rules broken by the current wiring */
++  violations: number;
++  /** gates currently breaking a rule, first */
++  bySuspicion: Int32Array;
++  /** gate outputs as they were given to us, to diff repairs against */
++  originalOut: Int32Array;
++  /** output bits the last evaluation got right */
++  lastCorrect: number;
++  budget: number;
++  /** bit-parallel carry out of each stage, as a working adder makes it */
++  expectedCarry: Uint32Array;
++  /** scratch for cone walks, stamped per call instead of cleared */
++  coneSeen: Int32Array;
++  coneDone: Int32Array;
++  coneOrder: Int32Array;
++  coneStamp: number;
++  /** when to give up and answer with what we have */
++  deadline: number;
++  /** scratch for mapping wires back to the gate driving them */
++  driver: Int32Array;
++  bestPartial: string[] | null;
++}
++
++function violationsOf(c: Circuit, table: Uint8Array): number {
++  let total = 0;
++  for (let g = 0; g < c.numGates; g++) total += table[g * c.numWires + c.out[g]];
++  return total;
++}
++
++function createContext(gates: Gate[]): Context | null {
++  const circuit = compile(gates);
++
++  let bits = 0;
++  for (const name of circuit.names) {
++    const b = bitOf(name, 'x');
++    if (b >= 0) bits = Math.max(bits, b + 1);
++  }
++  if (bits === 0) return null;
++  const numZ = bits + 1;
++
++  const count = STRIDE * 32;
++  const tests = buildTestVectors(bits, count, FAST_WORDS * 32);
++  const { sums, carries } = expectedSums(tests);
++
++  const vals = new Uint32Array(circuit.numWires * STRIDE);
++  for (let t = 0; t < count; t++) {
++    const word = t >>> 5;
++    const bit = 1 << (t & 31);
++    for (let i = 0; i < bits; i++) {
++      const x = circuit.index.get(wireName(i, 'x'));
++      const y = circuit.index.get(wireName(i, 'y'));
++      if (x !== undefined && tests.x[t * bits + i]) vals[x * STRIDE + word] |= bit;
++      if (y !== undefined && tests.y[t * bits + i]) vals[y * STRIDE + word] |= bit;
++    }
++  }
++
++  const expected = new Uint32Array(numZ * STRIDE);
++  const zIndex = new Int32Array(numZ);
++  for (let j = 0; j < numZ; j++) {
++    const w = circuit.index.get(wireName(j, 'z'));
++    zIndex[j] = w === undefined ? -1 : w;
++    for (let t = 0; t < count; t++) {
++      if (sums[t * numZ + j]) expected[j * STRIDE + (t >>> 5)] |= 1 << (t & 31);
++    }
++  }
++
++  const expectedCarry = new Uint32Array(bits * STRIDE);
++  for (let i = 0; i < bits; i++) {
++    for (let t = 0; t < count; t++) {
++      if (carries[t * bits + i]) expectedCarry[i * STRIDE + (t >>> 5)] |= 1 << (t & 31);
++    }
++  }
++
++  const violates = buildViolationTable(circuit, bits);
++  const suspect = (g: number): number => violates[g * circuit.numWires + circuit.out[g]];
++  const bySuspicion = Int32Array.from({ length: circuit.numGates }, (_, i) => i).sort(
++    (a, b) => suspect(b) - suspect(a),
++  );
++
++  return {
++    circuit,
++    bits,
++    numZ,
++    zIndex,
++    vals,
++    expected,
++    expectedCarry,
++    coneSeen: new Int32Array(circuit.numWires),
++    coneDone: new Int32Array(circuit.numWires),
++    coneOrder: new Int32Array(circuit.numGates),
++    coneStamp: 0,
++    order: new Int32Array(circuit.numGates),
++    rem: new Uint8Array(circuit.numGates),
++    violates,
++    violations: violationsOf(circuit, violates),
++    bySuspicion,
++    originalOut: Int32Array.from(circuit.out),
++    lastCorrect: 0,
++    budget: EVAL_BUDGET,
++    deadline: Date.now() + TIME_LIMIT_MS,
++    driver: new Int32Array(circuit.numWires),
++    bestPartial: null,
++  };
++}
++
++/**
++ * Scores the circuit: returns the lowest output bit it gets wrong (`numZ` when
++ * it adds correctly, -1 when a swap has made the wiring cyclic) and leaves the
++ * total number of correct output bits in `ctx.lastCorrect`.
++ *
++ * Two numbers rather than one, because a stage can break in two independent
++ * places. A broken sum path shows up as the lowest wrong bit; a broken carry
++ * path leaves that bit alone and corrupts everything above it instead.
++ */
++function assess(ctx: Context, words: number): number {
++  ctx.budget--;
++  const c = ctx.circuit;
++  ctx.lastCorrect = 0;
++  if (!topoOrder(c, ctx.rem, ctx.order)) return -1;
++  evaluate(c, ctx.order, ctx.vals, words, STRIDE);
++
++  let bad = ctx.numZ;
++  let correct = 0;
++  for (let j = 0; j < ctx.numZ; j++) {
++    const w = ctx.zIndex[j];
++    let ok = w >= 0;
++    if (ok) {
++      const base = w * STRIDE;
++      const want = j * STRIDE;
++      for (let k = 0; k < words; k++) {
++        if (ctx.vals[base + k] !== ctx.expected[want + k]) {
++          ok = false;
++          break;
++        }
++      }
++    }
++    if (ok) correct++;
++    else if (j < bad) bad = j;
++  }
++  ctx.lastCorrect = correct;
++  return bad;
++}
++
++/**
++ * Whether `wire` is holding exactly the carry out of stage `stage`, given
++ * `driver`, the gate currently driving each wire.
++ *
++ * Only the cone feeding the wire is evaluated, and for a repair built from bit
++ * 0 upwards that cone is the part already settled — so this is a ground-truth
++ * check on a half-finished repair, and a walk that took a wrong turn can be
++ * dropped at the turn rather than at the end of the walk. A cycle in the cone
++ * is a wrong turn too: no prefix of an adder has one.
++ */
++function carryHolds(ctx: Context, stage: number, wire: number, driver: Int32Array): boolean {
++  const c = ctx.circuit;
++  if (wire < 0 || stage < 0 || stage >= ctx.bits) return false;
++
++  const stamp = ++ctx.coneStamp;
++  const { coneSeen: seen, coneDone: done, coneOrder: order } = ctx;
++  let count = 0;
++  const stack = [wire];
++  while (stack.length > 0) {
++    const w = stack[stack.length - 1];
++    const g = driver[w];
++    if (done[w] === stamp || g < 0) {
++      done[w] = stamp;
++      stack.pop();
++      continue;
++    }
++    if (seen[w] !== stamp) {
++      seen[w] = stamp;
++      stack.push(c.ina[g], c.inb[g]);
++      continue;
++    }
++    // Back at this wire with its inputs handled: any still open is a cycle.
++    if (done[c.ina[g]] !== stamp || done[c.inb[g]] !== stamp) return false;
++    order[count++] = g;
++    done[w] = stamp;
++    stack.pop();
++  }
++
++  const { op, ina, inb, out } = c;
++  const vals = ctx.vals;
++  for (let k = 0; k < count; k++) {
++    const g = order[k];
++    const a = ina[g] * STRIDE;
++    const b = inb[g] * STRIDE;
++    const o = out[g] * STRIDE;
++    switch (op[g]) {
++      case AND:
++        for (let w = 0; w < FAST_WORDS; w++) vals[o + w] = vals[a + w] & vals[b + w];
++        break;
++      case OR:
++        for (let w = 0; w < FAST_WORDS; w++) vals[o + w] = vals[a + w] | vals[b + w];
++        break;
++      default:
++        for (let w = 0; w < FAST_WORDS; w++) vals[o + w] = vals[a + w] ^ vals[b + w];
++        break;
++    }
++  }
++
++  const base = wire * STRIDE;
++  const want = stage * STRIDE;
++  for (let w = 0; w < FAST_WORDS; w++) {
++    if (vals[base + w] !== ctx.expectedCarry[want + w]) return false;
++  }
++  return true;
++}
++
++function coneFlags(c: Circuit, wire: number, producer: Int32Array, flags: Uint8Array): void {
++  if (wire < 0) return;
++  const seen = new Uint8Array(c.numWires);
++  const stack = [wire];
++  while (stack.length > 0) {
++    const w = stack.pop() as number;
++    if (seen[w]) continue;
++    seen[w] = 1;
++    const g = producer[w];
++    if (g < 0) continue;
++    flags[g] = 1;
++    stack.push(c.ina[g], c.inb[g]);
++  }
++}
++
++/**
++ * Splits the gates into those worth swapping when bit `bad` is the lowest
++ * wrong output, and everything else.
++ *
++ * A swap can only matter here if one side currently drives a wire feeding
++ * z[bad] or z[bad+1] — z[bad+1] included because a stage's carry output is not
++ * in its own sum's cone, so a mis-wired carry is invisible at z[bad]. Gates
++ * that also feed the bit below (already correct) are demoted: the damage is
++ * nearly always in the part of the cone the working prefix doesn't touch.
++ */
++function candidateGroups(ctx: Context, bad: number): [number[], number[]] {
++  const c = ctx.circuit;
++  const producer = producers(c);
++  const near = new Uint8Array(c.numGates);
++  coneFlags(c, ctx.zIndex[bad], producer, near);
++  if (bad + 1 < ctx.numZ) coneFlags(c, ctx.zIndex[bad + 1], producer, near);
++  const below = new Uint8Array(c.numGates);
++  if (bad > 0) coneFlags(c, ctx.zIndex[bad - 1], producer, below);
++
++  const fresh: number[] = [];
++  const rest: number[] = [];
++  for (const g of ctx.bySuspicion) {
++    if (!near[g]) continue;
++    (below[g] ? rest : fresh).push(g);
++  }
++  return [fresh, rest];
++}
++
++function swapOutputs(ctx: Context, g1: number, g2: number): void {
++  const c = ctx.circuit;
++  const w1 = c.out[g1];
++  const w2 = c.out[g2];
++  const n = c.numWires;
++  ctx.violations +=
++    ctx.violates[g1 * n + w2] +
++    ctx.violates[g2 * n + w1] -
++    ctx.violates[g1 * n + w1] -
++    ctx.violates[g2 * n + w2];
++  c.out[g1] = w2;
++  c.out[g2] = w1;
++}
++
++/**
++ * The gate pairs whose outputs the current repair has exchanged, or null if
++ * the repair isn't of that shape.
++ *
++ * Taken as a diff against the circuit we were handed rather than from the list
++ * of swaps performed, because a repair may route one gate through several
++ * exchanges on its way to the right output. What matters is that the result
++ * reads as pairs: the corruption was four two-way exchanges, so a fix that
++ * rotates three gates around a cycle explains the same behaviour but not the
++ * same story.
++ */
++function repairPairs(ctx: Context): Array<[number, number]> | null {
++  const c = ctx.circuit;
++  const driver = ctx.driver.fill(-1);
++  for (let g = 0; g < c.numGates; g++) driver[c.out[g]] = g;
++
++  const pairs: Array<[number, number]> = [];
++  for (let g = 0; g < c.numGates; g++) {
++    const was = ctx.originalOut[g];
++    if (c.out[g] === was) continue;
++    // Whoever took this gate's old wire must have given up the one it took.
++    const partner = driver[was];
++    if (partner < 0 || ctx.originalOut[partner] !== c.out[g]) return null;
++    if (g < partner) pairs.push([g, partner]);
++  }
++  return pairs;
++}
++
++function repairedWires(ctx: Context, pairs: Array<[number, number]>): string[] {
++  const names: string[] = [];
++  for (const [g1, g2] of pairs) {
++    names.push(ctx.circuit.names[ctx.originalOut[g1]], ctx.circuit.names[ctx.originalOut[g2]]);
++  }
++  return names.sort();
++}
++
++/**
++ * Whether the circuit, as currently rewired, is a repair we would sign off on:
++ * four exchanges, an adder that adds, and — the part that takes some care —
++ * four exchanges that each *matter*.
++ *
++ * A correct adder has a symmetry: the generate and propagate terms of a stage
++ * meet in an OR, so trading those two wires changes nothing. A repair can pick
++ * up such a pair for free and still add correctly, which makes it a true story
++ * about the circuit but the wrong answer, since a swap nobody can observe is
++ * not a swap the puzzle made. Putting each pair back one at a time and
++ * insisting the adder breaks rules those out.
++ */
++function isConvincingRepair(ctx: Context, pairs: Array<[number, number]>): boolean {
++  if (pairs.length !== NUM_SWAPS) return false;
++  // Most candidates die on the quick check, so spend the full suite only on
++  // the ones that survive it.
++  if (assess(ctx, FAST_WORDS) !== ctx.numZ) return false;
++  if (assess(ctx, STRIDE) !== ctx.numZ) return false;
++  for (const [g1, g2] of pairs) {
++    swapOutputs(ctx, g1, g2);
++    const stillAdds = assess(ctx, STRIDE) === ctx.numZ;
++    swapOutputs(ctx, g1, g2);
++    if (stillAdds) return false;
++  }
++  return true;
++}
++
++/**
++ * Scores swapping each gate in `drivers` against every other gate, keeping
++ * those that leave the already-working low bits alone.
++ */
++function scoreMoves(ctx: Context, drivers: number[], bad: number, moves: Move[]): void {
++  const c = ctx.circuit;
++  const seen = new Set<number>();
++  for (const g1 of drivers) {
++    for (const g2 of ctx.bySuspicion) {
++      if (g1 === g2 || ctx.budget <= 0) continue;
++      const key = g1 < g2 ? g1 * c.numGates + g2 : g2 * c.numGates + g1;
++      if (seen.has(key)) continue;
++      seen.add(key);
++
++      swapOutputs(ctx, g1, g2);
++      const nextBad = assess(ctx, FAST_WORDS);
++      const move = { g1, g2, bad: nextBad, correct: ctx.lastCorrect, violations: ctx.violations };
++      swapOutputs(ctx, g1, g2);
++      // Breaking a bit that already worked is never a step towards the repair,
++      // and a cyclic result (-1) is not a circuit at all.
++      if (nextBad >= bad) moves.push(move);
++    }
++  }
++}
++
++/**
++ * Orders swaps by how much of the adder they restore: first how far up the
++ * output the circuit now works, then how close the wiring is to an adder's
++ * shape, then how many bits are right anywhere.
++ *
++ * Shape outranks the bit count because when a stage is broken twice, repairing
++ * one half moves neither the failing bit nor, usually, the bit count — but it
++ * does resolve a structural violation, and that is the only visible progress.
++ */
++function byPromise(a: Move, b: Move): number {
++  return b.bad - a.bad || a.violations - b.violations || b.correct - a.correct;
++}
++
++/**
++ * Depth-first search over swaps, guided by how much of the adder works.
++ *
++ * Candidates must leave the already-correct low bits intact, and those that
++ * repair another output bit are taken first, which turns "choose 4 pairs out
++ * of ~24k" into a handful of probes per level. A stage can also be broken in
++ * two places at once — sum path and carry path — and then no single swap shows
++ * any functional gain, so the best-shaped swaps are explored anyway. Nothing
++ * is trusted until four swaps together pass the full test suite, so a wrong
++ * guess costs time rather than correctness.
++ */
++function search(ctx: Context, depth: number): boolean {
++  if (ctx.budget <= 0 || Date.now() > ctx.deadline) return false;
++  const pairs = repairPairs(ctx);
++  if (depth === NUM_SWAPS) return pairs !== null && isConvincingRepair(ctx, pairs);
++
++  // Candidates are ranked on a quick 128-vector check, so re-score any node we
++  // actually descend into against the whole suite before trusting it.
++  const bad = assess(ctx, STRIDE);
++  if (bad === ctx.numZ) {
++    // A correct adder with swaps to spare: the rest of the swaps cancel out and
++    // no amount of simulation can pin them down. Hold on to what we have.
++    const wires = pairs && repairedWires(ctx, pairs);
++    if (wires && (!ctx.bestPartial || wires.length > ctx.bestPartial.length)) {
++      ctx.bestPartial = wires;
++    }
++    return false;
++  }
++
++  const [fresh, rest] = candidateGroups(ctx, bad);
++  const moves: Move[] = [];
++  scoreMoves(ctx, fresh, bad, moves);
++  if (!moves.some((m) => m.bad > bad)) scoreMoves(ctx, rest, bad, moves);
++  moves.sort(byPromise);
++
++  let sideways = SIDEWAYS_KEEP;
++  for (const move of moves) {
++    if (ctx.budget <= 0) return false;
++    if (move.bad === bad && sideways-- <= 0) break;
++    swapOutputs(ctx, move.g1, move.g2);
++    if (search(ctx, depth + 1)) return true;
++    swapOutputs(ctx, move.g1, move.g2);
++  }
++  return false;
++}
++
++/**
++ * Finds the eight wires involved in the four output swaps that stop these
++ * gates from adding X and Y correctly. Returns them sorted.
++ */
++export function findSwappedWires(gates: Gate[]): string[] {
++  const ctx = createContext(gates);
++  if (!ctx) return [];
++
++  // Reading the adder off its (untouched) input wiring pins the swaps down
++  // directly, so try that first and keep the answer if it really does add.
++  let repaired: string[] | null = null;
++  const accept = (): boolean => {
++    const pairs = repairPairs(ctx);
++    if (!pairs || !isConvincingRepair(ctx, pairs)) return false;
++    repaired = repairedWires(ctx, pairs);
++    return true;
++  };
++  // The thorough walk can wander, so cap it well short of the overall budget
++  // and leave the rest of the time for the search.
++  const walkDeadline = ctx.deadline - 0.6 * TIME_LIMIT_MS;
++  const carryCheck = (stage: number, wire: number, driver: Int32Array): boolean =>
++    carryHolds(ctx, stage, wire, driver);
++  for (const [thorough, deadline] of [[false, ctx.deadline], [true, walkDeadline]] as const) {
++    if (reconstruct(ctx.circuit, ctx.bits, accept, carryCheck, thorough, deadline) && repaired) {
++      return repaired;
++    }
++    ctx.circuit.out.set(ctx.originalOut);
++  }
++  ctx.violations = violationsOf(ctx.circuit, ctx.violates);
++
++  // Otherwise hunt for the swaps by simulation, which needs no assumption
++  // about the circuit's shape beyond it being meant to add.
++  if (search(ctx, 0)) {
++    const pairs = repairPairs(ctx);
++    if (pairs) return repairedWires(ctx, pairs);
++  }
++
++  // Nothing verified end to end: fall back on the best partial repair, topped
++  // up with the gates whose wiring breaks the adder shape.
++  const found = new Set<string>(ctx.bestPartial ?? []);
++  for (const g of ctx.bySuspicion) {
++    if (found.size >= 2 * NUM_SWAPS) break;
++    if (ctx.violates[g * ctx.circuit.numWires + ctx.circuit.out[g]]) {
++      found.add(ctx.circuit.names[ctx.circuit.out[g]]);
++    }
++  }
++  return [...found].sort();
++}
+diff --git a/src/testvectors.ts b/src/testvectors.ts
+new file mode 100644
+index 0000000..8b9de5f
+--- /dev/null
++++ b/src/testvectors.ts
+@@ -0,0 +1,106 @@
++/** Deterministic PRNG so results never depend on run order. */
++function mulberry32(seed: number): () => number {
++  let a = seed >>> 0;
++  return () => {
++    a = (a + 0x6d2b79f5) >>> 0;
++    let t = Math.imul(a ^ (a >>> 15), 1 | a);
++    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
++    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
++  };
++}
++
++export interface TestVectors {
++  /** number of vectors */
++  count: number;
++  /** bit i of vector t at [t * bits + i] */
++  x: Uint8Array;
++  y: Uint8Array;
++  bits: number;
++}
++
++/**
++ * Builds `count` (x, y) input pairs for an `bits`-wide adder.
++ *
++ * The suite opens with structured patterns that stress carry generation and
++ * propagation, then single-bit walks, then uniform random pairs. Random pairs
++ * matter most: at every bit position they exercise all eight combinations of
++ * (x_i, y_i, carry_in) many times over, which is what makes "lowest wrong
++ * output bit" a trustworthy signal. The ordering matters because a quick check
++ * only reads the first slice of vectors.
++ */
++export function buildTestVectors(bits: number, count: number, fastCount: number): TestVectors {
++  const x = new Uint8Array(count * bits);
++  const y = new Uint8Array(count * bits);
++  const rand = mulberry32(0x5eed1234);
++  let t = 0;
++
++  const patterns: Array<(i: number) => [number, number]> = [
++    () => [0, 0],
++    () => [1, 1],
++    (i) => [1, i === 0 ? 1 : 0],
++    (i) => [0, i === 0 ? 1 : 0],
++    (i) => [i % 2, 1 - (i % 2)],
++    (i) => [1 - (i % 2), i % 2],
++    (i) => [i % 3 === 0 ? 1 : 0, i % 3 === 1 ? 1 : 0],
++    () => [1, 0],
++    () => [0, 1],
++  ];
++  for (const pattern of patterns) {
++    if (t >= count) break;
++    for (let i = 0; i < bits; i++) {
++      const [xi, yi] = pattern(i);
++      x[t * bits + i] = xi;
++      y[t * bits + i] = yi;
++    }
++    t++;
++  }
++
++  const randomFill = (limit: number): void => {
++    while (t < limit) {
++      for (let i = 0; i < bits; i++) {
++        x[t * bits + i] = rand() < 0.5 ? 1 : 0;
++        y[t * bits + i] = rand() < 0.5 ? 1 : 0;
++      }
++      t++;
++    }
++  };
++
++  // Keep the walks inside the fast window: they isolate one bit at a time.
++  randomFill(Math.max(0, Math.min(count, fastCount - 2 * bits)));
++  for (let i = 0; i < bits && t < count; i++) {
++    x[t * bits + i] = 1;
++    y[t * bits + i] = 1;
++    t++;
++  }
++  for (let i = 0; i < bits && t < count; i++) {
++    x[t * bits + i] = 1;
++    t++;
++  }
++  randomFill(count);
++
++  return { count, x, y, bits };
++}
++
++/**
++ * Expected sum bits and stage carries.
++ *
++ * `sums[t * (bits + 1) + j]` is bit j of x + y, and `carries[t * bits + i]` is
++ * the carry out of stage i — what the wire running from stage i into stage
++ * i + 1 must hold in a working adder.
++ */
++export function expectedSums(tests: TestVectors): { sums: Uint8Array; carries: Uint8Array } {
++  const { count, bits, x, y } = tests;
++  const sums = new Uint8Array(count * (bits + 1));
++  const carries = new Uint8Array(count * bits);
++  for (let t = 0; t < count; t++) {
++    let carry = 0;
++    for (let i = 0; i < bits; i++) {
++      const total = x[t * bits + i] + y[t * bits + i] + carry;
++      sums[t * (bits + 1) + i] = total & 1;
++      carry = total > 1 ? 1 : 0;
++      carries[t * bits + i] = carry;
++    }
++    sums[t * (bits + 1) + bits] = carry;
++  }
++  return { sums, carries };
++}
+diff --git a/src/types.ts b/src/types.ts
+new file mode 100644
+index 0000000..a95ce6b
+--- /dev/null
++++ b/src/types.ts
+@@ -0,0 +1,10 @@
++/** A single two-input logic gate. */
++export interface Gate {
++  op: 'AND' | 'OR' | 'XOR';
++  /** first input wire name */
++  in1: string;
++  /** second input wire name */
++  in2: string;
++  /** output wire name */
++  out: string;
++}
+diff --git a/tests/generator.ts b/tests/generator.ts
+new file mode 100644
+index 0000000..1815131
+--- /dev/null
++++ b/tests/generator.ts
+@@ -0,0 +1,178 @@
++import type { Gate } from '../src/types.js';
++import { simulate } from '../src/simulate.js';
++
++export function mulberry32(seed: number): () => number {
++  let a = seed >>> 0;
++  return () => {
++    a = (a + 0x6d2b79f5) >>> 0;
++    let t = Math.imul(a ^ (a >>> 15), 1 | a);
++    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
++    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
++  };
++}
++
++const pad = (n: number): string => String(n).padStart(2, '0');
++
++/** A correct ripple-carry adder of `bits` width, with random internal names. */
++export function buildAdder(bits: number, rand: () => number): Gate[] {
++  const used = new Set<string>();
++  const randomName = (): string => {
++    const letters = 'abcdefghijklmnopqrstuvwxyz';
++    for (;;) {
++      let name = '';
++      for (let i = 0; i < 3; i++) name += letters[Math.floor(rand() * 26)];
++      if (name[0] === 'x' || name[0] === 'y' || name[0] === 'z') continue;
++      if (used.has(name)) continue;
++      used.add(name);
++      return name;
++    }
++  };
++
++  const gates: Gate[] = [];
++  gates.push({ op: 'XOR', in1: `x${pad(0)}`, in2: `y${pad(0)}`, out: `z${pad(0)}` });
++  let carry = randomName();
++  gates.push({ op: 'AND', in1: `x${pad(0)}`, in2: `y${pad(0)}`, out: carry });
++
++  for (let i = 1; i < bits; i++) {
++    const half = randomName();
++    const gen = randomName();
++    const prop = randomName();
++    const next = i === bits - 1 ? `z${pad(bits)}` : randomName();
++    gates.push({ op: 'XOR', in1: `x${pad(i)}`, in2: `y${pad(i)}`, out: half });
++    gates.push({ op: 'XOR', in1: half, in2: carry, out: `z${pad(i)}` });
++    gates.push({ op: 'AND', in1: `x${pad(i)}`, in2: `y${pad(i)}`, out: gen });
++    gates.push({ op: 'AND', in1: half, in2: carry, out: prop });
++    gates.push({ op: 'OR', in1: gen, in2: prop, out: next });
++    carry = next;
++  }
++  return gates;
++}
++
++/** True if the gates add x + y correctly for the given random probes. */
++export function isCorrectAdder(gates: Gate[], bits: number, rand: () => number, trials = 60): boolean {
++  const cases: Array<[bigint, bigint]> = [
++    [0n, 0n],
++    [(1n << BigInt(bits)) - 1n, 1n],
++    [(1n << BigInt(bits)) - 1n, (1n << BigInt(bits)) - 1n],
++  ];
++  for (let t = cases.length; t < trials; t++) {
++    let x = 0n;
++    let y = 0n;
++    for (let i = 0; i < bits; i++) {
++      if (rand() < 0.5) x |= 1n << BigInt(i);
++      if (rand() < 0.5) y |= 1n << BigInt(i);
++    }
++    cases.push([x, y]);
++  }
++
++  for (const [x, y] of cases) {
++    const inputs: Record<string, number> = {};
++    for (let i = 0; i < bits; i++) {
++      inputs[`x${pad(i)}`] = Number((x >> BigInt(i)) & 1n);
++      inputs[`y${pad(i)}`] = Number((y >> BigInt(i)) & 1n);
++    }
++    const values = simulate(gates, inputs);
++    let got = 0n;
++    for (let j = 0; j <= bits; j++) {
++      const v = values[`z${pad(j)}`];
++      if (v === undefined) return false;
++      if (v) got |= 1n << BigInt(j);
++    }
++    if (got !== x + y) return false;
++  }
++  return true;
++}
++
++export interface SwappedCircuit {
++  gates: Gate[];
++  /** the eight wire names, sorted */
++  answer: string[];
++  /** the four swapped wire-name pairs */
++  swapped: Array<[string, string]>;
++}
++
++/**
++ * Takes a correct adder and swaps four disjoint pairs of gate outputs.
++ *
++ * Each swap is required to be individually observable: a pair whose exchange
++ * leaves the adder correct (the two AND terms feeding one OR, say) would be
++ * impossible for any solver to recover, so those are rejected here rather than
++ * smuggled into the expected answer.
++ */
++export function makeSwapped(bits: number, seed: number, numSwaps = 4): SwappedCircuit {
++  const rand = mulberry32(seed);
++  const base = buildAdder(bits, rand);
++
++  for (let attempt = 0; attempt < 500; attempt++) {
++    const gates = base.map((g) => ({ ...g }));
++    const taken = new Set<number>();
++    const pairs: Array<[number, number]> = [];
++    let ok = true;
++
++    while (pairs.length < numSwaps && ok) {
++      let found = false;
++      for (let tries = 0; tries < 400 && !found; tries++) {
++        const i = Math.floor(rand() * gates.length);
++        const j = Math.floor(rand() * gates.length);
++        if (i === j || taken.has(i) || taken.has(j)) continue;
++
++        const probe = base.map((g) => ({ ...g }));
++        const tmp = probe[i].out;
++        probe[i].out = probe[j].out;
++        probe[j].out = tmp;
++        // Reject swaps that leave the adder correct (unrecoverable by anyone)
++        // and swaps that make the circuit cyclic (some wire never resolves).
++        if (isCorrectAdder(probe, bits, mulberry32(seed + 7), 12)) continue;
++        if (Object.keys(simulate(probe, allZero(bits))).length !== countWires(probe)) continue;
++
++        taken.add(i);
++        taken.add(j);
++        pairs.push([i, j]);
++        found = true;
++      }
++      if (!found) ok = false;
++    }
++    if (!ok) continue;
++
++    const answer: string[] = [];
++    const swapped: Array<[string, string]> = [];
++    for (const [i, j] of pairs) {
++      const tmp = gates[i].out;
++      gates[i].out = gates[j].out;
++      gates[j].out = tmp;
++      answer.push(gates[i].out, gates[j].out);
++      swapped.push([gates[i].out, gates[j].out]);
++    }
++    if (isCorrectAdder(gates, bits, mulberry32(seed + 11), 40)) continue;
++
++    shuffle(gates, rand);
++    return { gates, answer: answer.sort(), swapped };
++  }
++  throw new Error(`could not build a swapped circuit for seed ${seed}`);
++}
++
++function allZero(bits: number): Record<string, number> {
++  const inputs: Record<string, number> = {};
++  for (let i = 0; i < bits; i++) {
++    inputs[`x${pad(i)}`] = 0;
++    inputs[`y${pad(i)}`] = 0;
++  }
++  return inputs;
++}
++
++function countWires(gates: Gate[]): number {
++  const wires = new Set<string>();
++  for (const g of gates) {
++    wires.add(g.in1);
++    wires.add(g.in2);
++    wires.add(g.out);
++  }
++  return wires.size;
++}
++
++function shuffle<T>(items: T[], rand: () => number): void {
++  for (let i = items.length - 1; i > 0; i--) {
++    const j = Math.floor(rand() * (i + 1));
++    [items[i], items[j]] = [items[j], items[i]];
++  }
++}
+diff --git a/tests/simulate.test.ts b/tests/simulate.test.ts
+new file mode 100644
+index 0000000..e1a667d
+--- /dev/null
++++ b/tests/simulate.test.ts
+@@ -0,0 +1,107 @@
++import { describe, expect, it } from 'vitest';
++import { simulate } from '../src/index.js';
++import type { Gate } from '../src/index.js';
++import { buildAdder, mulberry32 } from './generator.js';
++
++describe('simulate', () => {
++  it('applies each gate operation', () => {
++    const gates: Gate[] = [
++      { op: 'AND', in1: 'a', in2: 'b', out: 'and' },
++      { op: 'OR', in1: 'a', in2: 'b', out: 'or' },
++      { op: 'XOR', in1: 'a', in2: 'b', out: 'xor' },
++    ];
++    expect(simulate(gates, { a: 1, b: 0 })).toEqual({ a: 1, b: 0, and: 0, or: 1, xor: 1 });
++    expect(simulate(gates, { a: 1, b: 1 })).toEqual({ a: 1, b: 1, and: 1, or: 1, xor: 0 });
++    expect(simulate(gates, { a: 0, b: 0 })).toEqual({ a: 0, b: 0, and: 0, or: 0, xor: 0 });
++  });
++
++  it('resolves gates given out of dependency order', () => {
++    const gates: Gate[] = [
++      { op: 'AND', in1: 'mid', in2: 'c', out: 'result' },
++      { op: 'OR', in1: 'a', in2: 'b', out: 'mid' },
++    ];
++    expect(simulate(gates, { a: 0, b: 1, c: 1 })).toEqual({ a: 0, b: 1, c: 1, mid: 1, result: 1 });
++  });
++
++  it('handles a deep chain of dependencies', () => {
++    const gates: Gate[] = [];
++    for (let i = 0; i < 200; i++) {
++      gates.push({ op: 'XOR', in1: `w${i}`, in2: 'one', out: `w${i + 1}` });
++    }
++    gates.reverse();
++    const values = simulate(gates, { w0: 0, one: 1 });
++    expect(values.w200).toBe(0);
++    expect(values.w199).toBe(1);
++  });
++
++  it('accepts a gate reading the same wire twice', () => {
++    const gates: Gate[] = [{ op: 'XOR', in1: 'a', in2: 'a', out: 'b' }];
++    expect(simulate(gates, { a: 1 })).toEqual({ a: 1, b: 0 });
++  });
++
++  it('returns only the inputs when no gate can fire', () => {
++    const gates: Gate[] = [{ op: 'AND', in1: 'p', in2: 'q', out: 'r' }];
++    expect(simulate(gates, { p: 1 })).toEqual({ p: 1 });
++  });
++
++  it('matches the example 4-bit adder from the task', () => {
++    const gates: Gate[] = [
++      { op: 'XOR', in1: 'x00', in2: 'y00', out: 'z00' },
++      { op: 'AND', in1: 'x00', in2: 'y00', out: 'c00' },
++      { op: 'XOR', in1: 'x01', in2: 'y01', out: 't01' },
++      { op: 'XOR', in1: 't01', in2: 'c00', out: 'z01' },
++      { op: 'AND', in1: 'x01', in2: 'y01', out: 'a01' },
++      { op: 'AND', in1: 't01', in2: 'c00', out: 'b01' },
++      { op: 'OR', in1: 'a01', in2: 'b01', out: 'c01' },
++      { op: 'XOR', in1: 'x02', in2: 'y02', out: 't02' },
++      { op: 'XOR', in1: 't02', in2: 'c01', out: 'z02' },
++      { op: 'AND', in1: 'x02', in2: 'y02', out: 'a02' },
++      { op: 'AND', in1: 't02', in2: 'c01', out: 'b02' },
++      { op: 'OR', in1: 'a02', in2: 'b02', out: 'c02' },
++      { op: 'XOR', in1: 'x03', in2: 'y03', out: 't03' },
++      { op: 'XOR', in1: 't03', in2: 'c02', out: 'z03' },
++      { op: 'AND', in1: 'x03', in2: 'y03', out: 'a03' },
++      { op: 'AND', in1: 't03', in2: 'c02', out: 'b03' },
++      { op: 'OR', in1: 'a03', in2: 'b03', out: 'z04' },
++    ];
++
++    for (let x = 0; x < 16; x++) {
++      for (let y = 0; y < 16; y++) {
++        const inputs: Record<string, number> = {};
++        for (let i = 0; i < 4; i++) {
++          inputs[`x0${i}`] = (x >> i) & 1;
++          inputs[`y0${i}`] = (y >> i) & 1;
++        }
++        const values = simulate(gates, inputs);
++        let sum = 0;
++        for (let j = 0; j < 5; j++) sum |= values[`z0${j}`] << j;
++        expect(sum).toBe(x + y);
++      }
++    }
++  });
++
++  it('adds correctly on a generated 45-bit adder', () => {
++    const bits = 45;
++    const rand = mulberry32(99);
++    const gates = buildAdder(bits, rand);
++    for (let trial = 0; trial < 25; trial++) {
++      let x = 0n;
++      let y = 0n;
++      const inputs: Record<string, number> = {};
++      for (let i = 0; i < bits; i++) {
++        const xi = rand() < 0.5 ? 1 : 0;
++        const yi = rand() < 0.5 ? 1 : 0;
++        inputs[`x${String(i).padStart(2, '0')}`] = xi;
++        inputs[`y${String(i).padStart(2, '0')}`] = yi;
++        if (xi) x |= 1n << BigInt(i);
++        if (yi) y |= 1n << BigInt(i);
++      }
++      const values = simulate(gates, inputs);
++      let sum = 0n;
++      for (let j = 0; j <= bits; j++) {
++        if (values[`z${String(j).padStart(2, '0')}`]) sum |= 1n << BigInt(j);
++      }
++      expect(sum).toBe(x + y);
++    }
++  });
++});
+diff --git a/tests/swaps.test.ts b/tests/swaps.test.ts
+new file mode 100644
+index 0000000..965b616
+--- /dev/null
++++ b/tests/swaps.test.ts
+@@ -0,0 +1,143 @@
++import { describe, expect, it } from 'vitest';
++import { findSwappedWires } from '../src/index.js';
++import type { Gate } from '../src/index.js';
++import { isCorrectAdder, makeSwapped, mulberry32 } from './generator.js';
++
++const pad = (n: number): string => String(n).padStart(2, '0');
++
++/**
++ * A readable ripple-carry adder: stage i has half-sum `tNN`, generate `aNN`,
++ * propagate `bNN` and carry `cNN`, exactly like the example in the task.
++ */
++function namedAdder(bits: number): Gate[] {
++  const gates: Gate[] = [
++    { op: 'XOR', in1: 'x00', in2: 'y00', out: 'z00' },
++    { op: 'AND', in1: 'x00', in2: 'y00', out: 'c00' },
++  ];
++  for (let i = 1; i < bits; i++) {
++    const carryIn = `c${pad(i - 1)}`;
++    const carryOut = i === bits - 1 ? `z${pad(bits)}` : `c${pad(i)}`;
++    gates.push({ op: 'XOR', in1: `x${pad(i)}`, in2: `y${pad(i)}`, out: `t${pad(i)}` });
++    gates.push({ op: 'XOR', in1: `t${pad(i)}`, in2: carryIn, out: `z${pad(i)}` });
++    gates.push({ op: 'AND', in1: `x${pad(i)}`, in2: `y${pad(i)}`, out: `a${pad(i)}` });
++    gates.push({ op: 'AND', in1: `t${pad(i)}`, in2: carryIn, out: `b${pad(i)}` });
++    gates.push({ op: 'OR', in1: `a${pad(i)}`, in2: `b${pad(i)}`, out: carryOut });
++  }
++  return gates;
++}
++
++function withSwaps(gates: Gate[], pairs: Array<[string, string]>): Gate[] {
++  const swapped = gates.map((g) => ({ ...g }));
++  for (const [a, b] of pairs) {
++    const i = swapped.findIndex((g) => g.out === a);
++    const j = swapped.findIndex((g) => g.out === b);
++    swapped[i].out = b;
++    swapped[j].out = a;
++  }
++  return swapped;
++}
++
++/** Is there a pairing of `wires` whose swaps turn `gates` into a real adder? */
++function isValidRepair(gates: Gate[], bits: number, wires: string[]): boolean {
++  if (wires.length !== 8) return false;
++  const pairings: Array<Array<[string, string]>> = [];
++  const build = (rest: string[], acc: Array<[string, string]>): void => {
++    if (rest.length === 0) {
++      pairings.push(acc);
++      return;
++    }
++    const [head, ...tail] = rest;
++    for (let i = 0; i < tail.length; i++) {
++      build([...tail.slice(0, i), ...tail.slice(i + 1)], [...acc, [head, tail[i]]]);
++    }
++  };
++  build(wires, []);
++
++  return pairings.some((pairing) => {
++    const trial = gates.map((g) => ({ ...g }));
++    const byOut = new Map(trial.map((g, i) => [g.out, i]));
++    for (const [a, b] of pairing) {
++      const i = byOut.get(a);
++      const j = byOut.get(b);
++      if (i === undefined || j === undefined) return false;
++      trial[i].out = b;
++      trial[j].out = a;
++      byOut.set(a, j);
++      byOut.set(b, i);
++    }
++    return isCorrectAdder(trial, bits, mulberry32(31337), 50);
++  });
++}
++
++describe('findSwappedWires', () => {
++  it('finds four hand-placed swaps in an 8-bit adder', () => {
++    const gates = withSwaps(namedAdder(8), [
++      ['z01', 'a01'], // sum bit traded with its stage's generate term
++      ['t03', 'a03'], // half sum traded with its stage's generate term
++      ['z05', 'c05'], // sum bit traded with the carry out
++      ['z07', 'a07'], // sum bit traded across into a generate term
++    ]);
++    expect(findSwappedWires(gates)).toEqual(['a01', 'a03', 'a07', 'c05', 't03', 'z01', 'z05', 'z07']);
++  });
++
++  it('finds a swap that lands on bit 0', () => {
++    const gates = withSwaps(namedAdder(8), [
++      ['z00', 'c00'],
++      ['z02', 'b02'],
++      ['t04', 'a04'],
++      ['z06', 'b06'],
++    ]);
++    expect(findSwappedWires(gates)).toEqual(['a04', 'b02', 'b06', 'c00', 't04', 'z00', 'z02', 'z06']);
++  });
++
++  it('returns the wires sorted', () => {
++    const wires = findSwappedWires(makeSwapped(24, 7).gates);
++    expect(wires).toHaveLength(8);
++    expect([...wires].sort()).toEqual(wires);
++  });
++
++  it('does not depend on the order the gates are listed in', () => {
++    const { gates, answer } = makeSwapped(30, 4242);
++    expect(findSwappedWires([...gates].reverse())).toEqual(answer);
++    expect(findSwappedWires([...gates])).toEqual(answer);
++  });
++
++  for (const bits of [4, 8, 16, 32, 45]) {
++    it(`recovers four swaps across generated ${bits}-bit adders`, () => {
++      for (let seed = 1; seed <= 15; seed++) {
++        const { gates, answer } = makeSwapped(bits, seed * 1000 + bits);
++        expect(findSwappedWires(gates)).toEqual(answer);
++      }
++    });
++  }
++
++  it('reports wires that genuinely repair the circuit', () => {
++    for (let seed = 1; seed <= 8; seed++) {
++      const { gates } = makeSwapped(20, seed * 77);
++      expect(isValidRepair(gates, 20, findSwappedWires(gates))).toBe(true);
++    }
++  });
++
++  it('solves a 45-bit circuit well inside the time limit', () => {
++    const { gates, answer } = makeSwapped(45, 20250724);
++    expect(gates.length).toBeGreaterThan(200);
++
++    const started = performance.now();
++    const wires = findSwappedWires(gates);
++    const elapsed = performance.now() - started;
++
++    expect(wires).toEqual(answer);
++    expect(elapsed).toBeLessThan(5000);
++  });
++
++  it('stays inside the time limit on the slowest circuit we can generate', () => {
++    let worst = 0;
++    for (let seed = 1; seed <= 40; seed++) {
++      const { gates } = makeSwapped(45, seed * 31 + 5);
++      const started = performance.now();
++      findSwappedWires(gates);
++      worst = Math.max(worst, performance.now() - started);
++    }
++    expect(worst).toBeLessThan(5000);
++  });
++});
