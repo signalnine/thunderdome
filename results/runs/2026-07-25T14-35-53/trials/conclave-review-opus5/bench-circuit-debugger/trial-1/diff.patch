@@ -1,0 +1,1921 @@
+diff --git a/.gitignore b/.gitignore
+index f4e2c6d..40f2ef3 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,3 +1,4 @@
+ node_modules/
+ dist/
+ *.tsbuildinfo
++.thunderdome-*
+diff --git a/package-lock.json b/package-lock.json
+index 97d25c0..3c003c8 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/adder.ts b/src/adder.ts
+new file mode 100644
+index 0000000..833885f
+--- /dev/null
++++ b/src/adder.ts
+@@ -0,0 +1,164 @@
++import { evaluate, type Circuit } from './circuit.js';
++
++/** One input pattern plus the expected sum bits. */
++export interface TestVector {
++  x: Uint8Array;
++  y: Uint8Array;
++  /** Expected z bits, least significant first, length `bits + 1`. */
++  z: Uint8Array;
++}
++
++/** Test patterns grouped by the bit position they are designed to exercise. */
++export interface TestSuite {
++  bits: number;
++  /** `perBit[i]` isolates bit `i` under both carry-in polarities. */
++  perBit: TestVector[][];
++  /** Extra whole-word patterns that stress carry chains end to end. */
++  extra: TestVector[];
++  /**
++   * Sentinel returned by {@link lowestFailingBit} when every test passes: one
++   * past the most significant output bit, so it compares greater than any real
++   * failure position.
++   */
++  clean: number;
++}
++
++function expectedSum(x: Uint8Array, y: Uint8Array, bits: number): Uint8Array {
++  const z = new Uint8Array(bits + 1);
++  let carry = 0;
++  for (let bit = 0; bit < bits; bit++) {
++    const sum = x[bit] + y[bit] + carry;
++    z[bit] = sum & 1;
++    carry = sum >> 1;
++  }
++  z[bits] = carry;
++  return z;
++}
++
++function vector(x: Uint8Array, y: Uint8Array, bits: number): TestVector {
++  return { x, y, z: expectedSum(x, y, bits) };
++}
++
++/**
++ * Build the verification suite for a `bits`-wide adder.
++ *
++ * For every bit position we test all four (x, y) combinations with carry-in 0
++ * and carry-in 1 (carry-in is forced by filling the lower bits of x and setting
++ * y's bit 0). Any single-position fault therefore shows up in that position's
++ * group, which lets the search cheaply re-check just the bit it is repairing.
++ */
++export function buildTestSuite(bits: number): TestSuite {
++  const perBit: TestVector[][] = [];
++  for (let bit = 0; bit < bits; bit++) {
++    const group: TestVector[] = [];
++    const carries = bit === 0 ? [0] : [0, 1];
++    for (const carry of carries) {
++      for (let combo = 0; combo < 4; combo++) {
++        const x = new Uint8Array(bits);
++        const y = new Uint8Array(bits);
++        if (carry === 1) {
++          for (let lower = 0; lower < bit; lower++) x[lower] = 1;
++          y[0] = 1;
++        }
++        x[bit] = combo & 1;
++        y[bit] = (combo >> 1) & 1;
++        group.push(vector(x, y, bits));
++      }
++    }
++    perBit.push(group);
++  }
++
++  const extra: TestVector[] = [];
++  const ones = new Uint8Array(bits).fill(1);
++  const zeros = new Uint8Array(bits);
++  const one = new Uint8Array(bits);
++  if (bits > 0) one[0] = 1;
++  const evens = new Uint8Array(bits);
++  const odds = new Uint8Array(bits);
++  for (let bit = 0; bit < bits; bit++) {
++    if (bit % 2 === 0) evens[bit] = 1;
++    else odds[bit] = 1;
++  }
++  extra.push(vector(ones, ones, bits));
++  extra.push(vector(ones, one, bits));
++  extra.push(vector(ones, zeros, bits));
++  extra.push(vector(evens, odds, bits));
++  extra.push(vector(evens, evens, bits));
++  extra.push(vector(odds, odds, bits));
++
++  // Deterministic pseudo-random patterns: cheap insurance against faults that
++  // only surface for particular bit combinations.
++  let seed = 0x2f6e2b1;
++  const nextBit = (): number => {
++    // Math.imul keeps the multiply in 32-bit range; plain `*` would overflow
++    // the float mantissa and degenerate the sequence.
++    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
++    return (seed >>> 17) & 1;
++  };
++  for (let trial = 0; trial < 40; trial++) {
++    const x = new Uint8Array(bits);
++    const y = new Uint8Array(bits);
++    for (let bit = 0; bit < bits; bit++) {
++      x[bit] = nextBit();
++      y[bit] = nextBit();
++    }
++    extra.push(vector(x, y, bits));
++  }
++
++  return { bits, perBit, extra, clean: bits + 1 };
++}
++
++/** Lowest z index that disagrees with the expected sum, or -1 if the vector passes. */
++function mismatch(circuit: Circuit, test: TestVector, scratch: Uint8Array): number {
++  evaluate(circuit, test.x, test.y, scratch);
++  for (let bit = 0; bit <= circuit.bits; bit++) {
++    if (scratch[bit] !== test.z[bit]) return bit;
++  }
++  return -1;
++}
++
++/**
++ * True when the patterns targeting `bit` produce correct output up to and
++ * including `bit`.
++ *
++ * Deliberately tolerant of mismatches *above* `bit`: during a repair search the
++ * higher bits are still expected to be broken, so demanding the whole word be
++ * correct would reject every partial fix.
++ */
++export function bitSettled(
++  circuit: Circuit,
++  suite: TestSuite,
++  bit: number,
++  scratch: Uint8Array,
++): boolean {
++  if (bit >= suite.perBit.length) return false;
++  for (const test of suite.perBit[bit]) {
++    const bad = mismatch(circuit, test, scratch);
++    if (bad !== -1 && bad <= bit) return false;
++  }
++  return true;
++}
++
++/**
++ * Lowest output bit position where the circuit disagrees with X + Y over the
++ * whole suite, or `suite.clean` when the circuit adds correctly.
++ */
++export function lowestFailingBit(circuit: Circuit, suite: TestSuite, scratch: Uint8Array): number {
++  let lowest = suite.clean;
++  for (const group of suite.perBit) {
++    for (const test of group) {
++      const bad = mismatch(circuit, test, scratch);
++      if (bad !== -1 && bad < lowest) lowest = bad;
++    }
++  }
++  for (const test of suite.extra) {
++    const bad = mismatch(circuit, test, scratch);
++    if (bad !== -1 && bad < lowest) lowest = bad;
++  }
++  return lowest;
++}
++
++/** True when the circuit adds correctly across the whole suite. */
++export function isCorrectAdder(circuit: Circuit, suite: TestSuite, scratch: Uint8Array): boolean {
++  return lowestFailingBit(circuit, suite, scratch) === suite.clean;
++}
+diff --git a/src/circuit.ts b/src/circuit.ts
+new file mode 100644
+index 0000000..aa020bb
+--- /dev/null
++++ b/src/circuit.ts
+@@ -0,0 +1,260 @@
++import type { Gate, GateOp } from './types.js';
++
++export const OP_AND = 0;
++export const OP_OR = 1;
++export const OP_XOR = 2;
++
++const OP_CODES: Record<string, number> = { AND: OP_AND, OR: OP_OR, XOR: OP_XOR };
++
++export const X_WIRE = /^x(\d+)$/;
++export const Y_WIRE = /^y(\d+)$/;
++export const Z_WIRE = /^z(\d+)$/;
++
++/**
++ * A circuit flattened into typed arrays so the swap search can re-evaluate it
++ * tens of thousands of times without allocating.
++ *
++ * `out` is the only mutable wiring: swapping two entries models swapping two
++ * gates' output wires. `refresh` must be called afterwards to rebuild the
++ * producer map and evaluation order.
++ */
++export interface Circuit {
++  /** Number of X (and Y) input bits; the sum has `bits + 1` bits. */
++  bits: number;
++  gateCount: number;
++  wireCount: number;
++  op: Uint8Array;
++  in1: Int32Array;
++  in2: Int32Array;
++  out: Int32Array;
++  /** Wire index of each x/y/z bit, or -1 when the wire is absent. */
++  xIndex: Int32Array;
++  yIndex: Int32Array;
++  zIndex: Int32Array;
++  wireNames: string[];
++  /** Gate index producing each wire, or -1 for a primary input. */
++  producer: Int32Array;
++  /** Gates in evaluation order; only the first `orderLength` entries are valid. */
++  order: Int32Array;
++  orderLength: number;
++  /** False when the current wiring contains a cycle. */
++  acyclic: boolean;
++  // Static consumer adjacency in CSR form: consumers of wire w are
++  // consumerList[consumerStart[w] .. consumerStart[w + 1]).
++  consumerStart: Int32Array;
++  consumerList: Int32Array;
++  // Scratch buffers reused across evaluations.
++  values: Int8Array;
++  pending: Int32Array;
++  queue: Int32Array;
++}
++
++/** Flatten gates into a {@link Circuit}. Does not mutate `gates`. */
++export function compile(gates: Gate[]): Circuit {
++  const index = new Map<string, number>();
++  const wireNames: string[] = [];
++  const wireIndex = (name: string): number => {
++    const existing = index.get(name);
++    if (existing !== undefined) return existing;
++    const id = wireNames.length;
++    index.set(name, id);
++    wireNames.push(name);
++    return id;
++  };
++
++  const gateCount = gates.length;
++  const op = new Uint8Array(gateCount);
++  const in1 = new Int32Array(gateCount);
++  const in2 = new Int32Array(gateCount);
++  const out = new Int32Array(gateCount);
++
++  for (let i = 0; i < gateCount; i++) {
++    const gate = gates[i];
++    const code = OP_CODES[gate.op];
++    if (code === undefined) throw new Error(`Unknown gate operation: ${String(gate.op)}`);
++    op[i] = code;
++    in1[i] = wireIndex(gate.in1);
++    in2[i] = wireIndex(gate.in2);
++    out[i] = wireIndex(gate.out);
++  }
++
++  // Bit positions come from parsing the wire names actually present, so any
++  // zero-padding convention works.
++  const xAt = new Map<number, number>();
++  const yAt = new Map<number, number>();
++  const zAt = new Map<number, number>();
++  let maxX = -1;
++  let maxZ = -1;
++  for (let id = 0; id < wireNames.length; id++) {
++    const name = wireNames[id];
++    const x = X_WIRE.exec(name);
++    if (x !== null) {
++      const bit = Number(x[1]);
++      maxX = Math.max(maxX, bit);
++      xAt.set(bit, id);
++      continue;
++    }
++    const y = Y_WIRE.exec(name);
++    if (y !== null) {
++      yAt.set(Number(y[1]), id);
++      continue;
++    }
++    const z = Z_WIRE.exec(name);
++    if (z !== null) {
++      const bit = Number(z[1]);
++      maxZ = Math.max(maxZ, bit);
++      zAt.set(bit, id);
++    }
++  }
++  const bits = Math.max(maxX + 1, maxZ);
++
++  const wireCount = wireNames.length;
++  const xIndex = new Int32Array(bits).fill(-1);
++  const yIndex = new Int32Array(bits).fill(-1);
++  const zIndex = new Int32Array(bits + 1).fill(-1);
++  for (let bit = 0; bit < bits; bit++) {
++    xIndex[bit] = xAt.get(bit) ?? -1;
++    yIndex[bit] = yAt.get(bit) ?? -1;
++  }
++  for (let bit = 0; bit <= bits; bit++) {
++    zIndex[bit] = zAt.get(bit) ?? -1;
++  }
++
++  // Consumer adjacency (independent of the mutable `out` array).
++  const counts = new Int32Array(wireCount + 1);
++  for (let i = 0; i < gateCount; i++) {
++    counts[in1[i]]++;
++    counts[in2[i]]++;
++  }
++  const consumerStart = new Int32Array(wireCount + 1);
++  let total = 0;
++  for (let w = 0; w < wireCount; w++) {
++    consumerStart[w] = total;
++    total += counts[w];
++  }
++  consumerStart[wireCount] = total;
++  const consumerList = new Int32Array(total);
++  const cursor = consumerStart.slice(0, wireCount);
++  for (let i = 0; i < gateCount; i++) {
++    consumerList[cursor[in1[i]]++] = i;
++    consumerList[cursor[in2[i]]++] = i;
++  }
++
++  const circuit: Circuit = {
++    bits,
++    gateCount,
++    wireCount,
++    op,
++    in1,
++    in2,
++    out,
++    xIndex,
++    yIndex,
++    zIndex,
++    wireNames,
++    producer: new Int32Array(wireCount).fill(-1),
++    order: new Int32Array(gateCount),
++    orderLength: 0,
++    acyclic: false,
++    consumerStart,
++    consumerList,
++    values: new Int8Array(wireCount),
++    pending: new Int32Array(gateCount),
++    queue: new Int32Array(gateCount),
++  };
++  refresh(circuit);
++  return circuit;
++}
++
++/** Rebuild the producer map and topological order after `out` changed. */
++export function refresh(circuit: Circuit): boolean {
++  const { producer, out, in1, in2, pending, queue, order, consumerStart, consumerList } = circuit;
++  producer.fill(-1);
++  for (let i = 0; i < circuit.gateCount; i++) producer[out[i]] = i;
++
++  let head = 0;
++  let tail = 0;
++  for (let i = 0; i < circuit.gateCount; i++) {
++    // Inputs driven by another gate are the ones worth waiting for; anything
++    // else is a primary input and already available.
++    let awaited = 0;
++    if (producer[in1[i]] >= 0) awaited++;
++    if (producer[in2[i]] >= 0) awaited++;
++    pending[i] = awaited;
++    if (awaited === 0) queue[tail++] = i;
++  }
++
++  let emitted = 0;
++  while (head < tail) {
++    const gate = queue[head++];
++    order[emitted++] = gate;
++    const wire = out[gate];
++    const end = consumerStart[wire + 1];
++    for (let k = consumerStart[wire]; k < end; k++) {
++      const consumer = consumerList[k];
++      if (--pending[consumer] === 0) queue[tail++] = consumer;
++    }
++  }
++
++  circuit.orderLength = emitted;
++  circuit.acyclic = emitted === circuit.gateCount;
++  return circuit.acyclic;
++}
++
++/** Swap the output wires of two gates and rebuild the evaluation order. */
++export function swapOutputs(circuit: Circuit, gateA: number, gateB: number): boolean {
++  const tmp = circuit.out[gateA];
++  circuit.out[gateA] = circuit.out[gateB];
++  circuit.out[gateB] = tmp;
++  return refresh(circuit);
++}
++
++/** Written to `zOut` for an output bit the circuit never settles on. */
++export const UNKNOWN = 2;
++
++/**
++ * Evaluate the circuit for the given X/Y bit vectors, writing the `bits + 1`
++ * output bits into `zOut`.
++ *
++ * A cyclic wiring is evaluated as far as it goes: gates inside or downstream of
++ * a cycle never fire and their output bits come back as {@link UNKNOWN}. That
++ * matters during a repair search, where an intermediate wiring may be cyclic
++ * while the low bits under repair are still perfectly well defined.
++ */
++export function evaluate(circuit: Circuit, x: Uint8Array, y: Uint8Array, zOut: Uint8Array): void {
++  const { values, op, in1, in2, out, order, orderLength, xIndex, yIndex, zIndex, bits } = circuit;
++  const { producer, wireCount } = circuit;
++  for (let wire = 0; wire < wireCount; wire++) values[wire] = producer[wire] >= 0 ? -1 : 0;
++  for (let bit = 0; bit < bits; bit++) {
++    const xi = xIndex[bit];
++    if (xi >= 0) values[xi] = x[bit];
++    const yi = yIndex[bit];
++    if (yi >= 0) values[yi] = y[bit];
++  }
++  for (let k = 0; k < orderLength; k++) {
++    const gate = order[k];
++    const a = values[in1[gate]];
++    const b = values[in2[gate]];
++    const code = op[gate];
++    values[out[gate]] = code === OP_AND ? a & b : code === OP_OR ? a | b : a ^ b;
++  }
++  for (let bit = 0; bit <= bits; bit++) {
++    const zi = zIndex[bit];
++    zOut[bit] = zi >= 0 && values[zi] >= 0 ? values[zi] : UNKNOWN;
++  }
++}
++
++/** Apply the current wiring back onto a fresh gate list. */
++export function toGates(circuit: Circuit): Gate[] {
++  const ops: readonly GateOp[] = ['AND', 'OR', 'XOR'];
++  const gates: Gate[] = [];
++  for (let i = 0; i < circuit.gateCount; i++) {
++    gates.push({
++      op: ops[circuit.op[i]],
++      in1: circuit.wireNames[circuit.in1[i]],
++      in2: circuit.wireNames[circuit.in2[i]],
++      out: circuit.wireNames[circuit.out[i]],
++    });
++  }
++  return gates;
++}
+diff --git a/src/findSwapped.ts b/src/findSwapped.ts
+new file mode 100644
+index 0000000..4deb57b
+--- /dev/null
++++ b/src/findSwapped.ts
+@@ -0,0 +1,292 @@
++import {
++  bitSettled,
++  buildTestSuite,
++  isCorrectAdder,
++  lowestFailingBit,
++  type TestSuite,
++} from './adder.js';
++import { compile, swapOutputs, toGates, type Circuit } from './circuit.js';
++import { reconstruct } from './reconstruct.js';
++import { structuralSuspects } from './structural.js';
++import type { Gate } from './types.js';
++
++/** Number of swapped pairs the circuit is known to contain. */
++const SWAP_COUNT = 4;
++
++/**
++ * Wall-clock budget shared by every strategy, comfortably inside the 5s
++ * requirement even allowing for a slow final verification.
++ */
++const TIME_BUDGET_MS = 2500;
++
++/** How convincing a candidate repair is. */
++enum Quality {
++  /** Still not an adder. */
++  Broken = 0,
++  /** Adds correctly, but the gate wiring is not the textbook shape. */
++  Functional = 1,
++  /** Adds correctly *and* every gate sits in its canonical role. */
++  Canonical = 2,
++}
++
++/**
++ * Grade the circuit as it is currently wired.
++ *
++ * Functional correctness alone can be ambiguous: a handful of wire names are
++ * interchangeable, so more than one repair may add correctly. The original
++ * circuit was a textbook ripple-carry adder, so a repair that also restores
++ * every structural invariant is the one that was intended.
++ */
++function grade(circuit: Circuit, suite: TestSuite, scratch: Uint8Array): Quality {
++  if (!circuit.acyclic) return Quality.Broken;
++  if (!isCorrectAdder(circuit, suite, scratch)) return Quality.Broken;
++  const suspects = structuralSuspects(toGates(circuit), circuit.bits);
++  return suspects.length === 0 ? Quality.Canonical : Quality.Functional;
++}
++
++interface Search {
++  circuit: Circuit;
++  suite: TestSuite;
++  scratch: Uint8Array;
++  used: Uint8Array;
++  chosen: number[];
++  /** Best functional-but-not-canonical repair seen so far, if any. */
++  fallback: number[] | null;
++  deadline: number;
++  /** Gate indices ordered so structurally suspicious gates are tried first. */
++  ranked: Int32Array;
++  coneMark: Uint8Array;
++  coneStack: Int32Array;
++}
++
++/** Gate indices that (transitively) feed `wire`, including its own producer. */
++function ancestorGates(search: Search, wire: number): number[] {
++  const { circuit, coneMark, coneStack } = search;
++  const gates: number[] = [];
++  if (wire < 0 || circuit.producer[wire] < 0) return gates;
++  coneMark.fill(0);
++  let top = 0;
++  const producer = circuit.producer[wire];
++  coneStack[top++] = producer;
++  coneMark[producer] = 1;
++  while (top > 0) {
++    const gate = coneStack[--top];
++    gates.push(gate);
++    const left = circuit.producer[circuit.in1[gate]];
++    if (left >= 0 && coneMark[left] === 0) {
++      coneMark[left] = 1;
++      coneStack[top++] = left;
++    }
++    const right = circuit.producer[circuit.in2[gate]];
++    if (right >= 0 && coneMark[right] === 0) {
++      coneMark[right] = 1;
++      coneStack[top++] = right;
++    }
++  }
++  return gates;
++}
++
++/**
++ * Repair the circuit one swap at a time, lowest broken output bit first.
++ *
++ * A ripple-carry adder is built up bit by bit, so the lowest z index that
++ * disagrees with x + y pins down where the damage starts. At least one gate of
++ * the swap responsible for it must sit in the cone feeding that bit — otherwise
++ * its wrong value could not reach the bit — so it suffices to pair each gate in
++ * that cone with every gate in the circuit, rather than trying all pairs. Only
++ * candidates that strictly raise the lowest broken bit are explored, which bounds
++ * the recursion to the four swaps we are looking for.
++ *
++ * Returns true once a canonical repair is found. A merely functional repair is
++ * remembered in `search.fallback` and the search continues, since the intended
++ * answer is the canonical one.
++ */
++function searchSwaps(search: Search, depth: number, lowest: number): boolean {
++  const { circuit, suite, scratch, used, chosen, ranked } = search;
++  if (lowest === suite.clean) {
++    const quality = grade(circuit, suite, scratch);
++    if (quality === Quality.Canonical) return true;
++    if (quality === Quality.Functional && search.fallback === null) {
++      search.fallback = [...chosen];
++    }
++    return false;
++  }
++  if (depth === SWAP_COUNT) return false;
++  if (Date.now() > search.deadline) return false;
++
++  const targetBit = Math.min(lowest, circuit.bits);
++  const cone = ancestorGates(search, circuit.zIndex[targetBit]);
++  const outer: number[] = [];
++  if (cone.length === 0) {
++    for (let i = 0; i < ranked.length; i++) outer.push(ranked[i]);
++  } else {
++    const inCone = new Uint8Array(circuit.gateCount);
++    for (const gate of cone) inCone[gate] = 1;
++    // Ranked order tries structurally suspicious gates first; they hit far more
++    // often than the rest.
++    for (let i = 0; i < ranked.length; i++) {
++      if (inCone[ranked[i]] === 1) outer.push(ranked[i]);
++    }
++  }
++
++  const tried = new Set<number>();
++  for (const a of outer) {
++    if (used[a] === 1) continue;
++    for (let i = 0; i < ranked.length; i++) {
++      const b = ranked[i];
++      if (b === a || used[b] === 1) continue;
++      const key = a < b ? a * circuit.gateCount + b : b * circuit.gateCount + a;
++      if (tried.has(key)) continue;
++      tried.add(key);
++
++      swapOutputs(circuit, a, b);
++      // Re-check just the broken bit first: eight evaluations instead of the
++      // whole suite, which is what keeps the candidate sweep affordable. Bits
++      // above it may still be broken, and the wiring may even be cyclic further
++      // up; both are fine at this stage.
++      if (lowest >= circuit.bits || bitSettled(circuit, suite, lowest, scratch)) {
++        const next = lowestFailingBit(circuit, suite, scratch);
++        if (next > lowest) {
++          used[a] = 1;
++          used[b] = 1;
++          chosen.push(a, b);
++          const done = searchSwaps(search, depth + 1, next);
++          if (done) return true;
++          chosen.length -= 2;
++          used[a] = 0;
++          used[b] = 0;
++        }
++      }
++      swapOutputs(circuit, a, b);
++      if (Date.now() > search.deadline) return false;
++    }
++  }
++  return false;
++}
++
++/**
++ * Try every way of pairing up `gateIndices` (even length) and stop at the first
++ * pairing whose swaps restore a canonical adder. Leaves the winning swaps
++ * applied; restores the original wiring when there is no winner.
++ */
++function matchPairs(
++  circuit: Circuit,
++  suite: TestSuite,
++  scratch: Uint8Array,
++  gateIndices: number[],
++  deadline: number,
++): boolean {
++  const remaining = [...gateIndices];
++  const recurse = (): boolean => {
++    if (Date.now() > deadline) return false;
++    if (remaining.length === 0) return grade(circuit, suite, scratch) === Quality.Canonical;
++    const a = remaining.shift() as number;
++    for (let i = 0; i < remaining.length; i++) {
++      const b = remaining[i];
++      remaining.splice(i, 1);
++      swapOutputs(circuit, a, b);
++      if (recurse()) return true;
++      swapOutputs(circuit, a, b);
++      remaining.splice(i, 0, b);
++    }
++    remaining.unshift(a);
++    return false;
++  };
++  return recurse();
++}
++
++/** Sorted, de-duplicated wire names from a list of swapped pairs. */
++function wiresOf(pairs: Array<[string, string]>): string[] {
++  return [...new Set(pairs.flat())].sort();
++}
++
++/**
++ * Shape an unverified guess like a real answer: at most four pairs' worth of
++ * wires, and an even count, so callers can always pair the result up.
++ */
++function asPairedGuess(wires: string[]): string[] {
++  const capped = wires.slice(0, SWAP_COUNT * 2);
++  return capped.length % 2 === 0 ? capped : capped.slice(0, -1);
++}
++
++/**
++ * Find the eight wires whose gate outputs were swapped in a broken binary adder.
++ *
++ * The primary strategy reconstructs the adder bit by bit to recover each gate's
++ * intended output wire directly (see {@link reconstruct}). Two independent
++ * fallbacks cover circuits it cannot unpick: structural rules that nominate
++ * suspects, and a simulation-driven repair search.
++ */
++export function findSwappedWires(gates: Gate[]): string[] {
++  if (gates.length === 0) return [];
++
++  const circuit = compile(gates);
++  const suite = buildTestSuite(circuit.bits);
++  const scratch = new Uint8Array(circuit.bits + 1);
++
++  if (grade(circuit, suite, scratch) !== Quality.Broken) return [];
++
++  // Insist on a textbook result first; settle for one that merely adds correctly
++  // if the circuit has quirks the structural rules do not expect. Each pass gets
++  // its own slice of the budget so a hopeless first pass cannot starve the rest.
++  const started = Date.now();
++  // The first pass is the one that resolves real circuits, so it gets the bulk
++  // of the time; the later strategies only matter for malformed input.
++  const slices = [
++    { bar: Quality.Canonical, until: started + TIME_BUDGET_MS * 0.6 },
++    { bar: Quality.Functional, until: started + TIME_BUDGET_MS * 0.85 },
++  ];
++  for (const { bar, until } of slices) {
++    const accept = (repaired: Gate[]): boolean =>
++      grade(compile(repaired), suite, scratch) >= bar;
++    const rebuilt = reconstruct(gates, circuit.bits, accept, until);
++    if (rebuilt !== null && rebuilt.pairs.length > 0) return wiresOf(rebuilt.pairs);
++  }
++
++  const suspects = structuralSuspects(gates, circuit.bits).sort();
++  const gateForWire = new Map<string, number>();
++  for (let i = 0; i < gates.length; i++) gateForWire.set(gates[i].out, i);
++  const suspectGates: number[] = [];
++  for (const wire of suspects) {
++    const gate = gateForWire.get(wire);
++    if (gate !== undefined) suspectGates.push(gate);
++  }
++
++  const deadline = started + TIME_BUDGET_MS;
++  if (
++    suspectGates.length === SWAP_COUNT * 2 &&
++    matchPairs(circuit, suite, scratch, suspectGates, deadline)
++  ) {
++    return suspects;
++  }
++
++  const suspectSet = new Set(suspectGates);
++  const ranked = new Int32Array(circuit.gateCount);
++  let cursor = 0;
++  for (const gate of suspectGates) ranked[cursor++] = gate;
++  for (let i = 0; i < circuit.gateCount; i++) {
++    if (!suspectSet.has(i)) ranked[cursor++] = i;
++  }
++
++  const search: Search = {
++    circuit,
++    suite,
++    scratch,
++    used: new Uint8Array(circuit.gateCount),
++    chosen: [],
++    fallback: null,
++    deadline,
++    ranked,
++    coneMark: new Uint8Array(circuit.gateCount),
++    coneStack: new Int32Array(circuit.gateCount),
++  };
++
++  const found = searchSwaps(search, 0, lowestFailingBit(circuit, suite, scratch))
++    ? search.chosen
++    : search.fallback;
++  if (found !== null) return found.map((gate) => gates[gate].out).sort();
++
++  // Nothing could be verified, so the circuit is not the adder we were promised.
++  // The structural suspects remain the best guess available.
++  return asPairedGuess(suspects);
++}
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..68b80e7
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,3 @@
++export type { Gate, GateOp } from './types.js';
++export { simulate } from './simulate.js';
++export { findSwappedWires } from './findSwapped.js';
+diff --git a/src/reconstruct.ts b/src/reconstruct.ts
+new file mode 100644
+index 0000000..9e8ff5a
+--- /dev/null
++++ b/src/reconstruct.ts
+@@ -0,0 +1,354 @@
++import { X_WIRE, Y_WIRE } from './circuit.js';
++import type { Gate, GateOp } from './types.js';
++
++/** Upper bound on the number of swapped pairs, as stated by the problem. */
++const MAX_PAIRS = 4;
++
++/**
++ * Backstop against pathological backtracking on circuits that are not adders.
++ * The caller's deadline is the real bound; this just keeps a coarse clock from
++ * letting the walk run away.
++ */
++const NODE_BUDGET = 200_000;
++const VERIFY_BUDGET = 40;
++
++/** How often to consult the clock while backtracking. */
++const CLOCK_INTERVAL = 16;
++
++function isInputWire(name: string): boolean {
++  return X_WIRE.test(name) || Y_WIRE.test(name);
++}
++
++function bitName(prefix: string, bit: number): string {
++  return `${prefix}${String(bit).padStart(2, '0')}`;
++}
++
++/** Order-independent identity of a gate: its operation plus its input pair. */
++function gateKey(op: GateOp, in1: string, in2: string): string {
++  return in1 < in2 ? `${op}|${in1}|${in2}` : `${op}|${in2}|${in1}`;
++}
++
++/**
++ * A XOR/AND gate pair sharing the same two internal inputs: one bit's sum and
++ * carry-propagate gates. Their two common inputs are that bit's partial sum and
++ * its incoming carry, in unknown order.
++ */
++interface SumPair {
++  first: string;
++  second: string;
++  /** Gate that should emit `zNN`. */
++  sum: number;
++  /** Gate that should emit the carry-propagate term. */
++  propagate: number;
++}
++
++/** Mutable half of the walk: which gate emits which wire, and the swaps so far. */
++interface Wiring {
++  out: string[];
++  producer: Map<string, number>;
++  pairs: Array<[string, string]>;
++  /** Gates whose output wire has been pinned down. */
++  settled: Uint8Array;
++  /** Sum/propagate pairs already claimed by a lower bit. */
++  claimed: Set<SumPair>;
++}
++
++export interface Reconstruction {
++  /** Wire-name pairs that were exchanged. */
++  pairs: Array<[string, string]>;
++  /** The circuit with those exchanges undone. */
++  gates: Gate[];
++}
++
++/**
++ * Recover the intended output wire of every gate, and hence the swaps.
++ *
++ * Swapping output wires never touches any gate's *inputs*, so a gate's identity
++ * — its operation plus its pair of input wires — survives the damage intact.
++ * That is enough to rebuild the adder bit by bit. Each bit is a group of five
++ * gates with fixed expectations: the sum gate emits `zNN`, the partial sum comes
++ * from `xNN XOR yNN`, the carry-in comes from the previous bit's carry gate, and
++ * the two carry terms meet at one OR gate. Every violated expectation names both
++ * the wire that belongs there and the wire sitting in its place — that is one
++ * swap, and undoing it lets the walk continue.
++ *
++ * Which gates form bit `i` is itself deduced from three independent clues (the
++ * carry-in wire, the partial-sum wire and the `zNN` wire). A swap can corrupt a
++ * clue, so when they disagree each reading is tried in turn and contradictions
++ * further up the walk prune the wrong ones. `accept` decides whether a completed
++ * walk really produced an adder.
++ *
++ * Returns null if the circuit is not shaped like an adder, if the damage cannot
++ * be unpicked this way, or if `deadline` (a `Date.now()` value) passes first;
++ * the caller then falls back to searching.
++ */
++export function reconstruct(
++  input: Gate[],
++  bits: number,
++  accept: (gates: Gate[]) => boolean,
++  deadline: number,
++): Reconstruction | null {
++  if (bits < 1 || input.length === 0) return null;
++
++  // Invariant structure: operations and inputs are never touched by a swap.
++  const op = input.map((gate) => gate.op);
++  const in1 = input.map((gate) => gate.in1);
++  const in2 = input.map((gate) => gate.in2);
++  const byKey = new Map<string, number>();
++  const consumers = new Map<string, number[]>();
++  for (let i = 0; i < input.length; i++) {
++    byKey.set(gateKey(op[i], in1[i], in2[i]), i);
++    for (const wire of [in1[i], in2[i]]) {
++      const list = consumers.get(wire);
++      if (list === undefined) consumers.set(wire, [i]);
++      else if (!list.includes(i)) list.push(i);
++    }
++  }
++
++  // The two gates reading each pair of input bits.
++  const halfXor: number[] = [];
++  const halfAnd: number[] = [];
++  for (let bit = 0; bit < bits; bit++) {
++    const xor = byKey.get(gateKey('XOR', bitName('x', bit), bitName('y', bit)));
++    const and = byKey.get(gateKey('AND', bitName('x', bit), bitName('y', bit)));
++    if (xor === undefined || and === undefined) return null;
++    halfXor.push(xor);
++    halfAnd.push(and);
++  }
++
++  // The XOR/AND gate pairs that share internal inputs: one per bit above zero.
++  const sumPairs: SumPair[] = [];
++  const pairByWire = new Map<string, SumPair>();
++  for (let i = 0; i < input.length; i++) {
++    if (op[i] !== 'XOR' || isInputWire(in1[i]) || isInputWire(in2[i])) continue;
++    const propagate = byKey.get(gateKey('AND', in1[i], in2[i]));
++    if (propagate === undefined) continue;
++    const pair: SumPair = { first: in1[i], second: in2[i], sum: i, propagate };
++    sumPairs.push(pair);
++    pairByWire.set(in1[i], pair);
++    pairByWire.set(in2[i], pair);
++  }
++
++  let nodes = NODE_BUDGET;
++  let verifications = VERIFY_BUDGET;
++  let wanted: number | null = null;
++
++  /**
++   * False once the search has spent its allowance, of work or of time. Counted
++   * per candidate wiring considered, which is the unit of real cost here — each
++   * one copies the whole wiring.
++   */
++  const withinBudget = (): boolean => {
++    if (nodes-- <= 0) return false;
++    return nodes % CLOCK_INTERVAL !== 0 || Date.now() <= deadline;
++  };
++
++  const clone = (wiring: Wiring): Wiring => ({
++    out: wiring.out.slice(),
++    producer: new Map(wiring.producer),
++    pairs: wiring.pairs.map((pair): [string, string] => [pair[0], pair[1]]),
++    settled: wiring.settled.slice(),
++    claimed: new Set(wiring.claimed),
++  });
++
++  /**
++   * Make `gate` emit `wire`, exchanging with whichever gate holds it. Both gates
++   * end up settled: a swap has exactly two sides, so the wire displaced from
++   * `gate` is the one the other gate was supposed to emit all along.
++   */
++  const ensureOut = (wiring: Wiring, gate: number, wire: string): boolean => {
++    const current = wiring.out[gate];
++    if (current === wire) {
++      wiring.settled[gate] = 1;
++      return true;
++    }
++    const holder = wiring.producer.get(wire);
++    if (holder === undefined || holder === gate) return false;
++    if (wiring.settled[gate] === 1 || wiring.settled[holder] === 1) return false;
++    if (wiring.pairs.length === MAX_PAIRS) return false;
++    wiring.out[gate] = wire;
++    wiring.out[holder] = current;
++    wiring.producer.set(wire, gate);
++    wiring.producer.set(current, holder);
++    wiring.pairs.push([current, wire]);
++    wiring.settled[gate] = 1;
++    wiring.settled[holder] = 1;
++    return true;
++  };
++
++  /** The single OR gate reading `wire`, if there is exactly one. */
++  const orConsumerOf = (wire: string): number | undefined => {
++    const found = (consumers.get(wire) ?? []).filter((gate) => op[gate] === 'OR');
++    return found.length === 1 ? found[0] : undefined;
++  };
++
++  const orGates: number[] = [];
++  for (let i = 0; i < input.length; i++) {
++    if (op[i] === 'OR') orGates.push(i);
++  }
++
++  /** OR gates, those still emitting into an unclaimed sum pair first. */
++  const orderedOrGates = (wiring: Wiring): number[] => {
++    const plausible: number[] = [];
++    const rest: number[] = [];
++    for (const gate of orGates) {
++      const target = pairByWire.get(wiring.out[gate]);
++      if (target !== undefined && !wiring.claimed.has(target)) plausible.push(gate);
++      else rest.push(gate);
++    }
++    return [...plausible, ...rest];
++  };
++
++  /** Sum/propagate pairs that could be bit `bit`, most strongly indicated first. */
++  const candidatesFor = (wiring: Wiring, bit: number, carryGate: number): SumPair[] => {
++    const carryWire = wiring.out[carryGate];
++    const partialWire = wiring.out[halfXor[bit]];
++    const zWire = bitName('z', bit);
++    const scored: Array<{ pair: SumPair; score: number }> = [];
++    for (const pair of sumPairs) {
++      if (wiring.claimed.has(pair)) continue;
++      let score = 0;
++      if (pair.first === carryWire || pair.second === carryWire) score++;
++      if (pair.first === partialWire || pair.second === partialWire) score++;
++      if (wiring.out[pair.sum] === zWire) score++;
++      scored.push({ pair, score });
++    }
++    // Best-supported first. Unsupported pairs stay in the running — all three
++    // clues can be damaged at one bit — but only get tried once the plausible
++    // ones have been ruled out.
++    return scored.sort((a, b) => b.score - a.score).map((entry) => entry.pair);
++  };
++
++  /**
++   * Which of the pair's two wires is the partial sum and which is the carry-in.
++   * When neither wire is where it belongs both readings are viable, so both are
++   * offered; they report the same set of swapped wires but move different wires
++   * elsewhere in the circuit.
++   */
++  const splitsOf = (wiring: Wiring, bit: number, carryGate: number, pair: SumPair): string[] => {
++    const partialWire = wiring.out[halfXor[bit]];
++    const carryWire = wiring.out[carryGate];
++    if (partialWire === pair.first || partialWire === pair.second) return [partialWire];
++    if (carryWire === pair.first) return [pair.second];
++    if (carryWire === pair.second) return [pair.first];
++    return [pair.first, pair.second];
++  };
++
++  /** A way of settling one bit: the resulting wiring and its carry-out gate. */
++  interface Step {
++    wiring: Wiring;
++    carryGate: number;
++  }
++
++  /**
++   * Every way of pinning down bit `bit` given that its gates are `pair`, best
++   * first. Lazy: the last resort below enumerates every OR gate, and building
++   * those wirings is far too expensive to do unless they are actually needed.
++   */
++  const settleBit = function* (
++    base: Wiring,
++    bit: number,
++    carryGate: number,
++    pair: SumPair,
++  ): Generator<Step> {
++    for (const partial of splitsOf(base, bit, carryGate, pair)) {
++      if (!withinBudget()) return;
++      const carry = partial === pair.first ? pair.second : pair.first;
++      const wiring = clone(base);
++      if (!ensureOut(wiring, halfXor[bit], partial)) continue;
++      if (!ensureOut(wiring, carryGate, carry)) continue;
++      if (!ensureOut(wiring, pair.sum, bitName('z', bit))) continue;
++      wiring.claimed.add(pair);
++
++      // This bit's generate and propagate terms must meet at a single OR gate.
++      const generate = wiring.out[halfAnd[bit]];
++      const propagate = wiring.out[pair.propagate];
++      const direct = byKey.get(gateKey('OR', generate, propagate));
++      if (direct !== undefined) {
++        wiring.settled[halfAnd[bit]] = 1;
++        wiring.settled[pair.propagate] = 1;
++        yield { wiring, carryGate: direct };
++        continue;
++      }
++      // They do not, so at least one of the two terms is misplaced. Either the
++      // OR gate reading the generate term is this bit's carry gate and the
++      // propagate term is wrong, or the other way round.
++      const viaGenerate = orConsumerOf(generate);
++      if (viaGenerate !== undefined) {
++        const fixed = clone(wiring);
++        const other = in1[viaGenerate] === generate ? in2[viaGenerate] : in1[viaGenerate];
++        if (ensureOut(fixed, pair.propagate, other)) {
++          fixed.settled[halfAnd[bit]] = 1;
++          yield { wiring: fixed, carryGate: viaGenerate };
++        }
++      }
++      const viaPropagate = orConsumerOf(propagate);
++      if (viaPropagate !== undefined) {
++        const fixed = clone(wiring);
++        const other = in1[viaPropagate] === propagate ? in2[viaPropagate] : in1[viaPropagate];
++        if (ensureOut(fixed, halfAnd[bit], other)) {
++          fixed.settled[pair.propagate] = 1;
++          yield { wiring: fixed, carryGate: viaPropagate };
++        }
++      }
++      // Or *both* terms are misplaced, in which case neither points at the
++      // carry gate and every OR gate is a candidate for it. Carries feed the
++      // next bit's sum pair, so ones whose output lands in an unclaimed pair
++      // come first.
++      for (const candidate of orderedOrGates(wiring)) {
++        for (const [first, second] of [
++          [in1[candidate], in2[candidate]],
++          [in2[candidate], in1[candidate]],
++        ]) {
++          if (!withinBudget()) return;
++          const fixed = clone(wiring);
++          if (!ensureOut(fixed, halfAnd[bit], first)) continue;
++          if (!ensureOut(fixed, pair.propagate, second)) continue;
++          yield { wiring: fixed, carryGate: candidate };
++        }
++      }
++    }
++  };
++
++  const materialize = (wiring: Wiring): Gate[] =>
++    input.map((_, i) => ({ op: op[i], in1: in1[i], in2: in2[i], out: wiring.out[i] }));
++
++  const walk = (wiring: Wiring, bit: number, carryGate: number): Wiring | null => {
++    if (bit === bits) {
++      // The last carry is the most significant output bit.
++      const finished = clone(wiring);
++      if (!ensureOut(finished, carryGate, bitName('z', bits))) return null;
++      if (wanted !== null && finished.pairs.length !== wanted) return null;
++      if (verifications-- <= 0) return null;
++      return accept(materialize(finished)) ? finished : null;
++    }
++    for (const pair of candidatesFor(wiring, bit, carryGate)) {
++      for (const step of settleBit(wiring, bit, carryGate, pair)) {
++        const done = walk(step.wiring, bit + 1, step.carryGate);
++        if (done !== null) return done;
++      }
++    }
++    return null;
++  };
++
++  const attempt = (pairCount: number | null): Reconstruction | null => {
++    nodes = NODE_BUDGET;
++    verifications = VERIFY_BUDGET;
++    wanted = pairCount;
++    const start: Wiring = {
++      out: input.map((gate) => gate.out),
++      producer: new Map(input.map((gate, i) => [gate.out, i])),
++      pairs: [],
++      settled: new Uint8Array(input.length),
++      claimed: new Set(),
++    };
++    if (!ensureOut(start, halfXor[0], bitName('z', 0))) return null;
++    const solved = walk(start, 1, halfAnd[0]);
++    return solved === null ? null : { pairs: solved.pairs, gates: materialize(solved) };
++  };
++
++  // Prefer a repair with the stated number of swaps. Dense damage in a narrow
++  // adder can leave a shorter repair that also adds correctly, but the four-swap
++  // one is the damage that was actually done.
++  return attempt(MAX_PAIRS) ?? attempt(null);
++}
+diff --git a/src/simulate.ts b/src/simulate.ts
+new file mode 100644
+index 0000000..06ed3e7
+--- /dev/null
++++ b/src/simulate.ts
+@@ -0,0 +1,104 @@
++import type { Gate, GateOp } from './types.js';
++
++function apply(op: GateOp, a: number, b: number): number {
++  switch (op) {
++    case 'AND':
++      return a & b;
++    case 'OR':
++      return a | b;
++    case 'XOR':
++      return a ^ b;
++    default: {
++      const bad: never = op;
++      throw new Error(`Unknown gate operation: ${String(bad)}`);
++    }
++  }
++}
++
++/**
++ * Evaluate a combinational circuit.
++ *
++ * Wires listed in `inputs` seed the simulation. Gates fire once both of their
++ * input wires hold a value, in dependency order, so gates may be supplied in any
++ * order. Where a wire is both seeded and driven by a gate the gate wins; the
++ * seed is only used as a fallback if the circuit never settles that wire, which
++ * can then unblock whatever was waiting downstream.
++ *
++ * Returns the settled value of every wire that could be resolved. Wires that can
++ * never resolve (missing inputs) are omitted. A wire driven by two gates is
++ * malformed input; the first gate to settle it wins, so the result stays
++ * self-consistent.
++ */
++export function simulate(gates: Gate[], inputs: Record<string, number>): Record<string, number> {
++  const seeds = new Map<string, number>();
++  for (const [wire, value] of Object.entries(inputs)) seeds.set(wire, value ? 1 : 0);
++
++  const driven = new Set<string>();
++  for (const gate of gates) driven.add(gate.out);
++
++  const values = new Map<string, number>();
++  for (const [wire, value] of seeds) {
++    if (!driven.has(wire)) values.set(wire, value);
++  }
++
++  // Gates waiting on each unresolved wire. A gate appears twice when both of its
++  // inputs are the same wire, so the pending counter stays balanced.
++  const waiting = new Map<string, number[]>();
++  const pending = new Int32Array(gates.length);
++  const ready: number[] = [];
++
++  const addWaiter = (wire: string, gateIndex: number): void => {
++    const list = waiting.get(wire);
++    if (list === undefined) waiting.set(wire, [gateIndex]);
++    else list.push(gateIndex);
++  };
++
++  for (let i = 0; i < gates.length; i++) {
++    const gate = gates[i];
++    let awaited = 0;
++    if (!values.has(gate.in1)) {
++      awaited++;
++      addWaiter(gate.in1, i);
++    }
++    if (!values.has(gate.in2)) {
++      awaited++;
++      addWaiter(gate.in2, i);
++    }
++    pending[i] = awaited;
++    if (awaited === 0) ready.push(i);
++  }
++
++  /** Let go of the gates waiting on a wire that has just settled. */
++  const release = (wire: string): void => {
++    const waiters = waiting.get(wire);
++    if (waiters === undefined) return;
++    for (const waiter of waiters) {
++      if (--pending[waiter] === 0) ready.push(waiter);
++    }
++  };
++
++  const settle = (): void => {
++    while (ready.length > 0) {
++      const gate = gates[ready.pop() as number];
++      const a = values.get(gate.in1);
++      const b = values.get(gate.in2);
++      // A gate is only made ready once both of its inputs hold values.
++      if (a === undefined || b === undefined) continue;
++      if (values.has(gate.out)) continue; // already driven; keep the first value
++      values.set(gate.out, apply(gate.op, a, b));
++      release(gate.out);
++    }
++  };
++
++  settle();
++  for (const [wire, value] of seeds) {
++    if (values.has(wire)) continue;
++    values.set(wire, value);
++    release(wire);
++    settle();
++  }
++
++  const result: Record<string, number> = {};
++  for (const [wire, value] of values) result[wire] = value;
++  return result;
++}
+diff --git a/src/structural.ts b/src/structural.ts
+new file mode 100644
+index 0000000..0bd3fd8
+--- /dev/null
++++ b/src/structural.ts
+@@ -0,0 +1,102 @@
++import { X_WIRE, Y_WIRE, Z_WIRE } from './circuit.js';
++import type { Gate } from './types.js';
++
++interface WireKind {
++  /** Bit position for x/y/z wires, otherwise -1. */
++  bit: number;
++  isX: boolean;
++  isY: boolean;
++  isZ: boolean;
++}
++
++function classify(name: string): WireKind {
++  const x = X_WIRE.exec(name);
++  if (x !== null) return { bit: Number(x[1]), isX: true, isY: false, isZ: false };
++  const y = Y_WIRE.exec(name);
++  if (y !== null) return { bit: Number(y[1]), isX: false, isY: true, isZ: false };
++  const z = Z_WIRE.exec(name);
++  if (z !== null) return { bit: Number(z[1]), isX: false, isY: false, isZ: true };
++  return { bit: -1, isX: false, isY: false, isZ: false };
++}
++
++/** True when `ops` is exactly the given operations, which must be distinct. */
++function consumedBy(ops: Set<string>, ...expected: string[]): boolean {
++  if (ops.size !== expected.length) return false;
++  return expected.every((op) => ops.has(op));
++}
++
++/**
++ * Flag gate outputs that violate the shape of a ripple-carry adder.
++ *
++ * A correct adder wires gates together in only a few ways, so each rule below
++ * is a local invariant that no correct gate can break:
++ *
++ * - `z00` is `x00 XOR y00`; `zNN` in between is a XOR of a partial sum and a
++ *   carry; the top `z` bit is the final carry (an OR, or an AND for a one-bit
++ *   adder).
++ * - A partial sum (internal XOR) reads `xNN`/`yNN` of one bit and is consumed
++ *   by exactly one XOR (the sum) and one AND (carry propagate).
++ * - A carry term (internal AND) is consumed by exactly one OR, except the bit 0
++ *   carry, which acts as a carry and so is consumed by a XOR and an AND.
++ * - A carry (internal OR) is consumed by exactly one XOR and one AND.
++ *
++ * Note that a wire's consumers depend only on gates' *input* fields, which
++ * swapping outputs never touches — so these consumer profiles describe the
++ * role the wire was designed for, and comparing them against the gate that now
++ * drives the wire exposes the swap.
++ *
++ * The result is only a hypothesis: the caller must confirm it by pairing the
++ * suspects up and simulating.
++ */
++export function structuralSuspects(gates: Gate[], bits: number): string[] {
++  const consumerOps = new Map<string, Set<string>>();
++  const note = (wire: string, op: string): void => {
++    const set = consumerOps.get(wire);
++    if (set === undefined) consumerOps.set(wire, new Set([op]));
++    else set.add(op);
++  };
++  for (const gate of gates) {
++    note(gate.in1, gate.op);
++    note(gate.in2, gate.op);
++  }
++
++  const topBit = bits; // z index holding the final carry
++  const suspects = new Set<string>();
++
++  for (const gate of gates) {
++    const out = classify(gate.out);
++    const a = classify(gate.in1);
++    const b = classify(gate.in2);
++    const fromInputs = ((a.isX && b.isY) || (a.isY && b.isX)) && a.bit === b.bit;
++    const inputBit = fromInputs ? a.bit : -1;
++    const consumers = consumerOps.get(gate.out) ?? new Set<string>();
++
++    if (out.isZ) {
++      if (out.bit === topBit) {
++        const expected = bits <= 1 ? 'AND' : 'OR';
++        if (gate.op !== expected) suspects.add(gate.out);
++      } else if (gate.op !== 'XOR') {
++        suspects.add(gate.out);
++      } else if (out.bit === 0) {
++        if (inputBit !== 0) suspects.add(gate.out);
++      } else if (fromInputs) {
++        suspects.add(gate.out);
++      }
++      continue;
++    }
++
++    if (gate.op === 'XOR') {
++      if (inputBit < 1 || !consumedBy(consumers, 'XOR', 'AND')) suspects.add(gate.out);
++    } else if (gate.op === 'AND') {
++      if (fromInputs && inputBit === 0) {
++        if (!consumedBy(consumers, 'XOR', 'AND')) suspects.add(gate.out);
++      } else if (!consumedBy(consumers, 'OR')) {
++        suspects.add(gate.out);
++      }
++    } else if (!consumedBy(consumers, 'XOR', 'AND')) {
++      suspects.add(gate.out);
++    }
++  }
++
++  return [...suspects];
++}
+diff --git a/src/types.ts b/src/types.ts
+new file mode 100644
+index 0000000..4288017
+--- /dev/null
++++ b/src/types.ts
+@@ -0,0 +1,13 @@
++/** Logic operation performed by a gate. */
++export type GateOp = 'AND' | 'OR' | 'XOR';
++
++/** A single two-input logic gate. */
++export interface Gate {
++  op: GateOp;
++  /** First input wire name. */
++  in1: string;
++  /** Second input wire name. */
++  in2: string;
++  /** Output wire name. */
++  out: string;
++}
+diff --git a/tests/findSwappedWires.test.ts b/tests/findSwappedWires.test.ts
+new file mode 100644
+index 0000000..7095426
+--- /dev/null
++++ b/tests/findSwappedWires.test.ts
+@@ -0,0 +1,177 @@
++import { describe, expect, it } from 'vitest';
++import { findSwappedWires } from '../src/index.js';
++import type { Gate } from '../src/types.js';
++import { applySwaps, buildAdder, makeRandom } from './helpers/adderFixture.js';
++import { addsCorrectly, makeBrokenAdder } from './helpers/brokenAdder.js';
++
++/** Repair `gates` by swapping the reported wires back and confirm it adds. */
++function repairs(gates: Gate[], wires: string[], bits: number): boolean {
++  if (wires.length % 2 !== 0) return false;
++  const byWire = new Map<string, Gate>();
++  const repaired = gates.map((gate) => ({ ...gate }));
++  for (const gate of repaired) byWire.set(gate.out, gate);
++  const pool = [...wires];
++  const search = (): boolean => {
++    if (pool.length === 0) return addsCorrectly(repaired, bits, makeRandom(4242));
++    const first = pool.shift() as string;
++    for (let i = 0; i < pool.length; i++) {
++      const second = pool[i];
++      pool.splice(i, 1);
++      const left = byWire.get(first);
++      const right = byWire.get(second);
++      if (left !== undefined && right !== undefined) {
++        left.out = second;
++        right.out = first;
++        byWire.set(first, right);
++        byWire.set(second, left);
++        if (search()) return true;
++        left.out = first;
++        right.out = second;
++        byWire.set(first, left);
++        byWire.set(second, right);
++      }
++      pool.splice(i, 0, second);
++    }
++    pool.unshift(first);
++    return false;
++  };
++  return search();
++}
++
++describe('findSwappedWires', () => {
++  it('finds a swap that crosses a sum bit and a carry term', () => {
++    const gates: Gate[] = [
++      { op: 'XOR', in1: 'x00', in2: 'y00', out: 'z00' },
++      { op: 'AND', in1: 'x00', in2: 'y00', out: 'c00' },
++      { op: 'XOR', in1: 'x01', in2: 'y01', out: 't01' },
++      { op: 'XOR', in1: 't01', in2: 'c00', out: 'a01' }, // swapped with a01
++      { op: 'AND', in1: 'x01', in2: 'y01', out: 'z01' }, // swapped with z01
++      { op: 'AND', in1: 't01', in2: 'c00', out: 'b01' },
++      { op: 'OR', in1: 'a01', in2: 'b01', out: 'c01' },
++      { op: 'XOR', in1: 'x02', in2: 'y02', out: 't02' },
++      { op: 'XOR', in1: 't02', in2: 'c01', out: 'z02' },
++      { op: 'AND', in1: 'x02', in2: 'y02', out: 'b02' }, // swapped with b02
++      { op: 'AND', in1: 't02', in2: 'c01', out: 'a02' }, // swapped with a02
++      { op: 'OR', in1: 'a02', in2: 'b02', out: 'c02' },
++      { op: 'XOR', in1: 'x03', in2: 'y03', out: 't03' },
++      { op: 'XOR', in1: 't03', in2: 'c02', out: 'b03' }, // swapped with b03
++      { op: 'AND', in1: 'x03', in2: 'y03', out: 'a03' },
++      { op: 'AND', in1: 't03', in2: 'c02', out: 'z03' }, // swapped with z03
++      { op: 'OR', in1: 'a03', in2: 'b03', out: 'c03' },
++      { op: 'XOR', in1: 'x04', in2: 'y04', out: 't04' },
++      { op: 'XOR', in1: 't04', in2: 'c03', out: 'z04' },
++      { op: 'AND', in1: 'x04', in2: 'y04', out: 'a04' },
++      { op: 'AND', in1: 't04', in2: 'c03', out: 'b04' },
++      { op: 'OR', in1: 'a04', in2: 'b04', out: 'z05' },
++    ];
++    // a02/b02 feed the same OR, so that swap is invisible; the remaining three
++    // are real faults and must be reported.
++    const found = findSwappedWires(gates);
++    expect(found).toContain('z01');
++    expect(found).toContain('a01');
++    expect(found).toContain('z03');
++    expect(found).toContain('b03');
++    expect(repairs(gates, found, 5)).toBe(true);
++  });
++
++  it('returns an empty array for a correct adder', () => {
++    const gates = buildAdder(8, makeRandom(5));
++    expect(findSwappedWires(gates)).toEqual([]);
++  });
++
++  it('returns an empty array for an empty circuit', () => {
++    expect(findSwappedWires([])).toEqual([]);
++  });
++
++  it('handles a one-bit adder, whose top bit is an AND rather than an OR', () => {
++    const correct: Gate[] = [
++      { op: 'XOR', in1: 'x00', in2: 'y00', out: 'z00' },
++      { op: 'AND', in1: 'x00', in2: 'y00', out: 'z01' },
++    ];
++    expect(findSwappedWires(correct)).toEqual([]);
++    const swapped: Gate[] = [
++      { op: 'XOR', in1: 'x00', in2: 'y00', out: 'z01' },
++      { op: 'AND', in1: 'x00', in2: 'y00', out: 'z00' },
++    ];
++    expect(findSwappedWires(swapped)).toEqual(['z00', 'z01']);
++  });
++
++  it.each([4, 5, 6, 8, 12, 20, 32, 45])('recovers four swaps in a %i-bit adder', (bits) => {
++    for (let seed = 1; seed <= 6; seed++) {
++      const broken = makeBrokenAdder(bits, seed * 1000 + bits);
++      const found = findSwappedWires(broken.gates);
++      expect(found, `bits=${bits} seed=${seed}`).toEqual(broken.wires);
++    }
++  });
++
++  it('always returns a set of wires that repairs the circuit', () => {
++    const bits = 45;
++    for (let seed = 1; seed <= 5; seed++) {
++      const broken = makeBrokenAdder(bits, seed * 31 + 3);
++      const found = findSwappedWires(broken.gates);
++      expect(found.length).toBe(8);
++      expect([...found].sort()).toEqual(found);
++      expect(repairs(broken.gates, found, bits), `seed=${seed}`).toBe(true);
++    }
++  });
++
++  it('handles a 45-bit circuit in well under five seconds', () => {
++    const broken = makeBrokenAdder(45, 777);
++    const started = Date.now();
++    const found = findSwappedWires(broken.gates);
++    const elapsed = Date.now() - started;
++    expect(found).toEqual(broken.wires);
++    expect(elapsed).toBeLessThan(5000);
++  });
++
++  it.each([
++    ['partial sums', (gate: Gate) => gate.op === 'XOR' && /^[xy]\d\d$/.test(gate.in1)],
++    ['carry generators', (gate: Gate) => gate.op === 'AND' && /^[xy]\d\d$/.test(gate.in1)],
++    ['sum outputs', (gate: Gate) => gate.op === 'XOR' && /^z\d\d$/.test(gate.out)],
++    ['carries', (gate: Gate) => gate.op === 'OR'],
++  ])('recovers swaps between two %s, which look alike structurally', (_label, matches) => {
++    const bits = 30;
++    const random = makeRandom(8642);
++    const correct = buildAdder(bits, random);
++    const candidates = correct
++      .map((gate, index) => ({ gate, index }))
++      .filter(({ gate }) => matches(gate) && !gate.in1.endsWith('00'))
++      .map(({ index }) => index);
++    const pairs: Array<[number, number]> = [
++      [candidates[0], candidates[9]],
++      [candidates[2], candidates[14]],
++      [candidates[4], candidates[19]],
++      [candidates[6], candidates[24]],
++    ];
++    const { gates, wires } = applySwaps(correct, pairs);
++    expect(findSwappedWires(gates)).toEqual(wires);
++  });
++
++  it('tolerates a circuit carrying a gate that is not part of the adder', () => {
++    const broken = makeBrokenAdder(12, 6012);
++    const padded: Gate[] = [...broken.gates, { op: 'OR', in1: 'x00', in2: 'y00', out: 'spare' }];
++    expect(findSwappedWires(padded)).toEqual(broken.wires);
++  });
++
++  it('works when the swaps are far apart in the carry chain', () => {
++    const bits = 40;
++    const random = makeRandom(2024);
++    const correct = buildAdder(bits, random);
++    const partialSums = correct
++      .map((gate, index) => ({ gate, index }))
++      .filter(({ gate }) => gate.op === 'XOR' && gate.in1.startsWith('x'))
++      .map(({ index }) => index);
++    const carryTerms = correct
++      .map((gate, index) => ({ gate, index }))
++      .filter(({ gate }) => gate.op === 'AND' && gate.in1.startsWith('x'))
++      .map(({ index }) => index);
++    const pairs: Array<[number, number]> = [
++      [partialSums[1], carryTerms[1]],
++      [partialSums[10], carryTerms[10]],
++      [partialSums[25], carryTerms[25]],
++      [partialSums[37], carryTerms[37]],
++    ];
++    const { gates, wires } = applySwaps(correct, pairs);
++    expect(findSwappedWires(gates)).toEqual(wires);
++  });
++});
+diff --git a/tests/helpers/adderFixture.ts b/tests/helpers/adderFixture.ts
+new file mode 100644
+index 0000000..a6f2068
+--- /dev/null
++++ b/tests/helpers/adderFixture.ts
+@@ -0,0 +1,113 @@
++import type { Gate } from '../../src/types.js';
++
++/** Deterministic PRNG so failures are reproducible. */
++export function makeRandom(seed: number): () => number {
++  let state = seed >>> 0;
++  return () => {
++    state = (state * 1664525 + 1013904223) >>> 0;
++    return state / 0x100000000;
++  };
++}
++
++export function label(bit: number): string {
++  return String(bit).padStart(2, '0');
++}
++
++/**
++ * Build a correct `bits`-wide ripple-carry adder whose internal wires have
++ * random three-letter names, matching the shape described in the task.
++ */
++export function buildAdder(bits: number, random: () => number): Gate[] {
++  const alphabet = 'abcdefghijklmnopqrstuvwxyz';
++  const usedNames = new Set<string>();
++  const freshName = (): string => {
++    for (;;) {
++      let name = '';
++      for (let i = 0; i < 3; i++) name += alphabet[Math.floor(random() * 26)];
++      if (!usedNames.has(name)) {
++        usedNames.add(name);
++        return name;
++      }
++    }
++  };
++
++  const gates: Gate[] = [];
++  if (bits === 1) {
++    gates.push({ op: 'XOR', in1: 'x00', in2: 'y00', out: 'z00' });
++    gates.push({ op: 'AND', in1: 'x00', in2: 'y00', out: 'z01' });
++    return gates;
++  }
++
++  gates.push({ op: 'XOR', in1: 'x00', in2: 'y00', out: 'z00' });
++  let carry = freshName();
++  gates.push({ op: 'AND', in1: 'x00', in2: 'y00', out: carry });
++
++  for (let bit = 1; bit < bits; bit++) {
++    const partial = freshName();
++    const generate = freshName();
++    const propagate = freshName();
++    gates.push({ op: 'XOR', in1: `x${label(bit)}`, in2: `y${label(bit)}`, out: partial });
++    gates.push({ op: 'XOR', in1: partial, in2: carry, out: `z${label(bit)}` });
++    gates.push({ op: 'AND', in1: `x${label(bit)}`, in2: `y${label(bit)}`, out: generate });
++    gates.push({ op: 'AND', in1: partial, in2: carry, out: propagate });
++    const nextCarry = bit === bits - 1 ? `z${label(bits)}` : freshName();
++    gates.push({ op: 'OR', in1: generate, in2: propagate, out: nextCarry });
++    carry = nextCarry;
++  }
++
++  // Shuffle: gate order must not matter.
++  for (let i = gates.length - 1; i > 0; i--) {
++    const j = Math.floor(random() * (i + 1));
++    const tmp = gates[i];
++    gates[i] = gates[j];
++    gates[j] = tmp;
++  }
++  return gates;
++}
++
++/** Add two bit vectors, returning `bits + 1` result bits (LSB first). */
++export function addBits(x: number[], y: number[], bits: number): number[] {
++  const z: number[] = [];
++  let carry = 0;
++  for (let bit = 0; bit < bits; bit++) {
++    const sum = (x[bit] ?? 0) + (y[bit] ?? 0) + carry;
++    z.push(sum & 1);
++    carry = sum >> 1;
++  }
++  z.push(carry);
++  return z;
++}
++
++export function inputsFor(x: number[], y: number[], bits: number): Record<string, number> {
++  const inputs: Record<string, number> = {};
++  for (let bit = 0; bit < bits; bit++) {
++    inputs[`x${label(bit)}`] = x[bit] ?? 0;
++    inputs[`y${label(bit)}`] = y[bit] ?? 0;
++  }
++  return inputs;
++}
++
++export function randomBits(bits: number, random: () => number): number[] {
++  const out: number[] = [];
++  for (let bit = 0; bit < bits; bit++) out.push(random() < 0.5 ? 1 : 0);
++  return out;
++}
++
++/**
++ * Swap `count` disjoint pairs of gate output wires, returning the broken
++ * circuit and the sorted names of the wires involved.
++ */
++export function applySwaps(
++  gates: Gate[],
++  pairs: Array<[number, number]>,
++): { gates: Gate[]; wires: string[] } {
++  const broken = gates.map((gate) => ({ ...gate }));
++  const wires: string[] = [];
++  for (const [a, b] of pairs) {
++    wires.push(broken[a].out, broken[b].out);
++    const tmp = broken[a].out;
++    broken[a].out = broken[b].out;
++    broken[b].out = tmp;
++  }
++  return { gates: broken, wires: wires.sort() };
++}
+diff --git a/tests/helpers/brokenAdder.ts b/tests/helpers/brokenAdder.ts
+new file mode 100644
+index 0000000..0bc90d0
+--- /dev/null
++++ b/tests/helpers/brokenAdder.ts
+@@ -0,0 +1,72 @@
++import { simulate } from '../../src/index.js';
++import type { Gate } from '../../src/types.js';
++import { addBits, applySwaps, buildAdder, inputsFor, label, makeRandom, randomBits } from './adderFixture.js';
++
++/** True when every gate settled (no cycle) and the circuit computes x + y. */
++export function addsCorrectly(gates: Gate[], bits: number, random: () => number): boolean {
++  const trials: Array<[number[], number[]]> = [
++    [new Array(bits).fill(1), new Array(bits).fill(1)],
++    [new Array(bits).fill(0), new Array(bits).fill(0)],
++    [new Array(bits).fill(1), [1, ...new Array(Math.max(0, bits - 1)).fill(0)]],
++  ];
++  for (let i = 0; i < 12; i++) trials.push([randomBits(bits, random), randomBits(bits, random)]);
++
++  for (const [x, y] of trials) {
++    const values = simulate(gates, inputsFor(x, y, bits));
++    for (const gate of gates) {
++      if (values[gate.out] === undefined) return false; // cycle: never settled
++    }
++    const expected = addBits(x, y, bits);
++    for (let bit = 0; bit <= bits; bit++) {
++      if (values[`z${label(bit)}`] !== expected[bit]) return false;
++    }
++  }
++  return true;
++}
++
++export interface BrokenAdder {
++  gates: Gate[];
++  /** Sorted names of the eight wires that were swapped. */
++  wires: string[];
++  bits: number;
++}
++
++/**
++ * Build a `bits`-wide adder with four disjoint output-wire swaps that leave the
++ * circuit acyclic but broken.
++ */
++export function makeBrokenAdder(bits: number, seed: number): BrokenAdder {
++  const random = makeRandom(seed);
++  const correct = buildAdder(bits, random);
++  if (correct.length < 8) throw new Error(`a ${bits}-bit adder has too few gates to swap 4 pairs`);
++  for (let attempt = 0; attempt < 500; attempt++) {
++    const picks: number[] = [];
++    const seen = new Set<number>();
++    while (picks.length < 8) {
++      const index = Math.floor(random() * correct.length);
++      if (seen.has(index)) continue;
++      seen.add(index);
++      picks.push(index);
++    }
++    const pairs: Array<[number, number]> = [
++      [picks[0], picks[1]],
++      [picks[2], picks[3]],
++      [picks[4], picks[5]],
++      [picks[6], picks[7]],
++    ];
++    // Every pair on its own must break the adder, otherwise it is undetectable
++    // (swapping the two carry terms feeding one OR changes nothing) and no
++    // solver could be expected to report it.
++    const detectable = pairs.every(
++      (pair) => !addsCorrectly(applySwaps(correct, [pair]).gates, bits, makeRandom(seed + 11)),
++    );
++    if (!detectable) continue;
++
++    const { gates, wires } = applySwaps(correct, pairs);
++    if (addsCorrectly(gates, bits, makeRandom(seed + 7))) continue; // faults cancelled out
++    const values = simulate(gates, inputsFor(randomBits(bits, random), randomBits(bits, random), bits));
++    if (gates.some((gate) => values[gate.out] === undefined)) continue; // cycle
++    return { gates, wires, bits };
++  }
++  throw new Error(`could not build a broken ${bits}-bit adder for seed ${seed}`);
++}
+diff --git a/tests/simulate.test.ts b/tests/simulate.test.ts
+new file mode 100644
+index 0000000..8eb43dd
+--- /dev/null
++++ b/tests/simulate.test.ts
+@@ -0,0 +1,134 @@
++import { describe, expect, it } from 'vitest';
++import { simulate } from '../src/index.js';
++import type { Gate } from '../src/types.js';
++import { addBits, buildAdder, inputsFor, label, makeRandom, randomBits } from './helpers/adderFixture.js';
++
++describe('simulate', () => {
++  it('applies each operation', () => {
++    const gates: Gate[] = [
++      { op: 'AND', in1: 'a', in2: 'b', out: 'and' },
++      { op: 'OR', in1: 'a', in2: 'b', out: 'or' },
++      { op: 'XOR', in1: 'a', in2: 'b', out: 'xor' },
++    ];
++    expect(simulate(gates, { a: 1, b: 1 })).toEqual({ a: 1, b: 1, and: 1, or: 1, xor: 0 });
++    expect(simulate(gates, { a: 1, b: 0 })).toEqual({ a: 1, b: 0, and: 0, or: 1, xor: 1 });
++    expect(simulate(gates, { a: 0, b: 0 })).toEqual({ a: 0, b: 0, and: 0, or: 0, xor: 0 });
++  });
++
++  it('resolves gates in dependency order regardless of listing order', () => {
++    const gates: Gate[] = [
++      { op: 'AND', in1: 'd', in2: 'e', out: 'f' },
++      { op: 'OR', in1: 'c', in2: 'x', out: 'e' },
++      { op: 'XOR', in1: 'a', in2: 'b', out: 'c' },
++      { op: 'XOR', in1: 'c', in2: 'x', out: 'd' },
++    ];
++    const values = simulate(gates, { a: 1, b: 0, x: 0 });
++    expect(values).toEqual({ a: 1, b: 0, x: 0, c: 1, d: 1, e: 1, f: 1 });
++  });
++
++  it('handles a gate whose two inputs are the same wire', () => {
++    const gates: Gate[] = [
++      { op: 'XOR', in1: 'a', in2: 'b', out: 'c' },
++      { op: 'AND', in1: 'c', in2: 'c', out: 'd' },
++    ];
++    expect(simulate(gates, { a: 1, b: 0 })).toEqual({ a: 1, b: 0, c: 1, d: 1 });
++  });
++
++  it('treats non-zero seed values as 1 and keeps unused seeds', () => {
++    const gates: Gate[] = [{ op: 'AND', in1: 'a', in2: 'b', out: 'c' }];
++    expect(simulate(gates, { a: 1, b: 1, spare: 0 })).toEqual({ a: 1, b: 1, spare: 0, c: 1 });
++  });
++
++  it('falls back to a seeded value when the gate driving that wire cannot fire', () => {
++    const gates: Gate[] = [
++      { op: 'AND', in1: 'nope1', in2: 'nope2', out: 'c' },
++      { op: 'XOR', in1: 'c', in2: 'a', out: 'd' },
++      { op: 'OR', in1: 'd', in2: 'a', out: 'e' },
++    ];
++    // `c` never settles on its own, so the seed stands in and unblocks d and e.
++    expect(simulate(gates, { a: 1, c: 1 })).toEqual({ a: 1, c: 1, d: 0, e: 1 });
++  });
++
++  it('keeps the first value when two gates drive one wire', () => {
++    const gates: Gate[] = [
++      { op: 'OR', in1: 'a', in2: 'b', out: 'c' },
++      { op: 'AND', in1: 'a', in2: 'b', out: 'c' },
++      { op: 'XOR', in1: 'c', in2: 'zero', out: 'd' },
++    ];
++    const values = simulate(gates, { a: 1, b: 0, zero: 0 });
++    // Malformed input, but the result must at least agree with itself: d = c XOR 0.
++    expect(values.d).toBe(values.c);
++  });
++
++  it('omits wires that can never resolve', () => {
++    const gates: Gate[] = [
++      { op: 'AND', in1: 'a', in2: 'missing', out: 'c' },
++      { op: 'OR', in1: 'a', in2: 'a', out: 'd' },
++    ];
++    const values = simulate(gates, { a: 1 });
++    expect(values).toEqual({ a: 1, d: 1 });
++  });
++
++  it('returns an empty result for an empty circuit', () => {
++    expect(simulate([], {})).toEqual({});
++  });
++
++  it('lets a gate override a seeded value for its own output wire', () => {
++    const gates: Gate[] = [
++      { op: 'AND', in1: 'a', in2: 'b', out: 'c' },
++      { op: 'XOR', in1: 'c', in2: 'a', out: 'd' },
++    ];
++    const values = simulate(gates, { a: 1, b: 0, c: 1 });
++    expect(values).toEqual({ a: 1, b: 0, c: 0, d: 1 });
++  });
++
++  it('adds correctly across the documented 4-bit adder', () => {
++    const gates: Gate[] = [
++      { op: 'XOR', in1: 'x00', in2: 'y00', out: 'z00' },
++      { op: 'AND', in1: 'x00', in2: 'y00', out: 'c00' },
++      { op: 'XOR', in1: 'x01', in2: 'y01', out: 't01' },
++      { op: 'XOR', in1: 't01', in2: 'c00', out: 'z01' },
++      { op: 'AND', in1: 'x01', in2: 'y01', out: 'a01' },
++      { op: 'AND', in1: 't01', in2: 'c00', out: 'b01' },
++      { op: 'OR', in1: 'a01', in2: 'b01', out: 'c01' },
++      { op: 'XOR', in1: 'x02', in2: 'y02', out: 't02' },
++      { op: 'XOR', in1: 't02', in2: 'c01', out: 'z02' },
++      { op: 'AND', in1: 'x02', in2: 'y02', out: 'a02' },
++      { op: 'AND', in1: 't02', in2: 'c01', out: 'b02' },
++      { op: 'OR', in1: 'a02', in2: 'b02', out: 'c02' },
++      { op: 'XOR', in1: 'x03', in2: 'y03', out: 't03' },
++      { op: 'XOR', in1: 't03', in2: 'c02', out: 'z03' },
++      { op: 'AND', in1: 'x03', in2: 'y03', out: 'a03' },
++      { op: 'AND', in1: 't03', in2: 'c02', out: 'b03' },
++      { op: 'OR', in1: 'a03', in2: 'b03', out: 'z04' },
++    ];
++    for (let x = 0; x < 16; x++) {
++      for (let y = 0; y < 16; y++) {
++        const inputs: Record<string, number> = {};
++        for (let bit = 0; bit < 4; bit++) {
++          inputs[`x${label(bit)}`] = (x >> bit) & 1;
++          inputs[`y${label(bit)}`] = (y >> bit) & 1;
++        }
++        const values = simulate(gates, inputs);
++        let sum = 0;
++        for (let bit = 4; bit >= 0; bit--) sum = sum * 2 + values[`z${label(bit)}`];
++        expect(sum).toBe(x + y);
++      }
++    }
++  });
++
++  it('adds correctly across a wide generated adder', () => {
++    const bits = 45;
++    const random = makeRandom(99);
++    const gates = buildAdder(bits, random);
++    for (let trial = 0; trial < 25; trial++) {
++      const x = randomBits(bits, random);
++      const y = randomBits(bits, random);
++      const values = simulate(gates, inputsFor(x, y, bits));
++      const expected = addBits(x, y, bits);
++      for (let bit = 0; bit <= bits; bit++) {
++        expect(values[`z${label(bit)}`]).toBe(expected[bit]);
++      }
++    }
++  });
++});

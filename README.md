@@ -21,7 +21,7 @@ Third-party orchestrators and harnesses — things you can install and run today
 
 | Rank | Orchestrator | Overall | Standard | Hard | Trials | $/task | Model |
 |---:|---|---:|---:|---:|---:|---:|---|
-| 1 | [Conclave](https://github.com/signalnine/conclave) Review (Opus 5) | **93.4%** | 92.5% | 94.3% | 19 | $6.18 | Opus 5 |
+| 1 | [Conclave](https://github.com/signalnine/conclave) Review (Opus 5) | **91.7%** | 92.9% | 90.5% | 61 | $6.27 | Opus 5 |
 | 2 | [Conclave](https://github.com/signalnine/conclave) Review | **88.3%** | 88.3% | 88.2% | 139 | $1.86 | Opus 4.6 |
 | 3 | [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) | **87.9%** | 85.8% | 89.9% | 57 | $1.74 | Opus 4.6 |
 | 4 | [Conclave](https://github.com/signalnine/conclave) v10 Routed (duo) | **87.3%** | 86.1% | 88.6% | 38 | $0.25 | Haiku -> Opus/Sonnet |
@@ -34,7 +34,7 @@ Third-party orchestrators and harnesses — things you can install and run today
 | 11 | [Gemini CLI](https://github.com/google-gemini/gemini-cli) | **81.3%** | 81.8% | 80.8% | 60 | $0.14 | Gemini 2.5 Pro |
 | 12 | [ExoMonad](https://github.com/tidepool-heavy-industries/exomonad) | **74.8%** | 66.8% | 82.9% | 22 | $0.84 | Opus 4.6 + Gemini |
 
-Note the model column: **every framework below except row 1 is still measured on Opus 4.6 or Sonnet 4.6** — one to two model generations behind the vanilla baselines in the next table. Row 1 is the same Conclave Review scaffold re-run on Opus 5 specifically to separate the harness contribution from the model generation; see the harness-vs-model section below for the decomposition (+5.1pp model, +1.0pp scaffold).
+Note the model column: **every framework below except row 1 is still measured on Opus 4.6 or Sonnet 4.6** — one to two model generations behind the vanilla baselines in the next table. Row 1 is the same Conclave Review scaffold re-run on Opus 5 specifically to separate the harness contribution from the model generation; see the harness-vs-model section below for the decomposition (+3.4pp from the model, -0.7pp from the scaffold, at n=3).
 
 Rows carried by earlier revisions that no longer meet the 8+/8+ entry bar (Conclave v7 Lite, v7 Double Review, ExoMonad v2, Conclave v8 on Sonnet 4.6) were dropped rather than reprinted with numbers the current `results/` can't reproduce.
 
@@ -49,6 +49,7 @@ Same harness with different models, or same model through different harnesses. T
 | **Claude Code + Opus 5 (OAuth)** | **92.4%** | 93.3% | 91.4% | 63 | $2.37 | `claude-opus-5`, vanilla headless `-p` OAuth. **The top score on the board, above every orchestration framework** -- see the harness-vs-model section below for why that comparison is confounded. n=3: 21/21 tasks completed, zero crashes, zero auth failures. Exceptionally low variance -- 7 of 21 tasks scored identically across all three runs, most sd <= 0.016; only analytics-dashboard is genuinely noisy (sd 0.142). Beats the flag-matched Opus 4.8 baseline by ~1.6pp overall, and the entire gain is hard-suite (91.4 vs 89.6) -- Standard is a tie. Costs ~2.7x the tokens and ~2.2x the wall clock of 4.8 for that gain. |
 | Claude Code + Opus 4.8 (OAuth) | **90.8%** | 92.1% | 89.6% | 25 | $1.18 | `claude-opus-4-8` pinned, vanilla headless `-p` OAuth, hermetic flags. The apples-to-apples baseline for Opus 5 -- same adapter, only the model id differs. NOTE: an older `claude-code-oauth-opus-48` entry (rank 17, 85.5%) uses the floating `--model opus` **alias** without hermetic flags; it is not a valid 4.8 baseline, and because the alias floats it would no longer even run 4.8 today. |
 | Claude Code + Fable 5 (OAuth) | **89.7%** | 92.8% | 86.7% | 96 | $1.58 | `claude-fable-5`, vanilla headless `-p` OAuth. Third overall, ~2.7pp under Opus 5 with the gap again concentrated in the hard suite (86.7 vs 91.4). |
+| Fable 5 supervisor -> Opus 5 / local Qwen3.6-27B | **86.7%** | 93.4% | 80.0% | 23 | $2.48 | Fable 5 owns the task and delegates by difficulty: mechanical work to Qwen3.6-27B on the local q27 box (free), hard reasoning to Opus 5. **Routing mechanical work out is free; the supervisor pattern is not.** Standard holds at 93.4% (vs 92.8% for Fable 5 solo) while HARD drops to 80.0% (vs 86.7%) -- net -3.0pp. The delegation actually happened (35 local calls across the suite, zero failures), so this is not an inert harness. The likely cause of the hard-suite loss is visible in the split: Fable escalated to Opus 5 only **3 times in 21 tasks**, so the frontier arm barely engaged and hard tasks were effectively solved by Fable alone while it also paid orchestration overhead. A higher escalation bias is the obvious next knob. NOTE: Claude Code subagents cannot express this -- the per-agent `model` field is accepted and ignored, so delegation is an explicit `delegate light|heavy` CLI. |
 | v11 Qwen-routed (Neuralwatt+Sonnet) | **86.3%** | 86.6% | 86.0% | 20 | $0.74 | Haiku -> (Qwen+zen + Sonnet verify \| Sonnet v8) |
 | Claude Code + Sonnet 5 (OAuth) | **78.9%** | 92.8% | 65.1% | 82 | $1.96 | `claude-sonnet-5`, vanilla headless `-p` OAuth -- same harness as the Opus baselines. **Frontier-grade on the standard suite (92.8%, statistically tied with Opus 5's 93.3%) but the hard reasoning suite collapses to 65.1%** -- a ~26pp gap to Opus 5 that is entirely reasoning-shaped. n=3 (82 trials) confirms it: the standard ties are zero-variance, the hard deficit is stable, so this is capability, not noise. Does not beat Sonnet 4.6 (next row). **The weakness is largely a reasoning-BUDGET limit rather than raw capability -- `--effort xhigh` recovers most of it (row below).** |
 | Claude Code + Sonnet 5 xhigh (OAuth) | **82.1%** | 92.5% | 71.7% | 21 | $2.10 | `claude-sonnet-5 --effort xhigh` (vanilla runs use the default `high`; Sonnet 5 accepts xhigh and max despite docs calling them Opus-only). **Confirms the hard-reasoning weakness was substantially a reasoning-budget artifact: xhigh lifts the hard suite +6.6pp (65.1 -> 71.7) and overall +3.2pp**, at roughly 7.7x the tokens of vanilla. Standard is unchanged (already saturated -- more thinking does not help localized tasks). At that token multiple, Opus 4.8/5 is likely cheaper-per-result for reasoning-heavy work. Single trial. |
@@ -301,7 +302,7 @@ Haiku-based model routing (v10) scores highest at 90.2% but barely routes -- Hai
 
 ### Discipline beats complexity
 
-**Revised 2026-07-24.** Within the Opus 4.6 generation this held cleanly: vanilla Claude Code on Opus 4.6 scored 84.5% while the best scaffolds reached ~87-88%, and the v8 methodology -- a 6-step system prompt (understand, contract, TDD, complete implementation, verify, self-review) -- captured most of that gap with no plugins and no multi-agent overhead. The gap has since closed from the other direction: vanilla Claude Code on Opus 4.8 is 90.8% and on Opus 5 is 92.4%, above every scaffold measured here. Discipline still beats complexity among scaffolds -- a plain system prompt matches or beats multi-agent machinery -- but a generation of model improvement now outweighs any scaffold in this dataset. That confound is now measured directly: the same Conclave Review scaffold on Opus 5 reaches 93.4%, i.e. +5.1pp from the model upgrade and +1.0pp from the scaffold itself.
+**Revised 2026-07-24.** Within the Opus 4.6 generation this held cleanly: vanilla Claude Code on Opus 4.6 scored 84.5% while the best scaffolds reached ~87-88%, and the v8 methodology -- a 6-step system prompt (understand, contract, TDD, complete implementation, verify, self-review) -- captured most of that gap with no plugins and no multi-agent overhead. The gap has since closed from the other direction: vanilla Claude Code on Opus 4.8 is 90.8% and on Opus 5 is 92.4%, above every scaffold measured here. Discipline still beats complexity among scaffolds -- a plain system prompt matches or beats multi-agent machinery -- but a generation of model improvement now outweighs any scaffold in this dataset. That confound is now measured directly: the same Conclave Review scaffold on Opus 5 reaches 91.7% at n=3 -- +3.4pp from the model upgrade, and -0.7pp from the scaffold itself.
 
 Every discipline gene helps. Self-review, TDD, plan-before-code, verification gates -- all lift scores above vanilla. The specific discipline matters less than having one at all. Sixteen metacog variants with wildly different system prompts all land between 80-86%.
 
@@ -325,7 +326,19 @@ Retry loops don't help either. The ralph fresh-context loop -- which runs `claud
 
 **Updated 2026-07-24.** This section used to be titled "the model is not the bottleneck — the harness is". The fixed-model evidence below still holds and is strong. What changed is the other half: after the scoring corrections, the top three entries on the whole board are **vanilla Claude Code with no scaffolding at all** (Opus 5 92.4%, Opus 4.8 90.8%, Fable 5 89.7%), above every orchestration framework.
 
-That comparison was confounded -- every framework in the tools table is measured on Opus 4.6 or Sonnet 4.6, one to two generations behind those vanilla runs -- so we ran the **same scaffold on the new model** to separate the two variables:
+That comparison was confounded -- every framework in the tools table is measured on Opus 4.6 or Sonnet 4.6, one to two generations behind those vanilla runs -- so we ran the **same scaffold on the new model** to separate the two variables. At n=3:
+
+| Configuration | Overall | Standard | Hard | $/task |
+|---|---:|---:|---:|---:|
+| Vanilla Claude Code on **Opus 5** | **92.4%** | 93.3% | 91.4% | $2.37 |
+| Conclave Review on **Opus 5** | 91.7% | 92.9% | 90.5% | $6.27 |
+| Conclave Review on **Opus 4.6** | 88.3% | 88.3% | 88.2% | $1.86 |
+
+Holding the scaffold fixed and upgrading the model is worth **+3.4pp**. Holding the model fixed and adding the scaffold is worth **-0.7pp**, at 2.6x the cost. **At the frontier the model is the whole story and this scaffold no longer pays for itself.**
+
+That reverses the n=1 reading, which had the scaffold +1.0pp ahead; replication is why the README now says the opposite. Two caveats keep this honest. First, 8 of 42 trials in the replication run hit the Max 5-hour session cap, and it landed non-randomly on the longest tasks (circuit-debugger, factory-reset). Excluding every session-limit-contaminated trial gives 92.4% (Std 90.9 / Hard 93.9) -- a dead heat overall with a genuine **+2.5pp hard-suite** edge for the scaffold. `scripts/gen-scores.py` does not know about session limits, so the 91.7% in the table includes those truncated trials; the truth is somewhere between "slightly behind" and "level with a hard-suite edge". Second, this is one scaffold. Conclave Review is a single review pass, not the strongest configuration measured here.
+
+The defensible summary: **a strong harness lifts a weak model enormously (24pp below), and no longer reliably lifts a frontier one.** Whatever headroom scaffolding used to buy on this suite has largely been absorbed by the model.
 
 | Configuration | Overall | Standard | Hard | $/task |
 |---|---:|---:|---:|---:|

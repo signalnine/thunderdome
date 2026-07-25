@@ -1,0 +1,1594 @@
+diff --git a/.gitignore b/.gitignore
+index f4e2c6d..423386a 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,3 +1,5 @@
+ node_modules/
+ dist/
+ *.tsbuildinfo
++.thunderdome-output.jsonl
++.thunderdome-stderr.log
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..65a9405
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,17 @@
++{
++  "input_tokens": 23251,
++  "output_tokens": 194017,
++  "cache_read_tokens": 16583390,
++  "cache_creation_tokens": 302018,
++  "turns": 118,
++  "tools_used": [
++    "Bash",
++    "Write",
++    "Edit",
++    "Read",
++    "ToolSearch",
++    "Agent"
++  ],
++  "duration_ms": 3764094,
++  "total_cost_usd": 16.50765625
++}
+\ No newline at end of file
+diff --git a/src/bits.ts b/src/bits.ts
+new file mode 100644
+index 0000000..25e0193
+--- /dev/null
++++ b/src/bits.ts
+@@ -0,0 +1,31 @@
++/**
++ * Helpers for 64-bit vectors stored as a pair of 32-bit words (`lo`, `hi`).
++ *
++ * The solvers work with up to 64 buttons / 64 equations, which does not fit in
++ * a single JavaScript bitwise integer, so vectors are kept as two Int32 words.
++ */
++
++/** Number of set bits in a 32-bit word. */
++export function popcount32(x: number): number {
++  let v = x - ((x >> 1) & 0x55555555);
++  v = (v & 0x33333333) + ((v >> 2) & 0x33333333);
++  v = (v + (v >> 4)) & 0x0f0f0f0f;
++  return (Math.imul(v, 0x01010101) >> 24) & 0x3f;
++}
++
++/** Number of set bits across a (lo, hi) word pair. */
++export function popcount64(lo: number, hi: number): number {
++  return popcount32(lo) + popcount32(hi);
++}
++
++/** Test bit `index` (0..63) of a (lo, hi) word pair. */
++export function testBit(lo: number, hi: number, index: number): boolean {
++  return index < 32
++    ? (lo & (1 << index)) !== 0
++    : (hi & (1 << (index - 32))) !== 0;
++}
++
++/** Index of the lowest set bit of a non-zero 32-bit word. */
++export function lowestBitIndex32(x: number): number {
++  return 31 - Math.clz32(x & -x);
++}
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..063c7db
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,30 @@
++import { solveModular } from './modular.js';
++import { solveToggle } from './toggle.js';
++import type { Machine } from './types.js';
++
++export type { Machine };
++export { solveToggle };
++
++/**
++ * Counter variant of the toggle puzzle: buttons increment counters that wrap at
++ * `modulus`, and each button may be pressed 0..modulus-1 times.
++ *
++ * Counter indices outside the target array are ignored, and a counter listed
++ * twice by one button is incremented twice per press.
++ *
++ * @param lights   target value of each counter (each counter starts at 0)
++ * @param buttons  `buttons[i]` lists the counter indices button `i` increments
++ * @param modulus  prime modulus the counters wrap at
++ * @returns press counts per button, minimising the total number of presses
++ *          (ties broken lexicographically), or `null` when unsolvable
++ * @throws if `modulus` is not a prime integer
++ */
++export function solveCounter(
++  lights: number[],
++  buttons: number[][],
++  modulus: number,
++): number[] | null {
++  return solveModular(lights ?? [], buttons ?? [], modulus);
++}
++
++export default { solveToggle, solveCounter };
+diff --git a/src/modular.ts b/src/modular.ts
+new file mode 100644
+index 0000000..463b35f
+--- /dev/null
++++ b/src/modular.ts
+@@ -0,0 +1,631 @@
++/**
++ * Solver for the counter puzzle: a linear system over the field Z/pZ where the
++ * cost of a solution is the total number of button presses.
++ *
++ * Gaussian elimination alone finds *a* solution; the minimum-press one requires
++ * searching the solution coset, which is why this module pairs an exact
++ * elimination step with a branch & bound search over the free variables.
++ */
++
++/**
++ * Wall-clock budget for the search. Minimising presses is NP-hard, so the
++ * budget — not the algorithm — is what guarantees the 5s contract. It is set
++ * well below 5s to leave room for slower hardware; systems that need the whole
++ * budget are ones where the extra time was not buying optimality anyway.
++ *
++ * Finding the minimum gets the larger share; the remainder goes to picking the
++ * tie-break winner among the solutions that achieve it.
++ */
++const TOTAL_TIME_BUDGET_MS = 3600;
++const MINIMISE_BUDGET_MS = 2400;
++/** Hard cap on explored nodes, so a pathological system still terminates. */
++const NODE_LIMIT = 20_000_000;
++/** Iterated-local-search settings, used only when deepening runs out of time. */
++const SEED_ROUNDS = 4000;
++const SEED_KICK_MAX = 4;
++const SEED_TIME_BUDGET_MS = 250;
++/** Widest system for which the disjoint-row bound can use 64-bit masks. */
++const MAX_MASKED_COLUMNS = 64;
++
++/** Trial division. The moduli in play are small, so this is plenty. */
++function isPrime(value: number): boolean {
++  if (value < 2) return false;
++  for (let factor = 2; factor * factor <= value; factor++) {
++    if (value % factor === 0) return false;
++  }
++  return true;
++}
++
++/** Modular inverse via the extended Euclidean algorithm. */
++export function modInverse(value: number, modulus: number): number {
++  let [oldR, r] = [value % modulus, modulus];
++  let [oldS, s] = [1, 0];
++  while (r !== 0) {
++    const q = Math.floor(oldR / r);
++    [oldR, r] = [r, oldR - q * r];
++    [oldS, s] = [s, oldS - q * s];
++  }
++  if (oldR !== 1) {
++    throw new Error(`${value} is not invertible modulo ${modulus}; modulus must be prime`);
++  }
++  return ((oldS % modulus) + modulus) % modulus;
++}
++
++/** Row-reduced echelon form, with pivots pushed to the highest columns. */
++interface Rref {
++  rank: number;
++  /** `coef[e]` has length `m`; row `e` has coefficient 1 at `pivotCol[e]`. */
++  coef: number[][];
++  rhs: number[];
++  pivotCol: number[];
++  /** Row owning each column as its pivot, or -1 when the column is free. */
++  rowOfCol: Int32Array;
++}
++
++/**
++ * Reduce the system, preferring pivots in the *highest* columns. That ordering
++ * guarantees every row's remaining non-zeros sit strictly left of its pivot, so
++ * a left-to-right search can force each pivot variable the moment it reaches it.
++ *
++ * Both `matrix` and `rhs` are consumed. Returns `null` if inconsistent.
++ */
++function buildRref(matrix: number[][], rhs: number[], m: number, p: number): Rref | null {
++  const n = matrix.length;
++  let rank = 0;
++  const pivotCol: number[] = [];
++  const rowOfCol = new Int32Array(m).fill(-1);
++
++  for (let col = m - 1; col >= 0 && rank < n; col--) {
++    let pivot = -1;
++    for (let row = rank; row < n; row++) {
++      if (matrix[row][col] !== 0) {
++        pivot = row;
++        break;
++      }
++    }
++    if (pivot < 0) continue;
++
++    if (pivot !== rank) {
++      [matrix[pivot], matrix[rank]] = [matrix[rank], matrix[pivot]];
++      [rhs[pivot], rhs[rank]] = [rhs[rank], rhs[pivot]];
++    }
++
++    // Rows still in play hold zeros to the right of `col`, so the loops below
++    // can stop there instead of scanning the full width.
++    const pivotRow = matrix[rank];
++    const inv = modInverse(pivotRow[col], p);
++    if (inv !== 1) {
++      for (let j = 0; j <= col; j++) {
++        if (pivotRow[j] !== 0) pivotRow[j] = (pivotRow[j] * inv) % p;
++      }
++      rhs[rank] = (rhs[rank] * inv) % p;
++    }
++
++    for (let row = 0; row < n; row++) {
++      if (row === rank) continue;
++      const factor = matrix[row][col];
++      if (factor === 0) continue;
++      const target = matrix[row];
++      for (let j = 0; j <= col; j++) {
++        if (pivotRow[j] === 0) continue;
++        target[j] = (target[j] - factor * pivotRow[j]) % p;
++        if (target[j] < 0) target[j] += p;
++      }
++      rhs[row] = (rhs[row] - factor * rhs[rank]) % p;
++      if (rhs[row] < 0) rhs[row] += p;
++    }
++
++    pivotCol.push(col);
++    rowOfCol[col] = rank;
++    rank++;
++  }
++
++  // Rows that reduced to `0 = c` with c != 0 make the system unsolvable.
++  for (let row = rank; row < n; row++) {
++    if (rhs[row] !== 0) return null;
++  }
++
++  return {
++    rank,
++    coef: matrix.slice(0, rank),
++    rhs: rhs.slice(0, rank),
++    pivotCol,
++    rowOfCol,
++  };
++}
++
++/**
++ * One representative column index per group of identical columns, ascending.
++ *
++ * Buttons with identical columns are interchangeable, and moving one's presses
++ * onto the other never costs more (`(a + b) mod p <= a + b`). So the cheapest
++ * solution can always be found on the deduplicated system, and the tie-break
++ * winner concentrates every press on a single member of each group: the last
++ * one (smallest press vector) or the first one (largest press vector).
++ */
++function groupColumns(rows: number[][], m: number, keepFirst: boolean): number[] {
++  const chosen = new Map<string, number>();
++  for (let col = 0; col < m; col++) {
++    let key = '';
++    for (const row of rows) key += `${row[col]},`;
++    if (keepFirst && chosen.has(key)) continue;
++    chosen.set(key, col);
++  }
++  return [...chosen.values()].sort((a, b) => a - b);
++}
++
++/**
++ * Solve `A x = b (mod p)` for x in `[0, p)^m`, minimising the total presses.
++ *
++ * @param preferHigherEarly when true, ties on total presses are broken towards
++ *   the lexicographically *largest* vector instead of the smallest. The toggle
++ *   puzzle needs this: for equal press counts, the smallest set of button
++ *   indices is the 0/1 vector that owns the earliest differing index.
++ */
++export function solveModular(
++  counters: number[],
++  buttons: number[][],
++  modulus: number,
++  preferHigherEarly = false,
++): number[] | null {
++  const p = modulus;
++  const m = buttons.length;
++  const n = counters.length;
++
++  // Elimination divides by pivots, so the counters have to form a field. A
++  // composite modulus would otherwise fail deep inside — or worse, succeed by
++  // luck and return a meaningless vector.
++  if (!Number.isInteger(p) || !isPrime(p)) {
++    throw new Error(`modulus must be a prime integer, received ${modulus}`);
++  }
++
++  const rows: number[][] = [];
++  const rhs: number[] = [];
++  for (let counter = 0; counter < n; counter++) {
++    rows.push(new Array<number>(m).fill(0));
++    const value = Math.trunc(counters[counter]);
++    rhs.push(((value % p) + p) % p);
++  }
++  for (let button = 0; button < m; button++) {
++    for (const counter of buttons[button]) {
++      // A button listing the same counter twice increments it twice.
++      if (!Number.isInteger(counter) || counter < 0 || counter >= n) continue;
++      rows[counter][button] = (rows[counter][button] + 1) % p;
++    }
++  }
++
++  // Duplicate columns are collapsed: they never help, and doing so can shrink
++  // the search space by orders of magnitude.
++  const representatives = groupColumns(rows, m, preferHigherEarly);
++  const width = representatives.length;
++  const reducedRows = rows.map((row) => representatives.map((col) => row[col]));
++
++  // buildRref consumes its input, but the original 0/1 rows give the sharpest
++  // search bounds, so elimination runs on a copy.
++  const rref = buildRref(
++    reducedRows.map((row) => row.slice()),
++    rhs.slice(),
++    width,
++    p,
++  );
++  if (rref === null) return null;
++
++  const solution = new Array<number>(m).fill(0);
++  if (width === 0) return solution;
++
++  let reduced: number[];
++  if (rref.rank === width) {
++    // Fully determined: elimination already produced the only solution.
++    reduced = new Array<number>(width).fill(0);
++    for (let e = 0; e < rref.rank; e++) reduced[rref.pivotCol[e]] = rref.rhs[e];
++  } else {
++    const started = Date.now();
++    reduced = new PressSearch(rref, reducedRows, rhs, width, p, preferHigherEarly).solve(
++      started + MINIMISE_BUDGET_MS,
++      started + TOTAL_TIME_BUDGET_MS,
++    );
++  }
++
++  for (let k = 0; k < width; k++) solution[representatives[k]] = reduced[k];
++  return solution;
++}
++
++/** Branch & bound over the free variables of an already-reduced system. */
++class PressSearch {
++  private readonly freeCount: number;
++  /** Constraint pool: reduced rows first (index e owns pivot `pivotCol[e]`). */
++  private readonly poolCoef: number[][] = [];
++  private readonly poolRhs: number[] = [];
++  /** `poolMaxFrom[t][i]` = largest coefficient of row `t` at columns >= `i`. */
++  private readonly poolMaxFrom: Int32Array[] = [];
++  private readonly poolResidual: Int32Array;
++  /** Per column, the pool rows it appears in and with which coefficient. */
++  private readonly colRows: Int32Array[] = [];
++  private readonly colCoefs: Int32Array[] = [];
++  /** Original rows, visited in this order when computing a bound. */
++  private readonly boundRows: Int32Array;
++  /** Column support of each bound row from a given position onwards. */
++  private readonly supportLo: Int32Array;
++  private readonly supportHi: Int32Array;
++  private readonly masked: boolean;
++  /** `maxWeightFrom[i]` = largest column total over the bound rows at columns >= i. */
++  private readonly maxWeightFrom: Int32Array;
++  /** Running total of the bound rows' residuals. */
++  private residualSum = 0;
++
++  private readonly x: Int32Array;
++  private bestX: number[] = [];
++  private bestCost = Infinity;
++  private nodes = 0;
++  private deadline = 0;
++  private aborted = false;
++  private lexLimit = 0;
++  private lexMode = false;
++  private found = false;
++
++  constructor(
++    private readonly rref: Rref,
++    originalRows: number[][],
++    originalRhs: number[],
++    private readonly m: number,
++    private readonly p: number,
++    private readonly preferHigherEarly: boolean,
++  ) {
++    this.x = new Int32Array(m);
++    this.freeCount = m - rref.rank;
++    this.masked = m <= MAX_MASKED_COLUMNS;
++
++    // Reduced rows come first: the search reads their residual directly to get
++    // the forced value of the matching pivot variable.
++    for (let e = 0; e < rref.rank; e++) {
++      this.poolCoef.push(rref.coef[e]);
++      this.poolRhs.push(rref.rhs[e]);
++    }
++    const boundRows: number[] = [];
++    for (let row = 0; row < originalRows.length; row++) {
++      if (originalRows[row].every((c) => c === 0)) continue;
++      boundRows.push(this.poolCoef.length);
++      this.poolCoef.push(originalRows[row]);
++      this.poolRhs.push(originalRhs[row]);
++    }
++
++    for (const coef of this.poolCoef) {
++      const maxFrom = new Int32Array(m + 1);
++      for (let i = m - 1; i >= 0; i--) maxFrom[i] = Math.max(maxFrom[i + 1], coef[i]);
++      this.poolMaxFrom.push(maxFrom);
++    }
++    this.poolResidual = new Int32Array(this.poolRhs);
++
++    for (let col = 0; col < m; col++) {
++      const rowList: number[] = [];
++      const coefList: number[] = [];
++      for (let t = 0; t < this.poolCoef.length; t++) {
++        if (this.poolCoef[t][col] !== 0) {
++          rowList.push(t);
++          coefList.push(this.poolCoef[t][col]);
++        }
++      }
++      this.colRows.push(new Int32Array(rowList));
++      this.colCoefs.push(new Int32Array(coefList));
++    }
++
++    // Narrow rows first: the greedy packing in lowerBound fits more of them in.
++    const width = this.masked ? m + 1 : 0;
++    const spread = new Map<number, number>();
++    for (const row of boundRows) {
++      spread.set(row, this.poolCoef[row].reduce((count, c) => count + (c === 0 ? 0 : 1), 0));
++    }
++    boundRows.sort((a, b) => (spread.get(a) as number) - (spread.get(b) as number));
++    this.boundRows = new Int32Array(boundRows);
++    this.maxWeightFrom = new Int32Array(m + 1);
++    for (let col = m - 1; col >= 0; col--) {
++      let weight = 0;
++      for (const row of boundRows) weight += this.poolCoef[row][col];
++      this.maxWeightFrom[col] = Math.max(this.maxWeightFrom[col + 1], weight);
++    }
++    this.supportLo = new Int32Array(boundRows.length * width);
++    this.supportHi = new Int32Array(boundRows.length * width);
++    if (this.masked) {
++      for (let index = 0; index < boundRows.length; index++) {
++        const coef = this.poolCoef[boundRows[index]];
++        const base = index * width;
++        for (let i = m - 1; i >= 0; i--) {
++          let lo = this.supportLo[base + i + 1];
++          let hi = this.supportHi[base + i + 1];
++          if (coef[i] !== 0) {
++            if (i < 32) lo |= 1 << i;
++            else hi |= 1 << (i - 32);
++          }
++          this.supportLo[base + i] = lo;
++          this.supportHi[base + i] = hi;
++        }
++      }
++    }
++  }
++
++  /**
++   * Cheapest press vector, preferring the lexicographically smallest (or
++   * largest, see `preferHigherEarly`) among the ones that achieve it.
++   *
++   * Every stage shares one incumbent and can only improve on it, so running out
++   * of budget degrades the answer rather than losing it.
++   *
++   * Deepening settles most systems outright, including every one where the
++   * optimum is anywhere near the lower bound. It does not always finish on wide
++   * dense systems (say 40 buttons over 20 counters at modulus 97), where the
++   * gap between bound and optimum runs to hundreds of levels; there the result
++   * is a valid solution that is not guaranteed minimal.
++   */
++  solve(minimiseDeadline: number, totalDeadline: number): number[] {
++    // A single descent is enough to give deepening an upper limit to work
++    // towards; the expensive local search is only worth it if deepening fails.
++    this.snapshot(this.descend(new Int32Array(this.m)));
++    if (this.bestCost === 0 || this.freeCount === 0) return this.bestX;
++
++    if (this.deepen(minimiseDeadline)) return this.bestX;
++
++    // Deepening ran out of road, so the answer will be a good solution rather
++    // than a provably minimal one. Both remaining stages only lower the
++    // incumbent: local search escapes the basin the first descent landed in,
++    // then branch & bound grinds it down further from that better start.
++    this.improveIncumbent(Date.now() + SEED_TIME_BUDGET_MS);
++    this.runPhase(false, 0, (Date.now() + totalDeadline) / 2);
++    this.runPhase(true, this.bestCost, totalDeadline);
++    return this.bestX;
++  }
++
++  /**
++   * Iterative deepening on the total press count.
++   *
++   * Cheap solutions are hard for plain branch & bound to reach: the incumbent
++   * starts far above the optimum, so nothing prunes. Searching instead for a
++   * solution of cost at most `limit`, starting from the lower bound and
++   * stepping up, keeps every level tightly pruned — and because the levels
++   * below it came back empty, the first level that succeeds proves the optimum
++   * *and* yields the tie-break winner, since levels are explored in order.
++   *
++   * @returns true once the answer is final, false when the budget ran out.
++   */
++  private deepen(deadline: number): boolean {
++    this.resetResiduals();
++    for (let limit = this.lowerBound(0); limit < this.bestCost; limit++) {
++      this.runPhase(true, limit, deadline);
++      if (this.found) return true;
++      if (this.aborted) return false;
++    }
++    // The incumbent already matches the bound, but a tie-break may still win.
++    this.runPhase(true, this.bestCost, deadline);
++    return !this.aborted;
++  }
++
++  /** Record `values` as the incumbent if it beats the current one. */
++  private snapshot(values: Int32Array): void {
++    let cost = 0;
++    for (let i = 0; i < this.m; i++) cost += values[i];
++    if (cost >= this.bestCost) return;
++    this.bestCost = cost;
++    this.bestX = Array.from(values);
++  }
++
++  /**
++   * Iterated local search.
++   *
++   * Plain coordinate descent stalls badly on wide systems, and restarting from
++   * scratch lands in an equally bad basin every time. So each round instead
++   * kicks a few free variables off the current solution and descends again,
++   * keeping the kick unless it made things worse.
++   */
++  private improveIncumbent(deadline: number): void {
++    let random = 0x2545f491;
++    const nextRandom = (): number => {
++      random ^= random << 13;
++      random ^= random >>> 17;
++      random ^= random << 5;
++      return (random >>> 0) / 4294967296;
++    };
++
++    const free: number[] = [];
++    for (let col = 0; col < this.m; col++) {
++      if (this.rref.rowOfCol[col] < 0) free.push(col);
++    }
++    let current: Int32Array = Int32Array.from(this.bestX);
++    let currentCost = this.bestCost;
++
++    for (let round = 0; round < SEED_ROUNDS; round++) {
++      if (this.bestCost === 0 || Date.now() > deadline) break;
++      const trial = Int32Array.from(current);
++      const kicks = 1 + Math.floor(nextRandom() * SEED_KICK_MAX);
++      for (let kick = 0; kick < kicks; kick++) {
++        trial[free[Math.floor(nextRandom() * free.length)]] = Math.floor(nextRandom() * this.p);
++      }
++      const candidate = this.descend(trial);
++      let cost = 0;
++      for (let i = 0; i < this.m; i++) cost += candidate[i];
++      // Sideways moves are accepted so the walk keeps drifting across plateaus.
++      if (cost <= currentCost) {
++        current = candidate;
++        currentCost = cost;
++      }
++      this.snapshot(candidate);
++    }
++  }
++
++  /** Improve one free-variable at a time until no single change helps. */
++  private descend(values: Int32Array): Int32Array {
++    const { rank, coef, rhs, pivotCol, rowOfCol } = this.rref;
++    const p = this.p;
++    const residual = new Int32Array(rhs);
++    const base = new Int32Array(rank);
++    for (let col = 0; col < this.m; col++) {
++      if (rowOfCol[col] >= 0 || values[col] === 0) continue;
++      for (let e = 0; e < rank; e++) {
++        const c = coef[e][col];
++        if (c !== 0) residual[e] = (((residual[e] - c * values[col]) % p) + p) % p;
++      }
++    }
++
++    let improved = true;
++    for (let pass = 0; improved && pass < 32; pass++) {
++      improved = false;
++      for (let col = 0; col < this.m; col++) {
++        if (rowOfCol[col] >= 0) continue;
++        const current = values[col];
++        let bestValue = current;
++        let bestDelta = 0;
++        // Residual as if this variable were 0, so every candidate costs O(rank).
++        for (let e = 0; e < rank; e++) {
++          base[e] = (residual[e] + coef[e][col] * current) % p;
++        }
++        for (let v = 0; v < p; v++) {
++          if (v === current) continue;
++          let delta = v - current;
++          for (let e = 0; e < rank; e++) {
++            const c = coef[e][col];
++            const after = c === 0 ? base[e] : (((base[e] - c * v) % p) + p) % p;
++            delta += after - residual[e];
++          }
++          if (delta < bestDelta) {
++            bestDelta = delta;
++            bestValue = v;
++          }
++        }
++        if (bestValue !== current) {
++          for (let e = 0; e < rank; e++) {
++            const c = coef[e][col];
++            if (c !== 0) residual[e] = (((base[e] - c * bestValue) % p) + p) % p;
++          }
++          values[col] = bestValue;
++          improved = true;
++        }
++      }
++    }
++
++    for (let e = 0; e < rank; e++) values[pivotCol[e]] = residual[e];
++    return values;
++  }
++
++  private runPhase(lexMode: boolean, limit: number, deadline: number): void {
++    this.lexMode = lexMode;
++    this.lexLimit = limit;
++    this.found = false;
++    this.aborted = false;
++    this.nodes = 0;
++    this.deadline = deadline;
++    this.resetResiduals();
++    this.x.fill(0);
++    this.dfs(0, 0);
++  }
++
++  /**
++   * Smallest total the unassigned columns can still contribute.
++   *
++   * Every constraint row gives `sum(coef * x) >= residual` over the integers,
++   * hence `sum(x) >= residual / maxCoef`. Rows whose remaining columns do not
++   * overlap constrain disjoint variables, so their bounds add up.
++   */
++  private lowerBound(pos: number): number {
++    const width = this.masked ? this.m + 1 : 0;
++    let packed = 0;
++    let strongest = 0;
++    let usedLo = 0;
++    let usedHi = 0;
++    for (let index = 0; index < this.boundRows.length; index++) {
++      const row = this.boundRows[index];
++      const residual = this.poolResidual[row];
++      if (residual === 0) continue;
++      const maxCoef = this.poolMaxFrom[row][pos];
++      // No unassigned column can still move this row, yet it is unsatisfied.
++      if (maxCoef === 0) return Infinity;
++      const need = maxCoef === 1 ? residual : Math.ceil(residual / maxCoef);
++      if (need > strongest) strongest = need;
++      if (!this.masked) continue;
++      const base = index * width + pos;
++      const supportLo = this.supportLo[base];
++      const supportHi = this.supportHi[base];
++      if ((supportLo & usedLo) === 0 && (supportHi & usedHi) === 0) {
++        packed += need;
++        usedLo |= supportLo;
++        usedHi |= supportHi;
++      }
++    }
++
++    // Adding every row up gives a third bound: the residuals together need at
++    // least `sum(residual) / heaviest column` presses, however they are spread.
++    const heaviest = this.maxWeightFrom[pos];
++    const aggregate = heaviest === 0 ? 0 : Math.ceil(this.residualSum / heaviest);
++    return Math.max(packed, strongest, aggregate);
++  }
++
++  /** Restore every residual to the untouched right-hand side. */
++  private resetResiduals(): void {
++    this.poolResidual.set(this.poolRhs);
++    this.residualSum = 0;
++    for (const row of this.boundRows) this.residualSum += this.poolRhs[row];
++  }
++
++  /** Add (`sign` = 1) or undo (`sign` = -1) the effect of `x[col] = value`. */
++  private apply(col: number, value: number, sign: number): void {
++    if (value === 0) return;
++    const rows = this.colRows[col];
++    const coefs = this.colCoefs[col];
++    const p = this.p;
++    const boundStart = this.rref.rank;
++    for (let t = 0; t < rows.length; t++) {
++      const row = rows[t];
++      let next = (this.poolResidual[row] - sign * coefs[t] * value) % p;
++      if (next < 0) next += p;
++      if (row >= boundStart) this.residualSum += next - this.poolResidual[row];
++      this.poolResidual[row] = next;
++    }
++  }
++
++  private dfs(pos: number, cost: number): void {
++    if (this.aborted) return;
++    this.nodes++;
++    if (this.nodes >= NODE_LIMIT || (this.nodes & 2047) === 0) {
++      if (this.nodes >= NODE_LIMIT || Date.now() > this.deadline) {
++        this.aborted = true;
++        return;
++      }
++    }
++
++    if (pos === this.m) {
++      this.bestCost = cost;
++      this.bestX = Array.from(this.x);
++      this.found = true;
++      return;
++    }
++
++    const ceiling = this.lexMode ? this.lexLimit : this.bestCost - 1;
++    if (cost + this.lowerBound(pos) > ceiling) return;
++
++    const row = this.rref.rowOfCol[pos];
++    if (row >= 0) {
++      // Pivot column: its value follows from the columns already assigned.
++      const value = this.poolResidual[row];
++      if (cost + value > ceiling) return;
++      this.x[pos] = value;
++      this.apply(pos, value, 1);
++      this.dfs(pos + 1, cost + value);
++      this.apply(pos, value, -1);
++      this.x[pos] = 0;
++      return;
++    }
++
++    const descending = this.lexMode && this.preferHigherEarly;
++    for (let step = 0; step < this.p; step++) {
++      const value = descending ? this.p - 1 - step : step;
++      if (cost + value > ceiling) {
++        // Ascending values only get more expensive from here.
++        if (descending) continue;
++        break;
++      }
++      this.x[pos] = value;
++      this.apply(pos, value, 1);
++      this.dfs(pos + 1, cost + value);
++      this.apply(pos, value, -1);
++      this.x[pos] = 0;
++      if (this.aborted || (this.lexMode && this.found)) return;
++    }
++  }
++}
+diff --git a/src/toggle.ts b/src/toggle.ts
+new file mode 100644
+index 0000000..dfbd2e3
+--- /dev/null
++++ b/src/toggle.ts
+@@ -0,0 +1,306 @@
++import { lowestBitIndex32, popcount32, testBit } from './bits.js';
++import type { Machine } from './types.js';
++import { solveModular } from './modular.js';
++
++/**
++ * Above this many buttons the meet-in-the-middle table would need too much
++ * memory, so we fall back to the (heuristic-guided) modular branch & bound.
++ * The stated problem bound is 40 buttons, comfortably inside this limit.
++ */
++const MAX_MEET_IN_MIDDLE_BUTTONS = 42;
++
++/** The toggle system reduced to at most `rank` independent equations. */
++interface ReducedSystem {
++  /** Number of independent equations (0..64). */
++  rank: number;
++  /** `columnLo/Hi[i]` = equations in which button `i` appears. */
++  columnLo: Int32Array;
++  columnHi: Int32Array;
++  /** Right-hand side of the independent equations, as a bit vector. */
++  targetLo: number;
++  targetHi: number;
++}
++
++/**
++ * Turn the machine into an equivalent, independent set of GF(2) equations.
++ * Returns `null` when the system is inconsistent (no solution exists).
++ */
++function reduceSystem(target: boolean[], buttons: number[][]): ReducedSystem | null {
++  const lightCount = target.length;
++  const buttonCount = buttons.length;
++
++  // One equation per light: which buttons flip it, and the desired parity.
++  const rowLo = new Int32Array(lightCount);
++  const rowHi = new Int32Array(lightCount);
++  const rhs = new Uint8Array(lightCount);
++  for (let light = 0; light < lightCount; light++) {
++    rhs[light] = target[light] ? 1 : 0;
++  }
++  for (let button = 0; button < buttonCount; button++) {
++    const lowWord = button < 32;
++    const bit = lowWord ? 1 << button : 1 << (button - 32);
++    for (const light of buttons[button]) {
++      // Toggling a light twice cancels out, hence the XOR accumulation.
++      if (!Number.isInteger(light) || light < 0 || light >= lightCount) continue;
++      if (lowWord) rowLo[light] ^= bit;
++      else rowHi[light] ^= bit;
++    }
++  }
++
++  // Gaussian elimination over GF(2) with buttons as columns.
++  let rank = 0;
++  for (let col = 0; col < buttonCount && rank < lightCount; col++) {
++    let pivot = -1;
++    for (let row = rank; row < lightCount; row++) {
++      if (testBit(rowLo[row], rowHi[row], col)) {
++        pivot = row;
++        break;
++      }
++    }
++    if (pivot < 0) continue;
++    if (pivot !== rank) {
++      let tmp = rowLo[pivot];
++      rowLo[pivot] = rowLo[rank];
++      rowLo[rank] = tmp;
++      tmp = rowHi[pivot];
++      rowHi[pivot] = rowHi[rank];
++      rowHi[rank] = tmp;
++      tmp = rhs[pivot];
++      rhs[pivot] = rhs[rank];
++      rhs[rank] = tmp;
++    }
++    for (let row = 0; row < lightCount; row++) {
++      if (row === rank) continue;
++      if (!testBit(rowLo[row], rowHi[row], col)) continue;
++      rowLo[row] ^= rowLo[rank];
++      rowHi[row] ^= rowHi[rank];
++      rhs[row] ^= rhs[rank];
++    }
++    rank++;
++  }
++
++  // Any all-zero row demanding an odd parity makes the system unsolvable.
++  for (let row = rank; row < lightCount; row++) {
++    if (rhs[row]) return null;
++  }
++
++  const columnLo = new Int32Array(buttonCount);
++  const columnHi = new Int32Array(buttonCount);
++  let targetLo = 0;
++  let targetHi = 0;
++  for (let eq = 0; eq < rank; eq++) {
++    const lowWord = eq < 32;
++    const bit = lowWord ? 1 << eq : 1 << (eq - 32);
++    for (let button = 0; button < buttonCount; button++) {
++      if (!testBit(rowLo[eq], rowHi[eq], button)) continue;
++      if (lowWord) columnLo[button] |= bit;
++      else columnHi[button] |= bit;
++    }
++    if (rhs[eq]) {
++      if (lowWord) targetLo |= bit;
++      else targetHi |= bit;
++    }
++  }
++
++  return { rank, columnLo, columnHi, targetLo, targetHi };
++}
++
++/**
++ * Open-addressing map from a 64-bit vector to the best button subset of the
++ * left half producing it. Sized as a power of two so probing can mask.
++ */
++class VectorTable {
++  private readonly mask: number;
++  private readonly keyLo: Int32Array;
++  private readonly keyHi: Int32Array;
++  private readonly value: Int32Array;
++  private readonly used: Uint8Array;
++
++  constructor(capacityHint: number) {
++    let capacity = 16;
++    while (capacity < capacityHint * 2) capacity *= 2;
++    this.mask = capacity - 1;
++    this.keyLo = new Int32Array(capacity);
++    this.keyHi = new Int32Array(capacity);
++    this.value = new Int32Array(capacity);
++    this.used = new Uint8Array(capacity);
++  }
++
++  private slot(lo: number, hi: number): number {
++    let h = Math.imul(lo ^ 0x9e3779b1, 0x85ebca6b) ^ Math.imul(hi + 0x165667b1, 0xc2b2ae35);
++    h ^= h >>> 15;
++    return h & this.mask;
++  }
++
++  /** Insert `subset` for the given vector, keeping the better of the two. */
++  insert(lo: number, hi: number, subset: number): void {
++    let i = this.slot(lo, hi);
++    for (;;) {
++      if (!this.used[i]) {
++        this.used[i] = 1;
++        this.keyLo[i] = lo;
++        this.keyHi[i] = hi;
++        this.value[i] = subset;
++        return;
++      }
++      if (this.keyLo[i] === lo && this.keyHi[i] === hi) {
++        if (isBetterSubset(subset, this.value[i])) this.value[i] = subset;
++        return;
++      }
++      i = (i + 1) & this.mask;
++    }
++  }
++
++  /** Best subset producing the vector, or -1 when unreachable. */
++  get(lo: number, hi: number): number {
++    let i = this.slot(lo, hi);
++    for (;;) {
++      if (!this.used[i]) return -1;
++      if (this.keyLo[i] === lo && this.keyHi[i] === hi) return this.value[i];
++      i = (i + 1) & this.mask;
++    }
++  }
++}
++
++/**
++ * Of two *different* subsets, does `a` have the lexicographically smaller
++ * sorted index list? Indices below the lowest differing bit are shared, so
++ * whichever subset owns that bit sorts first.
++ */
++function ownsSmallerIndex(a: number, b: number): boolean {
++  const lowest = (a ^ b) & -(a ^ b);
++  return (a & lowest) !== 0;
++}
++
++/**
++ * Is subset `a` preferable to subset `b`? Fewer presses wins; on a tie the
++ * lexicographically smaller sorted index list does.
++ */
++function isBetterSubset(a: number, b: number): boolean {
++  const countA = popcount32(a);
++  const countB = popcount32(b);
++  if (countA !== countB) return countA < countB;
++  if (a === b) return false;
++  return ownsSmallerIndex(a, b);
++}
++
++/** Expand a (left, right) subset pair into sorted button indices. */
++function toIndices(left: number, right: number, split: number, buttonCount: number): number[] {
++  const result: number[] = [];
++  for (let i = 0; i < split; i++) {
++    if (left & (1 << i)) result.push(i);
++  }
++  for (let i = split; i < buttonCount; i++) {
++    if (right & (1 << (i - split))) result.push(i);
++  }
++  return result;
++}
++
++/**
++ * Find the minimum set of buttons whose combined toggles produce the target
++ * light configuration, or `null` when no such set exists.
++ *
++ * Buttons are pressed at most once and toggling is commutative, so this is a
++ * linear system over GF(2). We reduce it to independent equations and then run
++ * meet-in-the-middle over the two halves of the buttons: O(2^(M/2)) instead of
++ * the infeasible O(2^M).
++ *
++ * Light indices outside the target array are ignored, and a light listed twice
++ * by one button cancels out, matching what pressing it would actually do.
++ */
++export function solveToggle(machine: Machine): number[] | null {
++  const target = machine?.target ?? [];
++  const buttons = machine?.buttons ?? [];
++  const buttonCount = buttons.length;
++
++  if (buttonCount > MAX_MEET_IN_MIDDLE_BUTTONS) {
++    return solveToggleFallback(target, buttons);
++  }
++
++  const system = reduceSystem(target, buttons);
++  if (system === null) return null;
++  const { rank, columnLo, columnHi, targetLo, targetHi } = system;
++  if (rank === 0) return [];
++
++  const split = buttonCount >> 1;
++  const leftSize = 1 << split;
++  const rightSize = 1 << (buttonCount - split);
++
++  // Vector reachable by each subset of the left half, built incrementally by
++  // stripping the lowest set bit (its vector is already known).
++  const leftLo = new Int32Array(leftSize);
++  const leftHi = new Int32Array(leftSize);
++  const table = new VectorTable(leftSize);
++  table.insert(0, 0, 0);
++  for (let subset = 1; subset < leftSize; subset++) {
++    const lowest = subset & -subset;
++    const button = lowestBitIndex32(lowest);
++    const rest = subset ^ lowest;
++    const lo = leftLo[rest] ^ columnLo[button];
++    const hi = leftHi[rest] ^ columnHi[button];
++    leftLo[subset] = lo;
++    leftHi[subset] = hi;
++    table.insert(lo, hi, subset);
++  }
++
++  let bestLeft = -1;
++  let bestRight = -1;
++  let bestCount = Infinity;
++  let rightLo = 0;
++  let rightHi = 0;
++  const rightVecLo = new Int32Array(rightSize);
++  const rightVecHi = new Int32Array(rightSize);
++  for (let subset = 0; subset < rightSize; subset++) {
++    if (subset > 0) {
++      const lowest = subset & -subset;
++      const button = split + lowestBitIndex32(lowest);
++      const rest = subset ^ lowest;
++      rightLo = rightVecLo[rest] ^ columnLo[button];
++      rightHi = rightVecHi[rest] ^ columnHi[button];
++      rightVecLo[subset] = rightLo;
++      rightVecHi[subset] = rightHi;
++    }
++    const left = table.get(targetLo ^ rightLo, targetHi ^ rightHi);
++    if (left < 0) continue;
++
++    const count = popcount32(left) + popcount32(subset);
++    if (count > bestCount) continue;
++    if (count < bestCount || isBetterPair(left, subset, bestLeft, bestRight)) {
++      bestCount = count;
++      bestLeft = left;
++      bestRight = subset;
++    }
++  }
++
++  if (bestLeft < 0) return null;
++  return toIndices(bestLeft, bestRight, split, buttonCount);
++}
++
++/**
++ * Tie-break between two equally sized (left, right) subset pairs. Every left
++ * index precedes every right one, so the left halves decide unless they match.
++ */
++function isBetterPair(leftA: number, rightA: number, leftB: number, rightB: number): boolean {
++  if (leftB < 0) return true;
++  if (leftA !== leftB) return ownsSmallerIndex(leftA, leftB);
++  if (rightA !== rightB) return ownsSmallerIndex(rightA, rightB);
++  return false;
++}
++
++/**
++ * Fallback for machines with more buttons than the meet-in-the-middle table
++ * can hold: solve as a modulus-2 counter system. A "press count" of 0 or 1 per
++ * button is exactly a subset, and minimum total presses is minimum subset size.
++ */
++function solveToggleFallback(target: boolean[], buttons: number[][]): number[] | null {
++  const counters = target.map((on) => (on ? 1 : 0));
++  // For equal press counts the smallest index *set* is the largest 0/1 vector,
++  // since owning the earliest differing index means a 1 where the other has 0.
++  const presses = solveModular(counters, buttons, 2, /* preferHigherEarly */ true);
++  if (presses === null) return null;
++  const result: number[] = [];
++  for (let i = 0; i < presses.length; i++) {
++    if (presses[i] === 1) result.push(i);
++  }
++  return result;
++}
+diff --git a/src/types.ts b/src/types.ts
+new file mode 100644
+index 0000000..9129001
+--- /dev/null
++++ b/src/types.ts
+@@ -0,0 +1,10 @@
++/**
++ * A machine with N lights (all initially off) and M buttons.
++ * Pressing a button toggles every light it is wired to.
++ */
++export interface Machine {
++  /** Desired state for each light. Lights are indexed by position. */
++  target: boolean[];
++  /** `buttons[i]` lists the light indices toggled by button `i`. */
++  buttons: number[][];
++}
+diff --git a/tests/counter.test.ts b/tests/counter.test.ts
+new file mode 100644
+index 0000000..b0556d4
+--- /dev/null
++++ b/tests/counter.test.ts
+@@ -0,0 +1,355 @@
++import { describe, expect, it } from 'vitest';
++import { solveCounter } from '../src/index.js';
++
++/** Apply press counts and report the resulting counter values. */
++function applyPresses(
++  counterCount: number,
++  buttons: number[][],
++  presses: number[],
++  modulus: number,
++): number[] {
++  const counters = new Array<number>(counterCount).fill(0);
++  for (let b = 0; b < buttons.length; b++) {
++    for (const c of buttons[b]) counters[c] = (counters[c] + presses[b]) % modulus;
++  }
++  return counters;
++}
++
++/** Reference solver: enumerate every press vector. Only usable for tiny inputs. */
++function bruteForceCounter(
++  target: number[],
++  buttons: number[][],
++  modulus: number,
++): number[] | null {
++  const m = buttons.length;
++  const presses = new Array<number>(m).fill(0);
++  let best: number[] | null = null;
++
++  const visit = (index: number): void => {
++    if (index === m) {
++      const result = applyPresses(target.length, buttons, presses, modulus);
++      if (!result.every((v, i) => v === target[i])) return;
++      if (best === null || isSmaller(presses, best)) best = presses.slice();
++      return;
++    }
++    for (let v = 0; v < modulus; v++) {
++      presses[index] = v;
++      visit(index + 1);
++    }
++    presses[index] = 0;
++  };
++  visit(0);
++  return best;
++}
++
++/**
++ * Independent exact reference: eliminate with pivots in the *lowest* columns
++ * (the opposite convention to the implementation), then enumerate every
++ * assignment of the free variables. Returns undefined when the coset is larger
++ * than `budget`, so callers can skip instances it cannot handle.
++ */
++function exactCounter(
++  target: number[],
++  buttons: number[][],
++  p: number,
++  budget: number,
++): number[] | null | undefined {
++  const n = target.length;
++  const m = buttons.length;
++  const a: number[][] = Array.from({ length: n }, () => new Array<number>(m).fill(0));
++  const b = target.map((v) => ((v % p) + p) % p);
++  for (let j = 0; j < m; j++) for (const c of buttons[j]) a[c][j] = (a[c][j] + 1) % p;
++
++  const inverse = (v: number): number => {
++    for (let i = 1; i < p; i++) if ((v * i) % p === 1) return i;
++    throw new Error('not invertible');
++  };
++  const pivotCol: number[] = [];
++  let rank = 0;
++  for (let col = 0; col < m && rank < n; col++) {
++    let pivot = -1;
++    for (let row = rank; row < n; row++) if (a[row][col]) { pivot = row; break; }
++    if (pivot < 0) continue;
++    [a[pivot], a[rank]] = [a[rank], a[pivot]];
++    [b[pivot], b[rank]] = [b[rank], b[pivot]];
++    const inv = inverse(a[rank][col]);
++    for (let j = 0; j < m; j++) a[rank][j] = (a[rank][j] * inv) % p;
++    b[rank] = (b[rank] * inv) % p;
++    for (let row = 0; row < n; row++) {
++      if (row === rank || !a[row][col]) continue;
++      const f = a[row][col];
++      for (let j = 0; j < m; j++) a[row][j] = ((a[row][j] - f * a[rank][j]) % p + p) % p;
++      b[row] = ((b[row] - f * b[rank]) % p + p) % p;
++    }
++    pivotCol.push(col);
++    rank++;
++  }
++  for (let row = rank; row < n; row++) if (b[row]) return null;
++
++  const isPivot = new Array<boolean>(m).fill(false);
++  for (const col of pivotCol) isPivot[col] = true;
++  const free: number[] = [];
++  for (let col = 0; col < m; col++) if (!isPivot[col]) free.push(col);
++  if (p ** free.length > budget) return undefined;
++
++  const x = new Array<number>(m).fill(0);
++  const assignment = new Array<number>(free.length).fill(0);
++  let best: number[] | null = null;
++  const visit = (index: number): void => {
++    if (index === free.length) {
++      for (let k = 0; k < free.length; k++) x[free[k]] = assignment[k];
++      for (let e = 0; e < rank; e++) {
++        let v = b[e];
++        for (let k = 0; k < free.length; k++) {
++          v = ((v - a[e][free[k]] * assignment[k]) % p + p) % p;
++        }
++        x[pivotCol[e]] = v;
++      }
++      if (best === null || isSmaller(x, best)) best = x.slice();
++      return;
++    }
++    for (let v = 0; v < p; v++) {
++      assignment[index] = v;
++      visit(index + 1);
++    }
++    assignment[index] = 0;
++  };
++  visit(0);
++  return best;
++}
++
++function isSmaller(a: number[], b: number[]): boolean {
++  const sumA = a.reduce((x, y) => x + y, 0);
++  const sumB = b.reduce((x, y) => x + y, 0);
++  if (sumA !== sumB) return sumA < sumB;
++  for (let i = 0; i < a.length; i++) {
++    if (a[i] !== b[i]) return a[i] < b[i];
++  }
++  return false;
++}
++
++function makeRandom(seed: number): () => number {
++  let state = seed >>> 0;
++  return () => {
++    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
++    return state / 4294967296;
++  };
++}
++
++describe('solveCounter', () => {
++  it('returns all zeros when every counter is already at its target', () => {
++    expect(solveCounter([0, 0, 0], [[0], [1, 2]], 5)).toEqual([0, 0]);
++  });
++
++  it('handles a system with no buttons', () => {
++    expect(solveCounter([0, 0], [], 7)).toEqual([]);
++    expect(solveCounter([1, 0], [], 7)).toBeNull();
++  });
++
++  it('solves a simple independent system', () => {
++    expect(solveCounter([3, 4], [[0], [1]], 5)).toEqual([3, 4]);
++  });
++
++  it('uses wrap-around when it needs fewer presses', () => {
++    // Two buttons both drive counter 0; reaching 4 (mod 5) directly costs 4,
++    // but there is no cheaper combination, so the total stays 4.
++    expect(solveCounter([4], [[0], [0]], 5)).toEqual([0, 4]);
++  });
++
++  it('prefers a shared button over pressing several individual ones', () => {
++    const answer = solveCounter([2, 2, 2], [[0], [1], [2], [0, 1, 2]], 7);
++    expect(answer).toEqual([0, 0, 0, 2]);
++  });
++
++  it('detects an unsolvable system', () => {
++    // Both counters are driven by the same button, so they can never differ.
++    expect(solveCounter([1, 2], [[0, 1]], 5)).toBeNull();
++  });
++
++  it('counts a counter listed twice by one button twice', () => {
++    // Button 0 adds 2 per press to counter 0, so 3 presses reach 6 % 5 = 1.
++    expect(solveCounter([1], [[0, 0]], 5)).toEqual([3]);
++  });
++
++  it('normalises modulus 2 to the toggle semantics', () => {
++    expect(solveCounter([1, 1, 0], [[0, 1], [1, 2], [0]], 2)).toEqual([1, 0, 0]);
++  });
++
++  it('rejects a modulus that is not a prime integer', () => {
++    expect(() => solveCounter([0], [[0]], 1)).toThrow(/prime/);
++    expect(() => solveCounter([0], [[0]], 2.5)).toThrow(/prime/);
++    expect(() => solveCounter([0], [[0]], 9)).toThrow(/prime/);
++  });
++
++  it('normalises target values outside the residue range', () => {
++    expect(solveCounter([8], [[0]], 5)).toEqual([3]);
++    expect(solveCounter([-1], [[0]], 5)).toEqual([4]);
++  });
++
++  it('ignores counter indices outside the target array', () => {
++    expect(solveCounter([1], [[0, 7], [9]], 5)).toEqual([1, 0]);
++  });
++
++  it('accepts a system with no counters at all', () => {
++    expect(solveCounter([], [[0], []], 5)).toEqual([0, 0]);
++  });
++
++  it('matches brute force on random small systems', () => {
++    const random = makeRandom(424242);
++    const moduli = [2, 3, 5, 7];
++    for (let trial = 0; trial < 220; trial++) {
++      const modulus = moduli[Math.floor(random() * moduli.length)];
++      const counters = 1 + Math.floor(random() * 4);
++      const buttonCount = 1 + Math.floor(random() * 5);
++      const buttons: number[][] = [];
++      for (let b = 0; b < buttonCount; b++) {
++        const wired: number[] = [];
++        for (let c = 0; c < counters; c++) if (random() < 0.5) wired.push(c);
++        buttons.push(wired);
++      }
++      const target: number[] = [];
++      for (let c = 0; c < counters; c++) target.push(Math.floor(random() * modulus));
++
++      const expected = bruteForceCounter(target, buttons, modulus);
++      const actual = solveCounter(target, buttons, modulus);
++      expect(actual, `trial ${trial} mod ${modulus}`).toEqual(expected);
++    }
++  });
++
++  it('matches an exact null-space search on mid-size systems', () => {
++    // Wider than brute force can reach, but with a small enough solution space
++    // that enumerating the whole coset is still tractable as a reference.
++    const random = makeRandom(8675309);
++    let checked = 0;
++    for (let trial = 0; checked < 60 && trial < 400; trial++) {
++      const modulus = [3, 5, 7, 11][Math.floor(random() * 4)];
++      const counters = 4 + Math.floor(random() * 6);
++      const buttonCount = counters + 1 + Math.floor(random() * 4);
++      const buttons: number[][] = [];
++      for (let b = 0; b < buttonCount; b++) {
++        const wired: number[] = [];
++        for (let c = 0; c < counters; c++) if (random() < 0.45) wired.push(c);
++        buttons.push(wired);
++      }
++      const target: number[] = [];
++      for (let c = 0; c < counters; c++) target.push(Math.floor(random() * modulus));
++
++      const expected = exactCounter(target, buttons, modulus, 200_000);
++      if (expected === undefined) continue;
++      checked++;
++      expect(solveCounter(target, buttons, modulus), `trial ${trial} mod ${modulus}`).toEqual(
++        expected,
++      );
++    }
++    expect(checked).toBeGreaterThan(20);
++  });
++
++  it('finds the single cheapest press in a wide system', () => {
++    // 40 buttons over 30 counters with a target that is exactly one press of
++    // button 39, so the optimum is known by construction to be 1.
++    const random = makeRandom(2718);
++    const size = 40;
++    const counters = 30;
++    const modulus = 97;
++    const buttons: number[][] = [];
++    for (let b = 0; b < size; b++) {
++      const wired: number[] = [];
++      for (let c = 0; c < counters; c++) if (random() < 0.4) wired.push(c);
++      buttons.push(wired);
++    }
++    const target = applyPresses(counters, buttons, [...new Array(39).fill(0), 1], modulus);
++
++    const started = Date.now();
++    const answer = solveCounter(target, buttons, modulus);
++    expect(Date.now() - started).toBeLessThan(5000);
++    expect((answer as number[]).reduce((a, b) => a + b, 0)).toBe(1);
++  });
++
++  it('solves 40 counters, 40 buttons and modulus 97 quickly', () => {
++    const random = makeRandom(99);
++    const size = 40;
++    const modulus = 97;
++    const buttons: number[][] = [];
++    for (let b = 0; b < size; b++) {
++      const wired: number[] = [];
++      for (let c = 0; c < size; c++) if (random() < 0.3) wired.push(c);
++      buttons.push(wired);
++    }
++    const presses = Array.from({ length: size }, () => Math.floor(random() * modulus));
++    const target = applyPresses(size, buttons, presses, modulus);
++
++    const started = Date.now();
++    const answer = solveCounter(target, buttons, modulus);
++    expect(Date.now() - started).toBeLessThan(5000);
++    expect(answer).not.toBeNull();
++    expect(applyPresses(size, buttons, answer as number[], modulus)).toEqual(target);
++  });
++
++  it('solves a rank-deficient system with many free variables quickly', () => {
++    // 40 buttons all driving the same counter: a huge solution space.
++    const buttons = Array.from({ length: 40 }, () => [0]);
++    const started = Date.now();
++    const answer = solveCounter([96], buttons, 97);
++    expect(Date.now() - started).toBeLessThan(5000);
++    expect(answer).not.toBeNull();
++    const total = (answer as number[]).reduce((a, b) => a + b, 0);
++    expect(total).toBe(96);
++    // Lexicographically smallest vector with that total puts it in the last slot.
++    expect(answer).toEqual([...new Array(39).fill(0), 96]);
++  });
++
++  it('recovers a sparse optimum hidden in a wide system', () => {
++    const random = makeRandom(31415);
++    const size = 40;
++    const counters = 8;
++    const modulus = 97;
++    const buttons: number[][] = [];
++    for (let b = 0; b < size; b++) {
++      const wired: number[] = [];
++      for (let c = 0; c < counters; c++) if (random() < 0.5) wired.push(c);
++      buttons.push(wired);
++    }
++    // A handful of small presses: the local-search incumbent lands nowhere near
++    // this, so finding it exercises the iterative-deepening search.
++    const planted = Array.from({ length: size }, () =>
++      random() < 0.25 ? 1 + Math.floor(random() * 3) : 0,
++    );
++    const target = applyPresses(counters, buttons, planted, modulus);
++
++    const started = Date.now();
++    const answer = solveCounter(target, buttons, modulus);
++    expect(Date.now() - started).toBeLessThan(5000);
++    expect(answer).not.toBeNull();
++    expect(applyPresses(counters, buttons, answer as number[], modulus)).toEqual(target);
++    const total = (answer as number[]).reduce((a, b) => a + b, 0);
++    expect(total).toBeLessThanOrEqual(planted.reduce((a, b) => a + b, 0));
++  });
++
++  it('concentrates presses on the last of a group of identical buttons', () => {
++    // Buttons 0, 2 and 3 are identical; the cheapest vector puts it all on 3.
++    expect(solveCounter([2, 0], [[0], [1], [0], [0]], 7)).toEqual([0, 0, 0, 2]);
++  });
++
++  it('solves a wide system with duplicated buttons quickly', () => {
++    const random = makeRandom(5150);
++    const size = 40;
++    const modulus = 97;
++    const base: number[][] = [];
++    for (let b = 0; b < 12; b++) {
++      const wired: number[] = [];
++      for (let c = 0; c < size; c++) if (random() < 0.3) wired.push(c);
++      base.push(wired);
++    }
++    const buttons = Array.from({ length: size }, (_, i) => base[i % base.length]);
++    const presses = Array.from({ length: size }, () => Math.floor(random() * 3));
++    const target = applyPresses(size, buttons, presses, modulus);
++
++    const started = Date.now();
++    const answer = solveCounter(target, buttons, modulus);
++    expect(Date.now() - started).toBeLessThan(5000);
++    expect(answer).not.toBeNull();
++    expect(applyPresses(size, buttons, answer as number[], modulus)).toEqual(target);
++    const total = (answer as number[]).reduce((a, b) => a + b, 0);
++    expect(total).toBeLessThanOrEqual(presses.reduce((a, b) => a + b, 0));
++  });
++});
+diff --git a/tests/toggle.test.ts b/tests/toggle.test.ts
+new file mode 100644
+index 0000000..46137bf
+--- /dev/null
++++ b/tests/toggle.test.ts
+@@ -0,0 +1,155 @@
++import { describe, expect, it } from 'vitest';
++import { solveToggle } from '../src/index.js';
++import type { Machine } from '../src/index.js';
++
++/** Apply a set of button presses and report the resulting light states. */
++function applyToggle(machine: Machine, presses: number[]): boolean[] {
++  const lights = machine.target.map(() => false);
++  for (const button of presses) {
++    for (const light of machine.buttons[button]) {
++      lights[light] = !lights[light];
++    }
++  }
++  return lights;
++}
++
++/** Reference solver: enumerate every subset. Only usable for tiny machines. */
++function bruteForceToggle(machine: Machine): number[] | null {
++  const m = machine.buttons.length;
++  let best: number[] | null = null;
++  for (let mask = 0; mask < 1 << m; mask++) {
++    const presses: number[] = [];
++    for (let i = 0; i < m; i++) if (mask & (1 << i)) presses.push(i);
++    const result = applyToggle(machine, presses);
++    if (!result.every((v, i) => v === machine.target[i])) continue;
++    if (best === null || isSmaller(presses, best)) best = presses;
++  }
++  return best;
++}
++
++function isSmaller(a: number[], b: number[]): boolean {
++  if (a.length !== b.length) return a.length < b.length;
++  for (let i = 0; i < a.length; i++) {
++    if (a[i] !== b[i]) return a[i] < b[i];
++  }
++  return false;
++}
++
++/** Deterministic PRNG so failures are reproducible. */
++function makeRandom(seed: number): () => number {
++  let state = seed >>> 0;
++  return () => {
++    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
++    return state / 4294967296;
++  };
++}
++
++describe('solveToggle', () => {
++  it('returns an empty set when every light is already off', () => {
++    expect(solveToggle({ target: [false, false], buttons: [[0], [1]] })).toEqual([]);
++  });
++
++  it('handles a machine with no buttons', () => {
++    expect(solveToggle({ target: [], buttons: [] })).toEqual([]);
++    expect(solveToggle({ target: [false], buttons: [] })).toEqual([]);
++    expect(solveToggle({ target: [true], buttons: [] })).toBeNull();
++  });
++
++  it('rejects the unsolvable example from the specification', () => {
++    const machine: Machine = {
++      target: [true, true, false, true],
++      buttons: [
++        [0, 1],
++        [1, 2, 3],
++        [0, 3],
++      ],
++    };
++    expect(solveToggle(machine)).toBeNull();
++  });
++
++  it('finds the single required button', () => {
++    const machine: Machine = {
++      target: [true, true, false, false],
++      buttons: [[0], [0, 1], [2, 3]],
++    };
++    expect(solveToggle(machine)).toEqual([1]);
++  });
++
++  it('prefers fewer presses over more', () => {
++    const machine: Machine = {
++      target: [true, true, true],
++      buttons: [[0], [1], [2], [0, 1, 2]],
++    };
++    expect(solveToggle(machine)).toEqual([3]);
++  });
++
++  it('breaks ties towards the lexicographically smallest index set', () => {
++    // Buttons 0 and 3 are identical, as are buttons 1 and 2.
++    const machine: Machine = {
++      target: [true, false, true],
++      buttons: [[0], [2], [2], [0]],
++    };
++    expect(solveToggle(machine)).toEqual([0, 1]);
++  });
++
++  it('ignores a light toggled twice by the same button', () => {
++    const machine: Machine = {
++      target: [false, true],
++      buttons: [[0, 0, 1]],
++    };
++    expect(solveToggle(machine)).toEqual([0]);
++  });
++
++  it('matches brute force on random small machines', () => {
++    const random = makeRandom(20260725);
++    for (let trial = 0; trial < 400; trial++) {
++      const lights = 1 + Math.floor(random() * 6);
++      const buttonCount = 1 + Math.floor(random() * 9);
++      const buttons: number[][] = [];
++      for (let b = 0; b < buttonCount; b++) {
++        const wired: number[] = [];
++        for (let l = 0; l < lights; l++) if (random() < 0.5) wired.push(l);
++        buttons.push(wired);
++      }
++      const target: boolean[] = [];
++      for (let l = 0; l < lights; l++) target.push(random() < 0.5);
++
++      const machine: Machine = { target, buttons };
++      const expected = bruteForceToggle(machine);
++      const actual = solveToggle(machine);
++      expect(actual, `trial ${trial}`).toEqual(expected);
++    }
++  });
++
++  it('solves 40 buttons and 40 lights quickly', () => {
++    const random = makeRandom(7);
++    const size = 40;
++    const buttons: number[][] = [];
++    for (let b = 0; b < size; b++) {
++      const wired: number[] = [];
++      for (let l = 0; l < size; l++) if (random() < 0.4) wired.push(l);
++      buttons.push(wired);
++    }
++    // Build a reachable target so a solution is guaranteed to exist.
++    const pressed = [3, 7, 11, 19, 27, 38];
++    const target = new Array<boolean>(size).fill(false);
++    for (const b of pressed) for (const l of buttons[b]) target[l] = !target[l];
++
++    const started = Date.now();
++    const machine: Machine = { target, buttons };
++    const answer = solveToggle(machine);
++    expect(Date.now() - started).toBeLessThan(5000);
++    expect(answer).not.toBeNull();
++    expect(applyToggle(machine, answer as number[])).toEqual(target);
++    expect((answer as number[]).length).toBeLessThanOrEqual(pressed.length);
++  });
++
++  it('handles a highly degenerate machine with many duplicate buttons', () => {
++    // 40 identical buttons: minimum is one press, and index 0 wins the tie.
++    const buttons = Array.from({ length: 40 }, () => [0, 1]);
++    const started = Date.now();
++    const answer = solveToggle({ target: [true, true], buttons });
++    expect(Date.now() - started).toBeLessThan(5000);
++    expect(answer).toEqual([0]);
++  });
++});

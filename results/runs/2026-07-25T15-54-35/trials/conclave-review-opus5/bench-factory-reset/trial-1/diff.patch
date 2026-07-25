@@ -1,0 +1,1564 @@
+diff --git a/.gitignore b/.gitignore
+index f4e2c6d..40f2ef3 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,3 +1,4 @@
+ node_modules/
+ dist/
+ *.tsbuildinfo
++.thunderdome-*
+diff --git a/package-lock.json b/package-lock.json
+index 07657bf..1a9db02 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1136,7 +1136,6 @@
+       "integrity": "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.18.0"
+       }
+@@ -1181,7 +1180,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1494,7 +1492,6 @@
+       "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1859,7 +1856,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -3500,7 +3496,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -3615,7 +3610,6 @@
+       "integrity": "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@vitest/expect": "2.1.9",
+         "@vitest/mocker": "2.1.9",
+diff --git a/src/bits.ts b/src/bits.ts
+new file mode 100644
+index 0000000..31bc091
+--- /dev/null
++++ b/src/bits.ts
+@@ -0,0 +1,64 @@
++/** Small helpers for the fixed-width bitsets used by the toggle solver. */
++
++/** Number of 32-bit words needed to hold `n` bits (at least one). */
++export function wordsFor(n: number): number {
++  return Math.max(1, (n + 31) >>> 5);
++}
++
++export function popcount32(x: number): number {
++  let v = x - ((x >>> 1) & 0x55555555);
++  v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
++  v = (v + (v >>> 4)) & 0x0f0f0f0f;
++  return Math.imul(v, 0x01010101) >>> 24;
++}
++
++/** Index of the lowest set bit. Undefined for 0. */
++export function ctz32(x: number): number {
++  return 31 - Math.clz32(x & -x);
++}
++
++export function getBit(bits: Uint32Array, i: number): number {
++  return (bits[i >>> 5] >>> (i & 31)) & 1;
++}
++
++export function setBit(bits: Uint32Array, i: number): void {
++  bits[i >>> 5] |= 1 << (i & 31);
++}
++
++export function popcountBits(bits: Uint32Array): number {
++  let total = 0;
++  for (let i = 0; i < bits.length; i++) total += popcount32(bits[i]);
++  return total;
++}
++
++export function xorInto(dst: Uint32Array, src: Uint32Array): void {
++  for (let i = 0; i < dst.length; i++) dst[i] ^= src[i];
++}
++
++/**
++ * True when the index list described by `a` is lexicographically smaller than
++ * the one described by `b`. Both are read as ascending index lists, so the
++ * winner is whichever set contains the lowest index the other one lacks.
++ * Only meaningful for sets of equal size (the caller compares sizes first).
++ */
++export function lexLessWord(a: number, b: number): boolean {
++  const diff = (a ^ b) >>> 0;
++  if (diff === 0) return false;
++  const lowest = diff & -diff;
++  return (a & lowest) !== 0;
++}
++
++/** Bitset version of {@link lexLessWord}. */
++export function lexLessBits(a: Uint32Array, b: Uint32Array): boolean {
++  for (let i = 0; i < a.length; i++) {
++    if (a[i] !== b[i]) return lexLessWord(a[i], b[i]);
++  }
++  return false;
++}
++
++/** Expand a bitset into the ascending list of set indices. */
++export function bitsToIndices(bits: Uint32Array, limit: number): number[] {
++  const out: number[] = [];
++  for (let i = 0; i < limit; i++) if (getBit(bits, i)) out.push(i);
++  return out;
++}
+diff --git a/src/counter.ts b/src/counter.ts
+new file mode 100644
+index 0000000..ac503a4
+--- /dev/null
++++ b/src/counter.ts
+@@ -0,0 +1,584 @@
++/**
++ * Part 2: counters instead of lights. Button `i` increments each counter it
++ * touches by one, counters wrap at a prime modulus, and a button may be pressed
++ * 0..modulus-1 times. Finding *a* press vector is a linear system over the
++ * field Z_p; finding the *cheapest* one is a minimum-weight coset problem,
++ * which is what most of this file is about.
++ */
++
++/** How many complete solutions we are willing to enumerate exhaustively. */
++const ENUMERATION_LIMIT = 4_000_000;
++
++/** Independent local-search runs used to bound the deepening search. */
++const SEED_RESTARTS = 10;
++
++/** Sweeps of dual ascent used to build the search's lower bounds. */
++const DUAL_SWEEPS = 4;
++
++/**
++ * Wall-clock ceiling for the deepening search, comfortably inside the 5s
++ * contract. Minimum-weight search over a huge coset is NP-hard in general, so on
++ * an instance that neither collapses, enumerates, nor has a cheap solution we
++ * return the best solution local search found instead of running forever. Any
++ * instance whose optimum is small enough to reach is answered exactly.
++ */
++const SEARCH_BUDGET_MS = 2500;
++
++/** A system whose buttons all have distinct, non-empty counter sets. */
++interface System {
++  buttonCount: number;
++  counterCount: number;
++  /** Counter indices touched by each button, deduplicated and ascending. */
++  buttonCounters: number[][];
++  /** Target value of each counter, reduced into 0..p-1. */
++  target: Int32Array;
++}
++
++/** Multiplicative inverses mod a prime `p`, indexed 1..p-1 (slot 0 unused). */
++function inverseTable(p: number): Int32Array {
++  const inv = new Int32Array(p);
++  for (let a = 1; a < p; a++) {
++    for (let b = 1; b < p; b++) {
++      if ((a * b) % p === 1) {
++        inv[a] = b;
++        break;
++      }
++    }
++  }
++  return inv;
++}
++
++interface Reduced {
++  /** Solution with every free variable set to 0, one entry per button. */
++  particular: Int32Array;
++  /** Null-space basis vectors, one per free variable. */
++  basis: Int32Array[];
++}
++
++/** Row-reduce the system mod `p`; `null` means the target is unreachable. */
++function reduce(system: System, p: number, inv: Int32Array): Reduced | null {
++  const { buttonCount: m, counterCount, buttonCounters, target } = system;
++  const width = m + 1;
++  const rhs = m;
++
++  const rows: Int32Array[] = [];
++  for (let counter = 0; counter < counterCount; counter++) {
++    const row = new Int32Array(width);
++    row[rhs] = target[counter];
++    rows.push(row);
++  }
++  for (let button = 0; button < m; button++) {
++    for (const counter of buttonCounters[button]) rows[counter][button] = 1;
++  }
++
++  const pivotCols: number[] = [];
++  let rank = 0;
++  for (let col = 0; col < m && rank < counterCount; col++) {
++    let sel = -1;
++    for (let r = rank; r < counterCount; r++) {
++      if (rows[r][col] !== 0) {
++        sel = r;
++        break;
++      }
++    }
++    if (sel < 0) continue;
++    const tmp = rows[rank];
++    rows[rank] = rows[sel];
++    rows[sel] = tmp;
++
++    const pivot = rows[rank];
++    const scale = inv[pivot[col]];
++    if (scale !== 1) {
++      for (let w = 0; w < width; w++) pivot[w] = (pivot[w] * scale) % p;
++    }
++    // Free columns left of `col` can still be nonzero, so the whole row has to
++    // take part in the update.
++    for (let r = 0; r < counterCount; r++) {
++      if (r === rank) continue;
++      const factor = rows[r][col];
++      if (factor === 0) continue;
++      const row = rows[r];
++      for (let w = 0; w < width; w++) {
++        row[w] = (row[w] - factor * pivot[w]) % p;
++        if (row[w] < 0) row[w] += p;
++      }
++    }
++    pivotCols.push(col);
++    rank++;
++  }
++
++  for (let r = rank; r < counterCount; r++) {
++    if (rows[r][rhs] !== 0) return null;
++  }
++
++  const particular = new Int32Array(m);
++  for (let r = 0; r < rank; r++) particular[pivotCols[r]] = rows[r][rhs];
++
++  const isPivot = new Uint8Array(m);
++  for (const col of pivotCols) isPivot[col] = 1;
++  const basis: Int32Array[] = [];
++  for (let col = 0; col < m; col++) {
++    if (isPivot[col]) continue;
++    const vec = new Int32Array(m);
++    vec[col] = 1;
++    for (let r = 0; r < rank; r++) {
++      const coeff = rows[r][col];
++      if (coeff !== 0) vec[pivotCols[r]] = (p - coeff) % p;
++    }
++    basis.push(vec);
++  }
++
++  return { particular, basis };
++}
++
++function pressTotal(x: Int32Array): number {
++  let sum = 0;
++  for (let i = 0; i < x.length; i++) sum += x[i];
++  return sum;
++}
++
++/** True when `a` sorts before `b`: fewer presses first, then lexicographic. */
++function better(a: Int32Array, aSum: number, b: Int32Array, bSum: number): boolean {
++  if (aSum !== bSum) return aSum < bSum;
++  for (let i = 0; i < a.length; i++) {
++    if (a[i] !== b[i]) return a[i] < b[i];
++  }
++  return false;
++}
++
++/** Add one basis vector into `x`, all mod `p`. */
++function addVector(x: Int32Array, vec: Int32Array, p: number): void {
++  for (let i = 0; i < x.length; i++) {
++    const sum = x[i] + vec[i];
++    x[i] = sum >= p ? sum - p : sum;
++  }
++}
++
++/**
++ * Visit every point of the solution space in mixed-radix order, moving by a
++ * single basis vector per step. Used when p^k is small enough to enumerate.
++ */
++function searchExhaustive(reduced: Reduced, p: number, combos: number): Int32Array {
++  const { particular, basis } = reduced;
++  const k = basis.length;
++  const cur = Int32Array.from(particular);
++  let best = Int32Array.from(cur);
++  let bestSum = pressTotal(cur);
++
++  const digits = new Int32Array(k);
++  for (let step = 1; step < combos; step++) {
++    // Advance the odometer. Rolling a digit from p-1 back to 0 is also a single
++    // basis-vector addition, so every carry is one more add.
++    for (let j = 0; j < k; j++) {
++      digits[j] = digits[j] + 1 === p ? 0 : digits[j] + 1;
++      addVector(cur, basis[j], p);
++      if (digits[j] !== 0) break;
++    }
++    const sum = pressTotal(cur);
++    if (better(cur, sum, best, bestSum)) {
++      best = Int32Array.from(cur);
++      bestSum = sum;
++    }
++  }
++  return best;
++}
++
++/** Deterministic 32-bit LCG, so results never depend on Math.random. */
++function makeRandom(seed: number): () => number {
++  let state = seed >>> 0;
++  return () => {
++    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
++    return state;
++  };
++}
++
++/**
++ * Upper bound for the deepening search: coordinate descent over the free
++ * coefficients, restarted from several random points in the solution space.
++ * Moving one coefficient is a single scaled basis-vector addition, so a whole
++ * sweep costs O(k * p * m).
++ */
++function seedSolution(reduced: Reduced, p: number): { sol: Int32Array; sum: number } {
++  const { particular, basis } = reduced;
++  const k = basis.length;
++  const m = particular.length;
++  const random = makeRandom(0x9e3779b9);
++
++  let best: Int32Array = Int32Array.from(particular);
++  let bestSum = pressTotal(best);
++
++  const coeffs = new Int32Array(k);
++  const cur = new Int32Array(m);
++  const trial = new Int32Array(m);
++  const winner = new Int32Array(m);
++
++  for (let restart = 0; restart < SEED_RESTARTS; restart++) {
++    cur.set(particular);
++    for (let j = 0; j < k; j++) {
++      const value = restart === 0 ? 0 : random() % p;
++      coeffs[j] = value;
++      if (value !== 0) {
++        const vec = basis[j];
++        for (let i = 0; i < m; i++) cur[i] = (cur[i] + value * vec[i]) % p;
++      }
++    }
++    let curSum = pressTotal(cur);
++
++    let improved = true;
++    while (improved) {
++      improved = false;
++      for (let j = 0; j < k; j++) {
++        const vec = basis[j];
++        const original = coeffs[j];
++        let winnerValue = original;
++        let winnerSum = curSum;
++        let found = false;
++        for (let value = 0; value < p; value++) {
++          if (value === original) continue;
++          const delta = value - original + (value < original ? p : 0);
++          for (let i = 0; i < m; i++) trial[i] = (cur[i] + delta * vec[i]) % p;
++          const sum = pressTotal(trial);
++          if (better(trial, sum, found ? winner : cur, winnerSum)) {
++            winner.set(trial);
++            winnerValue = value;
++            winnerSum = sum;
++            found = true;
++          }
++        }
++        if (found) {
++          coeffs[j] = winnerValue;
++          cur.set(winner);
++          curSum = winnerSum;
++          improved = true;
++        }
++      }
++    }
++
++    if (better(cur, curSum, best, bestSum)) {
++      best = Int32Array.from(cur);
++      bestSum = curSum;
++    }
++  }
++
++  return { sol: best, sum: bestSum };
++}
++
++/**
++ * Lower-bound weights, one vector per suffix of the button list.
++ *
++ * Any press vector that still has to raise counter `c` by `r_c` satisfies
++ * `sum over available buttons touching c of x_j >= r_c`. So for weights `y >= 0`
++ * where every available button's touched counters sum to at most 1, the total
++ * remaining presses are at least `y . r`. Those weights are built greedily
++ * (dual ascent on the covering LP), cheapest counters first.
++ */
++function dualWeights(cols: Uint8Array[], counterCount: number, m: number): Float64Array[] {
++  const perSuffix: Float64Array[] = [];
++  for (let from = 0; from <= m; from++) {
++    const y = new Float64Array(counterCount);
++    const slack = new Float64Array(m);
++    for (let j = from; j < m; j++) slack[j] = 1;
++
++    const touches = new Int32Array(counterCount);
++    for (let j = from; j < m; j++) {
++      for (let r = 0; r < counterCount; r++) if (cols[j][r]) touches[r]++;
++    }
++    const order: number[] = [];
++    for (let r = 0; r < counterCount; r++) if (touches[r] > 0) order.push(r);
++    order.sort((a, b) => touches[a] - touches[b] || a - b);
++
++    for (let sweep = 0; sweep < DUAL_SWEEPS; sweep++) {
++      let changed = false;
++      for (const r of order) {
++        let room = Infinity;
++        for (let j = from; j < m; j++) {
++          if (cols[j][r] && slack[j] < room) room = slack[j];
++        }
++        if (room === Infinity || room <= 1e-12) continue;
++        y[r] += room;
++        for (let j = from; j < m; j++) {
++          if (cols[j][r]) slack[j] = Math.max(0, slack[j] - room);
++        }
++        changed = true;
++      }
++      if (!changed) break;
++    }
++    perSuffix.push(y);
++  }
++  return perSuffix;
++}
++
++/**
++ * Iterative deepening on the press total, used when the solution space is too
++ * large to enumerate.
++ *
++ * Each pass explores only what could still total `threshold` or less, in index
++ * order with the smallest press count tried first - so the pass visits press
++ * vectors in lexicographic order and the first complete solution it reaches is
++ * the lexicographically smallest one within the threshold. Failed passes jump
++ * the threshold to the smallest total any pruned branch could reach, so the
++ * first pass that succeeds returns the true optimum: no cheaper solution exists,
++ * and none lexicographically smaller shares its total.
++ *
++ * Searching by increasing total (rather than keeping an incumbent and pruning
++ * against it) is what makes this practical: a cheap solution is found while the
++ * threshold is still small enough to keep the tree tiny, instead of the search
++ * sinking its whole budget into the first subtree.
++ *
++ * Two prunes do the work: the covering lower bound described on
++ * {@link dualWeights}, together with the trivial "counter `c` needs at least
++ * `r_c` more presses"; and the requirement that the residual lie in the span of
++ * the columns that are still available.
++ */
++function searchIterativeDeepening(
++  system: System,
++  reduced: Reduced,
++  p: number,
++  inv: Int32Array,
++): Int32Array {
++  const { buttonCount: m, counterCount: nc, buttonCounters, target } = system;
++
++  const cols: Uint8Array[] = [];
++  for (let button = 0; button < m; button++) {
++    const col = new Uint8Array(nc);
++    for (const counter of buttonCounters[button]) col[counter] = 1;
++    cols.push(col);
++  }
++
++  // Echelon basis of the column span, grown from the last button backwards, so
++  // the first `spanSize[i]` vectors span exactly the columns i..m-1.
++  const spanVecs: Int32Array[] = [];
++  const spanPivots: number[] = [];
++  const spanSize = new Int32Array(m + 1);
++  for (let i = m - 1; i >= 0; i--) {
++    const vec = new Int32Array(nc);
++    for (let r = 0; r < nc; r++) vec[r] = cols[i][r];
++    for (let j = 0; j < spanVecs.length; j++) {
++      const coeff = vec[spanPivots[j]];
++      if (coeff === 0) continue;
++      const basisVec = spanVecs[j];
++      for (let r = 0; r < nc; r++) {
++        vec[r] = (vec[r] - coeff * basisVec[r]) % p;
++        if (vec[r] < 0) vec[r] += p;
++      }
++    }
++    let pivot = -1;
++    for (let r = 0; r < nc; r++) {
++      if (vec[r] !== 0) {
++        pivot = r;
++        break;
++      }
++    }
++    if (pivot >= 0) {
++      const scale = inv[vec[pivot]];
++      if (scale !== 1) {
++        for (let r = 0; r < nc; r++) vec[r] = (vec[r] * scale) % p;
++      }
++      spanVecs.push(vec);
++      spanPivots.push(pivot);
++    }
++    spanSize[i] = spanVecs.length;
++  }
++
++  const scratch = new Int32Array(nc);
++  const reachable = (from: number, residual: Int32Array): boolean => {
++    scratch.set(residual);
++    const size = spanSize[from];
++    for (let j = 0; j < size; j++) {
++      const coeff = scratch[spanPivots[j]];
++      if (coeff === 0) continue;
++      const vec = spanVecs[j];
++      for (let r = 0; r < nc; r++) {
++        scratch[r] = (scratch[r] - coeff * vec[r]) % p;
++        if (scratch[r] < 0) scratch[r] += p;
++      }
++    }
++    for (let r = 0; r < nc; r++) if (scratch[r] !== 0) return false;
++    return true;
++  };
++
++  const weights = dualWeights(cols, nc, m);
++
++  /** Lower bound on the presses still needed to clear `residual`. */
++  const remainingBound = (depth: number, residual: Int32Array): number => {
++    const y = weights[depth];
++    let largest = 0;
++    let covering = 0;
++    for (let r = 0; r < nc; r++) {
++      const value = residual[r];
++      if (value > largest) largest = value;
++      covering += y[r] * value;
++    }
++    const rounded = Math.ceil(covering - 1e-9);
++    return rounded > largest ? rounded : largest;
++  };
++
++  // Local search gives a solution to fall back on and caps the deepening.
++  const seed = seedSolution(reduced, p);
++  const ceiling = seed.sum;
++
++  const deadline = Date.now() + SEARCH_BUDGET_MS;
++  let sinceClockCheck = 0;
++  let outOfTime = false;
++
++  const cur = new Int32Array(m);
++  let solution: Int32Array | null = null;
++  let threshold = 0;
++  let nextThreshold = Infinity;
++  // One residual buffer per depth: only a single frame per depth is ever live.
++  const buffers: Int32Array[] = [];
++  for (let i = 0; i <= m; i++) buffers.push(new Int32Array(nc));
++
++  /** Explore everything that could still total `threshold` or less. */
++  const dfs = (depth: number, residual: Int32Array, sum: number): boolean => {
++    if (++sinceClockCheck >= 2048) {
++      sinceClockCheck = 0;
++      if (Date.now() > deadline) outOfTime = true;
++    }
++    if (outOfTime) return false;
++
++    const lower = remainingBound(depth, residual);
++    const floorSum = sum + lower;
++    if (floorSum > threshold) {
++      if (floorSum < nextThreshold) nextThreshold = floorSum;
++      return false;
++    }
++    if (lower === 0) {
++      // Residual cleared: leaving every remaining button alone is both the
++      // cheapest and the lexicographically smallest way to finish.
++      const answer = new Int32Array(m);
++      for (let j = 0; j < depth; j++) answer[j] = cur[j];
++      solution = answer;
++      return true;
++    }
++    if (depth === m) return false;
++    if (!reachable(depth, residual)) return false;
++
++    const col = cols[depth];
++    const child = buffers[depth];
++    child.set(residual);
++    for (let presses = 0; presses < p; presses++) {
++      const nextSum = sum + presses;
++      if (nextSum > threshold) {
++        if (nextSum < nextThreshold) nextThreshold = nextSum;
++        break;
++      }
++      if (presses > 0) {
++        for (let r = 0; r < nc; r++) {
++          if (col[r] === 0) continue;
++          child[r] = child[r] === 0 ? p - 1 : child[r] - 1;
++        }
++      }
++      cur[depth] = presses;
++      if (dfs(depth + 1, child, nextSum)) return true;
++      if (outOfTime) return false;
++    }
++    cur[depth] = 0;
++    return false;
++  };
++
++  const root = Int32Array.from(target);
++  threshold = remainingBound(0, root);
++  while (threshold <= ceiling) {
++    nextThreshold = Infinity;
++    cur.fill(0);
++    if (dfs(0, root, 0) && solution !== null) return solution;
++    // Nothing totals `threshold` or less, so jump straight to the smallest
++    // total any pruned branch could still reach.
++    if (outOfTime || nextThreshold === Infinity) break;
++    threshold = nextThreshold;
++  }
++  return seed.sol;
++}
++
++/** Solve a system whose buttons are already distinct and non-empty. */
++function solveSystem(system: System, p: number, inv: Int32Array): Int32Array | null {
++  const reduced = reduce(system, p, inv);
++  if (reduced === null) return null;
++  const k = reduced.basis.length;
++  if (k === 0) return reduced.particular;
++  const combos = p ** k;
++  return combos <= ENUMERATION_LIMIT
++    ? searchExhaustive(reduced, p, combos)
++    : searchIterativeDeepening(system, reduced, p, inv);
++}
++
++/**
++ * Find how many times to press each button so the counters reach `lights`,
++ * minimizing the total number of presses (ties broken lexicographically), or
++ * `null` when the target is unreachable.
++ */
++export function solveCounter(
++  lights: number[],
++  buttons: number[][],
++  modulus: number,
++): number[] | null {
++  const rawButtons = buttons ?? [];
++  const rawTarget = lights ?? [];
++  const buttonCount = rawButtons.length;
++
++  if (!Number.isInteger(modulus) || modulus < 1) return null;
++  if (modulus === 1) {
++    // Every counter is permanently 0, so nothing ever needs pressing.
++    return new Array<number>(buttonCount).fill(0);
++  }
++  const p = modulus;
++
++  // Deduplicate each button's counter list and learn how many counters exist.
++  // A counter mentioned by a button but missing from `lights` still has to end
++  // at 0, so it takes part in the system.
++  let counterCount = rawTarget.length;
++  const perButton: number[][] = [];
++  for (const raw of rawButtons) {
++    const seen = new Set<number>();
++    for (const idx of raw ?? []) {
++      if (!Number.isInteger(idx) || idx < 0) continue;
++      seen.add(idx);
++      if (idx + 1 > counterCount) counterCount = idx + 1;
++    }
++    perButton.push([...seen].sort((a, b) => a - b));
++  }
++
++  const target = new Int32Array(counterCount);
++  for (let i = 0; i < rawTarget.length; i++) {
++    const raw = Number(rawTarget[i]);
++    const value = Number.isFinite(raw) ? Math.trunc(raw) : 0;
++    target[i] = ((value % p) + p) % p;
++  }
++
++  // Buttons with the same counter set are interchangeable: only the total of
++  // their presses matters. Collapse each such family into one unknown, which
++  // shrinks the solution space enormously on degenerate inputs. A family whose
++  // total is `v` costs `v` presses at best, spent entirely on one member, and
++  // the lexicographically smallest way to do that is to press the *last* one.
++  // Buttons that touch nothing are simply never pressed.
++  const families = new Map<string, number[]>();
++  for (let button = 0; button < buttonCount; button++) {
++    const counters = perButton[button];
++    if (counters.length === 0) continue;
++    const key = counters.join(',');
++    const family = families.get(key);
++    if (family === undefined) families.set(key, [button]);
++    else family.push(button);
++  }
++
++  // Ordering the unknowns by the button that carries them keeps lexicographic
++  // comparisons on the collapsed system equivalent to the original ones.
++  const carriers = [...families.values()].map((family) => family[family.length - 1]);
++  carriers.sort((a, b) => a - b);
++
++  const system: System = {
++    buttonCount: carriers.length,
++    counterCount,
++    buttonCounters: carriers.map((button) => perButton[button]),
++    target,
++  };
++
++  const inv = inverseTable(p);
++  const solved = solveSystem(system, p, inv);
++  if (solved === null) return null;
++
++  const result = new Array<number>(buttonCount).fill(0);
++  for (let i = 0; i < carriers.length; i++) result[carriers[i]] = solved[i];
++  return result;
++}
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..a57e42d
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,3 @@
++export type { Machine } from './types.js';
++export { solveToggle } from './toggle.js';
++export { solveCounter } from './counter.js';
+diff --git a/src/toggle.ts b/src/toggle.ts
+new file mode 100644
+index 0000000..4c5f158
+--- /dev/null
++++ b/src/toggle.ts
+@@ -0,0 +1,282 @@
++import type { Machine } from './types.js';
++import {
++  bitsToIndices,
++  ctz32,
++  getBit,
++  lexLessBits,
++  lexLessWord,
++  popcount32,
++  popcountBits,
++  setBit,
++  wordsFor,
++  xorInto,
++} from './bits.js';
++
++/**
++ * Normalized view of a machine: one light-mask per button plus the target mask.
++ * Duplicate light indices inside a button are collapsed (a button toggles a
++ * *set* of lights), and any light a button mentions beyond `target.length` is
++ * still tracked — such a light starts off and must end off.
++ */
++interface Normalized {
++  buttonCount: number;
++  lightCount: number;
++  /** Light indices toggled by each button, deduplicated and ascending. */
++  buttonLights: number[][];
++  target: boolean[];
++}
++
++function normalize(machine: Machine): Normalized {
++  const rawTarget = machine?.target ?? [];
++  const rawButtons = machine?.buttons ?? [];
++  let lightCount = rawTarget.length;
++  const buttonLights: number[][] = [];
++
++  for (const raw of rawButtons) {
++    const seen = new Set<number>();
++    for (const idx of raw ?? []) {
++      if (!Number.isInteger(idx) || idx < 0) continue;
++      seen.add(idx);
++      if (idx + 1 > lightCount) lightCount = idx + 1;
++    }
++    buttonLights.push([...seen].sort((a, b) => a - b));
++  }
++
++  return {
++    buttonCount: rawButtons.length,
++    lightCount,
++    buttonLights,
++    target: rawTarget.map((v) => Boolean(v)),
++  };
++}
++
++/** Result of Gaussian elimination on the GF(2) system `A x = target`. */
++interface Reduced {
++  /** Solution with every free variable set to 0. */
++  particular: Uint32Array;
++  /** Null-space basis vectors, one per free variable. */
++  basis: Uint32Array[];
++}
++
++/**
++ * Row-reduce the system "for each light, the XOR of the buttons touching it
++ * equals the target". Returns `null` when the system is inconsistent.
++ */
++function reduce(n: Normalized): Reduced | null {
++  const { buttonCount: m, lightCount, buttonLights, target } = n;
++  const rowWords = wordsFor(m + 1);
++  const rhs = m; // the augmented column lives right after the coefficients
++
++  const rows: Uint32Array[] = [];
++  for (let light = 0; light < lightCount; light++) {
++    const row = new Uint32Array(rowWords);
++    if (target[light]) setBit(row, rhs);
++    rows.push(row);
++  }
++  for (let button = 0; button < m; button++) {
++    for (const light of buttonLights[button]) setBit(rows[light], button);
++  }
++
++  const pivotCols: number[] = [];
++  let rank = 0;
++  for (let col = 0; col < m && rank < lightCount; col++) {
++    let sel = -1;
++    for (let r = rank; r < lightCount; r++) {
++      if (getBit(rows[r], col)) {
++        sel = r;
++        break;
++      }
++    }
++    if (sel < 0) continue;
++    const tmp = rows[rank];
++    rows[rank] = rows[sel];
++    rows[sel] = tmp;
++    const pivot = rows[rank];
++    for (let r = 0; r < lightCount; r++) {
++      if (r !== rank && getBit(rows[r], col)) xorInto(rows[r], pivot);
++    }
++    pivotCols.push(col);
++    rank++;
++  }
++
++  // Rows below the rank have no coefficients left; a set RHS means "0 = 1".
++  for (let r = rank; r < lightCount; r++) {
++    if (getBit(rows[r], rhs)) return null;
++  }
++
++  const solutionWords = wordsFor(m);
++  const particular = new Uint32Array(solutionWords);
++  for (let r = 0; r < rank; r++) {
++    if (getBit(rows[r], rhs)) setBit(particular, pivotCols[r]);
++  }
++
++  const isPivot = new Uint8Array(m);
++  for (const col of pivotCols) isPivot[col] = 1;
++  const basis: Uint32Array[] = [];
++  for (let col = 0; col < m; col++) {
++    if (isPivot[col]) continue;
++    const vec = new Uint32Array(solutionWords);
++    setBit(vec, col);
++    for (let r = 0; r < rank; r++) {
++      if (getBit(rows[r], col)) setBit(vec, pivotCols[r]);
++    }
++    basis.push(vec);
++  }
++
++  return { particular, basis };
++}
++
++/**
++ * Walk the whole solution space (particular solution XOR every combination of
++ * null-space basis vectors) in Gray-code order, keeping the best candidate.
++ * Costs 2^k steps, so callers only pick this when k is small.
++ */
++function searchNullSpace(reduced: Reduced, buttonCount: number): number[] {
++  const { particular, basis } = reduced;
++  const cur = Uint32Array.from(particular);
++  const best = Uint32Array.from(particular);
++  let bestCount = popcountBits(cur);
++
++  const combos = 2 ** basis.length;
++  for (let i = 1; i < combos; i++) {
++    xorInto(cur, basis[ctz32(i)]);
++    const count = popcountBits(cur);
++    if (count < bestCount || (count === bestCount && lexLessBits(cur, best))) {
++      bestCount = count;
++      best.set(cur);
++    }
++  }
++  return bitsToIndices(best, buttonCount);
++}
++
++/**
++ * Map key for a light mask. Numbers are used when the mask provably fits in a
++ * double's exact integer range; wider masks fall back to a string key. The two
++ * key spaces never collide because Map treats numbers and strings distinctly.
++ */
++function maskKey(mask: Uint32Array): number | string {
++  if (mask.length === 1) return mask[0] >>> 0;
++  if (mask.length === 2 && mask[1] >>> 0 < 0x200000) {
++    return (mask[1] >>> 0) * 4294967296 + (mask[0] >>> 0);
++  }
++  let key = '';
++  for (let i = 0; i < mask.length; i++) key += (mask[i] >>> 0).toString(36) + '.';
++  return key;
++}
++
++/**
++ * Meet in the middle: split the buttons into two halves, tabulate the best
++ * subset of the second half for every light mask it can produce, then scan the
++ * first half looking for the complement. Costs 2^ceil(M/2) instead of 2^M.
++ */
++function searchMeetInMiddle(n: Normalized): number[] | null {
++  const { buttonCount: m, lightCount, buttonLights, target } = n;
++  const lightWords = wordsFor(lightCount);
++
++  const buttonMasks: Uint32Array[] = [];
++  for (let button = 0; button < m; button++) {
++    const mask = new Uint32Array(lightWords);
++    for (const light of buttonLights[button]) setBit(mask, light);
++    buttonMasks.push(mask);
++  }
++  const targetMask = new Uint32Array(lightWords);
++  for (let light = 0; light < lightCount; light++) {
++    if (target[light]) setBit(targetMask, light);
++  }
++
++  const lowCount = m >>> 1;
++  const highCount = m - lowCount;
++  const scale = 2 ** highCount; // packs (count, subset) into one exact double
++
++  // Second half: for every reachable mask keep the cheapest subset, breaking
++  // ties toward the lexicographically smaller index list.
++  const table = new Map<number | string, number>();
++  const highMask = new Uint32Array(lightWords);
++  let highBits = 0;
++  const remember = (): void => {
++    const key = maskKey(highMask);
++    const count = popcount32(highBits);
++    const prev = table.get(key);
++    if (prev === undefined) {
++      table.set(key, count * scale + highBits);
++      return;
++    }
++    const prevCount = Math.floor(prev / scale);
++    const prevBits = prev - prevCount * scale;
++    if (count < prevCount || (count === prevCount && lexLessWord(highBits, prevBits))) {
++      table.set(key, count * scale + highBits);
++    }
++  };
++  remember();
++  const highCombos = 2 ** highCount;
++  for (let i = 1; i < highCombos; i++) {
++    const bit = ctz32(i);
++    xorInto(highMask, buttonMasks[lowCount + bit]);
++    highBits ^= 1 << bit;
++    remember();
++  }
++
++  // First half: look up the mask that completes the target.
++  const lowMask = new Uint32Array(lightWords);
++  const needed = new Uint32Array(lightWords);
++  let lowBits = 0;
++  let found = false;
++  let bestCount = 0;
++  let bestLow = 0;
++  let bestHigh = 0;
++  const lowCombos = 2 ** lowCount;
++  for (let i = 0; i < lowCombos; i++) {
++    if (i > 0) {
++      const bit = ctz32(i);
++      xorInto(lowMask, buttonMasks[bit]);
++      lowBits ^= 1 << bit;
++    }
++    for (let w = 0; w < lightWords; w++) needed[w] = lowMask[w] ^ targetMask[w];
++    const packed = table.get(maskKey(needed));
++    if (packed === undefined) continue;
++    const highSubsetCount = Math.floor(packed / scale);
++    const highSubset = packed - highSubsetCount * scale;
++    const count = popcount32(lowBits) + highSubsetCount;
++    const better =
++      !found ||
++      count < bestCount ||
++      (count === bestCount &&
++        (lowBits !== bestLow
++          ? lexLessWord(lowBits, bestLow)
++          : lexLessWord(highSubset, bestHigh)));
++    if (better) {
++      found = true;
++      bestCount = count;
++      bestLow = lowBits;
++      bestHigh = highSubset;
++    }
++  }
++  if (!found) return null;
++
++  const result: number[] = [];
++  for (let i = 0; i < lowCount; i++) if ((bestLow >>> i) & 1) result.push(i);
++  for (let i = 0; i < highCount; i++) if ((bestHigh >>> i) & 1) result.push(lowCount + i);
++  return result;
++}
++
++/**
++ * Find the smallest set of buttons whose combined toggles produce the target
++ * light configuration, or `null` if no set does.
++ *
++ * Order of presses is irrelevant and pressing a button twice cancels out, so
++ * this is a minimum-weight solution of a linear system over GF(2). Elimination
++ * gives the full solution space; if it is small we enumerate it directly,
++ * otherwise we meet in the middle over the buttons.
++ */
++export function solveToggle(machine: Machine): number[] | null {
++  const n = normalize(machine);
++  const reduced = reduce(n);
++  if (reduced === null) return null;
++
++  const free = reduced.basis.length;
++  const halfExponent = n.buttonCount >>> 1;
++  if (free <= Math.max(20, halfExponent)) {
++    return searchNullSpace(reduced, n.buttonCount);
++  }
++  return searchMeetInMiddle(n);
++}
+diff --git a/src/types.ts b/src/types.ts
+new file mode 100644
+index 0000000..a04d465
+--- /dev/null
++++ b/src/types.ts
+@@ -0,0 +1,7 @@
++/** A machine with toggle buttons (Part 1). */
++export interface Machine {
++  /** Desired state for each light. Every light starts off. */
++  target: boolean[];
++  /** `buttons[i]` lists the light indices toggled by button `i`. */
++  buttons: number[][];
++}
+diff --git a/tests/counter.test.ts b/tests/counter.test.ts
+new file mode 100644
+index 0000000..d30c8f8
+--- /dev/null
++++ b/tests/counter.test.ts
+@@ -0,0 +1,325 @@
++import { describe, expect, it } from 'vitest';
++import { solveCounter } from '../src/index.js';
++
++/** Apply press counts and report the resulting counter values. */
++function applyPresses(
++  counterCount: number,
++  buttons: number[][],
++  presses: number[],
++  modulus: number,
++): number[] {
++  const counters = new Array<number>(counterCount).fill(0);
++  for (let b = 0; b < buttons.length; b++) {
++    for (const counter of buttons[b]) {
++      counters[counter] = (counters[counter] + presses[b]) % modulus;
++    }
++  }
++  return counters;
++}
++
++/** Reference solver: try every press vector. Only for tiny instances. */
++function bruteForce(lights: number[], buttons: number[][], modulus: number): number[] | null {
++  const m = buttons.length;
++  const presses = new Array<number>(m).fill(0);
++  let best: number[] | null = null;
++  const total = modulus ** m;
++  for (let code = 0; code < total; code++) {
++    let rest = code;
++    for (let i = 0; i < m; i++) {
++      presses[i] = rest % modulus;
++      rest = Math.floor(rest / modulus);
++    }
++    const result = applyPresses(lights.length, buttons, presses, modulus);
++    if (!result.every((v, i) => v === lights[i])) continue;
++    if (best === null) {
++      best = [...presses];
++      continue;
++    }
++    const sum = presses.reduce((a, b) => a + b, 0);
++    const bestSum = best.reduce((a, b) => a + b, 0);
++    if (sum < bestSum) {
++      best = [...presses];
++    } else if (sum === bestSum) {
++      for (let i = 0; i < m; i++) {
++        if (presses[i] !== best[i]) {
++          if (presses[i] < best[i]) best = [...presses];
++          break;
++        }
++      }
++    }
++  }
++  return best;
++}
++
++/**
++ * Exact minimum number of presses, found by breadth-first search over counter
++ * states (each press is one unit-cost edge). Feasible whenever p^N is small,
++ * independently of how many buttons there are.
++ */
++function minPressesByBfs(lights: number[], buttons: number[][], modulus: number): number | null {
++  const n = lights.length;
++  const encode = (state: number[]): number => {
++    let code = 0;
++    for (let i = n - 1; i >= 0; i--) code = code * modulus + state[i];
++    return code;
++  };
++  const total = modulus ** n;
++  const dist = new Int32Array(total).fill(-1);
++  const start = encode(new Array<number>(n).fill(0));
++  const goal = encode(lights);
++  dist[start] = 0;
++  let frontier = [start];
++  while (frontier.length > 0) {
++    const next: number[] = [];
++    for (const code of frontier) {
++      if (code === goal) return dist[code];
++      const state: number[] = [];
++      let rest = code;
++      for (let i = 0; i < n; i++) {
++        state.push(rest % modulus);
++        rest = Math.floor(rest / modulus);
++      }
++      for (const button of buttons) {
++        const moved = [...state];
++        for (const counter of button) moved[counter] = (moved[counter] + 1) % modulus;
++        const encoded = encode(moved);
++        if (dist[encoded] !== -1) continue;
++        dist[encoded] = dist[code] + 1;
++        next.push(encoded);
++      }
++    }
++    frontier = next;
++  }
++  return dist[goal] === -1 ? null : dist[goal];
++}
++
++function makeRandom(seed: number): () => number {
++  let state = seed >>> 0;
++  return () => {
++    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
++    return state / 4294967296;
++  };
++}
++
++describe('solveCounter', () => {
++  it('returns all zeros when the target is already met', () => {
++    expect(solveCounter([0, 0], [[0], [1]], 5)).toEqual([0, 0]);
++  });
++
++  it('solves a single counter', () => {
++    expect(solveCounter([3], [[0]], 5)).toEqual([3]);
++  });
++
++  it('wraps around when that is cheaper', () => {
++    // Reaching 4 mod 5 on both counters costs 4 presses of button 2 rather than
++    // 4 + 4 presses of the single-counter buttons.
++    expect(solveCounter([4, 4], [[0], [1], [0, 1]], 5)).toEqual([0, 0, 4]);
++  });
++
++  it('returns null when the target is unreachable', () => {
++    expect(solveCounter([1, 2], [[0, 1]], 5)).toBeNull();
++  });
++
++  it('returns null when a counter cannot be touched', () => {
++    expect(solveCounter([0, 1], [[0]], 7)).toBeNull();
++  });
++
++  it('breaks ties toward the lexicographically smallest press vector', () => {
++    // Buttons 0 and 1 are interchangeable, so [0,3] beats [3,0] and [1,2].
++    expect(solveCounter([3], [[0], [0]], 5)).toEqual([0, 3]);
++  });
++
++  it('ignores duplicate counter indices inside one button', () => {
++    expect(solveCounter([2], [[0, 0]], 7)).toEqual([2]);
++  });
++
++  it('requires counters beyond the target array to end at zero', () => {
++    expect(solveCounter([1], [[0, 3]], 5)).toBeNull();
++  });
++
++  it('handles an empty button list', () => {
++    expect(solveCounter([0, 0], [], 7)).toEqual([]);
++    expect(solveCounter([1], [], 7)).toBeNull();
++  });
++
++  it('works with modulus 2 like a toggle puzzle', () => {
++    expect(solveCounter([1, 1, 0], [[0, 1], [1, 2], [2]], 2)).toEqual([1, 0, 0]);
++  });
++
++  it('agrees with brute force on random small systems', () => {
++    const random = makeRandom(4242);
++    const moduli = [2, 3, 5, 7];
++    for (let trial = 0; trial < 300; trial++) {
++      const modulus = moduli[Math.floor(random() * moduli.length)];
++      const counters = 1 + Math.floor(random() * 3);
++      const buttonCount = 1 + Math.floor(random() * 4);
++      const buttons: number[][] = [];
++      for (let b = 0; b < buttonCount; b++) {
++        const set = new Set<number>();
++        for (let c = 0; c < counters; c++) if (random() < 0.5) set.add(c);
++        buttons.push([...set]);
++      }
++      const lights: number[] = [];
++      for (let c = 0; c < counters; c++) lights.push(Math.floor(random() * modulus));
++
++      const label = JSON.stringify({ lights, buttons, modulus });
++      const actual = solveCounter(lights, buttons, modulus);
++      expect(actual, label).toEqual(bruteForce(lights, buttons, modulus));
++      if (actual !== null) {
++        expect(applyPresses(counters, buttons, actual, modulus), label).toEqual(lights);
++      }
++    }
++  });
++
++  it('agrees with brute force when the branch-and-bound path is forced', () => {
++    // Many duplicated buttons and a large modulus push p^k past the
++    // enumeration limit, so this exercises the search fallback.
++    const random = makeRandom(77);
++    for (let trial = 0; trial < 40; trial++) {
++      const modulus = 97;
++      const buttons: number[][] = [];
++      const pool: number[][] = [[0], [1], [0, 1]];
++      for (let b = 0; b < 6; b++) buttons.push([...pool[Math.floor(random() * pool.length)]]);
++      const lights = [Math.floor(random() * modulus), Math.floor(random() * modulus)];
++      const label = JSON.stringify({ lights, buttons, modulus });
++      const actual = solveCounter(lights, buttons, modulus);
++      const expectedSum = minPressesByBfs(lights, buttons, modulus);
++      if (expectedSum === null) {
++        expect(actual, label).toBeNull();
++        continue;
++      }
++      expect(actual, label).not.toBeNull();
++      expect(applyPresses(2, buttons, actual as number[], modulus), label).toEqual(lights);
++      const bestSum = (actual as number[]).reduce((a, b) => a + b, 0);
++      expect(bestSum, label).toBe(expectedSum);
++      for (const presses of actual as number[]) {
++        expect(presses, label).toBeGreaterThanOrEqual(0);
++        expect(presses, label).toBeLessThan(modulus);
++      }
++    }
++  });
++
++  it('solves a 40x40 mod 97 system quickly', () => {
++    const size = 40;
++    const modulus = 97;
++    const random = makeRandom(31337);
++    const buttons: number[][] = [];
++    for (let b = 0; b < size; b++) {
++      const set = new Set<number>([b]);
++      for (let c = 0; c < size; c++) if (random() < 0.25) set.add(c);
++      buttons.push([...set].sort((a, b2) => a - b2));
++    }
++    const presses: number[] = [];
++    for (let b = 0; b < size; b++) presses.push(Math.floor(random() * modulus));
++    const lights = applyPresses(size, buttons, presses, modulus);
++
++    const started = Date.now();
++    const solution = solveCounter(lights, buttons, modulus);
++    expect(Date.now() - started).toBeLessThan(5000);
++    expect(solution).not.toBeNull();
++    expect(applyPresses(size, buttons, solution as number[], modulus)).toEqual(lights);
++    const sum = (solution as number[]).reduce((a, b) => a + b, 0);
++    expect(sum).toBeLessThanOrEqual(presses.reduce((a, b) => a + b, 0));
++  });
++
++  it('solves a highly degenerate 40-button mod 97 system quickly', () => {
++    // Every button touches the same counter, so the null space has 39
++    // dimensions: 97^39 solutions, all but one of them wasteful.
++    const buttons: number[][] = [];
++    for (let b = 0; b < 40; b++) buttons.push([0]);
++    const started = Date.now();
++    const solution = solveCounter([96], buttons, 97);
++    expect(Date.now() - started).toBeLessThan(5000);
++    expect(solution).toEqual([...new Array<number>(39).fill(0), 96]);
++  });
++
++  it('detects infeasibility on a large degenerate system quickly', () => {
++    const buttons: number[][] = [];
++    for (let b = 0; b < 40; b++) buttons.push([0, 1]);
++    const started = Date.now();
++    expect(solveCounter([1, 2], buttons, 97)).toBeNull();
++    expect(Date.now() - started).toBeLessThan(5000);
++  });
++
++  // The solution space here is far too large to enumerate, but the cheapest
++  // solution is tiny. Searching by increasing total finds it immediately;
++  // searching with an incumbent instead sinks into the first subtree and
++  // returns something ~90x too expensive.
++  it('finds a cheap optimum in a large mod 97 solution space', () => {
++    const lights = [1, 1, 0, 1, 1, 3, 0, 2, 0, 0, 1, 0];
++    const buttons = [
++      [1, 4], [1, 5, 10], [1, 3, 6, 10], [4, 6], [0, 1, 2, 6, 9], [2, 4, 9, 10],
++      [2, 4, 10, 11], [5, 6, 9, 11], [0, 3, 4], [3, 6, 8, 9, 10],
++      [1, 2, 5, 6, 8, 9], [0, 6, 8], [1, 2, 5, 6, 9, 10], [1], [6, 7, 11], [5, 7],
++    ];
++    const started = Date.now();
++    const solution = solveCounter(lights, buttons, 97);
++    expect(Date.now() - started).toBeLessThan(5000);
++    expect(solution).not.toBeNull();
++    expect(applyPresses(12, buttons, solution as number[], 97)).toEqual(lights);
++    // 4 is optimal: the deepening search proved nothing cheaper exists.
++    expect((solution as number[]).reduce((a, b) => a + b, 0)).toBe(4);
++  });
++
++  it('finds a cheap optimum with 40 buttons and 24 counters mod 11', () => {
++    const lights = [0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0];
++    const buttons = [
++      [7, 15, 21], [6, 9, 15], [4, 5], [6, 18], [9, 18], [18, 19], [9, 11, 23],
++      [0, 2, 3, 5, 16], [2, 15, 18, 19], [6], [1, 11], [1, 4, 8, 11, 13, 19],
++      [4, 8, 9, 11, 14], [11, 12, 23], [4, 7, 10, 12, 14, 17], [2, 3, 9, 12, 13, 19],
++      [9, 13, 22, 23], [12], [3, 10, 12, 16, 17], [10, 13, 15, 18, 20], [2, 7, 23],
++      [1, 5, 10, 17, 18, 20], [2, 12, 20, 22], [4], [6, 23], [0, 1, 12],
++      [2, 7, 8, 12, 21], [5], [1, 8, 10], [3, 4], [4, 16], [0, 5, 6, 13], [2, 20],
++      [7, 9, 13, 14, 22], [6, 17], [4, 7, 8, 13, 17], [2, 7, 11, 21], [0, 9, 16],
++      [2, 10, 12, 13, 17, 18], [7, 17, 19],
++    ];
++    const expected = new Array<number>(40).fill(0);
++    expected[4] = 1;
++    expected[39] = 1;
++
++    const started = Date.now();
++    const solution = solveCounter(lights, buttons, 11);
++    expect(Date.now() - started).toBeLessThan(5000);
++    expect(solution).toEqual(expected);
++  });
++
++  it('is repeatable: identical inputs give identical answers', () => {
++    const lights = [1, 1, 0, 1, 1, 3, 0, 2, 0, 0, 1, 0];
++    const buttons = [
++      [1, 4], [1, 5, 10], [1, 3, 6, 10], [4, 6], [0, 1, 2, 6, 9], [2, 4, 9, 10],
++      [2, 4, 10, 11], [5, 6, 9, 11], [0, 3, 4], [3, 6, 8, 9, 10],
++      [1, 2, 5, 6, 8, 9], [0, 6, 8], [1, 2, 5, 6, 9, 10], [1], [6, 7, 11], [5, 7],
++    ];
++    const first = solveCounter(lights, buttons, 97);
++    for (let repeat = 0; repeat < 4; repeat++) {
++      expect(solveCounter(lights, buttons, 97)).toEqual(first);
++    }
++  });
++
++  it('never spends more presses than a planted solution at the stated limits', () => {
++    const random = makeRandom(90210);
++    for (const modulus of [2, 5, 13, 97]) {
++      const counters = 40;
++      const buttons: number[][] = [];
++      for (let b = 0; b < 40; b++) {
++        const set = new Set<number>();
++        for (let c = 0; c < counters; c++) if (random() < 0.25) set.add(c);
++        if (set.size === 0) set.add(Math.floor(random() * counters));
++        buttons.push([...set].sort((a, b2) => a - b2));
++      }
++      const planted = new Array<number>(40).fill(0);
++      for (let hit = 0; hit < 3; hit++) {
++        planted[Math.floor(random() * 40)] = 1 + Math.floor(random() * Math.min(3, modulus - 1));
++      }
++      const lights = applyPresses(counters, buttons, planted, modulus);
++
++      const started = Date.now();
++      const solution = solveCounter(lights, buttons, modulus);
++      expect(Date.now() - started).toBeLessThan(5000);
++      expect(solution).not.toBeNull();
++      expect(applyPresses(counters, buttons, solution as number[], modulus)).toEqual(lights);
++      const total = (solution as number[]).reduce((a, b) => a + b, 0);
++      expect(total).toBeLessThanOrEqual(planted.reduce((a, b) => a + b, 0));
++    }
++  });
++});
+diff --git a/tests/toggle.test.ts b/tests/toggle.test.ts
+new file mode 100644
+index 0000000..a921f9a
+--- /dev/null
++++ b/tests/toggle.test.ts
+@@ -0,0 +1,196 @@
++import { describe, expect, it } from 'vitest';
++import { solveToggle } from '../src/index.js';
++import type { Machine } from '../src/index.js';
++
++/** Apply a set of button presses and report the resulting light state. */
++function applyPresses(machine: Machine, presses: number[]): boolean[] {
++  const lights = machine.target.map(() => false);
++  for (const button of presses) {
++    for (const light of machine.buttons[button]) lights[light] = !lights[light];
++  }
++  return lights;
++}
++
++/** Reference solver: try every subset of buttons. Only for tiny instances. */
++function bruteForce(machine: Machine): number[] | null {
++  const m = machine.buttons.length;
++  let best: number[] | null = null;
++  for (let mask = 0; mask < 1 << m; mask++) {
++    const presses: number[] = [];
++    for (let i = 0; i < m; i++) if ((mask >>> i) & 1) presses.push(i);
++    const result = applyPresses(machine, presses);
++    if (!result.every((v, i) => v === machine.target[i])) continue;
++    if (best === null || presses.length < best.length) {
++      best = presses;
++      continue;
++    }
++    if (presses.length === best.length) {
++      for (let i = 0; i < presses.length; i++) {
++        if (presses[i] !== best[i]) {
++          if (presses[i] < best[i]) best = presses;
++          break;
++        }
++      }
++    }
++  }
++  return best;
++}
++
++function makeRandom(seed: number): () => number {
++  let state = seed >>> 0;
++  return () => {
++    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
++    return state / 4294967296;
++  };
++}
++
++describe('solveToggle', () => {
++  it('returns an empty press list when the target is already satisfied', () => {
++    expect(solveToggle({ target: [false, false], buttons: [[0], [1]] })).toEqual([]);
++  });
++
++  it('handles the worked example from the task (no solution)', () => {
++    const machine: Machine = {
++      target: [true, true, false, true],
++      buttons: [
++        [0, 1],
++        [1, 2, 3],
++        [0, 3],
++      ],
++    };
++    expect(solveToggle(machine)).toBeNull();
++  });
++
++  it('finds a single-button solution', () => {
++    const machine: Machine = {
++      target: [true, true, false],
++      buttons: [[0], [1], [0, 1], [2]],
++    };
++    expect(solveToggle(machine)).toEqual([2]);
++  });
++
++  it('prefers fewer presses over smaller indices', () => {
++    const machine: Machine = {
++      target: [true, true],
++      buttons: [[0], [1], [0, 1]],
++    };
++    expect(solveToggle(machine)).toEqual([2]);
++  });
++
++  it('breaks ties toward the lexicographically smallest index list', () => {
++    // Buttons 0 and 3 are identical, as are 1 and 2, so {0,1}, {0,2}, {3,1}
++    // and {3,2} all work with two presses. [0,1] is lexicographically first.
++    const machine: Machine = {
++      target: [true, true],
++      buttons: [[0], [1], [1], [0]],
++    };
++    expect(solveToggle(machine)).toEqual([0, 1]);
++  });
++
++  it('returns null when a light cannot be reached at all', () => {
++    expect(solveToggle({ target: [false, true], buttons: [[0]] })).toBeNull();
++  });
++
++  it('treats an empty machine as solved only for an all-off target', () => {
++    expect(solveToggle({ target: [], buttons: [] })).toEqual([]);
++    expect(solveToggle({ target: [false, false], buttons: [] })).toEqual([]);
++    expect(solveToggle({ target: [true], buttons: [] })).toBeNull();
++  });
++
++  it('ignores duplicate light indices inside one button', () => {
++    expect(solveToggle({ target: [true], buttons: [[0, 0]] })).toEqual([0]);
++  });
++
++  it('requires lights beyond the target array to end up off', () => {
++    // Button 0 is the only way to light light 0, but it also lights light 5,
++    // which is not in the target and therefore has to stay off.
++    expect(solveToggle({ target: [true], buttons: [[0, 5]] })).toBeNull();
++    expect(solveToggle({ target: [true], buttons: [[0, 5], [5]] })).toEqual([0, 1]);
++  });
++
++  it('agrees with brute force on random small machines', () => {
++    const random = makeRandom(12345);
++    for (let trial = 0; trial < 400; trial++) {
++      const lights = 1 + Math.floor(random() * 5);
++      const buttonCount = 1 + Math.floor(random() * 8);
++      const buttons: number[][] = [];
++      for (let b = 0; b < buttonCount; b++) {
++        const set = new Set<number>();
++        for (let l = 0; l < lights; l++) if (random() < 0.5) set.add(l);
++        buttons.push([...set]);
++      }
++      const target: boolean[] = [];
++      for (let l = 0; l < lights; l++) target.push(random() < 0.5);
++      const machine: Machine = { target, buttons };
++
++      const actual = solveToggle(machine);
++      const expected = bruteForce(machine);
++      expect(actual, JSON.stringify(machine)).toEqual(expected);
++      if (actual !== null) {
++        expect(applyPresses(machine, actual)).toEqual(target);
++      }
++    }
++  });
++
++  it('agrees with brute force when many buttons are dependent', () => {
++    // Few distinct light masks and many buttons: forces large null spaces.
++    const random = makeRandom(999);
++    for (let trial = 0; trial < 200; trial++) {
++      const lights = 3;
++      const pool: number[][] = [[0], [1], [0, 1], [2]];
++      const buttonCount = 6 + Math.floor(random() * 6);
++      const buttons: number[][] = [];
++      for (let b = 0; b < buttonCount; b++) {
++        buttons.push([...pool[Math.floor(random() * pool.length)]]);
++      }
++      const target: boolean[] = [];
++      for (let l = 0; l < lights; l++) target.push(random() < 0.5);
++      const machine: Machine = { target, buttons };
++      expect(solveToggle(machine), JSON.stringify(machine)).toEqual(bruteForce(machine));
++    }
++  });
++
++  it('solves a 40x40 machine with a unique solution quickly', () => {
++    const size = 40;
++    const random = makeRandom(2024);
++    const buttons: number[][] = [];
++    for (let b = 0; b < size; b++) {
++      const set = new Set<number>([b]); // guarantees full rank
++      for (let l = 0; l < size; l++) if (random() < 0.3) set.add(l);
++      buttons.push([...set].sort((a, b2) => a - b2));
++    }
++    const pressed = [3, 7, 11, 29, 38];
++    const machine: Machine = { target: new Array<boolean>(size).fill(false), buttons };
++    machine.target = applyPresses(machine, pressed);
++
++    const started = Date.now();
++    const solution = solveToggle(machine);
++    expect(Date.now() - started).toBeLessThan(5000);
++    expect(solution).not.toBeNull();
++    expect(applyPresses(machine, solution as number[])).toEqual(machine.target);
++    expect((solution as number[]).length).toBeLessThanOrEqual(pressed.length);
++  });
++
++  it('solves a 40-button machine with a huge solution space quickly', () => {
++    // Only three distinct light masks across 40 buttons: the null space has 37
++    // dimensions, so 2^37 combinations exist and only meet-in-the-middle works.
++    const buttons: number[][] = [];
++    for (let b = 0; b < 40; b++) buttons.push([b % 3]);
++    const machine: Machine = { target: [true, true, true], buttons };
++
++    const started = Date.now();
++    const solution = solveToggle(machine);
++    expect(Date.now() - started).toBeLessThan(5000);
++    expect(solution).toEqual([0, 1, 2]);
++  });
++
++  it('reports no solution on a 40-button machine with a huge solution space', () => {
++    const buttons: number[][] = [];
++    for (let b = 0; b < 40; b++) buttons.push([0, 1]);
++    const machine: Machine = { target: [true, false], buttons };
++
++    const started = Date.now();
++    expect(solveToggle(machine)).toBeNull();
++    expect(Date.now() - started).toBeLessThan(5000);
++  });
++});
