@@ -374,29 +374,25 @@ func rescoreLintOnly(ctx context.Context, trialDir string, task *config.Task) er
 	}
 	applyTaskMetaUpdates(meta, task)
 
-	// Prefer the trial's own preserved workspace when it survived AND is
-	// already installed: it is exactly the tree the original lint scored, so
-	// re-linting it is more faithful than rebuilding from v1 + diff.patch, it
-	// needs no install, and it sidesteps diffs that captured node_modules and
-	// no longer apply. Requiring node_modules keeps this read-only -- we never
-	// mutate stored results. Otherwise reconstruct into a temp dir.
-	wsDir := filepath.Join(trialDir, "workspace")
-	if fi, err := os.Stat(filepath.Join(wsDir, "node_modules")); err != nil || !fi.IsDir() {
-		var cleanup func()
-		wsDir, cleanup, err = reconstructToTempDir(trialDir, task)
-		if err != nil {
-			return err
-		}
-		defer cleanup()
+	// Always reconstruct from v1 + diff.patch rather than re-linting the
+	// trial's preserved workspace. The preserved tree is NOT what the original
+	// lint saw: validation runs inject validation-tests/ and leave coverage/
+	// and dist/ behind, and its node_modules is often partial, so `npm run
+	// lint` dies with "eslint: not found" and the parser correctly records a
+	// crashed linter as 0 -- silently downgrading trials that were fine.
+	wsDir, cleanup, err := reconstructToTempDir(trialDir, task)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
 
-		// Lint needs node_modules: reconstructToTempDir only clones v1 and
-		// applies the diff, and a bare `npm run lint` with no eslint installed
-		// exits nonzero, which the parser correctly reads as a crashed linter
-		// and scores 0. (rescoreFull only gets away without this because
-		// RunTests/RunCoverage install into the same workspace first.)
-		if err := validation.RunInstall(ctx, wsDir, task.ValidationImage, task.InstallCmd); err != nil {
-			return fmt.Errorf("install before lint: %w", err)
-		}
+	// Lint needs node_modules: reconstructToTempDir only clones v1 and applies
+	// the diff, and a bare `npm run lint` with no eslint installed exits
+	// nonzero, which the parser correctly reads as a crashed linter and scores
+	// 0. (rescoreFull only gets away without this because RunTests/RunCoverage
+	// install into the same workspace first.)
+	if err := validation.RunInstall(ctx, wsDir, task.ValidationImage, task.InstallCmd); err != nil {
+		return fmt.Errorf("install before lint: %w", err)
 	}
 
 	lintResult, err := validation.RunLint(ctx, wsDir, task.ValidationImage, task.LintCmd, 0)

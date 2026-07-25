@@ -154,12 +154,36 @@ func ReconstructFromDiff(repo, tag string, diff []byte) (string, func(), error) 
 
 	cleaned := stripNonRepoHunks(diff)
 
-	cmd := exec.Command("git", "apply", "--allow-empty", "-")
-	cmd.Dir = tmpDir
-	cmd.Stdin = strings.NewReader(string(cleaned))
-	if out, err := cmd.CombinedOutput(); err != nil {
-		cleanup()
-		return "", nil, fmt.Errorf("git apply: %s: %w", out, err)
+	// Exclude install artifacts: node_modules and package-lock.json are never a
+	// meaningful agent contribution, and both routinely break reconstruction --
+	// node_modules ships binary blobs (e.g. node_modules/esbuild/bin/esbuild)
+	// that fail to apply, and a regenerated lockfile is recorded as brand-new
+	// against a tag that already has one ("already exists in working
+	// directory"). Either aborts the ENTIRE apply over a file nobody scores.
+	// Dependencies are re-installed downstream from package.json, which IS
+	// applied; the tradeoff is that installs resolve semver-fresh rather than
+	// lockfile-pinned.
+	apply := func(extra ...string) ([]byte, error) {
+		args := append([]string{"apply", "--allow-empty",
+			"--exclude=node_modules/*", "--exclude=package-lock.json"}, extra...)
+		cmd := exec.Command("git", append(args, "-")...)
+		cmd.Dir = tmpDir
+		cmd.Stdin = strings.NewReader(string(cleaned))
+		return cmd.CombinedOutput()
+	}
+
+	if out, err := apply(); err != nil {
+		// Retry with --3way. Captured diffs routinely record files the tag
+		// already carries as brand-new (most often a regenerated
+		// package-lock.json -> "already exists in working directory") and can
+		// carry stale context; a plain apply aborts the ENTIRE reconstruction
+		// over one such hunk. --3way resolves them from blob identity and
+		// still fails loudly on a genuine conflict. Report the original error,
+		// which names the offending path.
+		if _, err3 := apply("--3way"); err3 != nil {
+			cleanup()
+			return "", nil, fmt.Errorf("git apply: %s: %w", out, err)
+		}
 	}
 	return tmpDir, cleanup, nil
 }
