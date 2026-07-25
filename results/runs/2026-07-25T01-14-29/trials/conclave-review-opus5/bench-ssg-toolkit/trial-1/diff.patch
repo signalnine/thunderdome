@@ -1,0 +1,1557 @@
+diff --git a/.gitignore b/.gitignore
+index b947077..47abc3c 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,2 +1,5 @@
+ node_modules/
+ dist/
++
++.thunderdome-output.jsonl
++.thunderdome-stderr.log
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..9e7f2ae
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,16 @@
++{
++  "input_tokens": 6886,
++  "output_tokens": 83853,
++  "cache_read_tokens": 6320669,
++  "cache_creation_tokens": 126145,
++  "turns": 81,
++  "tools_used": [
++    "Bash",
++    "Write",
++    "Edit",
++    "Agent",
++    "Read"
++  ],
++  "duration_ms": 1329274,
++  "total_cost_usd": 8.262427499999998
++}
+\ No newline at end of file
+diff --git a/src/plugins/asset-pipeline.ts b/src/plugins/asset-pipeline.ts
+new file mode 100644
+index 0000000..9e980dc
+--- /dev/null
++++ b/src/plugins/asset-pipeline.ts
+@@ -0,0 +1,156 @@
++import { BuildContext, ContentFile, Plugin } from '../core/types.js';
++import { mapUnfencedLines } from './utils.js';
++
++/**
++ * Rewrites relative asset references to a canonical `/assets/` prefix and
++ * records every asset it discovers in a build-wide manifest.
++ */
++
++export interface AssetManifest {
++  assets: string[];
++  /** URL prefix the rewritten assets are served from, for downstream plugins. */
++  prefix: string;
++}
++
++export interface AssetPipelineOptions {
++  /**
++   * URL prefix that rewritten assets are served from. Normalised to be
++   * root-relative so that rewriting is idempotent. Default `/assets`.
++   */
++  assetPrefix?: string;
++}
++
++export const ASSET_MANIFEST_KEY = 'asset-manifest';
++
++// Attribute rewriting is scoped to real tags so that prose or escaped example
++// markup (`&lt;img src="a.png"&gt;`) is never touched.
++const TAG_RE = /<[a-zA-Z][^>]*>/g;
++const URL_ATTR_RE = /\b(src|href)\s*=\s*("([^"]*)"|'([^']*)')/gi;
++
++// Inline markdown links and images: `[text](url)` / `![alt](url "title")`.
++// This plugin declares no dependencies, so it may run either side of
++// markdown-ext; handling both forms keeps it order-independent.
++const MARKDOWN_LINK_RE = /(!?\[[^\]]*\])\(\s*([^)\s]+)((?:\s+(?:"[^"]*"|'[^']*'))?\s*)\)/g;
++
++/** Documents are pages, not assets — they keep their original URLs. */
++const DOCUMENT_EXTENSIONS = new Set(['html', 'htm', 'xhtml', 'xml', 'md', 'markdown']);
++
++interface AssetReference {
++  /** Manifest key: a clean, root-relative path with no query or fragment. */
++  path: string;
++  /** The original `?query#fragment`, preserved when rewriting. */
++  suffix: string;
++}
++
++function isExternal(url: string): boolean {
++  // Scheme-qualified (`https:`, `mailto:`, `data:`), protocol-relative, or
++  // rooted/fragment/query-only URLs are all left untouched. Leaving rooted
++  // URLs alone is also what makes a second pass a no-op.
++  return (
++    url === '' ||
++    /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url) ||
++    url.startsWith('//') ||
++    url.startsWith('/') ||
++    url.startsWith('#') ||
++    url.startsWith('?')
++  );
++}
++
++/**
++ * Resolve a relative reference, e.g. `./img/a.png?v=2` -> path `img/a.png`
++ * with suffix `?v=2`. Returns null when the URL is not a rewritable asset.
++ */
++function toAssetReference(url: string): AssetReference | null {
++  if (isExternal(url)) return null;
++
++  const separator = url.search(/[?#]/);
++  const pathPart = separator === -1 ? url : url.slice(0, separator);
++  const suffix = separator === -1 ? '' : url.slice(separator);
++
++  const segments: string[] = [];
++  for (const segment of pathPart.split('/')) {
++    if (segment === '' || segment === '.') continue;
++    if (segment === '..') {
++      // Assets live in a flat namespace rooted at the content directory, so a
++      // `..` that would climb above the root is clamped rather than honoured.
++      segments.pop();
++      continue;
++    }
++    segments.push(segment);
++  }
++  if (segments.length === 0) return null;
++
++  const name = segments[segments.length - 1];
++  const dot = name.lastIndexOf('.');
++  if (dot <= 0 || dot === name.length - 1) return null;
++  const extension = name.slice(dot + 1).toLowerCase();
++  if (DOCUMENT_EXTENSIONS.has(extension)) return null;
++
++  return { path: segments.join('/'), suffix };
++}
++
++/** Normalise to a root-relative prefix; `/` collapses to the bare root. */
++function normalizePrefix(raw: string): string {
++  const trimmed = raw.replace(/\/+$/, '').replace(/^\/*/, '/');
++  return trimmed === '/' ? '' : trimmed;
++}
++
++function getManifest(ctx: BuildContext, prefix: string): AssetManifest {
++  const existing = ctx.data.get(ASSET_MANIFEST_KEY) as AssetManifest | undefined;
++  if (existing) return existing;
++  const manifest: AssetManifest = { assets: [], prefix };
++  ctx.data.set(ASSET_MANIFEST_KEY, manifest);
++  return manifest;
++}
++
++export function createAssetPipelinePlugin(options: AssetPipelineOptions = {}): Plugin {
++  const prefix = normalizePrefix(options.assetPrefix ?? '/assets');
++
++  return {
++    name: 'asset-pipeline',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      beforeBuild(ctx: BuildContext): void {
++        getManifest(ctx, prefix);
++      },
++
++      transformContent(file: ContentFile, ctx: BuildContext): ContentFile {
++        const manifest = getManifest(ctx, prefix);
++        const source = file.content ?? '';
++
++        /** Record the asset and hand back its public URL. */
++        const record = (reference: AssetReference): string => {
++          if (!manifest.assets.includes(reference.path)) {
++            manifest.assets.push(reference.path);
++          }
++          return `${prefix}/${reference.path}${reference.suffix}`;
++        };
++
++        const withRewrittenAttrs = source.replace(TAG_RE, tag =>
++          tag.replace(
++            URL_ATTR_RE,
++            (match, attr: string, _quoted: string, doubleQuoted?: string, singleQuoted?: string) => {
++              const quote = doubleQuoted !== undefined ? '"' : "'";
++              const url = doubleQuoted !== undefined ? doubleQuoted : (singleQuoted ?? '');
++              const reference = toAssetReference(url);
++              if (reference === null) return match;
++              return `${attr}=${quote}${record(reference)}${quote}`;
++            }
++          )
++        );
++
++        // Markdown links are only meaningful outside fenced code blocks.
++        const content = mapUnfencedLines(withRewrittenAttrs, line =>
++          line.replace(MARKDOWN_LINK_RE, (match, label: string, url: string, title: string) => {
++            const reference = toAssetReference(url);
++            if (reference === null) return match;
++            return `${label}(${record(reference)}${title})`;
++          })
++        );
++
++        return content === source ? file : { ...file, content };
++      },
++    },
++  };
++}
+diff --git a/src/plugins/dev-server.ts b/src/plugins/dev-server.ts
+new file mode 100644
+index 0000000..115828f
+--- /dev/null
++++ b/src/plugins/dev-server.ts
+@@ -0,0 +1,93 @@
++import { BuildContext, Plugin } from '../core/types.js';
++import { ASSET_MANIFEST_KEY, AssetManifest } from './asset-pipeline.js';
++import { SEARCH_INDEX_PATH, SEARCH_INDEX_PATH_KEY } from './search-index.js';
++
++/**
++ * Derives a serve-time configuration from the finished build: one route per
++ * rendered output, one per discovered asset, and a pointer to the search index.
++ */
++
++export type DevServerHandler = 'static' | 'asset' | 'search' | 'file';
++
++export interface DevServerRoute {
++  path: string;
++  handler: DevServerHandler;
++}
++
++export interface DevServerConfig {
++  port: number;
++  routes: DevServerRoute[];
++  assetPaths: string[];
++  searchIndexPath: string;
++}
++
++export interface DevServerOptions {
++  /** Port the dev server should listen on. Default 3000. */
++  port?: number;
++  /**
++   * Fallback URL prefix for assets, used only when asset-pipeline did not
++   * publish its own. Default `/assets`.
++   */
++  assetPrefix?: string;
++}
++
++export const DEV_SERVER_CONFIG_KEY = 'dev-server-config';
++export const DEFAULT_DEV_SERVER_PORT = 3000;
++
++function handlerFor(path: string, searchIndexPath: string): DevServerHandler {
++  if (path === searchIndexPath) return 'search';
++  return /\.html?$/i.test(path) ? 'static' : 'file';
++}
++
++function readManifest(ctx: BuildContext): AssetManifest | undefined {
++  const manifest = ctx.data.get(ASSET_MANIFEST_KEY) as AssetManifest | undefined;
++  return manifest && Array.isArray(manifest.assets) ? manifest : undefined;
++}
++
++export function createDevServerPlugin(options: DevServerOptions = {}): Plugin {
++  const port = options.port ?? DEFAULT_DEV_SERVER_PORT;
++  const fallbackPrefix = (options.assetPrefix ?? '/assets').replace(/\/+$/, '');
++
++  return {
++    name: 'dev-server',
++    version: '1.0.0',
++    dependencies: ['asset-pipeline', 'search-index'],
++    hooks: {
++      afterBuild(ctx: BuildContext): void {
++        // Read the effective paths the upstream plugins actually used rather
++        // than assuming their defaults, so custom options stay consistent.
++        const manifest = readManifest(ctx);
++        const assetPrefix = manifest?.prefix ?? fallbackPrefix;
++        const indexPath =
++          (ctx.data.get(SEARCH_INDEX_PATH_KEY) as string | undefined) ?? SEARCH_INDEX_PATH;
++
++        const routes: DevServerRoute[] = [];
++        const seen = new Set<string>();
++
++        const addRoute = (path: string, handler: DevServerHandler): void => {
++          const normalized = `/${path.replace(/^\/+/, '')}`;
++          if (seen.has(normalized)) return;
++          seen.add(normalized);
++          routes.push({ path: normalized, handler });
++        };
++
++        for (const path of ctx.output.keys()) {
++          addRoute(path, handlerFor(path, indexPath));
++        }
++
++        const assetPaths = manifest ? [...manifest.assets] : [];
++        for (const asset of assetPaths) {
++          addRoute(`${assetPrefix}/${asset}`, 'asset');
++        }
++
++        const config: DevServerConfig = {
++          port,
++          routes,
++          assetPaths,
++          searchIndexPath: ctx.output.has(indexPath) ? `/${indexPath}` : '',
++        };
++        ctx.data.set(DEV_SERVER_CONFIG_KEY, config);
++      },
++    },
++  };
++}
+diff --git a/src/plugins/index.ts b/src/plugins/index.ts
+new file mode 100644
+index 0000000..bd01bfc
+--- /dev/null
++++ b/src/plugins/index.ts
+@@ -0,0 +1,33 @@
++export { createMarkdownExtPlugin } from './markdown-ext.js';
++export { createAssetPipelinePlugin, ASSET_MANIFEST_KEY } from './asset-pipeline.js';
++export { createSyntaxHighlightPlugin } from './syntax-highlight.js';
++export {
++  createTaxonomyPlugin,
++  TAXONOMY_TAGS_KEY,
++  TAXONOMY_CATEGORIES_KEY,
++} from './taxonomy.js';
++export { createRssFeedPlugin, RSS_FEED_PATH } from './rss-feed.js';
++export {
++  createSearchIndexPlugin,
++  SEARCH_INDEX_PATH,
++  SEARCH_INDEX_PATH_KEY,
++} from './search-index.js';
++export { createSitemapPlugin, SITEMAP_PATH } from './sitemap.js';
++export {
++  createDevServerPlugin,
++  DEV_SERVER_CONFIG_KEY,
++  DEFAULT_DEV_SERVER_PORT,
++} from './dev-server.js';
++
++export type { AssetManifest, AssetPipelineOptions } from './asset-pipeline.js';
++export type { SyntaxHighlightOptions } from './syntax-highlight.js';
++export type { TaxonomyIndex, TaxonomyOptions } from './taxonomy.js';
++export type { RssFeedOptions } from './rss-feed.js';
++export type { SearchIndexEntry, SearchIndexOptions } from './search-index.js';
++export type { SitemapOptions } from './sitemap.js';
++export type {
++  DevServerConfig,
++  DevServerHandler,
++  DevServerOptions,
++  DevServerRoute,
++} from './dev-server.js';
+diff --git a/src/plugins/markdown-ext.ts b/src/plugins/markdown-ext.ts
+new file mode 100644
+index 0000000..b837535
+--- /dev/null
++++ b/src/plugins/markdown-ext.ts
+@@ -0,0 +1,264 @@
++import { marked } from 'marked';
++import { ContentFile, Plugin } from '../core/types.js';
++import { annotateFences } from './utils.js';
++
++/**
++ * Markdown renderer with two extensions on top of CommonMark/GFM:
++ *
++ *  - footnotes: `text[^1]` references paired with `[^1]: definition` blocks
++ *  - admonitions: `:::note ... :::` fenced containers
++ *
++ * Both extensions deliberately skip fenced code blocks, so a document that
++ * documents this syntax still renders its own examples verbatim.
++ */
++
++const FOOTNOTE_REF_RE = /\[\^([^\]\s]+)\]/g;
++const FOOTNOTE_DEF_RE = /^\[\^([^\]\s]+)\]:[ \t]*(.*)$/;
++const ADMONITION_OPEN_RE = /^:::([a-zA-Z][\w-]*)[ \t]*(.*)$/;
++const ADMONITION_CLOSE_RE = /^:::[ \t]*$/;
++
++function renderBlock(markdown: string): string {
++  return marked.parse(markdown) as string;
++}
++
++function renderInline(markdown: string): string {
++  return marked.parseInline(markdown) as string;
++}
++
++/**
++ * Build a placeholder generator whose token is guaranteed absent from the
++ * source. A fixed token would let author content forge a placeholder and have
++ * an admonition spliced in over it.
++ */
++function makePlaceholder(source: string): (index: number) => string {
++  let base = 'xxadmonitionx';
++  while (source.includes(base)) base += 'x';
++  return (index: number) => `${base}${index}xx`;
++}
++
++/**
++ * Map each footnote label to a unique DOM id. Sanitising alone is not enough:
++ * `a.b` and `a-b` both reduce to `fn-a-b`, which would emit duplicate ids.
++ */
++function assignFootnoteIds(labels: string[]): Map<string, string> {
++  const ids = new Map<string, string>();
++  const used = new Set<string>();
++
++  for (const label of labels) {
++    const base = `fn-${label.replace(/[^A-Za-z0-9_-]/g, '-')}`;
++    let id = base;
++    let suffix = 2;
++    while (used.has(id)) {
++      id = `${base}-${suffix}`;
++      suffix += 1;
++    }
++    used.add(id);
++    ids.set(label, id);
++  }
++
++  return ids;
++}
++
++/** Strip the smallest common indentation from a block of lines. */
++function dedent(block: string): string {
++  const lines = block.split('\n');
++  let indent = Infinity;
++  for (const line of lines) {
++    if (line.trim() === '') continue;
++    const match = /^[ \t]*/.exec(line);
++    indent = Math.min(indent, match ? match[0].length : 0);
++  }
++  if (!Number.isFinite(indent) || indent === 0) return block;
++  return lines.map(line => line.slice(indent)).join('\n');
++}
++
++interface FootnoteExtraction {
++  text: string;
++  definitions: Map<string, string>;
++}
++
++/**
++ * Pull `[^label]: text` definitions (plus their indented continuation lines)
++ * out of the source, returning the remaining markdown.
++ */
++function extractFootnoteDefinitions(source: string): FootnoteExtraction {
++  const definitions = new Map<string, string>();
++  const lines = source.split('\n');
++  const inside = annotateFences(lines);
++  const kept: string[] = [];
++  let current: { label: string; parts: string[] } | null = null;
++
++  const flush = (): void => {
++    if (!current) return;
++    definitions.set(current.label, current.parts.join('\n').trim());
++    current = null;
++  };
++
++  lines.forEach((line, index) => {
++    if (inside[index]) {
++      flush();
++      kept.push(line);
++      return;
++    }
++
++    const definition = FOOTNOTE_DEF_RE.exec(line);
++    if (definition) {
++      flush();
++      current = { label: definition[1], parts: [definition[2]] };
++      return;
++    }
++    if (current) {
++      // Indented, non-empty lines continue the previous definition.
++      if (/^[ \t]+\S/.test(line)) {
++        current.parts.push(line.trim());
++        return;
++      }
++      flush();
++      // Drop the blank line that terminated the definition block.
++      if (line.trim() === '') return;
++    }
++    kept.push(line);
++  });
++  flush();
++
++  return { text: kept.join('\n'), definitions };
++}
++
++/**
++ * Replace `[^label]` references that have a matching definition with a
++ * numbered superscript link. Returns the labels in order of first reference.
++ */
++function linkFootnoteReferences(
++  source: string,
++  definitions: Map<string, string>,
++  ids: Map<string, string>
++): { text: string; order: string[] } {
++  const order: string[] = [];
++  const lines = source.split('\n');
++  const inside = annotateFences(lines);
++
++  const text = lines
++    .map((line, index) => {
++      if (inside[index]) return line;
++      return line.replace(FOOTNOTE_REF_RE, (match, label: string) => {
++        if (!definitions.has(label)) return match;
++        let position = order.indexOf(label);
++        if (position === -1) {
++          position = order.length;
++          order.push(label);
++        }
++        return `<sup><a href="#${ids.get(label)}">${position + 1}</a></sup>`;
++      });
++    })
++    .join('\n');
++
++  return { text, order };
++}
++
++function renderFootnoteSection(
++  order: string[],
++  definitions: Map<string, string>,
++  ids: Map<string, string>
++): string {
++  const labels = [...order];
++  // Defined but never referenced notes still belong in the section.
++  for (const label of definitions.keys()) {
++    if (!labels.includes(label)) labels.push(label);
++  }
++  if (labels.length === 0) return '';
++
++  const items = labels
++    .map(label => `<li id="${ids.get(label)}">${renderInline(definitions.get(label) ?? '')}</li>`)
++    .join('\n');
++  return `\n<section class="footnotes">\n<ol>\n${items}\n</ol>\n</section>\n`;
++}
++
++function renderAdmonition(kind: string, title: string, body: string): string {
++  const variant = kind.toLowerCase();
++  const heading = title ? `<p class="admonition-title">${renderInline(title)}</p>` : '';
++  const content = renderBlock(dedent(body)).trim();
++  return `<div class="admonition admonition-${variant}">${heading}${content}</div>`;
++}
++
++/**
++ * Swap admonition blocks for placeholders so the surrounding markdown can be
++ * rendered without the container fences confusing the parser. An unterminated
++ * container is left untouched.
++ */
++function extractAdmonitions(
++  source: string,
++  placeholder: (index: number) => string
++): { text: string; blocks: string[] } {
++  const lines = source.split('\n');
++  const inside = annotateFences(lines);
++  const blocks: string[] = [];
++  const out: string[] = [];
++  let index = 0;
++
++  while (index < lines.length) {
++    const open = inside[index] ? null : ADMONITION_OPEN_RE.exec(lines[index]);
++    if (!open) {
++      out.push(lines[index]);
++      index += 1;
++      continue;
++    }
++
++    let cursor = index + 1;
++    while (cursor < lines.length && !(!inside[cursor] && ADMONITION_CLOSE_RE.test(lines[cursor]))) {
++      cursor += 1;
++    }
++    if (cursor >= lines.length) {
++      out.push(lines[index]);
++      index += 1;
++      continue;
++    }
++
++    blocks.push(renderAdmonition(open[1], open[2].trim(), lines.slice(index + 1, cursor).join('\n')));
++    out.push('', placeholder(blocks.length - 1), '');
++    index = cursor + 1;
++  }
++
++  return { text: out.join('\n'), blocks };
++}
++
++function restoreAdmonitions(
++  html: string,
++  blocks: string[],
++  placeholder: (index: number) => string
++): string {
++  let result = html;
++  blocks.forEach((_block, index) => {
++    const token = placeholder(index);
++    // Markdown wraps the lone placeholder line in a paragraph; unwrap it.
++    result = result.replace(new RegExp(`<p>\\s*${token}\\s*</p>`, 'g'), () => blocks[index]);
++    result = result.split(token).join(blocks[index]);
++  });
++  return result;
++}
++
++export function createMarkdownExtPlugin(): Plugin {
++  return {
++    name: 'markdown-ext',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      transformContent(file: ContentFile): ContentFile {
++        const source = file.content ?? '';
++        if (source.trim() === '') {
++          return { ...file, content: '' };
++        }
++
++        const placeholder = makePlaceholder(source);
++        const { text: withoutDefs, definitions } = extractFootnoteDefinitions(source);
++        const ids = assignFootnoteIds([...definitions.keys()]);
++        const { text: withRefs, order } = linkFootnoteReferences(withoutDefs, definitions, ids);
++        const { text: withPlaceholders, blocks } = extractAdmonitions(withRefs, placeholder);
++
++        const html = restoreAdmonitions(renderBlock(withPlaceholders), blocks, placeholder);
++        const footnotes = renderFootnoteSection(order, definitions, ids);
++
++        return { ...file, content: `${html}${footnotes}` };
++      },
++    },
++  };
++}
+diff --git a/src/plugins/rss-feed.ts b/src/plugins/rss-feed.ts
+new file mode 100644
+index 0000000..58f287f
+--- /dev/null
++++ b/src/plugins/rss-feed.ts
+@@ -0,0 +1,121 @@
++import { BuildContext, ContentFile, Plugin } from '../core/types.js';
++import { escapeXml, joinUrl, stripXmlInvalid } from './utils.js';
++import { TAXONOMY_TAGS_KEY, TaxonomyIndex } from './taxonomy.js';
++
++/**
++ * Emits an RSS 2.0 feed from the rendered content. Runs after markdown-ext so
++ * item descriptions carry HTML, and after taxonomy so items can be categorised.
++ */
++
++export interface RssFeedOptions {
++  /** Output path for the feed. Default `feed.xml`. */
++  outputPath?: string;
++  /** Cap on the number of items. Default: unlimited. */
++  limit?: number;
++  /** Channel description. Defaults to the site title. */
++  description?: string;
++}
++
++export const RSS_FEED_PATH = 'feed.xml';
++
++function parseDate(value: string | undefined): Date | null {
++  if (!value) return null;
++  const date = new Date(value);
++  return Number.isNaN(date.getTime()) ? null : date;
++}
++
++/** Newest first; undated entries sink to the bottom in their original order. */
++function byDateDescending(files: ContentFile[]): ContentFile[] {
++  return files
++    .map((file, index) => ({ file, index, time: parseDate(file.date)?.getTime() ?? null }))
++    .sort((a, b) => {
++      if (a.time === b.time) return a.index - b.index;
++      if (a.time === null) return 1;
++      if (b.time === null) return -1;
++      return b.time - a.time;
++    })
++    .map(entry => entry.file);
++}
++
++/**
++ * Prefer the taxonomy index (which is normalised and deduplicated) and fall
++ * back to the file's own tags when taxonomy has not run.
++ *
++ * Membership is tested by object identity, not by slug: slugs are not
++ * guaranteed unique, and matching on them would give two files that share a
++ * slug the union of both their tag sets. Taxonomy re-indexes the transformed
++ * files in its own `afterBuild`, which runs first, so the identities line up.
++ */
++function categoriesFor(file: ContentFile, ctx: BuildContext): string[] {
++  const index = ctx.data.get(TAXONOMY_TAGS_KEY) as TaxonomyIndex | undefined;
++  if (index instanceof Map) {
++    const terms: string[] = [];
++    for (const [term, files] of index) {
++      if (files.includes(file)) terms.push(term);
++    }
++    if (terms.length > 0) return terms;
++  }
++  return [...new Set(file.tags ?? [])];
++}
++
++/** CDATA cannot contain `]]>`; split the sequence across two sections. */
++function cdata(value: string): string {
++  return `<![CDATA[${stripXmlInvalid(value).split(']]>').join(']]]]><![CDATA[>')}]]>`;
++}
++
++function renderItem(file: ContentFile, ctx: BuildContext): string {
++  const link = joinUrl(ctx.config.baseUrl, `${file.slug}.html`);
++  const date = parseDate(file.date);
++  const parts = [
++    `      <title>${escapeXml(file.title)}</title>`,
++    `      <link>${escapeXml(link)}</link>`,
++    `      <guid isPermaLink="true">${escapeXml(link)}</guid>`,
++  ];
++  if (date) {
++    parts.push(`      <pubDate>${date.toUTCString()}</pubDate>`);
++  }
++  for (const category of categoriesFor(file, ctx)) {
++    parts.push(`      <category>${escapeXml(category)}</category>`);
++  }
++  parts.push(`      <description>${cdata(file.content ?? '')}</description>`);
++  return `    <item>\n${parts.join('\n')}\n    </item>`;
++}
++
++export function createRssFeedPlugin(options: RssFeedOptions = {}): Plugin {
++  const outputPath = options.outputPath ?? RSS_FEED_PATH;
++
++  return {
++    name: 'rss-feed',
++    version: '1.0.0',
++    dependencies: ['markdown-ext', 'taxonomy'],
++    hooks: {
++      afterBuild(ctx: BuildContext): void {
++        const ordered = byDateDescending(ctx.files);
++        const selected =
++          options.limit !== undefined && options.limit >= 0
++            ? ordered.slice(0, options.limit)
++            : ordered;
++
++        const description = options.description ?? ctx.config.title;
++        const siteLink = joinUrl(ctx.config.baseUrl, '');
++
++        const channel = [
++          `    <title>${escapeXml(ctx.config.title)}</title>`,
++          `    <link>${escapeXml(siteLink)}</link>`,
++          `    <description>${escapeXml(description)}</description>`,
++          ...selected.map(file => renderItem(file, ctx)),
++        ].join('\n');
++
++        ctx.output.set(
++          outputPath,
++          `<?xml version="1.0" encoding="UTF-8"?>
++<rss version="2.0">
++  <channel>
++${channel}
++  </channel>
++</rss>`
++        );
++      },
++    },
++  };
++}
+diff --git a/src/plugins/search-index.ts b/src/plugins/search-index.ts
+new file mode 100644
+index 0000000..51807e7
+--- /dev/null
++++ b/src/plugins/search-index.ts
+@@ -0,0 +1,66 @@
++import { BuildContext, ContentFile, Plugin } from '../core/types.js';
++import { joinUrl, stripHtml } from './utils.js';
++
++/**
++ * Emits a client-consumable JSON index of every page. Runs after markdown-ext
++ * and syntax-highlight so the indexed text reflects the final HTML — including
++ * the contents of code blocks.
++ */
++
++export interface SearchIndexEntry {
++  slug: string;
++  title: string;
++  url: string;
++  content: string;
++  date?: string;
++  tags?: string[];
++}
++
++export interface SearchIndexOptions {
++  /** Output path for the index. Default `search-index.json`. */
++  outputPath?: string;
++  /** Truncate indexed text to this many characters. Default: no limit. */
++  maxContentLength?: number;
++  /** Pretty-print the JSON. Default false. */
++  pretty?: boolean;
++}
++
++export const SEARCH_INDEX_PATH = 'search-index.json';
++
++/** Publishes the effective output path so dev-server need not assume it. */
++export const SEARCH_INDEX_PATH_KEY = 'search-index-path';
++
++export function createSearchIndexPlugin(options: SearchIndexOptions = {}): Plugin {
++  const outputPath = options.outputPath ?? SEARCH_INDEX_PATH;
++  const { maxContentLength, pretty } = options;
++
++  const toEntry = (file: ContentFile, ctx: BuildContext): SearchIndexEntry => {
++    let content = stripHtml(file.content ?? '');
++    if (maxContentLength !== undefined && content.length > maxContentLength) {
++      content = content.slice(0, maxContentLength).trimEnd();
++    }
++
++    const entry: SearchIndexEntry = {
++      slug: file.slug,
++      title: file.title,
++      url: joinUrl(ctx.config.baseUrl, `${file.slug}.html`),
++      content,
++    };
++    if (file.date) entry.date = file.date;
++    if (file.tags && file.tags.length > 0) entry.tags = [...file.tags];
++    return entry;
++  };
++
++  return {
++    name: 'search-index',
++    version: '1.0.0',
++    dependencies: ['markdown-ext', 'syntax-highlight'],
++    hooks: {
++      afterBuild(ctx: BuildContext): void {
++        const entries = ctx.files.map(file => toEntry(file, ctx));
++        ctx.output.set(outputPath, JSON.stringify(entries, null, pretty ? 2 : undefined));
++        ctx.data.set(SEARCH_INDEX_PATH_KEY, outputPath);
++      },
++    },
++  };
++}
+diff --git a/src/plugins/sitemap.ts b/src/plugins/sitemap.ts
+new file mode 100644
+index 0000000..7898ebd
+--- /dev/null
++++ b/src/plugins/sitemap.ts
+@@ -0,0 +1,66 @@
++import { BuildContext, Plugin } from '../core/types.js';
++import { encodeUrlPath, escapeXml, joinUrl } from './utils.js';
++
++/**
++ * Emits a sitemap covering every rendered page, the taxonomy listings and the
++ * RSS feed. It depends on taxonomy and rss-feed precisely so that their
++ * outputs are already present in `ctx.output` by the time this hook runs —
++ * enumerating `ctx.output` therefore needs no plugin-specific knowledge.
++ */
++
++export interface SitemapOptions {
++  /** Output path for the sitemap. Default `sitemap.xml`. */
++  outputPath?: string;
++  /** Extra output paths to include beyond the auto-detected ones. */
++  extraPaths?: string[];
++}
++
++export const SITEMAP_PATH = 'sitemap.xml';
++
++const INDEXABLE_EXTENSIONS = new Set(['html', 'htm', 'xml']);
++
++function isIndexable(path: string): boolean {
++  const dot = path.lastIndexOf('.');
++  if (dot === -1) return false;
++  return INDEXABLE_EXTENSIONS.has(path.slice(dot + 1).toLowerCase());
++}
++
++export function createSitemapPlugin(options: SitemapOptions = {}): Plugin {
++  const outputPath = options.outputPath ?? SITEMAP_PATH;
++
++  return {
++    name: 'sitemap',
++    version: '1.0.0',
++    dependencies: ['taxonomy', 'rss-feed'],
++    hooks: {
++      afterBuild(ctx: BuildContext): void {
++        const paths = new Set<string>();
++
++        for (const path of ctx.output.keys()) {
++          // A sitemap never lists itself, under either the configured name or
++          // the default (which may linger from an earlier run).
++          if (path === outputPath || path === SITEMAP_PATH) continue;
++          if (isIndexable(path)) paths.add(path);
++        }
++        for (const extra of options.extraPaths ?? []) {
++          paths.add(extra.replace(/^\/+/, ''));
++        }
++
++        const urls = [...paths]
++          .map(path => {
++            const loc = escapeXml(joinUrl(ctx.config.baseUrl, encodeUrlPath(path)));
++            return `  <url>\n    <loc>${loc}</loc>\n  </url>`;
++          })
++          .join('\n');
++
++        ctx.output.set(
++          outputPath,
++          `<?xml version="1.0" encoding="UTF-8"?>
++<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
++${urls}
++</urlset>`
++        );
++      },
++    },
++  };
++}
+diff --git a/src/plugins/syntax-highlight.ts b/src/plugins/syntax-highlight.ts
+new file mode 100644
+index 0000000..246afab
+--- /dev/null
++++ b/src/plugins/syntax-highlight.ts
+@@ -0,0 +1,72 @@
++import { ContentFile, Plugin } from '../core/types.js';
++import { parseAttributes } from './utils.js';
++
++/**
++ * Annotates fenced code blocks with a `data-language` attribute on the `<pre>`
++ * and a `highlighted` marker class on the `<code>`, so a client-side
++ * highlighter can pick them up. Blocks without a declared language and inline
++ * `<code>` spans are left exactly as they were.
++ */
++
++export interface SyntaxHighlightOptions {
++  /** Class added to `<code>` elements that were annotated. Default `highlighted`. */
++  highlightClass?: string;
++}
++
++// A `<pre>` immediately followed by its `<code>` child.
++const PRE_CODE_RE = /<pre\b([^>]*)>(\s*)<code\b([^>]*)>/gi;
++const LANGUAGE_CLASS_RE = /(?:^|\s)(?:language|lang)-(\S+)/i;
++
++// Language names are echoed into an attribute value, so anything outside this
++// conservative set is ignored rather than escaped — a crafted class such as
++// `language-js" onload="alert(1)` must not become a live handler.
++const SAFE_LANGUAGE_RE = /^[A-Za-z0-9_+#.-]+$/;
++
++export function createSyntaxHighlightPlugin(options: SyntaxHighlightOptions = {}): Plugin {
++  const highlightClass = options.highlightClass ?? 'highlighted';
++
++  return {
++    name: 'syntax-highlight',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      transformContent(file: ContentFile): ContentFile {
++        const source = file.content ?? '';
++
++        const content = source.replace(
++          PRE_CODE_RE,
++          (match, preAttrs: string, gap: string, codeAttrs: string) => {
++            const classAttr = parseAttributes(codeAttrs).find(
++              attr => attr.name.toLowerCase() === 'class'
++            );
++            if (!classAttr) return match;
++
++            const language = LANGUAGE_CLASS_RE.exec(classAttr.value);
++            if (!language || !SAFE_LANGUAGE_RE.test(language[1])) return match;
++
++            const classes = classAttr.value.split(/\s+/).filter(Boolean);
++            if (!classes.includes(highlightClass)) {
++              classes.push(highlightClass);
++            }
++
++            // Reusing the original quote character is safe: the value was read
++            // from between those quotes, so it cannot contain one.
++            const quote = classAttr.quote || '"';
++            const nextCodeAttrs =
++              codeAttrs.slice(0, classAttr.start) +
++              `class=${quote}${classes.join(' ')}${quote}` +
++              codeAttrs.slice(classAttr.end);
++
++            const nextPreAttrs = /\bdata-language\s*=/i.test(preAttrs)
++              ? preAttrs
++              : `${preAttrs} data-language="${language[1]}"`;
++
++            return `<pre${nextPreAttrs}>${gap}<code${nextCodeAttrs}>`;
++          }
++        );
++
++        return content === source ? file : { ...file, content };
++      },
++    },
++  };
++}
+diff --git a/src/plugins/taxonomy.ts b/src/plugins/taxonomy.ts
+new file mode 100644
+index 0000000..b35bbc0
+--- /dev/null
++++ b/src/plugins/taxonomy.ts
+@@ -0,0 +1,168 @@
++import { BuildContext, ContentFile, Plugin } from '../core/types.js';
++import { escapeHtml, uniqueSlug } from './utils.js';
++
++/**
++ * Groups content by tag and by category, exposes the indices on `ctx.data`,
++ * and emits a listing page for every term.
++ */
++
++export const TAXONOMY_TAGS_KEY = 'taxonomy-tags';
++export const TAXONOMY_CATEGORIES_KEY = 'taxonomy-categories';
++
++export type TaxonomyIndex = Map<string, ContentFile[]>;
++
++export interface TaxonomyOptions {
++  /** Emit `tags/index.html` and `categories/index.html`. Default true. */
++  generateIndexPages?: boolean;
++}
++
++type TaxonomyKind = 'tags' | 'categories';
++
++/** Terms are compared case-insensitively so `JS` and `js` are one bucket. */
++function normalizeTerm(term: unknown): string | null {
++  if (typeof term !== 'string') return null;
++  const normalized = term.trim().toLowerCase();
++  return normalized === '' ? null : normalized;
++}
++
++function categoriesOf(file: ContentFile): unknown[] {
++  const { category, categories } = file.metadata ?? {};
++  if (Array.isArray(categories)) return categories;
++  if (categories !== undefined) return [categories];
++  if (category !== undefined) return [category];
++  return [];
++}
++
++function buildIndex(files: ContentFile[], termsOf: (file: ContentFile) => unknown[]): TaxonomyIndex {
++  const index: TaxonomyIndex = new Map();
++  for (const file of files) {
++    const seen = new Set<string>();
++    for (const raw of termsOf(file)) {
++      const term = normalizeTerm(raw);
++      // A file listing the same term twice is still only one entry.
++      if (term === null || seen.has(term)) continue;
++      seen.add(term);
++      const bucket = index.get(term);
++      if (bucket) {
++        bucket.push(file);
++      } else {
++        index.set(term, [file]);
++      }
++    }
++  }
++  return index;
++}
++
++function buildIndices(files: ContentFile[]): Record<TaxonomyKind, TaxonomyIndex> {
++  return {
++    tags: buildIndex(files, file => file.tags ?? []),
++    categories: buildIndex(files, categoriesOf),
++  };
++}
++
++/**
++ * Assign every term a distinct page slug. Terms that differ only in
++ * punctuation (`C++` / `C#`) share a base slug, and without disambiguation the
++ * later page would silently overwrite the earlier one.
++ */
++function assignSlugs(index: TaxonomyIndex, reserved: string[]): Map<string, string> {
++  const used = new Set(reserved);
++  const slugs = new Map<string, string>();
++  for (const term of index.keys()) {
++    slugs.set(term, uniqueSlug(term, used));
++  }
++  return slugs;
++}
++
++function renderPage(title: string, body: string, siteTitle: string): string {
++  return `<!DOCTYPE html>
++<html>
++<head>
++  <meta charset="utf-8">
++  <title>${escapeHtml(title)} | ${escapeHtml(siteTitle)}</title>
++</head>
++<body>
++  <h1>${escapeHtml(title)}</h1>
++${body}
++</body>
++</html>`;
++}
++
++function renderTermPage(
++  kind: TaxonomyKind,
++  term: string,
++  files: ContentFile[],
++  siteTitle: string
++): string {
++  const items = files
++    .map(
++      file =>
++        `    <li><a href="/${escapeHtml(file.slug)}.html">${escapeHtml(file.title)}</a></li>`
++    )
++    .join('\n');
++  const body = `  <ul class="${kind}-list">\n${items}\n  </ul>`;
++  return renderPage(`${kind === 'tags' ? 'Tag' : 'Category'}: ${term}`, body, siteTitle);
++}
++
++function renderIndexPage(
++  kind: TaxonomyKind,
++  index: TaxonomyIndex,
++  slugs: Map<string, string>,
++  siteTitle: string
++): string {
++  const items = [...index.entries()]
++    .map(
++      ([term, files]) =>
++        `    <li><a href="/${kind}/${escapeHtml(slugs.get(term) ?? '')}.html">${escapeHtml(term)}</a> (${files.length})</li>`
++    )
++    .join('\n');
++  const body = `  <ul class="${kind}-index">\n${items}\n  </ul>`;
++  return renderPage(kind === 'tags' ? 'Tags' : 'Categories', body, siteTitle);
++}
++
++export function createTaxonomyPlugin(options: TaxonomyOptions = {}): Plugin {
++  const generateIndexPages = options.generateIndexPages ?? true;
++
++  return {
++    name: 'taxonomy',
++    version: '1.0.0',
++    dependencies: [],
++    hooks: {
++      beforeBuild(ctx: BuildContext): void {
++        const indices = buildIndices(ctx.files);
++        ctx.data.set(TAXONOMY_TAGS_KEY, indices.tags);
++        ctx.data.set(TAXONOMY_CATEGORIES_KEY, indices.categories);
++      },
++
++      afterBuild(ctx: BuildContext): void {
++        // Re-index against the transformed files: `beforeBuild` captured the
++        // pre-transform objects, and the engine replaces rather than mutates
++        // them, so the early index is stale by the time pages are rendered.
++        const indices = buildIndices(ctx.files);
++        ctx.data.set(TAXONOMY_TAGS_KEY, indices.tags);
++        ctx.data.set(TAXONOMY_CATEGORIES_KEY, indices.categories);
++
++        const siteTitle = ctx.config.title;
++
++        for (const kind of ['tags', 'categories'] as const) {
++          const index = indices[kind];
++          if (index.size === 0) continue;
++
++          // `index` is reserved so a term literally named "index" cannot
++          // collide with the listing page.
++          const slugs = assignSlugs(index, generateIndexPages ? ['index'] : []);
++
++          for (const [term, files] of index) {
++            ctx.output.set(
++              `${kind}/${slugs.get(term)}.html`,
++              renderTermPage(kind, term, files, siteTitle)
++            );
++          }
++          if (generateIndexPages) {
++            ctx.output.set(`${kind}/index.html`, renderIndexPage(kind, index, slugs, siteTitle));
++          }
++        }
++      },
++    },
++  };
++}
+diff --git a/src/plugins/utils.ts b/src/plugins/utils.ts
+new file mode 100644
+index 0000000..427098a
+--- /dev/null
++++ b/src/plugins/utils.ts
+@@ -0,0 +1,206 @@
++/**
++ * Small helpers shared by the bundled plugins.
++ */
++
++// Code points that XML 1.0 cannot represent at all, even escaped. Matching
++// control characters is the entire point here, hence the rule suppression.
++// eslint-disable-next-line no-control-regex
++const XML_INVALID_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g;
++
++/** Drop characters that would make the surrounding XML document unparseable. */
++export function stripXmlInvalid(value: string): string {
++  return value.replace(XML_INVALID_RE, '');
++}
++
++/** Escape a string for safe interpolation into XML text or attribute values. */
++export function escapeXml(value: string): string {
++  return stripXmlInvalid(value)
++    .replace(/&/g, '&amp;')
++    .replace(/</g, '&lt;')
++    .replace(/>/g, '&gt;')
++    .replace(/"/g, '&quot;')
++    .replace(/'/g, '&apos;');
++}
++
++/** Escape a string for safe interpolation into HTML text or attribute values. */
++export function escapeHtml(value: string): string {
++  return value
++    .replace(/&/g, '&amp;')
++    .replace(/</g, '&lt;')
++    .replace(/>/g, '&gt;')
++    .replace(/"/g, '&quot;')
++    .replace(/'/g, '&#39;');
++}
++
++/** Turn an arbitrary label into a URL/file-name safe slug. */
++export function slugify(value: string): string {
++  const slug = value
++    .trim()
++    .toLowerCase()
++    .replace(/[^a-z0-9]+/g, '-')
++    .replace(/^-+|-+$/g, '');
++  return slug || 'untitled';
++}
++
++/**
++ * Pick a slug for `value` that is not already in `used`, registering the
++ * result. Distinct terms often share a base slug (`C++` and `C#` both reduce
++ * to `c`), so callers need the disambiguated form to avoid clobbering pages.
++ */
++export function uniqueSlug(value: string, used: Set<string>): string {
++  const base = slugify(value);
++  let slug = base;
++  let suffix = 2;
++  while (used.has(slug)) {
++    slug = `${base}-${suffix}`;
++    suffix += 1;
++  }
++  used.add(slug);
++  return slug;
++}
++
++/**
++ * Percent-encode the characters that are not legal in a URL path. `%` is
++ * deliberately left alone so that re-encoding an already-encoded path is a
++ * no-op (unlike `encodeURI`, which would turn `%20` into `%2520`).
++ */
++export function encodeUrlPath(path: string): string {
++  return path.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@/%#?]/g, char => encodeURIComponent(char));
++}
++
++/** Join a site base URL with an output path, avoiding duplicate slashes. */
++export function joinUrl(baseUrl: string, path: string): string {
++  const base = baseUrl.replace(/\/+$/, '');
++  const rel = path.replace(/^\/+/, '');
++  return rel ? `${base}/${rel}` : base;
++}
++
++const NAMED_ENTITIES: Record<string, string> = {
++  amp: '&',
++  lt: '<',
++  gt: '>',
++  quot: '"',
++  apos: "'",
++  nbsp: ' ',
++};
++
++/**
++ * Decode the entities the HTML renderers here can emit. This is a single pass,
++ * so `&amp;lt;` correctly yields the literal text `&lt;` rather than `<`.
++ */
++export function decodeEntities(value: string): string {
++  return value.replace(
++    /&(?:([a-zA-Z][a-zA-Z0-9]*)|#(\d+)|#[xX]([0-9a-fA-F]+));/g,
++    (match, name: string | undefined, decimal: string | undefined, hex: string | undefined) => {
++      if (name !== undefined) {
++        return NAMED_ENTITIES[name.toLowerCase()] ?? match;
++      }
++      const code = decimal !== undefined ? parseInt(decimal, 10) : parseInt(hex ?? '', 16);
++      // Reject nulls, lone surrogates and out-of-range code points.
++      if (!Number.isFinite(code) || code <= 0 || code > 0x10ffff) return match;
++      if (code >= 0xd800 && code <= 0xdfff) return match;
++      return String.fromCodePoint(code);
++    }
++  );
++}
++
++// Only sequences that plausibly open a tag, so prose like `a < b and c > d`
++// survives intact.
++const HTML_TAG_RE = /<\/?[a-zA-Z][^>]*>|<![^>]*>/g;
++
++/**
++ * Reduce an HTML fragment to plain, searchable text. Tags become spaces so
++ * that adjacent blocks do not run their words together.
++ */
++export function stripHtml(html: string): string {
++  const withoutBlocks = html
++    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, ' ')
++    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, ' ')
++    .replace(/<!--[\s\S]*?-->/g, ' ');
++  return decodeEntities(withoutBlocks.replace(HTML_TAG_RE, ' '))
++    .replace(/\s+/g, ' ')
++    .trim();
++}
++
++const FENCE_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
++
++/**
++ * Mark which lines sit inside a fenced code block (delimiters included).
++ *
++ * Markdown-aware rewrites must skip these lines: a document that *documents*
++ * footnote or admonition syntax should render its examples verbatim rather
++ * than having them interpreted.
++ */
++export function annotateFences(lines: string[]): boolean[] {
++  const inside: boolean[] = [];
++  let fence: { char: string; length: number } | null = null;
++
++  for (const line of lines) {
++    const match = FENCE_RE.exec(line);
++    if (fence) {
++      inside.push(true);
++      const closes =
++        match !== null &&
++        match[1][0] === fence.char &&
++        match[1].length >= fence.length &&
++        match[2].trim() === '';
++      if (closes) fence = null;
++      continue;
++    }
++    // An info string on a backtick fence may not itself contain a backtick.
++    if (match && !(match[1][0] === '`' && match[2].includes('`'))) {
++      fence = { char: match[1][0], length: match[1].length };
++      inside.push(true);
++      continue;
++    }
++    inside.push(false);
++  }
++
++  return inside;
++}
++
++/** Apply `transform` to every line that is not inside a fenced code block. */
++export function mapUnfencedLines(source: string, transform: (line: string) => string): string {
++  const lines = source.split('\n');
++  const inside = annotateFences(lines);
++  return lines.map((line, index) => (inside[index] ? line : transform(line))).join('\n');
++}
++
++export interface HtmlAttribute {
++  name: string;
++  value: string;
++  /** The quote character used, or `''` when the value was unquoted. */
++  quote: string;
++  start: number;
++  end: number;
++}
++
++// name, optionally followed by ="value" / ='value' / bare-value.
++const ATTRIBUTE_RE = /([^\s=/>]+)(?:\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
++
++/**
++ * Parse a tag's attribute string into ordered name/value pairs.
++ *
++ * Walking real attribute boundaries matters: a naive `class="..."` search
++ * would happily match the `class=` sitting *inside* another attribute's value
++ * (e.g. `data-x="class='language-js'"`) and splice markup into the middle of it.
++ */
++export function parseAttributes(attrs: string): HtmlAttribute[] {
++  const parsed: HtmlAttribute[] = [];
++  ATTRIBUTE_RE.lastIndex = 0;
++  let match: RegExpExecArray | null;
++
++  while ((match = ATTRIBUTE_RE.exec(attrs)) !== null) {
++    const [raw, name, , doubleQuoted, singleQuoted, bare] = match;
++    const quote = doubleQuoted !== undefined ? '"' : singleQuoted !== undefined ? "'" : '';
++    parsed.push({
++      name,
++      value: doubleQuoted ?? singleQuoted ?? bare ?? '',
++      quote,
++      start: match.index,
++      end: match.index + raw.length,
++    });
++  }
++
++  return parsed;
++}
+diff --git a/tests/plugins/regression.test.ts b/tests/plugins/regression.test.ts
+new file mode 100644
+index 0000000..946bdb4
+--- /dev/null
++++ b/tests/plugins/regression.test.ts
+@@ -0,0 +1,213 @@
++import { describe, it, expect } from 'vitest';
++import { BuildEngine, createDefaultTemplate } from '../../src/core/index.js';
++import { BuildContext, ContentFile, SiteConfig } from '../../src/core/types.js';
++import {
++  createMarkdownExtPlugin, createAssetPipelinePlugin, createSyntaxHighlightPlugin,
++  createTaxonomyPlugin, createRssFeedPlugin, createSearchIndexPlugin,
++  createSitemapPlugin, createDevServerPlugin,
++} from '../../src/plugins/index.js';
++
++const config: SiteConfig = {
++  title: 'T', baseUrl: 'https://example.com',
++  outputDir: './dist', contentDir: './c', templateDir: './t',
++};
++const ctx = (files: ContentFile[] = [], data = new Map<string, unknown>()): BuildContext =>
++  ({ config, files, output: new Map(), assets: new Map(), data });
++const f = (o: Partial<ContentFile> = {}): ContentFile =>
++  ({ slug: 's', title: 'T', content: '', metadata: {}, ...o });
++
++const md = createMarkdownExtPlugin();
++const ap = createAssetPipelinePlugin();
++const sh = createSyntaxHighlightPlugin();
++const tax = createTaxonomyPlugin();
++
++describe('plugin regression coverage', () => {
++  it('R1: forged placeholder token is not replaced', async () => {
++    const r = await md.hooks.transformContent!(
++      f({ content: 'Token xxadmonitionx0xx literal.\n\n:::note\nReal body\n:::' }), ctx());
++    expect(r.content).toContain('xxadmonitionx0xx literal');
++    expect((r.content.match(/admonition-note/g) || []).length).toBe(1);
++  });
++
++  it('R2: footnote defs inside code fences are preserved', async () => {
++    const r = await md.hooks.transformContent!(
++      f({ content: 'Ex:\n\n```\n[^1]: sample text\n```' }), ctx());
++    expect(r.content).toContain('[^1]: sample text');
++    expect(r.content).not.toContain('<section class="footnotes">');
++  });
++
++  it('R2b: admonition syntax inside code fences is not rendered', async () => {
++    const r = await md.hooks.transformContent!(
++      f({ content: 'Doc:\n\n```md\n:::note\nexample\n:::\n```' }), ctx());
++    expect(r.content).not.toContain('<div class="admonition');
++    expect(r.content).toContain(':::note');
++  });
++
++  it('R2c: footnote refs inside code fences are not linked', async () => {
++    const r = await md.hooks.transformContent!(
++      f({ content: 'A[^1]\n\n```\ncode[^1] here\n```\n\n[^1]: note' }), ctx());
++    expect(r.content).toContain('code[^1] here');
++  });
++
++  it('R3: colliding footnote labels get distinct ids', async () => {
++    const r = await md.hooks.transformContent!(
++      f({ content: 'A[^a.b] B[^a-b]\n\n[^a.b]: First\n[^a-b]: Second' }), ctx());
++    const ids = [...r.content.matchAll(/<li id="([^"]+)"/g)].map(m => m[1]);
++    expect(new Set(ids).size).toBe(ids.length);
++    expect(ids.length).toBe(2);
++    for (const id of ids) expect(r.content).toContain(`href="#${id}"`);
++  });
++
++  it('R4: taxonomy slug collisions produce distinct pages', async () => {
++    const c = ctx([f({ slug: 'p1', title: 'P1', tags: ['c++'] }), f({ slug: 'p2', title: 'P2', tags: ['c--'] })]);
++    await tax.hooks.beforeBuild!(c); await tax.hooks.afterBuild!(c);
++    const pages = [...c.output.keys()].filter(k => k.startsWith('tags/') && k !== 'tags/index.html');
++    expect(pages.length).toBe(2);
++    expect(c.output.get(pages[0])).not.toBe(c.output.get(pages[1]));
++    // index page links must point at the real pages
++    for (const p of pages) expect(c.output.get('tags/index.html')).toContain(`/${p}`);
++  });
++
++  it('R4b: a tag named "index" does not clobber the index page', async () => {
++    const c = ctx([f({ slug: 'p1', title: 'P1', tags: ['index'] })]);
++    await tax.hooks.beforeBuild!(c); await tax.hooks.afterBuild!(c);
++    expect(c.output.get('tags/index.html')).toContain('class="tags-index"');
++    const term = [...c.output.keys()].find(k => k.startsWith('tags/') && k !== 'tags/index.html');
++    expect(c.output.get(term!)).toContain('Tag: index');
++  });
++
++  it('R5: duplicate slugs do not cross-contaminate RSS categories', async () => {
++    const files = [f({ slug: 'dup', title: 'A', tags: ['alpha'] }), f({ slug: 'dup', title: 'B', tags: ['beta'] })];
++    const c = ctx(files);
++    await tax.hooks.beforeBuild!(c);
++    await tax.hooks.afterBuild!(c);
++    await createRssFeedPlugin().hooks.afterBuild!(c);
++    const items = c.output.get('feed.xml')!.split('<item>').slice(1);
++    expect(items).toHaveLength(2);
++    expect(items[0]).toContain('<category>alpha</category>');
++    expect(items[0]).not.toContain('<category>beta</category>');
++    expect(items[1]).toContain('<category>beta</category>');
++    expect(items[1]).not.toContain('<category>alpha</category>');
++  });
++
++  it('R6: query strings and fragments survive asset rewriting', async () => {
++    const c = ctx();
++    const r = await ap.hooks.transformContent!(f({ content: '<img src="img/a.png?v=2#fr">' }), c);
++    expect(r.content).toBe('<img src="/assets/img/a.png?v=2#fr">');
++    expect((c.data.get('asset-manifest') as { assets: string[] }).assets).toEqual(['img/a.png']);
++  });
++
++  it('R7: asset rewriting skips code fences and prose', async () => {
++    const c = ctx();
++    const r = await ap.hooks.transformContent!(
++      f({ content: 'Docs:\n\n```md\n![a](./img/x.png)\n```\n\n<p>Set src="config/app.yaml" here.</p>' }), c);
++    expect(r.content).toContain('![a](./img/x.png)');
++    expect(r.content).toContain('src="config/app.yaml"');
++    expect((c.data.get('asset-manifest') as { assets: string[] }).assets).toEqual([]);
++  });
++
++  it('R8: relative assetPrefix is idempotent', async () => {
++    const p = createAssetPipelinePlugin({ assetPrefix: 'assets' });
++    const c = ctx();
++    let file = f({ content: '<img src="img/a.png">' });
++    for (let i = 0; i < 3; i++) file = await p.hooks.transformContent!(file, c) as ContentFile;
++    expect(file.content).toBe('<img src="/assets/img/a.png">');
++    expect((c.data.get('asset-manifest') as { assets: string[] }).assets).toEqual(['img/a.png']);
++  });
++
++  it('R9: syntax-highlight rejects attribute injection', async () => {
++    const r = await sh.hooks.transformContent!(
++      f({ content: `<pre><code class='language-js" onload="alert(1)'>x</code></pre>` }), ctx());
++    expect(r.content).not.toContain('onload="alert(1)"');
++    expect(r.content).toBe(`<pre><code class='language-js" onload="alert(1)'>x</code></pre>`);
++  });
++
++  it('R10: syntax-highlight ignores class= nested in another attribute value', async () => {
++    const src = `<pre><code data-x="class='language-js'">x</code></pre>`;
++    const r = await sh.hooks.transformContent!(f({ content: src }), ctx());
++    expect(r.content).toBe(src);
++  });
++
++  it('R11: stripHtml keeps prose around bare angle brackets', async () => {
++    const c = ctx([f({ slug: 'p', title: 'P', content: '<p>if a < b and c > d then</p>' })]);
++    await createSearchIndexPlugin().hooks.afterBuild!(c);
++    const idx = JSON.parse(c.output.get('search-index.json')!);
++    expect(idx[0].content).toContain('a < b and c > d');
++  });
++
++  it('R12: entities are decoded exactly once', async () => {
++    const c = ctx([f({ slug: 'p', title: 'P', content: '<p>&amp;lt;script&amp;gt;</p>' })]);
++    await createSearchIndexPlugin().hooks.afterBuild!(c);
++    expect(JSON.parse(c.output.get('search-index.json')!)[0].content).toBe('&lt;script&gt;');
++  });
++
++  it('R13: XML-illegal control chars are stripped from the feed', async () => {
++    const NUL = String.fromCharCode(0);
++    const BS = String.fromCharCode(8);
++    const c = ctx([f({ slug: 'p', title: `Bad${NUL}Title${BS}`, content: `<p>a${NUL}b</p>`, date: '2024-01-01' })]);
++    await createRssFeedPlugin().hooks.afterBuild!(c);
++    const feed = c.output.get('feed.xml')!;
++    expect(feed.includes(NUL) || feed.includes(BS)).toBe(false);
++    expect(feed).toContain('BadTitle');
++  });
++
++  it('R14: sitemap percent-encodes unsafe path chars and is idempotent', async () => {
++    const out = new Map([['sp ace.html', 'x'], ['pre%20enc.html', 'x']]);
++    const c = ctx(); out.forEach((v, k) => c.output.set(k, v));
++    await createSitemapPlugin().hooks.afterBuild!(c);
++    const sm = c.output.get('sitemap.xml')!;
++    expect(sm).toContain('https://example.com/sp%20ace.html');
++    expect(sm).toContain('https://example.com/pre%20enc.html');
++    expect(sm).not.toContain('%2520');
++  });
++
++  it('R15: sitemap never lists itself', async () => {
++    const c = ctx();
++    c.output.set('sitemap.xml', '<stale/>');
++    c.output.set('a.html', 'x');
++    await createSitemapPlugin({ outputPath: 'sitemap2.xml' }).hooks.afterBuild!(c);
++    expect(c.output.get('sitemap2.xml')).not.toContain('sitemap.xml');
++  });
++
++  it('R16: dev-server honours custom upstream paths', async () => {
++    const c = ctx([f({ slug: 'p', title: 'P', content: '<p>x</p>' })]);
++    await createAssetPipelinePlugin({ assetPrefix: '/static' })
++      .hooks.transformContent!(f({ content: '<img src="a.png">' }), c);
++    await createSearchIndexPlugin({ outputPath: 'custom-search.json' }).hooks.afterBuild!(c);
++    await createDevServerPlugin().hooks.afterBuild!(c);
++    const cfg = c.data.get('dev-server-config') as { routes: { path: string; handler: string }[]; searchIndexPath: string };
++    expect(cfg.searchIndexPath).toBe('/custom-search.json');
++    expect(cfg.routes.find(r => r.path === '/custom-search.json')!.handler).toBe('search');
++    expect(cfg.routes.find(r => r.handler === 'asset')!.path).toBe('/static/a.png');
++  });
++
++  it('R17: markdown-ext transform is stable and does not mutate input', async () => {
++    const original = f({ content: '# H[^1]\n\n:::note\nBody\n:::\n\n[^1]: N' });
++    const snapshot = original.content;
++    const once = await md.hooks.transformContent!(original, ctx()) as ContentFile;
++    expect(original.content).toBe(snapshot);
++    const twiceSh = await sh.hooks.transformContent!(
++      await sh.hooks.transformContent!(f({ content: '<pre><code class="language-js">x</code></pre>' }), ctx()) as ContentFile,
++      ctx()) as ContentFile;
++    expect(twiceSh.content).toBe('<pre data-language="js"><code class="language-js highlighted">x</code></pre>');
++    expect(once.content).toContain('admonition-note');
++  });
++
++  it('E2E: full pipeline still produces a coherent site', async () => {
++    const engine = new BuildEngine(config);
++    engine.registerTemplate(createDefaultTemplate());
++    [md, ap, sh, tax, createRssFeedPlugin(), createSearchIndexPlugin(),
++     createSitemapPlugin(), createDevServerPlugin()].forEach(p => engine.registerPlugin(p));
++    const built = await engine.build([
++      f({ slug: 'post-1', title: 'Hello', date: '2024-03-01', tags: ['JS'],
++          content: '# Hi[^1]\n\n![p](./img/a.png)\n\n:::warning\nCare\n:::\n\n```js\nconst x = 1;\n```\n\n[^1]: A note.' }),
++    ]);
++    expect(built.output.get('post-1.html')).toContain('src="/assets/img/a.png"');
++    expect(built.output.get('post-1.html')).toContain('data-language="js"');
++    expect(built.output.get('feed.xml')).toContain('<category>js</category>');
++    expect(built.output.get('sitemap.xml')).toContain('/tags/js.html');
++    expect(JSON.parse(built.output.get('search-index.json')!)[0].content).toContain('const x = 1;');
++    const dev = built.data.get('dev-server-config') as { assetPaths: string[] };
++    expect(dev.assetPaths).toEqual(['img/a.png']);
++  });
++});
