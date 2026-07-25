@@ -89,7 +89,33 @@ _LOCAL_INFERENCE = {o for o in (
     "codex-gpt54",
 )}
 
+# Outcomes where the agent demonstrably DID work, whatever the cost field says.
+# These must count: a timeout that produced a half-finished solution is a
+# genuine (bad) result, and dropping it both inflates the score and can push an
+# orchestrator under the 8+/8+ entry bar, disqualifying the whole run.
+#
+# Deliberately does NOT list "crashed". A crashed trial keeps the historical
+# cost-based treatment: crashed-with-cost still counts (it did real work before
+# dying), crashed-with-zero-cost still does not. Excluding all crashes was tried
+# and rejected -- it silently drops truncated-but-productive trials, which
+# INFLATES scores exactly the way this function is meant to prevent.
+_WORKED_REASONS = {"completed", "timeout", "gave_up"}
+
+
 def is_crash(meta):
+    """True when a trial produced no usable work and must be excluded.
+
+    Prefer the harness's own exit_reason over the cost==0 heuristic. cost==0 is
+    a poor proxy: it is also true for every locally-served (free) model, and for
+    any trial killed before its metrics were written -- notably timeouts, which
+    have done real work by definition. Cost is only consulted when exit_reason
+    is missing or unrecognised.
+    """
+    if meta.get("no_agent_contribution"):
+        return True
+    reason = meta.get("exit_reason")
+    if reason in _WORKED_REASONS:
+        return False
     orch = meta.get("orchestrator", "")
     cost = meta.get("total_cost_usd", None)
     dur = meta.get("duration_s", 0) or 0
