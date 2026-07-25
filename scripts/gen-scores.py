@@ -62,6 +62,19 @@ _LOCAL_INFERENCE = {o for o in (
     "pi-todowrite-qwen36",
     "pi-grepglob-qwen36",
     "pi-conclave-zen-qwen36",
+    # Locally-served models on haight (llama.cpp / vLLM) and the local Gemma 4.
+    # These always report cost=0, so without registering them here EVERY trial
+    # is classified as a crash and the orchestrator vanishes from the
+    # leaderboard entirely -- which silently hid ~537 trials, including
+    # claude-code-q27-haight (177) and crush-q27-greedy-haight (129).
+    "claude-code-q27-haight",
+    "claude-code-q5km-haight",
+    "claude-code-vllm-haight",
+    "codex-q27-haight",
+    "crush-q27-greedy-haight",
+    "crush-q5km-greedy-haight",
+    "crush-qwopus-haight",
+    "crush-gemma4-local",
     "pi-bigtools-qwen36",
     "pi-plus-runtests-qwen36",
     "pi-plus-applypatch-qwen36",
