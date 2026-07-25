@@ -40,6 +40,13 @@ COPY anthropic_proxy.py /usr/local/bin/anthropic_proxy.py
 RUN chmod +x /usr/local/bin/anthropic_proxy.py
 COPY anth2openai_proxy.py /usr/local/bin/anth2openai_proxy.py
 RUN chmod +x /usr/local/bin/anth2openai_proxy.py
+# Routes Anthropic Messages traffic to two upstreams by model name, so one
+# Claude Code process can run subagents on different backends.
+COPY anthropic_router_proxy.py /usr/local/bin/anthropic_router_proxy.py
+RUN chmod +x /usr/local/bin/anthropic_router_proxy.py
+# Explicit backend delegation for supervisor/worker adapters.
+COPY delegate.sh /usr/local/bin/delegate
+RUN chmod +x /usr/local/bin/delegate
 
 WORKDIR /workspace
 CMD ["/bin/bash", "/adapter.sh"]
