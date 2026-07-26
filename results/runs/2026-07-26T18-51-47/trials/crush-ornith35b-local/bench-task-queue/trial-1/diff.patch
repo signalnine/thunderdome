@@ -1,0 +1,1194 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..c637913
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 2178618,
++  "output_tokens": 24010,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.0
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..78b2cb7
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,364 @@
++Now let me read all the phase descriptions and test files to understand exactly what's needed.
++
++Now I have a thorough understanding of all 12 phases. Let me build the complete implementation.
++
++Build passes. Now let me run the tests.
++
++Let me analyze the failures:
++
++1. **Phase 4**: Multiple delayed tasks ordered by availability time - the test enqueues with `delay: 10000` first, then `delay: 3000`. Both become available at 10000ms. The one with delay 3000 should come first (sooner). The issue is that both have the same `availableAt` when dequeued at 10000ms. Need to sort by `availableAt` when available times are equal.
++
++2. **Phase 5**: The backoff/retry issue - `fail()` sets `availableAt` to `Date.now() + backoffDelay`, but with fake timers, `Date.now()` returns the fake time. However, the retry task goes back to the queue, and when we dequeue, the `availableAt` check should work. Let me re-read the test more carefully.
++
++The issue with Phase 5 is the `fail()` method uses `Date.now()` but the test uses fake timers. The `availableAt` is set correctly relative to fake time. Let me look more carefully at the backoff test.
++
++The test expects: first retry at 1000ms after fail, second retry at 2000ms after fail, third retry at 4000ms after fail. The backoff formula is `backoffMs * 2^(attempt - 1)` where attempt starts at 1.
++
++- 1st retry: attempt is now 1 (first dequeue), so backoff = 1000 * 2^0 = 1000ms ✓
++- 2nd retry: attempt is now 2, so backoff = 1000 * 2^1 = 2000ms ✓
++- 3rd retry: attempt is now 3, so backoff = 1000 * 2^2 = 4000ms ✓
++
++The issue is that after `fail()`, the task goes back to the queue as pending, but when we dequeue again, `attempts` gets incremented again. Let me trace through the code:
++
++In `dequeue()`: `task.attempts += 1` - so the first dequeue sets attempts to 1.
++In `fail()`: backoff uses `task.attempts - 1` which is `1 - 1 = 0`, so `1000 * 2^0 = 1000`. Good.
++Second dequeue: attempts becomes 2. fail() uses `2 - 1 = 1`, so `1000 * 2^1 = 2000`. Good.
++Third dequeue: attempts becomes 3. fail() uses `3 - 1 = 2`, so `1000 * 2^2 = 4000`. Good.
++
++But wait - the test does `vi.advanceTimersByTime(999)` then `vi.advanceTimersByTime(1)`. The issue might be that the fake timers don't advance `Date.now()` properly with `vi.advanceTimersByTime`. Let me check... Actually, `vi.advanceTimersByTime` should advance `Date.now()` in fake timer mode.
++
++Wait, the issue might be in `fail()`: after failing, the task is re-enqueued but its `availableAt` is set using `Date.now()`. But in the test, the current time when `fail()` is called is at time 0 (start). So `availableAt = 0 + 1000 = 1000`. Then `vi.advanceTimersByTime(999)` makes current time 999, and `availableAt (1000) > 999` so it's blocked. Then `vi.advanceTimersByTime(1)` makes current time 1000, and `availableAt (1000) > 1000` is false, so it should be available.
++
++Hmm, wait. The condition is `task.availableAt.getTime() > nowTime`. At time 1000, `1000 > 1000` is false, so it should be dequeued. That should work...
++
++Let me look at the `fail()` implementation more carefully. After calling `fail()`, the task is removed from the queue and re-added. But the `processingIds` is also cleaned up. Let me check if there's an issue with the task being found properly.
++
++Actually, I think the issue is that when `fail()` is called, the task's `status` is set to `'pending'` and it's re-added to the queue. But the `dequeue()` method checks `task.availableAt.getTime() > nowTime`. The `availableAt` is set as `new Date(Date.now() + backoffDelay)`. With fake timers, `Date.now()` returns the fake time. But wait - `new Date(Date.now() + ...)` creates a Date using the current fake time, so `availableAt.getTime()` should also return the fake time. This should work...
++
++Let me re-read the test more carefully:
++
++```
++queue.enqueue('work', { job: 'backoff-test' });
++const task = queue.dequeue('work')!;  // attempts = 1
++queue.fail(task.id, 'error 1');       // availableAt = now + 1000*2^0 = 1000
++vi.advanceTimersByTime(999);          // now = 999
++expect(queue.dequeue('work')).toBeNull();  // 1000 > 999, blocked ✓
++vi.advanceTimersByTime(1);            // now = 1000
++expect(queue.dequeue('work')).not.toBeNull();  // 1000 > 1000 is false, should dequeue
++```
++
++Wait, I need to check if there's an issue with the `fail()` method removing the task from the queue. After `fail()`, the task is set to pending and re-added. But the `dequeue` method filters for `status === 'pending'`. Let me check if the task's status is correctly set...
++
++Actually, I bet the problem is that `fail()` removes the task from the queue and re-adds it, but the `dequeue()` method's sorting might have an issue. Let me check the dequeue logic again.
++
++Actually wait - I think the problem might be simpler. In `fail()`, I do:
++```
++task.availableAt = new Date(Date.now() + backoffDelay);
++```
++
++But when the test calls `vi.advanceTimersByTime(999)` followed by `vi.advanceTimersByTime(1)`, the `Date.now()` inside `fail()` was called at time 0, so `availableAt = 1000`. But the `dequeue()` method uses `Date.now()` at the time of the call.
++
++Hmm, that should be fine. Let me look at the `dequeue` code again...
++
++Oh wait, I see the issue! In `dequeue()`, I have:
++```
++const nowTime = Date.now();
++```
++
++But then I also check:
++```
++if (task.availableAt.getTime() > nowTime) {
++```
++
++This should work. Let me think about what else could go wrong...
++
++Actually, I think the issue might be that after `fail()` re-enqueues the task, the task is pending but the `dequeue()` method might not be finding it. Let me add some debugging.
++
++Actually, let me just re-read the test for "respects maxRetries limit":
++
++```
++queue.enqueue('work', { job: 'limited' });
++
++for (let i = 0; i < 3; i++) {
++  const task = queue.dequeue('work')!;
++  expect(task).not.toBeNull();
++  queue.fail(task.id, `error ${i + 1}`);
++  vi.advanceTimersByTime(1000 * Math.pow(2, i));
++}
++
++// Fourth attempt
++const lastAttempt = queue.dequeue('work')!;
++expect(lastAttempt).not.toBeNull();
++```
++
++So after 3 failures with backoff delays of 1000, 2000, 4000, the fourth attempt should be available. But `maxRetries` defaults to 3, meaning the task can be attempted 3 times total. Let me re-read the phase description:
++
++"maxRetries: maximum number of retry attempts (default: 3)"
++
++So with `maxRetries: 3`, the task can be attempted 1 (original) + 3 (retries) = 4 times total? Or is it 3 attempts total?
++
++Looking at the test: it does 3 dequeue/fail cycles, then expects a 4th dequeue to succeed. So `maxRetries: 3` means 3 retries after the initial attempt, for a total of 4 attempts.
++
++In my code, I check `task.attempts >= task.maxRetries`. After the 3rd fail, `attempts` is 3, and `maxRetries` is 3, so `3 >= 3` is true, and the task goes to DLQ. But the test expects it to be available for a 4th attempt!
++
++So the logic should be: `maxRetries` is the number of retries allowed, not total attempts. The check should be `task.attempts > task.maxRetries` (i.e., if attempts exceeds maxRetries, it's exhausted).
++
++Let me fix this: the task should be retried as long as `attempts < maxRetries`. After the first attempt (attempts=1), if we fail, we retry. After the 3rd attempt (attempts=3), if we fail, we should NOT retry because attempts (3) is not less than maxRetries (3).
++
++Wait, but the test does 4 dequeue/fail cycles and expects the 4th to succeed. Let me re-read:
++
++```
++for (let i = 0; i < 3; i++) {
++  const task = queue.dequeue('work')!;  // i=0: 1st attempt, i=1: 2nd attempt, i=2: 3rd attempt
++  queue.fail(task.id, `error ${i + 1}`);
++  vi.advanceTimersByTime(1000 * Math.pow(2, i));
++}
++// Fourth attempt
++const lastAttempt = queue.dequeue('work')!;
++```
++
++So it does 3 dequeue/fail cycles (attempts 1, 2, 3), then expects a 4th dequeue. This means `maxRetries: 3` means 3 retries, so 4 total attempts.
++
++My check `task.attempts >= task.maxRetries` with attempts=3 and maxRetries=3 would be true, sending to DLQ. But the test expects the 4th attempt to succeed.
++
++So the correct check should be: after failing, if `attempts < maxRetries`, retry. Let me fix this.
++
++Actually wait, let me re-read: the backoff test does:
++- First attempt (dequeue), fail
++- First retry after 1000ms (backoffMs * 2^0)
++- Second attempt (dequeue), fail
++- Second retry after 2000ms (backoffMs * 2^1)
++- Third attempt (dequeue), fail
++- Third retry after 4000ms (backoffMs * 2^2)
++
++And the maxRetries test does 3 failures then expects a 4th attempt. So with default maxRetries=3:
++- Attempt 1: fail → retry (1st retry)
++- Attempt 2: fail → retry (2nd retry)
++- Attempt 3: fail → retry (3rd retry)
++- Attempt 4: fail → no more retries → DLQ
++
++So the check should be: if `attempts < maxRetries`, retry. After attempt 3 (attempts=3), `3 < 3` is false, so... wait that would mean attempt 3 doesn't get retried.
++
++Hmm, let me re-think. The test does:
++```
++for (let i = 0; i < 3; i++) {
++  const task = queue.dequeue('work')!;
++  queue.fail(task.id, `error ${i + 1}`);
++  vi.advanceTimersByTime(1000 * Math.pow(2, i));
++}
++// Fourth attempt
++const lastAttempt = queue.dequeue('work')!;
++expect(lastAttempt).not.toBeNull();
++queue.fail(lastAttempt.id, 'final error');
++// No more retries
++vi.advanceTimersByTime(100000);
++expect(queue.dequeue('work')).toBeNull();
++```
++
++So:
++- i=0: dequeue (attempt 1), fail, advance 1000ms → retry
++- i=1: dequeue (attempt 2), fail, advance 2000ms → retry
++- i=2: dequeue (attempt 3), fail, advance 4000ms → retry
++- Then: dequeue (attempt 4), fail → no more retries
++
++So with maxRetries=3, there are 4 total attempts (1 original + 3 retries). The check in `fail()` should be: if we've had fewer than `maxRetries` retries so far, retry. The number of retries so far is `attempts - 1` (since the first attempt isn't a retry).
++
++So: `if (attempts - 1 < maxRetries)` → `if (attempts <= maxRetries)` → retry.
++
++After attempt 3 (attempts=3), `3 <= 3` is true, so retry. After attempt 4 (attempts=4), `4 <= 3` is false, so DLQ.
++
++Let me fix the check to `task.attempts <= task.maxRetries`.
++
++Now for the Phase 4 ordering issue: the test enqueues `delay: 10000` first, then `delay: 3000`. At time 10000, both are available. The "sooner" one (delay 3000) should come first. The issue is that both have `availableAt` set to `Date.now() + delay`. The first one has `availableAt = 0 + 10000 = 10000`, and the second has `availableAt = 0 + 3000 = 3000`. At time 10000, both are available. But in my sort, I sort by priority first, then enqueue order. I need to also sort by `availableAt` when priority is the same.
++
++Actually, looking at the phase description: "When multiple delayed tasks are available, they are ordered by their availability time (earliest first), then by priority, then FIFO". So the sort order should be: availableAt first, then priority, then FIFO.
++
++Let me fix the sort in `dequeue()`.
++
++For Phase 12, the shutdown test times out. The issue is that my `shutdown()` uses `setTimeout` for polling, but with fake timers, `setTimeout` doesn't fire unless we advance timers. The test does `vi.advanceTimersByTime(100)` and `await Promise.resolve()` but the shutdown is waiting in a `while` loop with `setTimeout`. I need to rethink the shutdown implementation to work with fake timers.
++
++Let me rewrite the implementation to fix all these issues.
++
++Now let me fix all the issues. I'll rewrite the file with all fixes:
++
++1. **Phase 4 ordering**: Sort by `availableAt` first, then priority, then enqueue order
++2. **Phase 5 retry logic**: Change `attempts >= maxRetries` to `attempts > maxRetries` (maxRetries = number of retries, not total attempts)
++3. **Phase 6 DLQ**: The DLQ issue is caused by the maxRetries fix
++4. **Phase 9 cancel**: The condition `task.attempts === 0` is wrong - need to always remove from queue when cancelled and pending
++5. **Phase 12 shutdown**: Can't use `setTimeout` with fake timers - need a different approach
++
++Good progress - down to 2 failures. Let me fix both:
++
++**Phase 5 priority issue**: The test enqueues `high-pri` (priority 1) and `low-pri` (priority 9). Dequeues `high-pri`, fails it, advances 1000ms, then dequeues again expecting `high-pri` (retried) before `low-pri`. But my sort puts `availableAt` first, and the retried task has `availableAt = 1000` while `low-pri` has `availableAt = 0` (immediate). So `low-pri` (availableAt=0) comes first. The phase description says: "When multiple delayed tasks are available, they are ordered by their availability time (earliest first), then by priority, then FIFO". But non-delayed tasks should be dequeued before delayed ones. The retried task has a delay (backoff), so it's "delayed". The `low-pri` task is not delayed.
++
++The issue is that the sort puts `availableAt` first, but the phase 4 description says "Non-delayed tasks should be dequeued before delayed tasks that haven't become available yet". Once both are available, the description says "ordered by their availability time (earliest first), then by priority, then FIFO". But the retried task was available at time 1000, and the low-pri task was available at time 0. So by availability time, low-pri should come first.
++
++Wait, but the test expects the retried high-priority task to come first. Let me re-read the test:
++
++```
++queue.enqueue('work', { job: 'high-pri' }, { priority: 1 });
++queue.enqueue('work', { job: 'low-pri' }, { priority: 9 });
++
++const highPri = queue.dequeue('work')!;  // gets high-pri (priority 1)
++queue.fail(highPri.id, 'error');
++vi.advanceTimersByTime(1000);
++
++const next = queue.dequeue('work')!;  // expects high-pri (retried)
++```
++
++After fail, the retried task has `availableAt = 1000`. The low-pri task has `availableAt = 0`. At time 1000, both are available. By availability time, low-pri (0) < high-pri (1000), so low-pri should come first. But the test expects high-pri.
++
++I think the issue is that for non-delayed tasks, `availableAt` should be `Date(0)` (epoch), but for the purpose of ordering, non-delayed tasks should come before delayed tasks regardless of their `availableAt`. The sorting should be: non-delayed tasks first (by priority then FIFO), then delayed tasks (by availability time, then priority, then FIFO).
++
++Actually, re-reading the phase 4 description more carefully: "Non-delayed tasks should be dequeued before delayed tasks that haven't become available yet". This means non-delayed tasks take priority over delayed tasks that aren't yet available. But once both are available, the ordering should be... The description says "When multiple delayed tasks are available, they are ordered by their availability time (earliest first), then by priority, then FIFO". It doesn't explicitly say how non-delayed and delayed tasks interleave when both are available.
++
++But the test clearly expects priority to take precedence over availability time. Let me change the sort to: priority first, then availability time, then FIFO. This way, high-priority tasks always come before low-priority ones, and within the same priority, earlier availability comes first.
++
++Actually wait, let me re-read the phase 4 description: "When multiple delayed tasks are available, they are ordered by their availability time (earliest first), then by priority, then FIFO". This specifically says "when multiple delayed tasks are available". For non-delayed tasks mixed with delayed, the description says non-delayed should come first.
++
++I think the correct interpretation is:
++1. Non-delayed tasks (availableAt = epoch) come before delayed tasks
++2. Among non-delayed: priority, then FIFO
++3. Among delayed: availability time, then priority, then FIFO
++
++But the retried task from phase 5 has a backoff delay, making it "delayed". The test expects it to come before the non-delayed low-pri task because of priority.
++
++Hmm, but that contradicts the "non-delayed before delayed" rule. Unless... the retried task shouldn't be considered "delayed" in the same way. Let me think about this differently.
++
++Actually, I think the simplest fix is: sort by priority first, then by availability time, then by enqueue order. This matches what the test expects. The "non-delayed before delayed" rule is about when delayed tasks aren't yet available (they're blocked), not about ordering when both are available.
++
++Now for Phase 12, the shutdown test times out because `setTimeout` with fake timers doesn't fire unless `vi.advanceTimersByTime` is called. The test does `vi.advanceTimersByTime(100)` and `await Promise.resolve()` but the shutdown's `setTimeout` callbacks never fire.
++
++The key insight is that the test calls `vi.advanceTimersByTime(100)` and then `await Promise.resolve()` expecting the shutdown to check if the task completed. Since the task is still processing, the shutdown should wait. Then `queue.complete(task.id)` is called, and `vi.advanceTimersByTime(0)` + `await shutdownPromise` should resolve.
++
++The problem is that `setTimeout` doesn't resolve with fake timers unless we advance time. I need to use a different approach - maybe use `process.nextTick` or a microtask, or better yet, use `vi.advanceTimersByTime` internally.
++
++Actually, the simplest approach is to not use `setTimeout` at all. Instead, I can check if tasks are done synchronously, and if not, use a polling approach that works with fake timers. But with fake timers, `setTimeout` is the only way to yield.
++
++Wait - the test does `vi.advanceTimersByTime(100)` and then `await Promise.resolve()`. After `advanceTimersByTime(100)`, any pending `setTimeout` callbacks should fire. So the issue is that my `setTimeout` callbacks are being set up inside the async function, and they might not be registered before the test advances timers.
++
++Actually, looking more carefully at the test:
++```
++const shutdownPromise = queue.shutdown(10000).then((summary) => {
++  resolved = true;
++  return summary;
++});
++
++vi.advanceTimersByTime(100);
++await Promise.resolve(); // flush microtasks
++expect(resolved).toBe(false);
++
++queue.complete(task.id);
++vi.advanceTimersByTime(0);
++const summary = await shutdownPromise;
++```
++
++The shutdown is called, then timers are advanced by 100ms. At this point, my `setTimeout(checkCompletion, 10)` should have fired (since 100ms > 10ms). But `checkCompletion` checks if tasks are still processing, and they are, so it sets another `setTimeout(checkCompletion, 10)`. This continues until `queue.complete(task.id)` is called.
++
++After `queue.complete(task.id)`, the task status changes to 'completed'. Then `vi.advanceTimersByTime(0)` should fire any pending setTimeout callbacks. The `checkCompletion` function should see that `remaining.length === 0` and resolve.
++
++But the issue is that `vi.advanceTimersByTime(0)` might not fire callbacks that were set with `setTimeout(fn, 0)`. Let me check... Actually, `vi.advanceTimersByTime(0)` advances time by 0ms, which should fire any timers that were set to fire at or before the current time. If the current time is, say, 100ms, and a timer was set at time 0 with delay 10ms, it should have fired at 10ms. But since we're at 100ms now, it should have already fired.
++
++Hmm, actually the issue might be more subtle. Let me think about the timer flow:
++
++1. `shutdown()` is called at time 0. `startTime = 0`.
++2. `checkCompletion` is called synchronously. Tasks are still processing. `setTimeout(checkCompletion, 10)` is called. Current fake time is still 0.
++3. `vi.advanceTimersByTime(100)` advances time to 100ms. The `setTimeout(checkCompletion, 10)` fires because 10ms has passed. `checkCompletion` runs again. Tasks still processing. `Date.now() - startTime = 100 < 10000`, so no timeout. `setTimeout(checkCompletion, 10)` is called again.
++4. `await Promise.resolve()` flushes microtasks.
++5. `queue.complete(task.id)` marks task as completed.
++6. `vi.advanceTimersByTime(0)` - this advances time by 0ms. But there's a pending `setTimeout(checkCompletion, 10)` that was set at time 100 with delay 10ms, so it would fire at time 110. Since we only advance by 0ms, it doesn't fire.
++
++That's the problem! The `vi.advanceTimersByTime(0)` doesn't fire the pending setTimeout. I need a different approach.
++
++Instead of using `setTimeout` for polling, I should use a mechanism that works with fake timers. One approach: use `process.nextTick` or just check synchronously in the shutdown function. But the shutdown needs to wait for tasks to complete, which happens asynchronously.
++
++Actually, the best approach for fake timer compatibility is to not use setTimeout at all. Instead, I can use a `Promise` that resolves when a task completes. I can set up a listener on task completion.
++
++Let me rethink the shutdown implementation. The key requirement is:
++1. After shutdown, enqueue throws
++2. Wait for processing tasks to complete
++3. If timeout, force-cancel
++4. onShutdown callbacks fire
++
++For fake timer compatibility, I'll use a simple approach: set a timeout using `setTimeout`, and also check synchronously. The test advances timers, so `setTimeout` callbacks will fire when `vi.advanceTimersByTime` is called.
++
++Actually, I think the real issue is that `vi.advanceTimersByTime(0)` doesn't fire any pending timers. The test expects the shutdown to resolve after `complete()` is called and `vi.advanceTimersByTime(0)` is called. 
++
++Let me try a different approach: instead of polling with setTimeout, I'll use a simple check that doesn't rely on timers. I can use `await Promise.resolve()` to yield, and then check if tasks are done. But this won't work for the timeout case.
++
++Actually, let me look at what the test does more carefully:
++
++```javascript
++it('shutdown waits for processing tasks to complete', async () => {
++    queue.enqueue('work', { job: 'in-flight' });
++    const task = queue.dequeue('work')!;
++
++    let resolved = false;
++    const shutdownPromise = queue.shutdown(10000).then((summary) => {
++      resolved = true;
++      return summary;
++    });
++
++    // Shutdown should not resolve yet (task still processing)
++    vi.advanceTimersByTime(100);
++    await Promise.resolve(); // flush microtasks
++    expect(resolved).toBe(false);
++
++    // Complete the task
++    queue.complete(task.id);
++    vi.advanceTimersByTime(0);
++    const summary = await shutdownPromise;
++
++    expect(resolved).toBe(true);
++    expect(summary.completed).toBe(1);
++  });
++```
++
++The test expects that after `queue.complete(task.id)` and `vi.advanceTimersByTime(0)`, the shutdown resolves. This means the shutdown needs to detect completion synchronously or via a mechanism that fires with `advanceTimersByTime(0)`.
++
++One approach: use `setImmediate` instead of `setTimeout`. But `setImmediate` also doesn't fire with `advanceTimersByTime(0)`.
++
++Another approach: use a synchronous check. After `complete()` is called, the shutdown loop should detect it. But how?
++
++Actually, I think the solution is to use `vi.advanceTimersByTime(0)` to fire any pending microtasks. The key is that `complete()` should somehow trigger the shutdown to re-check. I could use an event/emitter pattern.
++
++Let me try a different approach: use a simple polling loop with `setTimeout`, but also add a check in `complete()` and `fail()` that resolves the shutdown promise if all tasks are done.
++
++Now let me rewrite the shutdown method and add the completion notification:
++
++Now I need to add a notification mechanism so that when `complete()` or `fail()` is called, the shutdown polling is notified. Let me add a `_notifyShutdown` call:
++
++Now add `_checkShutdownCompletion` and also add it to `fail()`:
++
++Now add the `_checkShutdownCompletion` helper:
++
++I also need to store the shutdown start time:
++
++I need to add the `_shutdownStartTime` field:
++
++All 90 tests pass. Now let me run lint:
++
++Need to fix lint errors - `any` types and unused parameter:
++
++Wait, let me check line 462 - it's the `process` handler parameter:
++
++The `any` on line 462 is the error catch. Let me fix it:
++
++Now fix the unused parameter `_notifyDependents`:
++
++All passing: **lint ✓**, **build ✓**, **90/90 tests ✓**.
++
++Done. All 90 tests pass across 12 phases, TypeScript compiles cleanly, and lint has no errors.
++
++Implementation in `src/index.ts` covers:
++- **Phases 1-2**: Basic FIFO with named queues
++- **Phase 3**: Priority (1-10) with FIFO within same priority
++- **Phase 4**: Delayed/scheduled tasks via `delay` and `runAt`
++- **Phase 5**: Retry with exponential backoff (`backoffMs * 2^(attempt-1)`)
++- **Phase 6**: Dead letter queue with `retryDLQ`/`clearDLQ`
++- **Phase 7**: Task dependencies with circular detection
++- **Phase 8**: Per-queue concurrency limits
++- **Phase 9**: Progress tracking and cancellation
++- **Phase 10**: Cron-like recurring schedules
++- **Phase 11**: Middleware pipeline
++- **Phase 12**: Graceful shutdown with timeout and force-cancel
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/CRUSH.md b/CRUSH.md
+new file mode 100644
+index 0000000..34ac16d
+--- /dev/null
++++ b/CRUSH.md
+@@ -0,0 +1,32 @@
++# STOP — Read this before doing anything
++
++You are an autonomous coding agent. Your job is to WRITE CODE that passes tests.
++
++## Step 1: Understand the task
++- Read TASK.md to understand what to build
++- Look at existing files: `ls -la`, `ls src/`, `ls tests/`
++
++## Step 2: Write the code
++- Create/edit files in `src/` — this is where your implementation goes
++- Write complete, working TypeScript code
++- NEVER delete test files or modify package.json/tsconfig.json
++
++## Step 3: Verify (MANDATORY — do this EVERY time after writing code)
++```bash
++npm install 2>/dev/null
++npm run build
++npm test
++npm run lint
++```
++
++## Step 4: Fix and repeat
++- If build fails: fix TypeScript errors, go to step 3
++- If tests fail: read the errors, fix your code, go to step 3
++- If lint fails: fix lint issues, go to step 3
++- Keep iterating until ALL THREE pass
++
++## CRITICAL RULES
++- You MUST write code in `src/index.ts` — that is the main deliverable
++- You MUST NOT delete or modify files in `tests/`
++- You MUST run `npm test` at least once before finishing
++- You MUST keep trying until tests pass — do not stop early
+diff --git a/package-lock.json b/package-lock.json
+index 1d53f39..3d2daad 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -964,7 +964,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1009,7 +1008,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1289,7 +1287,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -1640,7 +1637,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -2919,7 +2915,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+@@ -2951,7 +2946,6 @@
+       "integrity": "sha512-o5a9xKjbtuhY6Bi5S3+HvbRERmouabWbyUcpXXUA1u+GNUKoROi9byOJ8M0nHbHYHkYICiMlqxkg1KkYmm25Sw==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "esbuild": "^0.21.3",
+         "postcss": "^8.4.43",
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..a5b9608
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,711 @@
++import { randomUUID } from 'crypto';
++
++// ─── Types ────────────────────────────────────────────────────────────────────
++
++export type TaskStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
++
++export interface Task {
++  id: string;
++  payload: unknown;
++  status: TaskStatus;
++  createdAt: Date;
++  queueName: string;
++  priority: number;
++  attempts: number;
++  maxRetries: number;
++  backoffMs: number;
++  availableAt: Date;
++  lastError?: string;
++  failCount: number;
++  dependsOn: string[];
++  progress?: {
++    percent: number;
++    message?: string;
++    updatedAt: Date;
++  };
++  // internal
++  _enqueueOrder: number;
++}
++
++export interface Schedule {
++  id: string;
++  queueName: string;
++  cronExpression: string;
++  taskTemplate: unknown;
++  active: boolean;
++  _lastFired?: Date;
++}
++
++export interface ConcurrencyInfo {
++  current: number;
++  max: number;
++}
++
++export interface ProgressInfo {
++  percent: number;
++  message?: string;
++  updatedAt: Date;
++}
++
++export type Middleware = (task: Task, next: () => Promise<void>) => Promise<void>;
++
++export interface ShutdownSummary {
++  completed: number;
++  cancelled: number;
++  elapsed: number;
++}
++
++interface QueueState {
++  tasks: Task[];
++  dlq: Task[];
++  concurrencyLimit: number | null;
++  middleware: Middleware[];
++  schedules: Schedule[];
++  processingIds: Set<string>;
++  dependents: Map<string, Set<string>>;
++}
++
++// ─── Helpers ──────────────────────────────────────────────────────────────────
++
++function uuid(): string {
++  return randomUUID();
++}
++
++// ─── Class ────────────────────────────────────────────────────────────────────
++
++export class TaskQueue {
++  private queues: Map<string, QueueState> = new Map();
++  private taskStore: Map<string, Task> = new Map();
++  private nextOrder: number = 0;
++  private _shuttingDown: boolean = false;
++  private _shutdownPromise: Promise<ShutdownSummary> | null = null;
++  private _shutdownCallbacks: Array<() => void> = [];
++  private _progressSubs: Map<string, Array<(info: ProgressInfo) => void>> = new Map();
++  private _shutdownResolve: ((summary: ShutdownSummary) => void) | null = null;
++  private _shutdownProcessingTasks: Task[] = [];
++  private _shutdownStartTime: number = 0;
++
++  // ── Phase 1: Basic FIFO ──────────────────────────────────────────────────
++
++  enqueue(queueName: string, payload: unknown, options?: EnqueueOptions): Task {
++    if (this._shuttingDown) {
++      throw new Error('TaskQueue is shutting down');
++    }
++
++    const name = queueName || 'default';
++    const priority = options?.priority ?? 5;
++    if (priority < 1 || priority > 10) {
++      throw new Error(`Priority must be between 1 and 10, got ${priority}`);
++    }
++
++    // Validate dependsOn
++    const dependsOn: string[] = options?.dependsOn ?? [];
++    for (const depId of dependsOn) {
++      if (!this.taskStore.has(depId)) {
++        throw new Error(`Dependency task ${depId} does not exist`);
++      }
++    }
++
++    // Circular dependency detection
++    for (const depId of dependsOn) {
++      if (this._hasCircularDependency(depId, new Set([depId]))) {
++        throw new Error(`Circular dependency detected involving task ${depId}`);
++      }
++    }
++
++    const availableAt = this._computeAvailableAt(options);
++    const order = this.nextOrder++;
++
++    const task: Task = {
++      id: uuid(),
++      payload,
++      status: 'pending',
++      createdAt: new Date(),
++      queueName: name,
++      priority,
++      attempts: 0,
++      maxRetries: options?.maxRetries ?? 3,
++      backoffMs: options?.backoffMs ?? 1000,
++      availableAt,
++      failCount: 0,
++      dependsOn,
++      _enqueueOrder: order,
++    };
++
++    this._ensureQueue(name);
++    this.taskStore.set(task.id, task);
++    this.queues.get(name)!.tasks.push(task);
++
++    return task;
++  }
++
++  dequeue(queueName?: string): Task | null {
++    const name = queueName || 'default';
++    const state = this.queues.get(name);
++    if (!state) return null;
++
++    const nowTime = Date.now();
++
++    // Collect available tasks
++    const available: Task[] = [];
++
++    for (const task of state.tasks) {
++      if (task.status !== 'pending') continue;
++
++      // Check availability time
++      if (task.availableAt.getTime() > nowTime) {
++        continue;
++      }
++
++      // Check dependencies
++      if (!this._depsSatisfied(task)) {
++        continue;
++      }
++
++      available.push(task);
++    }
++
++    // Check concurrency limit
++    const currentProcessing = state.processingIds.size;
++    if (state.concurrencyLimit !== null && currentProcessing >= state.concurrencyLimit) {
++      return null;
++    }
++
++    // Sort: priority first (lower = higher priority), then availability time, then FIFO
++    available.sort((a, b) => {
++      if (a.priority !== b.priority) return a.priority - b.priority;
++      const atA = a.availableAt.getTime();
++      const atB = b.availableAt.getTime();
++      if (atA !== atB) return atA - atB;
++      return a._enqueueOrder - b._enqueueOrder;
++    });
++
++    if (available.length === 0) return null;
++
++    const task = available[0];
++    task.status = 'processing';
++    task.attempts += 1;
++    state.processingIds.add(task.id);
++
++    // Remove from queue
++    const idx = state.tasks.indexOf(task);
++    if (idx !== -1) state.tasks.splice(idx, 1);
++
++    return task;
++  }
++
++  size(): number {
++    let total = 0;
++    for (const state of this.queues.values()) {
++      for (const t of state.tasks) {
++        if (t.status === 'pending') total++;
++      }
++    }
++    return total;
++  }
++
++  // ── Phase 2: Named Queues ────────────────────────────────────────────────
++
++  listQueues(): string[] {
++    return Array.from(this.queues.keys());
++  }
++
++  queueSize(queueName: string): number {
++    const state = this.queues.get(queueName);
++    if (!state) return 0;
++    let count = 0;
++    for (const t of state.tasks) {
++      if (t.status === 'pending') count++;
++    }
++    return count;
++  }
++
++  // ── Phase 5: Retry with Backoff ──────────────────────────────────────────
++
++  fail(taskId: string, error?: string): void {
++    const task = this.taskStore.get(taskId);
++    if (!task) return;
++    if (task.status === 'cancelled') return;
++
++    task.lastError = error;
++    task.failCount += 1;
++
++    // maxRetries is the number of retries allowed (not total attempts)
++    // attempts starts at 1 on first dequeue, so if attempts > maxRetries, no more retries
++    if (task.attempts > task.maxRetries) {
++      // Exhausted retries - move to DLQ
++      task.status = 'failed';
++      this._moveToDLQ(task);
++      // Notify shutdown if active
++      this._checkShutdownCompletion();
++      return;
++    }
++
++    // Re-enqueue with backoff delay
++    const backoffDelay = task.backoffMs * Math.pow(2, task.attempts - 1);
++    task.availableAt = new Date(Date.now() + backoffDelay);
++    task.status = 'pending';
++
++    // Remove from current queue and free concurrency slot
++    const state = this.queues.get(task.queueName);
++    if (state) {
++      state.processingIds.delete(taskId);
++      const idx = state.tasks.indexOf(task);
++      if (idx !== -1) state.tasks.splice(idx, 1);
++    }
++
++    // Re-add to the queue
++    this._ensureQueue(task.queueName);
++    this.queues.get(task.queueName)!.tasks.push(task);
++  }
++
++  complete(taskId: string): void {
++    const task = this.taskStore.get(taskId);
++    if (!task) return;
++
++    task.status = 'completed';
++
++    // Free concurrency slot
++    const state = this.queues.get(task.queueName);
++    if (state) {
++      state.processingIds.delete(taskId);
++    }
++
++    // Check dependents
++    this._notifyDependents(taskId);
++
++    // Notify shutdown if active
++    this._checkShutdownCompletion();
++  }
++
++  // ── Phase 6: Dead Letter Queue ───────────────────────────────────────────
++
++  getDLQ(queueName: string): Task[] {
++    const state = this.queues.get(queueName);
++    return state ? [...state.dlq] : [];
++  }
++
++  retryDLQ(taskId: string): Task | null {
++    for (const [qName, state] of this.queues) {
++      const idx = state.dlq.findIndex((t) => t.id === taskId);
++      if (idx !== -1) {
++        const task = state.dlq[idx];
++        state.dlq.splice(idx, 1);
++        task.failCount = 0;
++        task.attempts = 0;
++        task.lastError = undefined;
++        task.status = 'pending';
++        task.availableAt = new Date();
++
++        this._ensureQueue(qName);
++        this.queues.get(qName)!.tasks.push(task);
++        return task;
++      }
++    }
++    return null;
++  }
++
++  clearDLQ(queueName: string): void {
++    const state = this.queues.get(queueName);
++    if (state) state.dlq = [];
++  }
++
++  // ── Phase 7: Dependencies ────────────────────────────────────────────────
++
++  getDependencies(taskId: string): Array<{ taskId: string; status: TaskStatus }> {
++    const task = this.taskStore.get(taskId);
++    if (!task) return [];
++    return task.dependsOn.map((depId) => ({
++      taskId: depId,
++      status: this.taskStore.get(depId)?.status ?? 'failed',
++    }));
++  }
++
++  // ── Phase 8: Concurrency Control ─────────────────────────────────────────
++
++  setConcurrency(queueName: string, limit: number): void {
++    this._ensureQueue(queueName);
++    this.queues.get(queueName)!.concurrencyLimit = limit;
++  }
++
++  getConcurrency(queueName: string): ConcurrencyInfo {
++    const state = this.queues.get(queueName);
++    if (!state) return { current: 0, max: 0 };
++    return {
++      current: state.processingIds.size,
++      max: state.concurrencyLimit ?? 0,
++    };
++  }
++
++  // ── Phase 9: Progress & Cancellation ─────────────────────────────────────
++
++  updateProgress(taskId: string, percent: number, message?: string): void {
++    const task = this.taskStore.get(taskId);
++    if (!task) return;
++    if (percent < 0 || percent > 100) {
++      throw new Error('Progress must be between 0 and 100');
++    }
++    task.progress = { percent, message, updatedAt: new Date() };
++
++    const subs = this._progressSubs.get(taskId);
++    if (subs) {
++      const info: ProgressInfo = { percent, message, updatedAt: task.progress.updatedAt };
++      for (const cb of subs) {
++        cb(info);
++      }
++    }
++  }
++
++  getProgress(taskId: string): ProgressInfo | null {
++    const task = this.taskStore.get(taskId);
++    if (!task?.progress) return null;
++    return { ...task.progress };
++  }
++
++  cancel(taskId: string): void {
++    const task = this.taskStore.get(taskId);
++    if (!task) return;
++
++    task.status = 'cancelled';
++
++    // Remove from queue if pending
++    const state = this.queues.get(task.queueName);
++    if (state) {
++      const idx = state.tasks.indexOf(task);
++      if (idx !== -1) state.tasks.splice(idx, 1);
++      state.processingIds.delete(taskId);
++    }
++  }
++
++  onProgress(taskId: string, callback: (info: ProgressInfo) => void): () => void {
++    if (!this._progressSubs.has(taskId)) {
++      this._progressSubs.set(taskId, []);
++    }
++    this._progressSubs.get(taskId)!.push(callback);
++
++    return () => {
++      const subs = this._progressSubs.get(taskId);
++      if (subs) {
++        const idx = subs.indexOf(callback);
++        if (idx !== -1) subs.splice(idx, 1);
++      }
++    };
++  }
++
++  // ── Phase 10: Recurring Tasks (Cron) ─────────────────────────────────────
++
++  schedule(queueName: string, cronExpression: string, taskTemplate: unknown): Schedule {
++    const schedule: Schedule = {
++      id: uuid(),
++      queueName,
++      cronExpression,
++      taskTemplate,
++      active: true,
++    };
++
++    this._ensureQueue(queueName);
++    this.queues.get(queueName)!.schedules.push(schedule);
++    return schedule;
++  }
++
++  unschedule(scheduleId: string): void {
++    for (const state of this.queues.values()) {
++      const sched = state.schedules.find((s) => s.id === scheduleId);
++      if (sched) {
++        sched.active = false;
++        return;
++      }
++    }
++  }
++
++  listSchedules(queueName?: string): Schedule[] {
++    const result: Schedule[] = [];
++    for (const state of this.queues.values()) {
++      for (const s of state.schedules) {
++        if (!s.active) continue;
++        if (queueName && s.queueName !== queueName) continue;
++        result.push(s);
++      }
++    }
++    return result;
++  }
++
++  tick(): void {
++    const currentTime = new Date();
++    for (const state of this.queues.values()) {
++      for (const schedule of state.schedules) {
++        if (!schedule.active) continue;
++        if (this._isCronDue(schedule.cronExpression, currentTime, schedule._lastFired)) {
++          this.enqueue(schedule.queueName, schedule.taskTemplate);
++          schedule._lastFired = currentTime;
++        }
++      }
++    }
++  }
++
++  // ── Phase 11: Middleware Pipeline ────────────────────────────────────────
++
++  use(queueName: string, middleware: Middleware): void {
++    this._ensureQueue(queueName);
++    this.queues.get(queueName)!.middleware.push(middleware);
++  }
++
++  async process(queueName: string, handler: (task: Task) => Promise<void>): Promise<void> {
++    const task = this.dequeue(queueName);
++    if (!task) return;
++
++    const state = this.queues.get(queueName)!;
++    const middlewares = [...state.middleware];
++
++    try {
++      await this._runMiddleware(middlewares, 0, task, handler);
++    } catch (err: unknown) {
++      task.status = 'failed';
++      task.lastError = (err as Error)?.message || String(err);
++      state.processingIds.delete(task.id);
++    }
++  }
++
++  // ── Phase 12: Graceful Shutdown ──────────────────────────────────────────
++
++  onShutdown(callback: () => void): void {
++    this._shutdownCallbacks.push(callback);
++  }
++
++  async shutdown(timeout?: number): Promise<ShutdownSummary> {
++    if (this._shutdownPromise) {
++      return this._shutdownPromise;
++    }
++
++    this._shuttingDown = true;
++    const startTime = Date.now();
++    const toTimeout = timeout ?? 30000;
++
++    // Collect processing tasks
++    const processingTasks: Task[] = [];
++    for (const task of this.taskStore.values()) {
++      if (task.status === 'processing') {
++        processingTasks.push(task);
++      }
++    }
++
++    this._shutdownProcessingTasks = processingTasks;
++    this._shutdownStartTime = startTime;
++
++    const promise = new Promise<ShutdownSummary>((resolve) => {
++      this._shutdownResolve = (summary) => resolve(summary);
++
++      // Fire shutdown callbacks
++      for (const cb of this._shutdownCallbacks) {
++        try {
++          cb();
++        } catch {
++          // ignore
++        }
++      }
++
++      if (processingTasks.length === 0) {
++        this._shutdownResolve({ completed: 0, cancelled: 0, elapsed: Date.now() - startTime });
++        return;
++      }
++
++      // Set up timeout
++      const timerId = setTimeout(() => {
++        const cancelled: Task[] = [];
++        const completed: Task[] = [];
++        for (const task of processingTasks) {
++          if (task.status === 'processing') {
++            task.status = 'cancelled';
++            cancelled.push(task);
++            const state = this.queues.get(task.queueName);
++            if (state) state.processingIds.delete(task.id);
++          } else {
++            completed.push(task);
++          }
++        }
++        this._shutdownResolve!({
++          completed: completed.length,
++          cancelled: cancelled.length,
++          elapsed: Date.now() - startTime,
++        });
++      }, toTimeout);
++
++      // Check completion periodically
++      const check = () => {
++        const remaining = processingTasks.filter((t) => t.status === 'processing');
++        if (remaining.length === 0) {
++          clearTimeout(timerId);
++          const completed: Task[] = [];
++          const cancelled: Task[] = [];
++          for (const task of processingTasks) {
++            if (task.status === 'completed' || task.status === 'failed') {
++              completed.push(task);
++            } else if (task.status === 'cancelled') {
++              cancelled.push(task);
++            }
++          }
++          this._shutdownResolve!({
++            completed: completed.length,
++            cancelled: cancelled.length,
++            elapsed: Date.now() - startTime,
++          });
++        } else {
++          setTimeout(check, 10);
++        }
++      };
++      setTimeout(check, 0);
++    });
++
++    this._shutdownPromise = promise;
++    return promise;
++  }
++
++  // ── Internal Helpers ─────────────────────────────────────────────────────
++
++  private _ensureQueue(name: string): void {
++    if (!this.queues.has(name)) {
++      this.queues.set(name, {
++        tasks: [],
++        dlq: [],
++        concurrencyLimit: null,
++        middleware: [],
++        schedules: [],
++        processingIds: new Set(),
++        dependents: new Map(),
++      });
++    }
++  }
++
++  private _computeAvailableAt(options?: EnqueueOptions): Date {
++    if (options?.runAt) {
++      return new Date(options.runAt.getTime());
++    }
++    if (options?.delay) {
++      return new Date(Date.now() + options.delay);
++    }
++    return new Date(0); // available immediately
++  }
++
++  private _depsSatisfied(task: Task): boolean {
++    if (task.dependsOn.length === 0) return true;
++    for (const depId of task.dependsOn) {
++      const dep = this.taskStore.get(depId);
++      if (!dep || dep.status !== 'completed') return false;
++    }
++    return true;
++  }
++
++  private _hasCircularDependency(depId: string, visited: Set<string>): boolean {
++    const depTask = this.taskStore.get(depId);
++    if (!depTask) return false;
++    for (const next of depTask.dependsOn) {
++      if (visited.has(next)) return true;
++      visited.add(next);
++      if (this._hasCircularDependency(next, visited)) return true;
++    }
++    return false;
++  }
++
++  private _notifyDependents(_completedTaskId: string): void {
++    // Dependencies are checked in dequeue's _depsSatisfied, so no action needed here
++    // The dependent tasks will become available on the next dequeue() call
++  }
++
++  private _moveToDLQ(task: Task): void {
++    const state = this.queues.get(task.queueName);
++    if (state) {
++      state.processingIds.delete(task.id);
++      state.dlq.push(task);
++      const idx = state.tasks.indexOf(task);
++      if (idx !== -1) state.tasks.splice(idx, 1);
++    }
++  }
++
++  private _checkShutdownCompletion(): void {
++    if (!this._shutdownResolve || this._shutdownProcessingTasks.length === 0) return;
++    const remaining = this._shutdownProcessingTasks.filter((t) => t.status === 'processing');
++    if (remaining.length === 0) {
++      const completed: number = this._shutdownProcessingTasks.filter(
++        (t) => t.status === 'completed' || t.status === 'failed',
++      ).length;
++      const cancelled: number = this._shutdownProcessingTasks.filter(
++        (t) => t.status === 'cancelled',
++      ).length;
++      this._shutdownResolve!({
++        completed,
++        cancelled,
++        elapsed: Date.now() - this._shutdownStartTime,
++      });
++    }
++  }
++
++  private async _runMiddleware(
++    middlewares: Middleware[],
++    index: number,
++    task: Task,
++    handler: (task: Task) => Promise<void>,
++  ): Promise<void> {
++    if (index >= middlewares.length) {
++      await handler(task);
++      if (task.status === 'processing') {
++        task.status = 'completed';
++      }
++      const state = this.queues.get(task.queueName);
++      if (state) {
++        state.processingIds.delete(task.id);
++      }
++      this._notifyDependents(task.id);
++      return;
++    }
++
++    const mw = middlewares[index];
++    await mw(task, () => this._runMiddleware(middlewares, index + 1, task, handler));
++  }
++
++  private _isCronDue(expression: string, currentTime: Date, lastFired?: Date): boolean {
++    const parts = expression.split(' ');
++    if (parts.length < 5) return false;
++
++    const [minutePart, hourPart] = parts;
++    const currentMinute = currentTime.getMinutes();
++    const currentHour = currentTime.getHours();
++
++    if (minutePart === '0' && hourPart === '*') {
++      if (currentMinute !== 0) return false;
++      if (lastFired) {
++        return lastFired.getHours() !== currentHour;
++      }
++      return true;
++    }
++
++    if (minutePart === '0' && hourPart === '0') {
++      if (currentMinute !== 0 || currentHour !== 0) return false;
++      if (lastFired) {
++        return lastFired.getDate() !== currentTime.getDate();
++      }
++      return true;
++    }
++
++    if (minutePart.startsWith('*/')) {
++      const n = parseInt(minutePart.slice(2), 10);
++      if (isNaN(n) || n === 0) return false;
++      if (currentMinute % n !== 0) return false;
++      if (lastFired) {
++        const lastMinute = lastFired.getMinutes();
++        return lastMinute !== currentMinute || lastFired.getHours() !== currentHour;
++      }
++      return true;
++    }
++
++    return false;
++  }
++}
++
++interface EnqueueOptions {
++  priority?: number;
++  delay?: number;
++  runAt?: Date;
++  maxRetries?: number;
++  backoffMs?: number;
++  dependsOn?: string[];
++}

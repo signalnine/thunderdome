@@ -1,0 +1,849 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..db45fa0
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 2257482,
++  "output_tokens": 15694,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.0
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..ac444fb
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,100 @@
++Now I have a complete understanding of the test file. Let me implement all the source files.
++
++Now fix the ws.ts type issues:
++
++The `ws` package has `WebSocket.Server` as a top-level export. Let me check:
++
++Build passes. Now run lint and tests:
++
++Lint passes. Now run tests:
++
++The main issue is that when two clients send operations based on the same version, the second client's operation gets transformed but then the version number conflicts because the version was already incremented by the first client's operation. I need to add proper concurrency control with a mutex/queue for document operations.
++
++The core problem is clear: when two clients send operations concurrently with the same version, they both compute `currentVersion` before either writes, leading to version number collisions. I need to add a per-document mutex/queue to serialize operations.
++
++Build and lint pass. Now run tests:
++
++Good progress - down to 2 failures. Two issues:
++
++1. "Two clients inserting at same position both insertions preserved" - client 2 sends at `version` (same as c1), gets broadcast from c1, then sends again at `version` — the transform needs to handle when client version is stale.
++2. "Concurrent edits do not lose data" - same issue, both clients send at same version, but only one gets through.
++
++The problem: when c2 sends an operation at `version` (the same version c1 used), the server sees `clientVersion === currentVersion`, so no transformation happens. But the operation was already applied by c1. I need to handle this case — when the client's version equals the current version but the doc has already been updated.
++
++Let me look at the test more carefully:
++
++- "Two clients inserting at same position both insertions preserved": c1 sends at version V, gets ack. c2 sends at version V (same as c1). The server should transform c2's op against c1's op.
++- "Concurrent edits do not lose data": both send at version V.
++
++The issue is that the server reads `currentVersion` from DB, but by the time c2's op arrives (after c1 already processed), the version has already been incremented. So `clientVersion (V) < latestVersion (V+1)` should trigger transformation. But the test sends c2's op with `version: version` (the sync version), not `version + 1`.
++
++Wait, looking at the test for "Two clients inserting at same position":
++```js
++sendOp(c1, { type: 'insert', position: 0, text: 'A' }, version);
++await waitForMsg(c1, 1); // ack
++await waitForMsg(c2, 1); // broadcast
++
++sendOp(c2, { type: 'insert', position: 0, text: 'B' }, version);
++await waitForMsg(c2, 2); // ack
++```
++
++So c2 sends with `version` (the original sync version). After c1's edit, the server version is `version + 1`. So `clientVersion (version) < latestVersion (version + 1)` should be true, and transformation should happen.
++
++But the test also waits for `c2, 1` which is the broadcast of c1's operation. After receiving the broadcast, c2 should apply it locally (incrementing its local version to `version + 1`), then send its own op at `version`. But the server-side code should still transform it.
++
++The "Too few parameter values" error is the real problem — the `clientVersion` could be `-1` (from COALESCE) and the query `version > ?` fails when `clientVersion` is `-1`. Let me check:
++
++Actually, the issue is that `clientVersion` is the version passed by the client. If `clientVersion` is `0` and `latestVersion` is `0`, the condition `clientVersion < latestVersion` is false, so no transformation. But if `clientVersion` is `0` and `latestVersion` is `1`, it enters the transform block.
++
++Wait, the "Too few parameter values" error happens at line 129: `SELECT operation FROM versions WHERE document_id = ? AND version > ?`. This means `clientVersion` could be `undefined` or something unexpected. Let me check — `parsed.version` could be `undefined` if not provided.
++
++Actually, looking more carefully at the flow: c2 sends `sendOp(c2, { type: 'insert', position: 0, text: 'B' }, version)`. In the test, `version` is the sync version (0). So `parsed.version` is `0`. Then `clientVersion = 0`, `latestVersion = 1` (after c1's edit). So `0 < 1` is true, enters the transform block. The query should work fine.
++
++But wait — the error is "Too few parameter values were provided". This means `clientVersion` might be `undefined`. Let me check if there's a case where `parsed.version` is not a number...
++
++Actually, looking at the "Two clients inserting at same position" test: c2 first receives the broadcast at index 1, then sends at `version`. But the server's `runExclusive` queue means c2's message handler runs asynchronously. Let me think about this differently.
++
++The real issue might be that the broadcast from c1's operation arrives at c2 *after* c2 has already sent its own op. But in the test, c2 waits for the broadcast before sending. So the sequence should be:
++
++1. c1 sends op at version 0
++2. Server processes c1's op, broadcasts to c2
++3. c2 receives broadcast (msg index 1)
++4. c2 sends op at version 0
++5. Server processes c2's op — at this point, version is 1, so clientVersion (0) < latestVersion (1), triggers transform
++
++This should work. Let me re-examine the "Too few parameter values" error. The issue might be that `clientVersion` is somehow not being passed correctly, or the query parameter binding is off.
++
++Let me look at the actual error location: line 129 is `).all(docId)`. The query is `SELECT operation FROM versions WHERE document_id = ? AND version > ?`. If `clientVersion` is `undefined`, SQLite might complain.
++
++Wait, actually the issue might be that `clientVersion` is `0` and the query `version > 0` works fine. Let me look at the code path more carefully.
++
++Actually, I bet the issue is that `parsed.version` is `0` which is falsy in some context. Let me check: `if (parsed.version !== undefined && typeof parsed.version === 'number')` — `0 !== undefined` is true, `typeof 0 === 'number'` is true. So it enters the block. `clientVersion = 0`. Then `latestVersion = db.prepare(...).get(...)` returns `{ maxVersion: 1 }`. `0 < 1` is true. Then the query should work.
++
++Hmm, let me look at the error more carefully. The error says "Too few parameter values were provided" at line 129. But the query has 2 placeholders and we pass `docId`. Wait — `clientVersion` might be `undefined` if the version check somehow fails. Let me add some debugging.
++
++Actually, I think the issue is simpler. The `runExclusive` function might have a race condition. When the queue is being processed, the `room.queue` is updated, but if there's an error in the promise chain, the `() => fn()` fallback might cause issues.
++
++Let me fix the queue implementation and also handle the edge case better:
++
++Let me look at the actual problem more carefully. The "Two clients inserting at same position" test expects c2 to receive msg index 2 (ack for c2's own op). But the test waits for `c2, 1` (broadcast from c1) before sending c2's op. After c2 sends, it should get an ack at `c2, 2`.
++
++But the test is timing out at `c2, 2` with only 2 messages. This means c2 never gets the ack. The likely cause is an unhandled error in the promise (the "Too few parameter values" error).
++
++Let me check: when c2 sends its op with `version` (0), and the server processes it, the server reads `latestVersion` which should be 1 (after c1). But what if the queue hasn't completed c1's processing yet? The `runExclusive` should serialize this, but maybe there's a timing issue.
++
++Actually, I think the problem is that `parsed.version` is being passed as `0` from the test, but in the transform block, `clientVersion` is `0`. The query `version > 0` should work. Let me check if the issue is that `clientVersion` is somehow not getting through to the query.
++
++Wait — I just realized: the `runExclusive` function creates a new promise chain, but the `fn` is called inside `.then()`. If there's an error in `fn`, the `() => fn()` fallback will call `fn` again, which might not be what we want. But more importantly, the error propagation might be swallowed.
++
++Let me rewrite the ws.ts with better error handling and a simpler approach — use an async mutex:
++
++All 45 tests pass.
++
++All 45 tests pass. Here's what was implemented:
++
++- **`src/models.ts`** — TypeScript interfaces for `Document`, `Version`, `InsertOp`, `DeleteOp`, `Operation`
++- **`src/db.ts`** — SQLite database setup using `schema.sql` with `better-sqlite3`
++- **`src/ot.ts`** — OT logic: `applyOperation`, `transformOperation` (all 4 op combinations), `validateOperation`
++- **`src/routes.ts`** — Express REST routes for full CRUD + version history
++- **`src/ws.ts`** — WebSocket server with per-document rooms, mutex-serialized operations, OT transformation against concurrent changes, broadcast to peers
++- **`src/server.ts`** — Combines Express + HTTP + WebSocket on the same port, exports `createApp` with `start`/`stop` lifecycle
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/CRUSH.md b/CRUSH.md
+new file mode 100644
+index 0000000..34ac16d
+--- /dev/null
++++ b/CRUSH.md
+@@ -0,0 +1,32 @@
++# STOP — Read this before doing anything
++
++You are an autonomous coding agent. Your job is to WRITE CODE that passes tests.
++
++## Step 1: Understand the task
++- Read TASK.md to understand what to build
++- Look at existing files: `ls -la`, `ls src/`, `ls tests/`
++
++## Step 2: Write the code
++- Create/edit files in `src/` — this is where your implementation goes
++- Write complete, working TypeScript code
++- NEVER delete test files or modify package.json/tsconfig.json
++
++## Step 3: Verify (MANDATORY — do this EVERY time after writing code)
++```bash
++npm install 2>/dev/null
++npm run build
++npm test
++npm run lint
++```
++
++## Step 4: Fix and repeat
++- If build fails: fix TypeScript errors, go to step 3
++- If tests fail: read the errors, fix your code, go to step 3
++- If lint fails: fix lint issues, go to step 3
++- Keep iterating until ALL THREE pass
++
++## CRITICAL RULES
++- You MUST write code in `src/index.ts` — that is the main deliverable
++- You MUST NOT delete or modify files in `tests/`
++- You MUST run `npm test` at least once before finishing
++- You MUST keep trying until tests pass — do not stop early
+diff --git a/package-lock.json b/package-lock.json
+index b36b372..e008134 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1081,7 +1081,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1207,7 +1206,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1500,7 +1498,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2258,7 +2255,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -4518,7 +4514,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/db.ts b/src/db.ts
+new file mode 100644
+index 0000000..66d1196
+--- /dev/null
++++ b/src/db.ts
+@@ -0,0 +1,16 @@
++import Database from 'better-sqlite3';
++import { readFileSync } from 'node:fs';
++import { fileURLToPath } from 'node:url';
++import { dirname, join } from 'node:path';
++
++const __filename = fileURLToPath(import.meta.url);
++const __dirname = dirname(__filename);
++
++const schemaSql = readFileSync(join(__dirname, '..', 'schema.sql'), 'utf-8');
++
++export function createDatabase(dbPath: string = ':memory:'): Database.Database {
++  const db = new Database(dbPath);
++  db.pragma('journal_mode = WAL');
++  db.exec(schemaSql);
++  return db;
++}
+diff --git a/src/models.ts b/src/models.ts
+new file mode 100644
+index 0000000..4d61935
+--- /dev/null
++++ b/src/models.ts
+@@ -0,0 +1,32 @@
++// ============================================================
++// Models / Interfaces
++// ============================================================
++
++export interface Document {
++  id: string;
++  title: string;
++  content: string;
++  created_at: string;
++  updated_at: string;
++}
++
++export interface Version {
++  version: number;
++  content: string;
++  operation: string | null;
++  created_at: string;
++}
++
++export interface InsertOp {
++  type: 'insert';
++  position: number;
++  text: string;
++}
++
++export interface DeleteOp {
++  type: 'delete';
++  position: number;
++  count: number;
++}
++
++export type Operation = InsertOp | DeleteOp;
+diff --git a/src/ot.ts b/src/ot.ts
+new file mode 100644
+index 0000000..bd176a7
+--- /dev/null
++++ b/src/ot.ts
+@@ -0,0 +1,133 @@
++import type { Operation } from './models.js';
++
++// ============================================================
++// applyOperation
++// ============================================================
++
++export function applyOperation(content: string, op: Operation): string {
++  if (op.type === 'insert') {
++    return content.slice(0, op.position) + op.text + content.slice(op.position);
++  }
++  if (op.type === 'delete') {
++    return content.slice(0, op.position) + content.slice(op.position + op.count);
++  }
++  return content;
++}
++
++// ============================================================
++// transformOperation — transform op1 so it can be applied after op2
++// op1 and op2 are both based on the same prior state.
++// Returns the transformed op1.
++// ============================================================
++
++export function transformOperation(op1: Operation, op2: Operation): Operation {
++  if (op1.type === 'insert' && op2.type === 'insert') {
++    // If op1 is at or after op2's position, shift op1 forward by op2's text length
++    if (op1.position >= op2.position) {
++      return {
++        type: 'insert',
++        position: op1.position + op2.text.length,
++        text: op1.text,
++      };
++    }
++    return { ...op1 };
++  }
++
++  if (op1.type === 'insert' && op2.type === 'delete') {
++    if (op1.position > op2.position + op2.count) {
++      // op1 is after the deleted range, shift left
++      return {
++        type: 'insert',
++        position: op1.position - op2.count,
++        text: op1.text,
++      };
++    }
++    if (op1.position >= op2.position) {
++      // op1 is inside the deleted range — clamp to the start
++      return {
++        type: 'insert',
++        position: op2.position,
++        text: op1.text,
++      };
++    }
++    return { ...op1 };
++  }
++
++  if (op1.type === 'delete' && op2.type === 'insert') {
++    if (op1.position >= op2.position + op2.text.length) {
++      // op1 is after the insertion, shift right
++      return {
++        type: 'delete',
++        position: op1.position + op2.text.length,
++        count: op1.count,
++      };
++    }
++    if (op1.position >= op2.position) {
++      // op1 starts inside the inserted range — shift to end of insertion
++      return {
++        type: 'delete',
++        position: op2.position + op2.text.length,
++        count: op1.count,
++      };
++    }
++    return { ...op1 };
++  }
++
++  if (op1.type === 'delete' && op2.type === 'delete') {
++    // Two deletes — handle overlapping ranges
++    const op1Start = op1.position;
++    const op1End = op1.position + op1.count;
++    const op2Start = op2.position;
++    const op2End = op2.position + op2.count;
++
++    if (op1End <= op2Start) {
++      // op1 is entirely before op2 — no change
++      return { ...op1 };
++    }
++    if (op1Start >= op2End) {
++      // op1 is entirely after op2 — shift left by op2's count
++      return {
++        type: 'delete',
++        position: op1.position - op2.count,
++        count: op1.count,
++      };
++    }
++
++    // Overlapping deletes
++    const newStart = Math.min(op1Start, op2Start);
++    const newEnd = Math.max(op1End, op2End);
++    return {
++      type: 'delete',
++      position: newStart,
++      count: newEnd - newStart,
++    };
++  }
++
++  return { ...op1 };
++}
++
++// ============================================================
++// validateOperation
++// ============================================================
++
++export function validateOperation(op: Operation, contentLength: number): { valid: boolean; error?: string } {
++  if (op.type === 'insert') {
++    if (op.position < 0 || op.position > contentLength) {
++      return { valid: false, error: `Insert position ${op.position} out of bounds [0, ${contentLength}]` };
++    }
++    return { valid: true };
++  }
++  if (op.type === 'delete') {
++    if (op.position < 0 || op.position >= contentLength) {
++      return { valid: false, error: `Delete position ${op.position} out of bounds` };
++    }
++    if (op.count <= 0) {
++      return { valid: false, error: 'Delete count must be positive' };
++    }
++    if (op.position + op.count > contentLength) {
++      return { valid: false, error: `Delete range [${op.position}, ${op.position + op.count}) exceeds content length ${contentLength}` };
++    }
++    return { valid: true };
++  }
++  return { valid: false, error: `Unknown operation type: ${(op as Operation).type}` };
++}
+diff --git a/src/routes.ts b/src/routes.ts
+new file mode 100644
+index 0000000..433b65d
+--- /dev/null
++++ b/src/routes.ts
+@@ -0,0 +1,129 @@
++import { Router } from 'express';
++import Database from 'better-sqlite3';
++import { randomUUID } from 'node:crypto';
++
++// We use crypto.randomUUID() instead of importing uuid
++
++export function createRoutes(db: Database.Database): Router {
++  const router = Router();
++
++  // POST /docs — create document
++  router.post('/docs', (req, res) => {
++    const { title, content = '' } = req.body as { title?: string; content?: string };
++    if (!title) {
++      return res.status(400).json({ error: 'title is required' });
++    }
++    const id = randomUUID();
++    db.prepare(
++      `INSERT INTO documents (id, title, content) VALUES (?, ?, ?)`
++    ).run(id, title, content);
++
++    // Create version 0
++    db.prepare(
++      `INSERT INTO versions (document_id, version, content) VALUES (?, 0, ?)`
++    ).run(id, content);
++
++    const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(id) as Record<string, unknown>;
++    return res.status(201).json({
++      id: doc.id,
++      title: doc.title,
++      content: doc.content,
++      created_at: doc.created_at,
++      updated_at: doc.updated_at,
++    });
++  });
++
++  // GET /docs — list all documents
++  router.get('/docs', (_req, res) => {
++    const docs = db.prepare(
++      `SELECT id, title, content, created_at, updated_at FROM documents ORDER BY created_at DESC`
++    ).all() as Record<string, unknown>[];
++    return res.status(200).json(docs);
++  });
++
++  // GET /docs/:id — get document
++  router.get('/docs/:id', (req, res) => {
++    const doc = db.prepare(
++      `SELECT id, title, content, created_at, updated_at FROM documents WHERE id = ?`
++    ).get(req.params.id) as Record<string, unknown> | undefined;
++    if (!doc) {
++      return res.status(404).json({ error: 'Document not found' });
++    }
++    return res.status(200).json(doc);
++  });
++
++  // PUT /docs/:id — update document
++  router.put('/docs/:id', (req, res) => {
++    const { title, content } = req.body as { title?: string; content?: string };
++    const existing = db.prepare('SELECT * FROM documents WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
++    if (!existing) {
++      return res.status(404).json({ error: 'Document not found' });
++    }
++
++    const newTitle = title !== undefined ? title : existing.title;
++    const newContent = content !== undefined ? content : existing.content;
++
++    db.prepare(
++      `UPDATE documents SET title = ?, content = ?, updated_at = datetime('now') WHERE id = ?`
++    ).run(newTitle, newContent, req.params.id);
++
++    // Record version
++    const currentVersion = db.prepare(
++      `SELECT COALESCE(MAX(version), -1) as maxVersion FROM versions WHERE document_id = ?`
++    ).get(req.params.id) as { maxVersion: number };
++    const newVersion = currentVersion.maxVersion + 1;
++
++    db.prepare(
++      `INSERT INTO versions (document_id, version, content, operation) VALUES (?, ?, ?, ?)`
++    ).run(req.params.id, newVersion, newContent, null);
++
++    const updated = db.prepare('SELECT id, title, content, created_at, updated_at FROM documents WHERE id = ?').get(req.params.id) as Record<string, unknown>;
++    return res.status(200).json({
++      id: updated.id,
++      title: updated.title,
++      content: updated.content,
++      created_at: updated.created_at,
++      updated_at: updated.updated_at,
++    });
++  });
++
++  // DELETE /docs/:id
++  router.delete('/docs/:id', (req, res) => {
++    const existing = db.prepare('SELECT id FROM documents WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
++    if (!existing) {
++      return res.status(404).json({ error: 'Document not found' });
++    }
++    db.prepare('DELETE FROM documents WHERE id = ?').run(req.params.id);
++    return res.status(204).send();
++  });
++
++  // GET /docs/:id/versions — list version history
++  router.get('/docs/:id/versions', (req, res) => {
++    const existing = db.prepare('SELECT id FROM documents WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
++    if (!existing) {
++      return res.status(404).json({ error: 'Document not found' });
++    }
++    const versions = db.prepare(
++      `SELECT version, content, operation, created_at FROM versions WHERE document_id = ? ORDER BY version ASC`
++    ).all(req.params.id) as Record<string, unknown>[];
++    return res.status(200).json(versions);
++  });
++
++  // GET /docs/:id/versions/:version — get specific version
++  router.get('/docs/:id/versions/:version', (req, res) => {
++    const existing = db.prepare('SELECT id FROM documents WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
++    if (!existing) {
++      return res.status(404).json({ error: 'Document not found' });
++    }
++    const versionNum = parseInt(req.params.version, 10);
++    const version = db.prepare(
++      `SELECT version, content, operation, created_at FROM versions WHERE document_id = ? AND version = ?`
++    ).get(req.params.id, versionNum) as Record<string, unknown> | undefined;
++    if (!version) {
++      return res.status(404).json({ error: 'Version not found' });
++    }
++    return res.status(200).json(version);
++  });
++
++  return router;
++}
+diff --git a/src/server.ts b/src/server.ts
+new file mode 100644
+index 0000000..c4bab73
+--- /dev/null
++++ b/src/server.ts
+@@ -0,0 +1,69 @@
++import express, { type Express } from 'express';
++import { createServer, type Server as HttpServer } from 'node:http';
++import Database from 'better-sqlite3';
++import { createRoutes } from './routes.js';
++import { setupWebSocket } from './ws.js';
++import { createDatabase } from './db.js';
++
++export interface AppInstance {
++  app: Express;
++  server: HttpServer;
++  wss: import('ws').Server;
++  db: Database.Database;
++  start: (port?: number) => Promise<number>;
++  stop: () => Promise<void>;
++}
++
++export function createApp(dbPath?: string): AppInstance {
++  const db = createDatabase(dbPath);
++  const app = express();
++  app.use(express.json());
++
++  // Register REST routes
++  app.use(createRoutes(db));
++
++  // Create HTTP server
++  const server = createServer(app);
++
++  // Setup WebSocket
++  const wss = setupWebSocket(server, db);
++
++  let currentPort = 0;
++
++  const start = async (port?: number): Promise<number> => {
++    return new Promise((resolve, reject) => {
++      const actualPort = port ?? 0;
++      server.listen(actualPort, () => {
++        const addr = server.address();
++        if (addr && typeof addr === 'object') {
++          currentPort = addr.port;
++          resolve(currentPort);
++        } else {
++          reject(new Error('Failed to get server address'));
++        }
++      });
++      server.on('error', reject);
++    });
++  };
++
++  const stop = async (): Promise<void> => {
++    return new Promise((resolve) => {
++      // Close all WebSocket connections
++      for (const client of wss.clients) {
++        client.close();
++      }
++      wss.close();
++      server.close(() => {
++        // Close DB connection
++        try {
++          db.close();
++        } catch {
++          // ignore
++        }
++        resolve();
++      });
++    });
++  };
++
++  return { app, server, wss, db, start, stop };
++}
+diff --git a/src/ws.ts b/src/ws.ts
+new file mode 100644
+index 0000000..f6955b2
+--- /dev/null
++++ b/src/ws.ts
+@@ -0,0 +1,229 @@
++import WebSocket, { WebSocketServer } from 'ws';
++import { Server as HttpServer } from 'node:http';
++import Database from 'better-sqlite3';
++import { applyOperation, transformOperation, validateOperation } from './ot.js';
++import type { Operation } from './models.js';
++
++interface Room {
++  clients: Set<WebSocket>;
++  lock: Mutex;
++}
++
++class Mutex {
++  private queue: Array<() => void> = [];
++  private locked = false;
++
++  async acquire(): Promise<void> {
++    if (!this.locked) {
++      this.locked = true;
++      return;
++    }
++    await new Promise<void>((resolve) => {
++      this.queue.push(resolve);
++    });
++    this.locked = true;
++  }
++
++  release(): void {
++    this.locked = false;
++    const next = this.queue.shift();
++    if (next) {
++      next();
++    }
++  }
++}
++
++const rooms = new Map<string, Room>();
++
++export function setupWebSocket(server: HttpServer, db: Database.Database): WebSocketServer {
++  const wss = new WebSocketServer({ server });
++
++  wss.on('connection', (ws: WebSocket, req: import('http').IncomingMessage) => {
++    // Extract document ID from URL path: /:docId
++    const url = req.url || '';
++    const docId = url.split('/')[1];
++
++    if (!docId) {
++      sendWs(ws, { type: 'error', message: 'Document ID is required' });
++      ws.close();
++      return;
++    }
++
++    // Validate document exists
++    const doc = db.prepare('SELECT id, content FROM documents WHERE id = ?').get(docId) as { id: string; content: string } | undefined;
++    if (!doc) {
++      sendWs(ws, { type: 'error', message: `Document '${docId}' not found` });
++      ws.close();
++      return;
++    }
++
++    // Get current version
++    const versionRow = db.prepare(
++      `SELECT COALESCE(MAX(version), 0) as maxVersion FROM versions WHERE document_id = ?`
++    ).get(docId) as { maxVersion: number };
++    const currentVersion = versionRow.maxVersion;
++
++    // Track connection
++    db.prepare(
++      `INSERT OR REPLACE INTO active_connections (id, document_id) VALUES (?, ?)`
++    ).run(docId, docId);
++
++    // Join room
++    if (!rooms.has(docId)) {
++      rooms.set(docId, { clients: new Set(), lock: new Mutex() });
++    }
++    const room = rooms.get(docId)!;
++    room.clients.add(ws);
++
++    // Send sync message
++    sendWs(ws, {
++      type: 'sync',
++      content: doc.content,
++      version: currentVersion,
++    });
++
++    ws.on('message', (data: WebSocket.Data) => {
++      let parsed: Record<string, unknown>;
++      try {
++        parsed = JSON.parse(data.toString());
++      } catch {
++        sendWs(ws, { type: 'error', message: 'Invalid JSON' });
++        return;
++      }
++
++      if (parsed.type !== 'operation') {
++        sendWs(ws, { type: 'error', message: 'Expected operation message' });
++        return;
++      }
++
++      const rawOp = parsed.operation as Record<string, unknown>;
++      if (!rawOp || typeof rawOp.type !== 'string') {
++        sendWs(ws, { type: 'error', message: 'Operation must have a type' });
++        return;
++      }
++
++      // Validate operation structure first (before locking)
++      if (rawOp.type !== 'insert' && rawOp.type !== 'delete') {
++        sendWs(ws, { type: 'error', message: `Invalid operation type: ${rawOp.type}` });
++        return;
++      }
++
++      const op = rawOp as unknown as Operation;
++
++      // Serialize operations per document via mutex
++      room.lock.acquire().then(async () => {
++        try {
++          // Re-read current doc state from DB (after lock)
++          const currentDoc = db.prepare('SELECT content FROM documents WHERE id = ?').get(docId) as { content: string } | undefined;
++          if (!currentDoc) {
++            sendWs(ws, { type: 'error', message: 'Document not found' });
++            return;
++          }
++
++          // Validate operation against current content
++          const validation = validateOperation(op, currentDoc.content.length);
++          if (!validation.valid) {
++            sendWs(ws, { type: 'error', message: validation.error });
++            return;
++          }
++
++          // If client sent a version, transform the operation against any concurrent changes
++          let effectiveOp = op;
++          if (parsed.version !== undefined && typeof parsed.version === 'number') {
++            const clientVersion = parsed.version;
++            const latestVersionRow = db.prepare(
++              `SELECT COALESCE(MAX(version), 0) as maxVersion FROM versions WHERE document_id = ?`
++            ).get(docId) as { maxVersion: number };
++
++            if (clientVersion < latestVersionRow.maxVersion) {
++              // There have been concurrent changes — transform
++              const ops = db.prepare(
++                `SELECT operation FROM versions WHERE document_id = ? AND version > ? ORDER BY version ASC`
++              ).all(docId, clientVersion) as { operation: string }[];
++
++              let transformedOp = op;
++              for (const row of ops) {
++                if (!row.operation) continue;
++                try {
++                  const priorOp = JSON.parse(row.operation) as Operation;
++                  transformedOp = transformOperation(transformedOp, priorOp);
++                } catch {
++                  // skip malformed ops
++                }
++              }
++              effectiveOp = transformedOp;
++
++              // Re-validate against current content length
++              const newValidation = validateOperation(effectiveOp, currentDoc.content.length);
++              if (!newValidation.valid) {
++                sendWs(ws, { type: 'error', message: newValidation.error });
++                return;
++              }
++            }
++          }
++
++          // Apply operation to current content
++          const newContent = applyOperation(currentDoc.content, effectiveOp);
++
++          // Update document in DB
++          db.prepare(
++            `UPDATE documents SET content = ?, updated_at = datetime('now') WHERE id = ?`
++          ).run(newContent, docId);
++
++          // Record version
++          const newVersionRow = db.prepare(
++            `SELECT COALESCE(MAX(version), -1) as maxVersion FROM versions WHERE document_id = ?`
++          ).get(docId) as { maxVersion: number };
++          const newVersion = newVersionRow.maxVersion + 1;
++
++          db.prepare(
++            `INSERT INTO versions (document_id, version, content, operation) VALUES (?, ?, ?, ?)`
++          ).run(docId, newVersion, newContent, JSON.stringify(effectiveOp));
++
++          // Acknowledge to sender
++          sendWs(ws, {
++            type: 'ack',
++            version: newVersion,
++          });
++
++          // Broadcast to all OTHER clients in the room
++          const broadcastMsg = JSON.stringify({
++            type: 'operation',
++            operation: effectiveOp,
++            version: newVersion,
++          });
++
++          for (const client of room.clients) {
++            if (client !== ws && client.readyState === WebSocket.OPEN) {
++              client.send(broadcastMsg);
++            }
++          }
++        } finally {
++          room.lock.release();
++        }
++      });
++    });
++
++    ws.on('close', () => {
++      room.clients.delete(ws);
++      try {
++        db.prepare(`DELETE FROM active_connections WHERE id = ?`).run(docId);
++      } catch {
++        // ignore if db closed
++      }
++
++      // Clean up empty rooms
++      if (room.clients.size === 0) {
++        rooms.delete(docId);
++      }
++    });
++  });
++
++  return wss;
++}
++
++function sendWs(ws: WebSocket, msg: Record<string, unknown>): void {
++  if (ws.readyState === WebSocket.OPEN) {
++    ws.send(JSON.stringify(msg));
++  }
++}
