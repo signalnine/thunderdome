@@ -219,14 +219,15 @@ class ProxyHandler(BaseHTTPRequestHandler):
                                     output_tokens = u.get('completion_tokens', 0) or u.get('output_tokens', 0)
                                 # Strip `reasoning`/`reasoning_details` from each
                                 # choice's delta/message. OpenRouter reasoning models
-                                # (e.g. Nemotron 3) emit a `reasoning_details` array
+                                # (e.g. Nemotron 3) emit a `reasoning_details` array, and llama.cpp
+                                # with --reasoning-format deepseek emits `reasoning_content`;
                                 # alongside `reasoning`; clients like CRUSH abort with
                                 # "unexpected end of JSON input" on either field.
                                 modified = False
                                 for ch in chunk.get('choices', []) or []:
                                     for k in ('delta', 'message'):
                                         if k in ch and isinstance(ch[k], dict):
-                                            for rk in ('reasoning', 'reasoning_details'):
+                                            for rk in ('reasoning', 'reasoning_details', 'reasoning_content'):
                                                 if rk in ch[k]:
                                                     del ch[k][rk]
                                                     modified = True
@@ -279,7 +280,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 for ch in data.get('choices', []) or []:
                     for k in ('delta', 'message'):
                         if k in ch and isinstance(ch[k], dict):
-                            for rk in ('reasoning', 'reasoning_details'):
+                            for rk in ('reasoning', 'reasoning_details', 'reasoning_content'):
                                 if rk in ch[k]:
                                     del ch[k][rk]
                                     modified = True
