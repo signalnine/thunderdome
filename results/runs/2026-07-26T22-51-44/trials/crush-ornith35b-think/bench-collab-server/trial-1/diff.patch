@@ -1,0 +1,650 @@
+diff --git a/.thunderdome-metrics.json b/.thunderdome-metrics.json
+new file mode 100644
+index 0000000..81d31b4
+--- /dev/null
++++ b/.thunderdome-metrics.json
+@@ -0,0 +1,8 @@
++{
++  "input_tokens": 1348467,
++  "output_tokens": 54179,
++  "cache_read_tokens": 0,
++  "cache_creation_tokens": 0,
++  "turns": 1,
++  "total_cost_usd": 0.0
++}
+diff --git a/.thunderdome-output.txt b/.thunderdome-output.txt
+new file mode 100644
+index 0000000..d41bbeb
+--- /dev/null
++++ b/.thunderdome-output.txt
+@@ -0,0 +1,23 @@
++Let me implement all the source files.
++
++I need to fix the schema path in db.ts since compiled files go to dist/. Let me copy schema.sql to src/ and adjust the path.
++
++Let me fix the remaining TypeScript errors:
++
++I need to fix the type issue with `wss.clients`:
++
++Now let me fix the remaining TypeScript errors:
++
++Let me continue fixing the TypeScript errors and then run the tests.
++
++The issue is that `db.get()` returns `unknown`. I need to cast the doc properly.
++
++All 45 tests pass, build succeeds, and lint passes.
++
++**Files implemented:**
++- `src/models.ts` — TypeScript interfaces for Document, Version, Operation
++- `src/db.ts` — SQLite setup using schema.sql, connection factory
++- `src/ot.ts` — OT logic (applyOperation, transformOperation, validateOperation)
++- `src/routes.ts` — Express REST routes for CRUD and version history
++- `src/ws.ts` — WebSocket server with rooms, OT, broadcasting, persistence
++- `src/server.ts` — Combines Express + WebSocket on same port with start/stop lifecycle
+diff --git a/.thunderdome-stderr.log b/.thunderdome-stderr.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/CRUSH.md b/CRUSH.md
+new file mode 100644
+index 0000000..34ac16d
+--- /dev/null
++++ b/CRUSH.md
+@@ -0,0 +1,32 @@
++# STOP — Read this before doing anything
++
++You are an autonomous coding agent. Your job is to WRITE CODE that passes tests.
++
++## Step 1: Understand the task
++- Read TASK.md to understand what to build
++- Look at existing files: `ls -la`, `ls src/`, `ls tests/`
++
++## Step 2: Write the code
++- Create/edit files in `src/` — this is where your implementation goes
++- Write complete, working TypeScript code
++- NEVER delete test files or modify package.json/tsconfig.json
++
++## Step 3: Verify (MANDATORY — do this EVERY time after writing code)
++```bash
++npm install 2>/dev/null
++npm run build
++npm test
++npm run lint
++```
++
++## Step 4: Fix and repeat
++- If build fails: fix TypeScript errors, go to step 3
++- If tests fail: read the errors, fix your code, go to step 3
++- If lint fails: fix lint issues, go to step 3
++- Keep iterating until ALL THREE pass
++
++## CRITICAL RULES
++- You MUST write code in `src/index.ts` — that is the main deliverable
++- You MUST NOT delete or modify files in `tests/`
++- You MUST run `npm test` at least once before finishing
++- You MUST keep trying until tests pass — do not stop early
+diff --git a/package-lock.json b/package-lock.json
+index b36b372..e008134 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1081,7 +1081,6 @@
+       "integrity": "sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~7.16.0"
+       }
+@@ -1207,7 +1206,6 @@
+       "integrity": "sha512-4Z+L8I2OqhZV8qA132M4wNL30ypZGYOQVBfMgxDH/K5UX0PNqTu1c6za9ST5r9+tavvHiTWmBnKzpCJ/GlVFtg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+-      "peer": true,
+       "dependencies": {
+         "@typescript-eslint/scope-manager": "7.18.0",
+         "@typescript-eslint/types": "7.18.0",
+@@ -1500,7 +1498,6 @@
+       "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "bin": {
+         "acorn": "bin/acorn"
+       },
+@@ -2258,7 +2255,6 @@
+       "deprecated": "This version is no longer supported. Please see https://eslint.org/version-support for other options.",
+       "dev": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "@eslint-community/eslint-utils": "^4.2.0",
+         "@eslint-community/regexpp": "^4.6.1",
+@@ -4518,7 +4514,6 @@
+       "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+       "dev": true,
+       "license": "Apache-2.0",
+-      "peer": true,
+       "bin": {
+         "tsc": "bin/tsc",
+         "tsserver": "bin/tsserver"
+diff --git a/src/db.ts b/src/db.ts
+new file mode 100644
+index 0000000..37dda6b
+--- /dev/null
++++ b/src/db.ts
+@@ -0,0 +1,15 @@
++import Database from 'better-sqlite3';
++import { readFileSync } from 'fs';
++import { fileURLToPath } from 'url';
++import { dirname, join } from 'path';
++
++const schema = readFileSync(
++  join(dirname(fileURLToPath(import.meta.url)), 'schema.sql'),
++  'utf-8'
++);
++
++export function createDb(dbPath?: string): Database.Database {
++  const db = dbPath ? new Database(dbPath) : new Database(':memory:');
++  db.exec(schema);
++  return db;
++}
+diff --git a/src/models.ts b/src/models.ts
+new file mode 100644
+index 0000000..ace9e52
+--- /dev/null
++++ b/src/models.ts
+@@ -0,0 +1,30 @@
++export interface Document {
++  id: string;
++  title: string;
++  content: string;
++  created_at: string;
++  updated_at: string;
++}
++
++export interface Version {
++  id: number;
++  document_id: string;
++  version: number;
++  content: string;
++  operation: string | null;
++  created_at: string;
++}
++
++export interface InsertOp {
++  type: 'insert';
++  position: number;
++  text: string;
++}
++
++export interface DeleteOp {
++  type: 'delete';
++  position: number;
++  count: number;
++}
++
++export type Operation = InsertOp | DeleteOp;
+diff --git a/src/ot.ts b/src/ot.ts
+new file mode 100644
+index 0000000..45c605b
+--- /dev/null
++++ b/src/ot.ts
+@@ -0,0 +1,64 @@
++import type { InsertOp, DeleteOp } from './models.js';
++
++export function applyOperation(content: string, op: InsertOp | DeleteOp): string {
++  if (op.type === 'insert') {
++    const insertOp = op as InsertOp;
++    return content.slice(0, insertOp.position) + insertOp.text + content.slice(insertOp.position);
++  }
++  if (op.type === 'delete') {
++    const deleteOp = op as DeleteOp;
++    return content.slice(0, deleteOp.position) + content.slice(deleteOp.position + deleteOp.count);
++  }
++  return content;
++}
++
++export function transformOperation(op1: InsertOp | DeleteOp, op2: InsertOp | DeleteOp): InsertOp | DeleteOp {
++  if (op1.type === 'insert' && op2.type === 'insert') {
++    if (op1.position <= op2.position) {
++      return op1;
++    }
++    return { ...op1, position: op1.position + (op2 as InsertOp).text.length };
++  }
++
++  if (op1.type === 'insert' && op2.type === 'delete') {
++    const deleteOp = op2 as DeleteOp;
++    if (op1.position <= deleteOp.position) {
++      return op1;
++    }
++    if (op1.position >= deleteOp.position + deleteOp.count) {
++      return { ...op1, position: op1.position - deleteOp.count };
++    }
++    return { ...op1, position: deleteOp.position };
++  }
++
++  if (op1.type === 'delete' && op2.type === 'insert') {
++    return { ...op1, position: op1.position - (op2 as InsertOp).text.length };
++  }
++
++  // delete vs delete
++  const deleteOp1 = op1 as DeleteOp;
++  const deleteOp2 = op2 as DeleteOp;
++  if (deleteOp1.position >= deleteOp2.position + deleteOp2.count) {
++    return { ...deleteOp1, position: deleteOp1.position - deleteOp2.count };
++  }
++  if (deleteOp1.position + deleteOp1.count <= deleteOp2.position) {
++    return deleteOp1;
++  }
++  const newStart = Math.max(deleteOp1.position, deleteOp2.position);
++  const newEnd = Math.min(deleteOp1.position + deleteOp1.count, deleteOp2.position + deleteOp2.count);
++  const newPos = newStart - deleteOp2.position;
++  const newCount = deleteOp1.count - (newEnd - newStart);
++  return { type: 'delete', position: newPos, count: Math.max(0, newCount) };
++}
++
++export function validateOperation(op: InsertOp | DeleteOp, contentLength: number): boolean {
++  if (op.type === 'insert') {
++    const insertOp = op as InsertOp;
++    return insertOp.position >= 0 && insertOp.position <= contentLength;
++  }
++  if (op.type === 'delete') {
++    const deleteOp = op as DeleteOp;
++    return deleteOp.position >= 0 && deleteOp.position + deleteOp.count <= contentLength;
++  }
++  return false;
++}
+diff --git a/src/routes.ts b/src/routes.ts
+new file mode 100644
+index 0000000..3726aa2
+--- /dev/null
++++ b/src/routes.ts
+@@ -0,0 +1,110 @@
++import crypto from 'crypto';
++import express from 'express';
++import Database from 'better-sqlite3';
++
++function generateId(): string {
++  return crypto.randomUUID();
++}
++
++export function setupRoutes(app: express.Application, db: Database.Database): void {
++  // GET /docs/:id/versions/:version (must be before /docs/:id/versions)
++  app.get('/docs/:id/versions/:version', (req, res) => {
++    const { id, version } = req.params;
++    const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
++    if (!doc) {
++      res.status(404).json({ error: 'Document not found' });
++      return;
++    }
++    const v = db.prepare(
++      'SELECT * FROM versions WHERE document_id = ? AND version = ?'
++    ).get(id, parseInt(version, 10)) as { content: string; version: number } | undefined;
++    if (!v) {
++      res.status(404).json({ error: 'Version not found' });
++      return;
++    }
++    res.json({ content: v.content, version: v.version });
++  });
++
++  // GET /docs/:id/versions
++  app.get('/docs/:id/versions', (req, res) => {
++    const { id } = req.params;
++    const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
++    if (!doc) {
++      res.status(404).json({ error: 'Document not found' });
++      return;
++    }
++    const versions = db.prepare(
++      'SELECT * FROM versions WHERE document_id = ? ORDER BY version ASC'
++    ).all(id);
++    res.json(versions);
++  });
++
++  // GET /docs
++  app.get('/docs', (_req, res) => {
++    const docs = db.prepare(
++      'SELECT * FROM documents ORDER BY created_at DESC'
++    ).all();
++    res.json(docs);
++  });
++
++  // POST /docs
++  app.post('/docs', (req, res) => {
++    const { title, content = '' } = req.body;
++    const id = generateId();
++    const now = new Date().toISOString();
++    db.prepare(
++      'INSERT INTO documents (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
++    ).run(id, title, content, now, now);
++    db.prepare(
++      'INSERT INTO versions (document_id, version, content, operation) VALUES (?, 0, ?, NULL)'
++    ).run(id, content);
++    res.status(201).json({ id, title, content, created_at: now, updated_at: now });
++  });
++
++  // GET /docs/:id
++  app.get('/docs/:id', (req, res) => {
++    const { id } = req.params;
++    const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
++    if (!doc) {
++      res.status(404).json({ error: 'Document not found' });
++      return;
++    }
++    res.json(doc);
++  });
++
++  // PUT /docs/:id
++  app.put('/docs/:id', (req, res) => {
++    const { id } = req.params;
++    const body = req.body;
++    const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(id) as { title: string; content: string; created_at: string } | undefined;
++    if (!doc) {
++      res.status(404).json({ error: 'Document not found' });
++      return;
++    }
++    const newTitle = (body as { title?: string }).title !== undefined ? (body as { title?: string }).title : doc.title;
++    const newContent = (body as { content?: string }).content !== undefined ? (body as { content?: string }).content : doc.content;
++    const now = new Date().toISOString();
++    db.prepare(
++      'UPDATE documents SET title = ?, content = ?, updated_at = ? WHERE id = ?'
++    ).run(newTitle, newContent, now, id);
++    res.json({
++      id,
++      title: newTitle,
++      content: newContent,
++      created_at: doc.created_at,
++      updated_at: now,
++    });
++  });
++
++  // DELETE /docs/:id
++  app.delete('/docs/:id', (req, res) => {
++    const { id } = req.params;
++    const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
++    if (!doc) {
++      res.status(404).json({ error: 'Document not found' });
++      return;
++    }
++    db.prepare('DELETE FROM documents WHERE id = ?').run(id);
++    res.status(204).send();
++  });
++}
+diff --git a/src/schema.sql b/src/schema.sql
+new file mode 100644
+index 0000000..3f23605
+--- /dev/null
++++ b/src/schema.sql
+@@ -0,0 +1,23 @@
++CREATE TABLE IF NOT EXISTS documents (
++  id TEXT PRIMARY KEY,
++  title TEXT NOT NULL,
++  content TEXT NOT NULL DEFAULT '',
++  created_at TEXT NOT NULL DEFAULT (datetime('now')),
++  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
++);
++
++CREATE TABLE IF NOT EXISTS versions (
++  id INTEGER PRIMARY KEY AUTOINCREMENT,
++  document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
++  version INTEGER NOT NULL,
++  content TEXT NOT NULL,
++  operation TEXT, -- JSON of the operation that produced this version
++  created_at TEXT NOT NULL DEFAULT (datetime('now')),
++  UNIQUE(document_id, version)
++);
++
++CREATE TABLE IF NOT EXISTS active_connections (
++  id TEXT PRIMARY KEY,
++  document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
++  connected_at TEXT NOT NULL DEFAULT (datetime('now'))
++);
+diff --git a/src/server.ts b/src/server.ts
+new file mode 100644
+index 0000000..d79191e
+--- /dev/null
++++ b/src/server.ts
+@@ -0,0 +1,80 @@
++import express from 'express';
++import http from 'http';
++import { WebSocketServer } from 'ws';
++import Database from 'better-sqlite3';
++import { createDb } from './db.js';
++import { setupRoutes } from './routes.js';
++import { setupWebSocket } from './ws.js';
++
++export interface AppInstance {
++  app: express.Application;
++  server: http.Server;
++  wss: WebSocketServer;
++  db: Database.Database;
++  start(port?: number): Promise<number>;
++  stop(): Promise<void>;
++}
++
++export function createApp(dbPath?: string): AppInstance {
++  const db = createDb(dbPath);
++  const app = express();
++  app.use(express.json());
++
++  const server = http.createServer(app);
++  const wss = new WebSocketServer({ server });
++
++  setupRoutes(app, db);
++  setupWebSocket(wss, db);
++
++  return {
++    app,
++    server,
++    wss,
++    db,
++    async start(port = 0): Promise<number> {
++      return new Promise<number>((resolve) => {
++        server.listen(port, () => {
++          const addr = server.address();
++          const actualPort =
++            typeof addr === 'object' && addr !== null ? addr.port : port;
++          resolve(actualPort);
++        });
++      });
++    },
++    async stop(): Promise<void> {
++      return new Promise<void>((resolve) => {
++        const clients = Array.from(wss.clients);
++        if (clients.length === 0) {
++          wss.close(() => {
++            server.close(() => {
++              db.close();
++              resolve();
++            });
++          });
++          return;
++        }
++
++        let closed = 0;
++        const total = clients.length;
++        const onAllClosed = () => {
++          wss.close(() => {
++            server.close(() => {
++              db.close();
++              resolve();
++            });
++          });
++        };
++
++        for (const client of clients) {
++          client.once('close', () => {
++            closed++;
++            if (closed === total) {
++              onAllClosed();
++            }
++          });
++          client.close();
++        }
++      });
++    },
++  };
++}
+diff --git a/src/ws.ts b/src/ws.ts
+new file mode 100644
+index 0000000..8c9d4e9
+--- /dev/null
++++ b/src/ws.ts
+@@ -0,0 +1,158 @@
++import crypto from 'crypto';
++import { WebSocketServer, WebSocket } from 'ws';
++import Database from 'better-sqlite3';
++import { applyOperation, transformOperation, validateOperation } from './ot.js';
++import type { InsertOp, DeleteOp } from './models.js';
++
++interface DocState {
++  version: number;
++  ops: (InsertOp | DeleteOp)[];
++  clients: Set<WebSocket>;
++}
++
++const docStates = new Map<string, DocState>();
++
++export function setupWebSocket(
++  wss: WebSocketServer,
++  db: Database.Database
++): void {
++  wss.on('connection', (ws, req) => {
++    const docId = (req.url || '').slice(1);
++
++    const doc = db.prepare(
++      'SELECT * FROM documents WHERE id = ?'
++    ).get(docId) as { id: string; title: string; content: string } | undefined;
++    if (!doc) {
++      ws.send(JSON.stringify({ type: 'error', message: 'Document not found' }));
++      return;
++    }
++
++    let state = docStates.get(docId);
++    if (!state) {
++      const row = db.prepare(
++        'SELECT MAX(version) as max_version FROM versions WHERE document_id = ?'
++      ).get(docId) as { max_version: number | null };
++      state = {
++        version: row.max_version ?? 0,
++        ops: [],
++        clients: new Set<WebSocket>(),
++      };
++      docStates.set(docId, state);
++    }
++
++    const connId = crypto.randomUUID();
++    db.prepare(
++      'INSERT INTO active_connections (id, document_id) VALUES (?, ?)'
++    ).run(connId, docId);
++
++    state.clients.add(ws);
++
++    ws.send(
++      JSON.stringify({
++        type: 'sync',
++        content: doc.content,
++        version: state.version,
++      })
++    );
++
++    ws.on('message', (data) => {
++      let msg: Record<string, unknown>;
++      try {
++        msg = JSON.parse(data.toString());
++      } catch {
++        ws.send(JSON.stringify({ type: 'error', message: 'Invalid JSON' }));
++        return;
++      }
++
++      if (msg.type !== 'operation') {
++        ws.send(JSON.stringify({ type: 'error', message: 'Invalid message type' }));
++        return;
++      }
++
++      const rawOp = msg.operation as Record<string, unknown> | undefined;
++      if (!rawOp || typeof rawOp.type !== 'string' || !['insert', 'delete'].includes(rawOp.type)) {
++        ws.send(JSON.stringify({ type: 'error', message: 'Invalid operation type' }));
++        return;
++      }
++
++      const op = rawOp as unknown as InsertOp | DeleteOp;
++
++      // Validate against current DB content
++      const currentDoc = db.prepare(
++        'SELECT content FROM documents WHERE id = ?'
++      ).get(docId) as { content: string } | undefined;
++      const currentContent = currentDoc?.content ?? '';
++
++      if (!validateOperation(op, currentContent.length)) {
++        ws.send(
++          JSON.stringify({ type: 'error', message: 'Operation out of bounds' })
++        );
++        return;
++      }
++
++      // Transform against concurrent operations
++      let transformedOp = op;
++      const clientVersion =
++        typeof msg.version === 'number' ? msg.version : undefined;
++      if (clientVersion !== undefined && clientVersion < state.version) {
++        for (let i = clientVersion; i < state.version; i++) {
++          transformedOp = transformOperation(transformedOp, state.ops[i]);
++        }
++      }
++
++      // Re-validate after transform
++      const updatedDoc = db.prepare(
++        'SELECT content FROM documents WHERE id = ?'
++      ).get(docId) as { content: string } | undefined;
++      const updatedContent = updatedDoc?.content ?? '';
++      if (!validateOperation(transformedOp, updatedContent.length)) {
++        ws.send(
++          JSON.stringify({ type: 'error', message: 'Operation out of bounds after transform' })
++        );
++        return;
++      }
++
++      // Apply
++      const newContent = applyOperation(updatedContent, transformedOp);
++      state.version++;
++      state.ops.push(transformedOp);
++
++      // Persist
++      db.prepare(
++        "UPDATE documents SET content = ?, updated_at = datetime('now') WHERE id = ?"
++      ).run(newContent, docId);
++      db.prepare(
++        'INSERT INTO versions (document_id, version, content, operation) VALUES (?, ?, ?, ?)'
++      ).run(docId, state.version, newContent, JSON.stringify(transformedOp));
++
++      // Ack to sender
++      ws.send(JSON.stringify({ type: 'ack', version: state.version }));
++
++      // Broadcast to others
++      const broadcastMsg = JSON.stringify({
++        type: 'operation',
++        operation: transformedOp,
++        version: state.version,
++      });
++      for (const client of state.clients) {
++        if (client !== ws && client.readyState === WebSocket.OPEN) {
++          client.send(broadcastMsg);
++        }
++      }
++    });
++
++    ws.on('close', () => {
++      state.clients.delete(ws);
++      try {
++        db.prepare(
++          'DELETE FROM active_connections WHERE id = ?'
++        ).run(connId);
++      } catch {
++        // connection may already be gone
++      }
++      if (state.clients.size === 0) {
++        docStates.delete(docId);
++      }
++    });
++  });
++}
