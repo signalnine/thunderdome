@@ -111,6 +111,47 @@ Write the simple, correct solution. A calm craftsperson writes less code, not mo
 QWEN_EXIT=$?
 set -e
 
+# ── DO-NO-HARM GATE, part 1: snapshot + baseline measurement ───────
+#
+# Measured on 21 tasks: the review phase is worth +4.4pp overall, but that is
+# +6.0pp of rescues MINUS 1.8pp of self-inflicted damage. On 15 of 21 tasks the
+# reviewer changed nothing that mattered; where the writer had already
+# succeeded, the reviewer was a net liability (reactive-spreadsheet 0.881 ->
+# 0.575, structural-merge 0.929 -> 0.861). Uncapped Gemma expressed the same
+# defect more violently: 154 turns ending with coverage/ deleted, 0.470.
+#
+# The common defect is that the reviewer may leave the workspace WORSE than it
+# found it. A turn cap only changes when the damage stops. This gate removes the
+# failure mode outright: keep the reviewer's edits only if they do not regress
+# the suite, otherwise restore the writer's tree byte for byte.
+SNAPSHOT=/tmp/writer-snapshot.tar
+DNH_ENABLED="${DNH_ENABLED:-1}"
+
+# Emits "<build_ok> <passed> <failed>". Vitest prints "Test Files ..." before
+# "Tests ...", so the last "N passed"/"N failed" match is the test-level count.
+measure_state() {
+  local b=0 p f out
+  timeout 300 npm run build >/dev/null 2>&1 && b=1
+  out=$(timeout 600 npm test 2>&1 | tail -80)
+  p=$(printf '%s' "$out" | grep -oE '[0-9]+ passed' | tail -1 | grep -oE '[0-9]+')
+  f=$(printf '%s' "$out" | grep -oE '[0-9]+ failed' | tail -1 | grep -oE '[0-9]+')
+  echo "${b} ${p:-0} ${f:-0}"
+}
+
+WRITER_STATE=""
+if [ "$DNH_ENABLED" = "1" ] && [ -f /workspace/package.json ]; then
+  # dist/ and coverage/ MUST be snapshotted -- the harness reads
+  # coverage/coverage-summary.json from the workspace. Runtime artifacts are
+  # excluded from BOTH the snapshot and the revert: .thunderdome-output.jsonl is
+  # written DURING review, so a naive revert would delete the reviewer
+  # transcript and silently zero reviewer_turns in the metrics.
+  tar cf "$SNAPSHOT" --exclude=./node_modules --exclude=./.git \
+    --exclude='./.thunderdome*' --exclude='./.qwen-*' --exclude='./.review-*' \
+    -C /workspace . 2>/dev/null || true
+  [ -f "$SNAPSHOT" ] && WRITER_STATE=$(measure_state)
+  echo "do-no-harm: writer baseline (build passed failed) = ${WRITER_STATE:-unavailable}" >&2
+fi
+
 # ── Phase 2: Gemma 4 26B-A4B verifies and repairs ──────────────────
 unset ANTHROPIC_AUTH_TOKEN
 export ANTHROPIC_BASE_URL="$REVIEW_UPSTREAM"
@@ -155,8 +196,39 @@ claude -p \
 REVIEW_EXIT=$?
 set -e
 
+# ── DO-NO-HARM GATE, part 2: verdict ───────────────────────────────
+# Keep the review only if NOTHING got worse: build must not break, failures must
+# not rise, passes must not drop. Ties are kept -- a reviewer that changed
+# nothing measurable is harmless, and reverting it would discard genuine
+# refactors that happen to be score-neutral.
+DNH_VERDICT="disabled"
+if [ -n "$WRITER_STATE" ]; then
+  REVIEWER_STATE=$(measure_state)
+  read -r WB WP WF <<<"$WRITER_STATE"
+  read -r RB RP RF <<<"$REVIEWER_STATE"
+  echo "do-no-harm: writer=[$WRITER_STATE] reviewer=[$REVIEWER_STATE]" >&2
+  if [ "$RB" -ge "$WB" ] && [ "$RF" -le "$WF" ] && [ "$RP" -ge "$WP" ]; then
+    DNH_VERDICT="kept"
+  else
+    DNH_VERDICT="reverted"
+    # Restore the writer's tree exactly: drop everything the reviewer left
+    # behind (including files it ADDED), then unpack the snapshot. node_modules,
+    # .git and the runtime artifacts are preserved -- they were never
+    # snapshotted, so deleting them here would be unrecoverable.
+    find /workspace -mindepth 1 -maxdepth 1 \
+      ! -name node_modules ! -name .git \
+      ! -name '.thunderdome*' ! -name '.qwen-*' ! -name '.review-*' \
+      -exec rm -rf {} + 2>/dev/null || true
+    tar xf "$SNAPSHOT" -C /workspace 2>/dev/null || true
+    echo "do-no-harm: REVERTED -- reviewer regressed the suite, writer tree restored" >&2
+  fi
+fi
+echo "do-no-harm: verdict=$DNH_VERDICT" >&2
+rm -f "$SNAPSHOT"
+
 # ── Metrics: both phases are local, so cost is $0 by construction ────
-REVIEW_EXIT="$REVIEW_EXIT" REVIEW_MAX_TURNS="$REVIEW_MAX_TURNS" node -e '
+REVIEW_EXIT="$REVIEW_EXIT" REVIEW_MAX_TURNS="$REVIEW_MAX_TURNS" \
+DNH_VERDICT="$DNH_VERDICT" DNH_WRITER="$WRITER_STATE" DNH_REVIEWER="${REVIEWER_STATE:-}" node -e '
 const fs = require("fs");
 const m = {input_tokens:0, output_tokens:0, cache_read_tokens:0, cache_creation_tokens:0,
            turns:0, tools_used:[], duration_ms:0, total_cost_usd:0};
@@ -196,7 +268,14 @@ m.turns = qwenTurns + revTurns;
 m.phases = {writer: "qwopus-27b-local (free)", writer_turns: qwenTurns,
             reviewer: "gemma-4-26b-a4b-local (free)", reviewer_turns: revTurns,
             reviewer_exit: Number(process.env.REVIEW_EXIT || 0),
-            reviewer_max_turns: Number(process.env.REVIEW_MAX_TURNS || 0)};
+            reviewer_max_turns: Number(process.env.REVIEW_MAX_TURNS || 0),
+            // do-no-harm gate: "kept" | "reverted" | "disabled". A revert means
+            // the reviewer regressed the suite and the writer tree was restored,
+            // so the trial scores as writer-only. Recorded so a revert is never
+            // invisible in the results.
+            dnh_verdict: process.env.DNH_VERDICT || "disabled",
+            dnh_writer_state: process.env.DNH_WRITER || null,
+            dnh_reviewer_state: process.env.DNH_REVIEWER || null};
 fs.writeFileSync("/workspace/.thunderdome-metrics.json", JSON.stringify(m, null, 2));
 console.error("Metrics: " + JSON.stringify(m));
 ' || true
