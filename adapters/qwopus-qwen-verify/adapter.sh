@@ -28,7 +28,24 @@ cd "$TASK_DIR"
 #
 # Serving: q27 loads one .q27 per process and the 5090 is full with qwopus, so
 # vanilla runs on the 3090 -- which requires the W8 build (`q27-server-w8`); the
-# default W12 build OOMs at graph setup on a 24 GB card. Weights are 17.7 GB.
+# default W12 build OOMs at graph setup on a 24 GB card.
+#
+# Use the q4s repack + turbo3 KV. Both are counter-intuitive and both are the
+# right call on Ampere:
+#   - q4s (15.5 GB) is 0.66 bpw SMALLER than the default repack yet measurably
+#     BETTER: wikitext-2 PPL 8.0197 vs 8.0409 (-0.26%), agentic NLL flat at CC
+#     depths, needle 2/2 exact in a 248.7K prompt. It pays a code-acceptance
+#     SPEED tax, not a quality tax. Every 3090 leg in q27's BENCHMARKING.md is
+#     measured on it.
+#   - turbo3 KV is already the serving DEFAULT on sm_86 (bare boot = turbo3 @
+#     262144 on a 3090). Do NOT copy Q27_KV=fp8 from the 5090 recipe: the tax
+#     ladder is 5090 fp8-wins-big / 4090 fp8-wins-small / 3090 turbo3-wins-
+#     outright, because 800 B vs 4096 B per KV pair per token beats the dequant
+#     compute on a bandwidth-starved part.
+# Measured here: fp8 + default repack auto-sized to ctx 36864, which is BELOW
+# what a 25-turn review transcript needs. q4s + turbo3 gives ctx 253952 in the
+# same 23.3 GB -- ~7x, and comfortably past the Gemma arm's 128K, so context
+# exhaustion cannot confound the reviewer comparison.
 #
 # Writer runs on the 5090 (qwopus via q27 :8080, reached through the bridge on
 # :8081); reviewer runs on the 3090 (vanilla via q27-server-w8 :8084, bridge
@@ -68,9 +85,11 @@ except Exception: sys.exit(1)
   echo "ERROR: reviewer endpoint $REVIEW_UPSTREAM unreachable." >&2
   echo "  Start VANILLA Qwen3.6-27B on the 3090 -- the W8 build is required," >&2
   echo "  the default W12 build OOMs at graph setup on a 24 GB card:" >&2
-  echo "    CUDA_VISIBLE_DEVICES=1 Q27_KV=fp8 /mnt/ai/projects/q27/build/q27-server-w8 \\" >&2
-  echo "      /mnt/ai/models/qwen36-27b-mtp/qwen36-27b-mtp.q27 \\" >&2
+  echo "    CUDA_VISIBLE_DEVICES=1 Q27_KV=turbo3 /mnt/ai/projects/q27/build/q27-server-w8 \\" >&2
+  echo "      /mnt/ai/models/qwen36-27b-mtp/qwen36-27b-mtp-q4s.q27 \\" >&2
   echo "      /mnt/ai/models/qwen36-27b-mtp/qwen36-27b-mtp.tok --port 8084" >&2
+  echo "  (q4s + turbo3, NOT the default repack and NOT fp8 -- see header. Yields" >&2
+  echo "   ctx 253952 on a 24 GB card; fp8 + default repack only reaches 36864.)" >&2
   echo "  q27 binds 127.0.0.1, so containers also need a second bridge:" >&2
   echo "    scripts/local-model-bridge.py --listen-port 8085 --target-port 8084" >&2
   exit 4
@@ -202,7 +221,7 @@ const qwenTurns = scan("/workspace/.qwen-output.jsonl", false);
 const revTurns  = scan("/workspace/.thunderdome-output.jsonl", false);
 m.turns = qwenTurns + revTurns;
 m.phases = {writer: "qwopus-27b-local (free)", writer_turns: qwenTurns,
-            reviewer: "qwen36-27b-vanilla-local (free)", reviewer_turns: revTurns,
+            reviewer: "qwen36-27b-vanilla-q4s-turbo3-local (free)", reviewer_turns: revTurns,
             reviewer_exit: Number(process.env.REVIEW_EXIT || 0),
             reviewer_max_turns: Number(process.env.REVIEW_MAX_TURNS || 0)};
 fs.writeFileSync("/workspace/.thunderdome-metrics.json", JSON.stringify(m, null, 2));
