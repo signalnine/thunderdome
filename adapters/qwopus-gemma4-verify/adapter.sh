@@ -131,6 +131,15 @@ The workspace reflects their attempt. Your job is verification and repair, not f
 
 Done means: build passes, tests pass, lint passes."
 
+# --max-turns caps the review phase because Gemma does not converge on hard
+# repairs: measured at 128K ctx it grinds until it fills the window, so raising
+# ctx only moves the wall (32K -> 128K crashed identically at 115/154/165 turns).
+# Engagement is also anti-correlated with score -- reviewer <10 turns averaged
+# 0.913, >=10 turns averaged 0.806, and plugin-marketplace ground for 154 turns
+# down to 0.470 having deleted coverage/. The cap keeps early repairs and denies
+# the spiral. Quiet verify-and-stop runs (2-5 turns) are unaffected.
+REVIEW_MAX_TURNS="${REVIEW_MAX_TURNS:-25}"
+
 set +e
 claude -p \
   --model "$REVIEW_MODEL" \
@@ -139,6 +148,7 @@ claude -p \
   --dangerously-skip-permissions \
   --setting-sources '' \
   --strict-mcp-config \
+  --max-turns "$REVIEW_MAX_TURNS" \
   --disallowed-tools "AskUserQuestion,EnterPlanMode" \
   -- "$REVIEW_PROMPT" \
   > "$FINAL_OUTPUT" 2>/workspace/.review-stderr.log
@@ -146,7 +156,7 @@ REVIEW_EXIT=$?
 set -e
 
 # ── Metrics: both phases are local, so cost is $0 by construction ────
-node -e '
+REVIEW_EXIT="$REVIEW_EXIT" REVIEW_MAX_TURNS="$REVIEW_MAX_TURNS" node -e '
 const fs = require("fs");
 const m = {input_tokens:0, output_tokens:0, cache_read_tokens:0, cache_creation_tokens:0,
            turns:0, tools_used:[], duration_ms:0, total_cost_usd:0};
@@ -184,13 +194,21 @@ const qwenTurns = scan("/workspace/.qwen-output.jsonl", false);
 const revTurns  = scan("/workspace/.thunderdome-output.jsonl", false);
 m.turns = qwenTurns + revTurns;
 m.phases = {writer: "qwopus-27b-local (free)", writer_turns: qwenTurns,
-            reviewer: "gemma-4-26b-a4b-local (free)", reviewer_turns: revTurns};
+            reviewer: "gemma-4-26b-a4b-local (free)", reviewer_turns: revTurns,
+            reviewer_exit: Number(process.env.REVIEW_EXIT || 0),
+            reviewer_max_turns: Number(process.env.REVIEW_MAX_TURNS || 0)};
 fs.writeFileSync("/workspace/.thunderdome-metrics.json", JSON.stringify(m, null, 2));
 console.error("Metrics: " + JSON.stringify(m));
 ' || true
 
-# The review phase owns the final state; surface its exit unless it never ran.
-if [ "$REVIEW_EXIT" -ne 0 ] && [ "$QWEN_EXIT" -ne 0 ]; then
-  exit "$QWEN_EXIT"
+# The reviewer is BEST-EFFORT repair on top of code the writer already produced,
+# so its failure must not invalidate the trial. Previously a reviewer error
+# surfaced as the adapter's exit and the harness marked the trial "crashed" --
+# which gen-scores.py excludes from _WORKED_REASONS -- disqualifying trials whose
+# code was fine (debug-nightmare scored 0.959 and was still thrown away as a
+# crash). The writer's exit governs; a reviewer failure is logged, not fatal.
+if [ "$REVIEW_EXIT" -ne 0 ]; then
+  echo "WARNING: review phase exited $REVIEW_EXIT (best-effort; writer output retained)" >&2
+  tail -3 /workspace/.review-stderr.log >&2 2>/dev/null || true
 fi
-exit "$REVIEW_EXIT"
+exit "$QWEN_EXIT"
