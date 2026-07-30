@@ -124,6 +124,14 @@ set -e
 # found it. A turn cap only changes when the damage stops. This gate removes the
 # failure mode outright: keep the reviewer's edits only if they do not regress
 # the suite, otherwise restore the writer's tree byte for byte.
+#
+# VALIDATED end-to-end against a real vitest project by vandalising a writer
+# tree (break a source file, delete a test, delete coverage/, add junk):
+# writer [0 136 10] vs vandalised [0 0 77] -> reverted; source byte-identical,
+# deleted test restored, junk removed, coverage-summary.json restored,
+# node_modules and both transcripts preserved, re-measured state an exact match.
+# A live trial also exercised the keep path (writer [1 69 0], reviewer [1 69 0]
+# -> kept).
 SNAPSHOT=/tmp/writer-snapshot.tar
 DNH_ENABLED="${DNH_ENABLED:-1}"
 
