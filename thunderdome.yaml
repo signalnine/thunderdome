@@ -680,6 +680,16 @@ orchestrators:
     image: thunderdome/claude-code:latest
     env: {}
 
+  # Local writer + cheap CLOUD reviewer. Luna is 83.9% solo but splits 94.1 std /
+  # 72.7 hard; reviewing is standard-suite work, so the profile may fit the seat
+  # better than the rank suggests. No shim needed -- OpenRouter serves Anthropic
+  # /v1/messages and accepts x-api-key.
+  - name: qwopus-luna-verify
+    adapter: ./adapters/qwopus-luna-verify/adapter.sh
+    image: thunderdome/claude-code:latest
+    env:
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY}"
+
   # NO-REVIEWER BASELINE for the writer+reviewer pairings above. Phase 1 is
   # byte-identical to theirs; the only difference is that no review phase runs,
   # so any delta isolates the review phase itself. Without this arm we can only
@@ -837,6 +847,16 @@ orchestrators:
     env:
       OPENROUTER_API_KEY: "${OPENROUTER_API_KEY}"
 
+  # GPT-5.6 Luna: the cheap tier of the 5.6 series ($0.10/$0.60 per M vs Terra
+  # $1/$6 and Sol $5/$30), 1.05M ctx. Cost/value candidate. Codex/Responses
+  # verified for this model: accepts codex's native tool shape AND returns
+  # reasoning items with encrypted_content, so chain-of-thought survives turns.
+  - name: codex-gpt56-luna-openrouter
+    adapter: ./adapters/codex-gpt56-luna-openrouter/adapter.sh
+    image: thunderdome/codex:latest
+    env:
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY}"
+
   - name: codex-glm52-openrouter
     adapter: ./adapters/codex-glm52-openrouter/adapter.sh
     image: thunderdome/codex:latest
@@ -869,6 +889,23 @@ orchestrators:
 
   - name: codex-gpt55-oauth
     adapter: ./adapters/codex-gpt55-oauth/adapter.sh
+    image: thunderdome/codex:latest
+    env: {}
+
+  # GPT-5.6 subscription arms. Sol ($5/$30) and Terra ($1/$6) are run on the
+  # ChatGPT OAuth subscription rather than metered, because at those rates a
+  # 21-task suite is real money -- the opposite tradeoff from Luna ($0.10/$0.60),
+  # which is metered precisely so $/task is measurable. Actual spend here is $0;
+  # the cost column is an imputed API-equivalent upper bound.
+  # Auth is auto-mounted from host ~/.codex/auth.json -- requires `codex login`.
+  # RUN SERIALLY: the OAuth refresh-token race corrupts credentials under --parallel.
+  - name: codex-gpt56-sol-oauth
+    adapter: ./adapters/codex-gpt56-sol-oauth/adapter.sh
+    image: thunderdome/codex:latest
+    env: {}
+
+  - name: codex-gpt56-terra-oauth
+    adapter: ./adapters/codex-gpt56-terra-oauth/adapter.sh
     image: thunderdome/codex:latest
     env: {}
 

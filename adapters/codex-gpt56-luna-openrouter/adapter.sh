@@ -4,14 +4,29 @@ set -euo pipefail
 : "${TASK_DIR:?TASK_DIR not set by harness}"
 : "${TASK_DESCRIPTION:?TASK_DESCRIPTION not set by harness}"
 
-# --- OpenAI Codex CLI + GLM-5.2 via OpenRouter ---
+# --- OpenAI Codex CLI + GPT-5.6 Luna via OpenRouter ---
 # Codex (https://github.com/openai/codex) supports arbitrary OpenAI-compatible
 # backends via a [model_providers.<name>] block in config.toml. We point it at
-# OpenRouter's z-ai/glm-5.2. The experiment: GLM-5.2 reasoning-ON collapsed
-# (27.4%) through our anth2openai/Claude Code path because that path DROPS the
-# model's chain-of-thought between turns (Claude Code rejects unsigned thinking
-# blocks). Codex is a different harness with its own reasoning handling -- this
-# tests whether GLM-5.2's collapse is a model problem or a harness problem.
+# OpenRouter's openai/gpt-5.6-luna.
+#
+# Luna is the CHEAP tier of the GPT-5.6 series: $0.10/$0.60 per M against
+# Terra's $1/$6 and Sol's $5/$30, at 1.05M context. Tested as a cost/value
+# candidate -- for scale, Kimi K3 is $3/$15 and cost $2.99/task for 84.8%.
+#
+# Codex/Responses is chosen deliberately over CRUSH or Claude Code: Luna is a
+# reasoning model and the Responses API PRESERVES chain-of-thought across turns.
+# VERIFIED for this model, not assumed: /responses returns a reasoning item with
+# encrypted_content (91 reasoning tokens on a path-counting probe), and it
+# accepts codex's native tool shape -- the exact thing that BLOCKED codex for
+# Poolside/Laguna ("no endpoints support the native namespace tool type").
+# Note a trivial prompt returns NO reasoning item; that is the model declining to
+# think, not a broken path. The Claude Code route drops unsigned thinking blocks
+# between turns, which collapsed GLM-5.2 to 27.4% before Codex rescued it to 67.0%.
+#
+# reasoning_effort=high is kept from the K3 adapter so the two are comparable.
+# Reasoning tokens bill as OUTPUT ($0.60/M), so a low-effort run is the obvious
+# cost ablation. luna-pro is the SAME weights served with reasoning.mode=pro --
+# same list price, more reasoning tokens, so a separate arm rather than a swap.
 
 [[ -f "$TASK_DESCRIPTION" ]] || { echo "Task file not found: $TASK_DESCRIPTION" >&2; exit 2; }
 
@@ -23,10 +38,10 @@ mkdir -p "$HOME/.codex"
 : "${OPENROUTER_API_KEY:?OPENROUTER_API_KEY is required for this adapter}"
 
 # Custom OpenRouter provider. env_key tells Codex which env var holds the key;
-# wire_api="chat" uses OpenAI chat-completions (the shape non-OpenAI models
-# speak). model_reasoning_effort=high asks Codex to request maximum thinking.
+# wire_api="responses" keeps reasoning intact; model_reasoning_effort=high asks
+# Codex to request maximum thinking (K3 exposes a reasoning_effort knob).
 cat > "$HOME/.codex/config.toml" <<'TOML'
-model = "z-ai/glm-5.2"
+model = "openai/gpt-5.6-luna"
 model_provider = "openrouter"
 model_reasoning_effort = "high"
 
@@ -87,14 +102,17 @@ try:
 except FileNotFoundError:
     pass
 
-# GLM-5.2 via OpenRouter pricing: \$1.40/M input, \$4.40/M output. cached_input
-# is the prompt-cache-hit slice of input_tokens (OpenRouter discounts it, but we
-# bill at full input rate here to stay conservative).
-# Rates re-checked against OpenRouter's live /api/v1/models on 2026-07-30:
-# \$0.97/M input, \$3.04/M output (was \$1.40/\$4.40 -- OpenRouter cut the price).
-# NOTE: GLM-5.2 results recorded BEFORE this date used the old rate and are
-# ~45% overstated on cost; only new runs are correct.
-cost = input_tokens * 0.97 / 1e6 + output_tokens * 3.04 / 1e6
+# GPT-5.6 Luna via OpenRouter pricing: \$0.10/M input, \$0.60/M output (checked
+# against the live /api/v1/models listing, not assumed). cached_input is the
+# prompt-cache-hit slice of input_tokens; OpenRouter discounts it, but we bill at
+# full input rate to stay conservative.
+#
+# THESE RATES ARE PER-MODEL AND MUST BE EDITED WHEN CLONING THIS ADAPTER. The
+# first Luna smoke test inherited Kimi K3's \$3/\$15 from the clone source and
+# reported \$0.749 for a trial that actually cost ~\$0.025 -- a 30x overstatement,
+# on the exact metric this adapter exists to measure. pricing.yaml has no entry
+# for these models, so nothing downstream catches a stale rate.
+cost = input_tokens * 0.10 / 1e6 + output_tokens * 0.60 / 1e6
 
 metrics = {
     'input_tokens': input_tokens,
