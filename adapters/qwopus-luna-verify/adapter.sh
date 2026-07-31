@@ -202,7 +202,14 @@ if [ -n "$WRITER_STATE" ]; then
   read -r WB WP WF <<<"$WRITER_STATE"
   read -r RB RP RF <<<"$REVIEWER_STATE"
   echo "do-no-harm: writer=[$WRITER_STATE] reviewer=[$REVIEWER_STATE]" >&2
-  if [ "$RB" -ge "$WB" ] && [ "$RF" -le "$WF" ] && [ "$RP" -ge "$WP" ]; then
+  # Keep if nothing got worse. Failures are STRICT (must not rise); the pass
+  # count is tolerant, because requiring passed >= writer's reverted a genuine
+  # repair: Luna on yaml-escapes took failures 1 -> 0 while consolidating tests
+  # 957 -> 949, and the strict rule threw the fix away and scored 0.300. The
+  # total-count floor (95%) still blocks the gaming case -- a reviewer deleting
+  # most of the suite to reach "0 failed" trips it and reverts.
+  WT=$(( WP + WF )); RT=$(( RP + RF ))
+  if [ "$RB" -ge "$WB" ] && [ "$RF" -le "$WF" ] && [ $(( RT * 100 )) -ge $(( WT * 95 )) ]; then
     DNH_VERDICT="kept"
   else
     DNH_VERDICT="reverted"
