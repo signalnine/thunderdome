@@ -41,11 +41,25 @@ LOCAL_UPSTREAM="${LOCAL_UPSTREAM:-http://host.docker.internal:8081}"
 REVIEW_MODEL="${REVIEW_MODEL:-openai/gpt-5.6-terra}"
 REVIEW_UPSTREAM="${REVIEW_UPSTREAM:-https://openrouter.ai/api}"
 
-if ! python3 -c "
+# Retry rather than exit on the first miss. A bare 5s check discarded 32 of 42
+# trials across two DeepSeek arms: fast reviews (~seconds) cycle trials
+# back-to-back, and q27 does not answer /v1/models promptly while it is still
+# finishing the previous trial, so the guard exited 3 BEFORE phase 1 wrote any
+# file -- surfacing as "crashed [NO AGENT CONTRIBUTION]" with zero tokens and no
+# stderr. The same tasks pass in isolation. A health check must not destroy a trial.
+_upstream_ready() {
+  local i
+  for i in 1 2 3 4 5 6; do
+    python3 -c "
 import urllib.request,sys
-try: urllib.request.urlopen('$LOCAL_UPSTREAM/v1/models', timeout=5)
+try: urllib.request.urlopen('$LOCAL_UPSTREAM/v1/models', timeout=20)
 except Exception: sys.exit(1)
-" 2>/dev/null; then
+" 2>/dev/null && return 0
+    sleep 10
+  done
+  return 1
+}
+if ! _upstream_ready; then
   echo "ERROR: local model endpoint $LOCAL_UPSTREAM unreachable." >&2
   echo "  q27-server binds 127.0.0.1, which containers cannot reach." >&2
   echo "  Fix: run scripts/local-model-bridge.py on the host, or restart q27-server with --host 0.0.0.0" >&2
