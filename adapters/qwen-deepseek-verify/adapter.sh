@@ -155,7 +155,17 @@ function scan(file, billed) {
 const qwenTurns = scan("/workspace/.qwen-output.jsonl", false);
 const revTurns  = scan("/workspace/.thunderdome-output.jsonl", true);
 m.turns = qwenTurns + revTurns;
-m.phases = {writer: "qwen3.6-27b-local (free)", writer_turns: qwenTurns,
+// Claude Code prices against its own ANTHROPIC model table and cannot know a
+// DeepSeek model, so msg.total_cost_usd is fiction here -- it is what produced
+// the long-quoted "$0.578/task" for this reviewer, which was implausible on its
+// face given the SOLO DeepSeek arm completes an entire task for $0.0955.
+// Recompute from tokens at the published rate ($0.14/M in, $0.28/M out).
+// cache_creation_input_tokens MUST count as input: verified against OpenRouter
+// /api/v1/generation, an envelope reporting input_tokens=3 +
+// cache_creation_input_tokens=4409 billed as native_tokens_prompt=4412.
+m.total_cost_usd = ((m.input_tokens + m.cache_creation_tokens + m.cache_read_tokens) * 0.14
+                    + m.output_tokens * 0.28) / 1e6;
+m.phases = {writer: "qwopus-27b-local (free)", writer_turns: qwenTurns,
             reviewer: process.env.REVIEW_MODEL || "deepseek-v4-flash", reviewer_turns: revTurns};
 fs.writeFileSync("/workspace/.thunderdome-metrics.json", JSON.stringify(m, null, 2));
 console.error("Metrics: " + JSON.stringify(m));
