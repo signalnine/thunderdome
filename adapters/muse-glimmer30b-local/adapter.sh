@@ -76,6 +76,18 @@ FINAL_OUTPUT=/workspace/.thunderdome-output.jsonl
 export ANTHROPIC_BASE_URL="$LOCAL_UPSTREAM"
 export ANTHROPIC_API_KEY="placeholder"
 
+# Tell Claude Code the REAL context window. It cannot infer a custom endpoint's
+# size and assumes an Anthropic-sized one, so its auto-compaction never fires and
+# the transcript runs straight past the limit: the first full-suite run died with
+# HTTP 400 "request (142811 tokens) exceeds the available context size (131072)"
+# on 10 of 21 tasks -- about 15% overshoot. Those trials still produced scored
+# work (67.4 mean vs 84.4 for the ones that fit), so the failure suppressed the
+# result rather than zeroing it, which makes it easy to mistake for weak capability.
+# 120000 leaves headroom under the model's native 131072 for the response.
+# Preferred over llama.cpp's --context-shift, which silently discards early
+# context and would change task semantics relative to every other arm.
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS="${CLAUDE_CODE_MAX_CONTEXT_TOKENS:-120000}"
+
 set +e
 claude -p \
   --model muse-glimmer-30b \
