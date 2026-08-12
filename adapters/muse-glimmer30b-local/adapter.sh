@@ -83,10 +83,19 @@ export ANTHROPIC_API_KEY="placeholder"
 # on 10 of 21 tasks -- about 15% overshoot. Those trials still produced scored
 # work (67.4 mean vs 84.4 for the ones that fit), so the failure suppressed the
 # result rather than zeroing it, which makes it easy to mistake for weak capability.
-# 120000 leaves headroom under the model's native 131072 for the response.
+# 120000 was NOT enough -- a second full run still lost 11/21, now landing just
+# barely over (131073, 131092, 131105, 131127...). Exactly limit+1 shows CC sizes
+# to what IT believes the window is, while llama.cpp counts differently for two
+# reasons: (a) llama.cpp charges prompt + requested completion against n_ctx, so
+# max_tokens is reserved on top, and (b) CC estimates tokens with a different
+# tokenizer than this model's, undercounting by roughly 9% (its "120000" measured
+# as 131073 real tokens).
+# So cap BOTH axes with real margin: 90000 * ~1.15 tokenizer drift + 8192 output
+# = ~111k, comfortably under the native 131072.
 # Preferred over llama.cpp's --context-shift, which silently discards early
 # context and would change task semantics relative to every other arm.
-export CLAUDE_CODE_MAX_CONTEXT_TOKENS="${CLAUDE_CODE_MAX_CONTEXT_TOKENS:-120000}"
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS="${CLAUDE_CODE_MAX_CONTEXT_TOKENS:-90000}"
+export CLAUDE_CODE_MAX_OUTPUT_TOKENS="${CLAUDE_CODE_MAX_OUTPUT_TOKENS:-8192}"
 
 set +e
 claude -p \
