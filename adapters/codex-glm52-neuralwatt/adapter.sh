@@ -5,6 +5,16 @@ set -euo pipefail
 : "${TASK_DESCRIPTION:?TASK_DESCRIPTION not set by harness}"
 
 # --- OpenAI Codex CLI + GLM-5.2 via Neuralwatt ---
+#
+# !! BROKEN as of the codex image bump to 0.145.0 (2026-07-30). Codex 0.145
+# REMOVED `wire_api = "chat"` ("no longer supported ... set wire_api = responses"),
+# and Neuralwatt returns 404 on /v1/responses -- so codex cannot reach Neuralwatt
+# at all on this image. The bump was required for the GPT-5.6 subscription arms,
+# which need codex >= 0.144.
+# To re-run this arm, either pin an older codex image or port it to CRUSH, which
+# is the established working Neuralwatt harness (see
+# adapters/crush-qwen38-27b-neuralwatt). Results already recorded for this
+# adapter predate the bump and remain valid.
 # Same experiment as codex-glm52-openrouter but on Neuralwatt's energy-priced
 # endpoint (model id "glm-5.2" = zai-org/GLM-5.2-FP8). Tests whether Codex's
 # harness (which speaks the provider's API directly and has its own reasoning
