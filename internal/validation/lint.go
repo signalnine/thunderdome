@@ -68,8 +68,7 @@ func RunLint(ctx context.Context, workDir, validationImage, lintCmd string, base
 		return &LintResult{Score: 1.0}, nil
 	}
 
-	cmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--init",
-		"--security-opt=seccomp=unconfined",
+	cmd := dockerRunCmd(ctx, "--security-opt=seccomp=unconfined",
 		"--security-opt=apparmor=unconfined",
 		"-e", "npm_config_update_notifier=false",
 		"-v", workDir+":/workspace", "-w", "/workspace",

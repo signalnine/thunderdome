@@ -59,7 +59,7 @@ func RunHiddenTests(ctx context.Context, workDir, validationImage, installCmd st
 
 	// Install dependencies (may need additional packages for validation tests)
 	if installCmd != "" {
-		cmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--init", seccomp, apparmor,
+		cmd := dockerRunCmd(ctx, seccomp, apparmor,
 			"-e", "npm_config_update_notifier=false",
 			"-v", workDir+":/workspace", "-w", "/workspace",
 			validationImage, "sh", "-c", installCmd)
@@ -75,7 +75,7 @@ func RunHiddenTests(ctx context.Context, workDir, validationImage, installCmd st
 	if _, err := os.Stat(filepath.Join(workDir, "validation-vitest.config.ts")); err == nil {
 		testCmd = "npx vitest run --config validation-vitest.config.ts"
 	}
-	cmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--init", seccomp, apparmor,
+	cmd := dockerRunCmd(ctx, seccomp, apparmor,
 		"-e", "npm_config_update_notifier=false",
 		"-v", workDir+":/workspace", "-w", "/workspace",
 		validationImage, "sh", "-c", testCmd)

@@ -23,8 +23,7 @@ func RunInstall(ctx context.Context, workDir, validationImage, installCmd string
 	if installCmd == "" {
 		return nil
 	}
-	cmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--init",
-		"--security-opt=seccomp=unconfined",
+	cmd := dockerRunCmd(ctx, "--security-opt=seccomp=unconfined",
 		"--security-opt=apparmor=unconfined",
 		"-e", "npm_config_update_notifier=false",
 		"-v", workDir+":/workspace", "-w", "/workspace",
@@ -43,7 +42,7 @@ func RunTests(ctx context.Context, workDir, validationImage, installCmd, testCmd
 		return nil, err
 	}
 
-	cmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--init", seccomp, apparmor,
+	cmd := dockerRunCmd(ctx, seccomp, apparmor,
 		"-e", "npm_config_update_notifier=false",
 		"-v", workDir+":/workspace", "-w", "/workspace",
 		validationImage, "sh", "-c", testCmd)

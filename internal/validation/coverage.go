@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 )
 
@@ -28,7 +27,7 @@ func RunCoverage(ctx context.Context, workDir, validationImage, installCmd strin
 
 	// Install dependencies first
 	if installCmd != "" {
-		cmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--init", seccomp, apparmor,
+		cmd := dockerRunCmd(ctx, seccomp, apparmor,
 			"-e", "npm_config_update_notifier=false",
 			"-v", workDir+":/workspace", "-w", "/workspace",
 			validationImage, "sh", "-c", installCmd)
@@ -39,7 +38,7 @@ func RunCoverage(ctx context.Context, workDir, validationImage, installCmd strin
 
 	// Install @vitest/coverage-v8 (required for v8 coverage provider).
 	// Match the installed vitest version to avoid peer dependency conflicts.
-	coverageInstall := exec.CommandContext(ctx, "docker", "run", "--rm", "--init", seccomp, apparmor,
+	coverageInstall := dockerRunCmd(ctx, seccomp, apparmor,
 		"-e", "npm_config_update_notifier=false",
 		"-v", workDir+":/workspace", "-w", "/workspace",
 		validationImage, "sh", "-c",
@@ -50,7 +49,7 @@ func RunCoverage(ctx context.Context, workDir, validationImage, installCmd strin
 	// Use --coverage.enabled explicitly (vitest 2.x requires it).
 	// Exclude validation-tests/ in case they were already injected.
 	coverageCmd := "npx vitest run --coverage.enabled --coverage.provider=v8 --coverage.reporter=json-summary --coverage.reportsDirectory=./coverage --exclude 'validation-tests/**' 2>&1 || true"
-	cmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--init", seccomp, apparmor,
+	cmd := dockerRunCmd(ctx, seccomp, apparmor,
 		"-e", "npm_config_update_notifier=false",
 		"-v", workDir+":/workspace", "-w", "/workspace",
 		validationImage, "sh", "-c", coverageCmd)
