@@ -60,16 +60,60 @@ TASK_PROMPT=$(cat "$TASK_DESCRIPTION")
 OUTPUT_FILE=/workspace/.thunderdome-output.jsonl
 STDERR_FILE=/workspace/.thunderdome-stderr.log
 
+# STREAM VOLUME: --mode json emits a message_update event per token delta. On a
+# long autonomous run that is not a nuisance, it is a disk hazard -- one
+# unfinished constraint-scheduler trial produced a 4.9 GB
+# .thunderdome-output.jsonl inside /workspace, which then lands in diff.patch
+# and the results tree (a short task already costs 31 MB, 5293 of its 5372
+# events being message_update).
+# Filter the incremental events at the source. message_start/message_end,
+# turn_*, tool_execution_start/end and agent_* are all retained, so turn counts,
+# tool names and the authoritative message_end usage totals survive intact.
+# PIPEFAIL NOTE: the exit code we care about is prime-agent's, not grep's, so
+# pipefail is enabled and PIPESTATUS[0] is read explicitly below.
+set -o pipefail
+
 WALL_CLOCK_START=$(date +%s)
 
 set +e
+# AUTONOMOUS MODE, not -p. This was wrong the first time and the failure was
+# quiet: `-p/--print` is literally "Print a response and exit", so the agent
+# explored for ~4 turns, executed 3 ipython calls, wrote NO source, and exited
+# reporting success. It scored 54.1% overall at $0.013/task -- cheap and
+# plausible-looking, which is exactly what makes it dangerous. The real signal
+# was diffs containing only runtime artifacts and package-lock.json.
+#
+# --autonomous is the documented mode for "runs where no human input is
+# expected": it injects follow-up continuations until GATES PASS or a limit is
+# hit. Its defaults are far too small for this suite (max-turns 12,
+# max-continuations 3, max-tokens 80000, timeout 30min), so the limits are
+# raised well past what a task should need.
+#
+# --autonomous-gate IS REQUIRED, and omitting it was a mistake. Without a gate
+# there is no completion signal, so the agent can only ever exhaust its budget:
+# the first correct-mode run scored 0.92 on constraint-scheduler but ran the
+# full 90 minutes to the wall, which across 21 tasks is ~31 hours.
+# `npm test` is not task-specific scaffolding -- it is the same command the task
+# prompts already instruct the agent to run, and every benchmark repo defines
+# it. It plays the role the final-answer signal plays for other harnesses.
 prime-agent \
   --mode json \
   --provider deepseek \
   --model deepseek-v4-flash \
-  -p "$TASK_PROMPT" \
-  > "$OUTPUT_FILE" 2> "$STDERR_FILE"
-EXIT_CODE=$?
+  --autonomous \
+  --autonomous-gate "npm test" \
+  --autonomous-gate-retries 1 \
+  --autonomous-gate-timeout-ms 600000 \
+  --autonomous-max-turns 200 \
+  --autonomous-max-continuations 20 \
+  --autonomous-max-tokens 4000000 \
+  --autonomous-timeout-ms 5400000 \
+  "$TASK_PROMPT" \
+  2> "$STDERR_FILE" \
+  | grep --line-buffered -vF '"type":"message_update"' \
+  | grep --line-buffered -vF '"type":"tool_execution_update"' \
+  > "$OUTPUT_FILE"
+EXIT_CODE=${PIPESTATUS[0]}
 set -e
 
 WALL_CLOCK_END=$(date +%s)
@@ -118,7 +162,7 @@ try:
             t = ev.get('type', '')
             if t == 'turn_end': turns += 1
             if t in ('tool_execution_start', 'tool_execution_update'):
-                n = ev.get('name') or (ev.get('tool') or {}).get('name')
+                n = ev.get('toolName') or ev.get('name') or (ev.get('tool') or {}).get('name')
                 if n and n not in tools: tools.append(n)
             if t != 'message_end': continue          # <- the one authoritative source
             u = find_usage(ev)
