@@ -8,12 +8,21 @@ set -e
 # model's primary tool rather than a fixed tool schema -- file ops, shell,
 # subagents are all expressed as Python the model writes and executes.
 #
-# Backend is DeepSeek v4 Flash GA on its FIRST-PARTY /anthropic endpoint --
-# deliberately identical model + endpoint to claude-code-deepseek-v4-flash-native
-# (90.7%, std 93.6 / hard 87.5, $0.096/task). Same model, same endpoint, different
-# harness, so any delta isolates the harness. Harness effects on this suite are
-# large (CRUSH cost GLM-5.1-fast 10.8pp vs Claude Code), which is exactly why this
-# is worth measuring rather than assuming.
+# Backend is DeepSeek v4 Flash GA (dated snapshot -0731) via OPENROUTER.
+#
+# Originally pointed at DeepSeek's first-party /anthropic endpoint to match
+# claude-code-deepseek-v4-flash-native (90.7%, std 93.6 / hard 87.5, $0.096/task)
+# exactly. That account ran out of credit mid-suite: 9 of 21 trials returned
+# `402 Insufficient Balance`, including all 5 that scored zero, producing a
+# complete-looking 55.0% that was an account artifact rather than a result.
+# Balance now reads -0.06 USD.
+#
+# CAVEAT this introduces: OpenRouter routes to third-party providers (SiliconFlow
+# was observed serving this model), so serving/quantization may differ from
+# first-party. The comparison against the Claude Code baseline is therefore
+# harness-vs-harness at the same MODEL but no longer the same ENDPOINT. Note too
+# that OpenRouter prices the floating alias ($0.09/$0.18) differently from -0731
+# ($0.14/$0.28), which is itself evidence they are not the same backend.
 #
 # SECURITY: Prime Agent executes MODEL-GENERATED PYTHON with the invoking user's
 # permissions. Acceptable only because the container is the sandbox -- the same
@@ -22,7 +31,7 @@ set -e
 # artifacts rather than the upstream curl|sh installer; see docker/prime-agent/.
 
 [[ -f "$TASK_DESCRIPTION" ]] || { echo "Task file not found: $TASK_DESCRIPTION" >&2; exit 2; }
-: "${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY is required for this adapter}"
+: "${OPENROUTER_API_KEY:?OPENROUTER_API_KEY is required for this adapter}"
 
 cd "$TASK_DIR"
 export HOME=/tmp
@@ -36,13 +45,13 @@ cat > "$HOME/.prime/agent/models.json" <<JSON
 {
   "providers": {
     "deepseek": {
-      "baseUrl": "https://api.deepseek.com/anthropic",
+      "baseUrl": "https://openrouter.ai/api",
       "api": "anthropic-messages",
-      "apiKey": "$DEEPSEEK_API_KEY",
+      "apiKey": "$OPENROUTER_API_KEY",
       "compat": { "supportsEagerToolInputStreaming": false },
       "models": [
         {
-          "id": "deepseek-v4-flash",
+          "id": "deepseek/deepseek-v4-flash-0731",
           "name": "DeepSeek v4 Flash GA",
           "reasoning": true,
           "input": ["text"],
@@ -93,15 +102,25 @@ set +e
 # there is no completion signal, so the agent can only ever exhaust its budget:
 # the first correct-mode run scored 0.92 on constraint-scheduler but ran the
 # full 90 minutes to the wall, which across 21 tasks is ~31 hours.
-# `npm test` is not task-specific scaffolding -- it is the same command the task
-# prompts already instruct the agent to run, and every benchmark repo defines
-# it. It plays the role the final-answer signal plays for other harnesses.
+# The gate must be NON-VACUOUS. A bare `npm test` is satisfied by the STARTING
+# state on greenfield tasks: those repos ship no tests/ directory, `vitest run`
+# exits clean with no test files, the gate passes in ~18 seconds and the agent
+# stops having written nothing. That produced a second complete-looking but
+# worthless suite (55.0%): beam-splitter 0.3 min / 4 turns / 0 output tokens /
+# no source, while constraint-scheduler -- whose tests DO fail initially --
+# correctly ran 24.6 min / 101 turns to 0.912.
+# Requiring evidence of tests that actually PASS ("N passed" in the output)
+# cannot be satisfied by an empty repo, so greenfield tasks must write and pass
+# their own tests before the gate opens. Still generic: it is the same
+# build-and-test loop every task prompt mandates and every benchmark repo
+# defines, and it plays the role the final-answer signal plays for other
+# harnesses. Worth stating explicitly when reporting.
 prime-agent \
   --mode json \
   --provider deepseek \
-  --model deepseek-v4-flash \
+  --model deepseek/deepseek-v4-flash-0731 \
   --autonomous \
-  --autonomous-gate "npm test" \
+  --autonomous-gate "npm test 2>&1 | tee /tmp/gate.txt; grep -qE '[0-9]+ (test[s]? )?passed' /tmp/gate.txt" \
   --autonomous-gate-retries 1 \
   --autonomous-gate-timeout-ms 600000 \
   --autonomous-max-turns 200 \
